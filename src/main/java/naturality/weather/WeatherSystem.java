@@ -113,7 +113,7 @@ public final class WeatherSystem {
         float wind = windCycle.tick(cycle, time, p.minWind, p.maxWind,
             1 - Math.pow(.65, 1.0 / 6000), 8000, 24000, 4200);
         float temp = old == null ? 50 : automaticTemperature(p, seed, time);
-        float direction = 360 * noise(seed + 311, time, 23000);
+        float direction = automaticDirection(seed, time);
         if (!cycle && old != null) { wind = old.wind(); temp = old.temperature(); direction = old.direction(); }
         // The advance_weather gamerule pauses these autonomous slider cycles.
         // /weather edits independent profile overrides, not the vanilla clock.
@@ -164,6 +164,10 @@ public final class WeatherSystem {
         float t = Math.floorMod(tick, period) / (float)period;
         t = t * t * (3 - 2 * t);
         return sample(seed, cell) * (1 - t) + sample(seed, cell + 1) * t;
+    }
+    /** Slowly changing deterministic random heading, sampled on a wrapped 0..360 circle. */
+    public static float automaticDirection(long seed, long weatherTime) {
+        return 360 * noise(seed + 311, Math.max(0, weatherTime), 23000);
     }
     private static float sample(long seed, long cell) {
         long x = seed + cell * 0x9E3779B97F4A7C15L;

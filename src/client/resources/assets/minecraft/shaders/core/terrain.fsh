@@ -169,8 +169,20 @@ void main() {
     float waterFog = linear_fog_value(cylindricalVertexDistance, FogRenderDistanceStart, FogRenderDistanceEnd);
     if (waterSprite && WaterMap.w != 0 && WaterSwitches.x != 0 && WaterEnvironment.x != 0 && NATURALITY_FOG_ENABLED) {
         vec2 fogUV = gl_FragCoord.xy / vec2(textureSize(NaturalityWaterAtmosphere, 0));
-        color.rgb = mix(color.rgb, texture(NaturalityWaterAtmosphere, fogUV).rgb, waterFog);
-        color.a = mix(color.a, 1.0, waterFog);
+        float fogOpacity = abs(FogColor.a) >= 2.0 ? 1.0 : FogColor.a;
+        float coverage = total_fog_value(sphericalVertexDistance, cylindricalVertexDistance,
+            FogEnvironmentalStart, FogEnvironmentalEnd, FogRenderDistanceStart, FogRenderDistanceEnd) * fogOpacity;
+        // Fog covers the whole view through the surface, including transmitted
+        // seabed color. Compose in premultiplied form before returning to the
+        // straight-alpha color expected by both vanilla transparency paths.
+        // Applying only distance fog here left holes in heavy-rain/cave haze.
+        vec3 fogged = apply_fog(vec4(color.rgb * color.a, color.a),
+            sphericalVertexDistance, cylindricalVertexDistance,
+            FogEnvironmentalStart, FogEnvironmentalEnd,
+            FogRenderDistanceStart, FogRenderDistanceEnd, FogColor).rgb;
+        fogged += (texture(NaturalityWaterAtmosphere, fogUV).rgb - FogColor.rgb) * waterFog * fogOpacity;
+        color.a = mix(color.a, 1.0, coverage);
+        color.rgb = fogged / max(color.a, 0.0001);
     }
     vec3 surfaceNormal = abs(cross(dFdx(naturalityBlockPosition), dFdy(naturalityBlockPosition)));
     // Derivatives must be evaluated before the per-fragment floor eligibility

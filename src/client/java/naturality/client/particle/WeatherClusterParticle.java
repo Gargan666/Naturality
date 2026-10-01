@@ -33,7 +33,17 @@ public final class WeatherClusterParticle extends SingleQuadParticle {
     public static void initialize() {
         var registry = ParticleProviderRegistry.getInstance();
         registry.register(NaturalityParticles.RAIN_CLUSTER, sprites ->
-            (_, level, x,y,z,_,_,_,random) -> new WeatherClusterParticle(level,x,y,z,sprites.getSprites().get(random.nextInt(sprites.getSprites().size())),random,false));
+            (_, level, x,y,z,_,_,_,random) -> {
+                var textures = sprites.getSprites();
+                var weather = WeatherSystem.state(level);
+                var camera = Minecraft.getInstance().gameRenderer.mainCamera();
+                double distance = camera == null ? 0 : camera.position().distanceTo(new Vec3(x, y, z));
+                boolean heavy = textures.size() >= 6 && weather != null
+                    && random.nextFloat() < weather.heavyRainParticleChance(distance);
+                int first = heavy ? 3 : 0;
+                return new WeatherClusterParticle(level,x,y,z,
+                    textures.get(first + random.nextInt(3)),random,false);
+            });
         registry.register(NaturalityParticles.SNOW_CLUSTER, sprites ->
             (_, level, x,y,z,_,_,_,random) -> new WeatherClusterParticle(level,x,y,z,sprites.getSprites().get(random.nextInt(sprites.getSprites().size())),random,true));
     }

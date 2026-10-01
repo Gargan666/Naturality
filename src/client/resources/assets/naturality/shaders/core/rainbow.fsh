@@ -17,7 +17,7 @@ void main() {
     // Opacity fades near the side switch; radius takes four times as much
     // celestial rotation to settle, and keeps changing during that fade.
     float middleDistance = abs(atan(sin(ColorModulator.y), cos(ColorModulator.y)));
-    float sideFade = smoothstep(0.0, 0.5, middleDistance);
+    float sideFade = clamp(middleDistance / 0.45, 0.0, 1.0);
     float sizeProgress = smoothstep(0.0, 2.0, middleDistance);
     float middleExpansion = pow(1.0 - sizeProgress, 2.0);
     float radius = radians(mix(28.0, 46.0, ColorModulator.w) + 9.0 * middleExpansion);

@@ -4,7 +4,7 @@ import java.util.Random;
 
 /** Night-only random start roll and weather-like active clock, independent of vanilla rain. */
 public final class SkyEventCycle {
-    public static final double START_CHANCE_PER_TICK = 1 - Math.pow(.6, 1.0 / 1200);
+    public static final double START_CHANCE_PER_TICK = 1 - Math.pow(.9, 1.0 / 1200);
     private final Random random;
     private int remaining, retarget;
     private boolean active;

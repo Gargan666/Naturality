@@ -17,6 +17,7 @@ import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.Level;
 import org.joml.Vector4f;
+import org.joml.Vector3fc;
 import java.util.Optional;
 
 /** A flat paletted celestial sprite, centered opposite the sun. */
@@ -74,6 +75,11 @@ public final class RainbowRenderer implements AutoCloseable {
         float t = (float)Math.clamp((cloudTop - cameraY) / 16.0, 0, 1);
         return t * t * (3 - 2 * t);
     }
+    public static float skyBlend(Vector3fc skyColor) {
+        float luminance = .2126F * skyColor.x() + .7152F * skyColor.y() + .0722F * skyColor.z();
+        float brightness = Math.clamp((luminance - .06F) / .55F, 0, 1);
+        return brightness * brightness;
+    }
     public void prepare() {
         if (strength <= .001F || world == null || !world.dimension().equals(Level.OVERWORLD)) return;
         Minecraft.getInstance().getTextureManager().getTexture(PALETTE);
@@ -89,7 +95,7 @@ public final class RainbowRenderer implements AutoCloseable {
             }
         }
     }
-    public void render(RenderPass pass, float sunAngle) {
+    public void render(RenderPass pass, float sunAngle, float skyBlend) {
         if (vertices == null || world == null || !world.dimension().equals(Level.OVERWORLD) || strength <= .001F) return;
         float partial = Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false);
         float value = previousStrength + (strength - previousStrength) * partial;
@@ -97,14 +103,15 @@ public final class RainbowRenderer implements AutoCloseable {
         float dayFade = daylightFade(world.getOverworldClockTime());
         float cloudFade = altitudeFade(Minecraft.getInstance().gameRenderer.mainCamera().position().y,
             ParticleWeather.highestActiveCloudTop(Minecraft.getInstance()));
-        if (dayFade * cloudFade <= .001F) return;
+        if (dayFade * cloudFade * skyBlend <= .001F) return;
         var texture = Minecraft.getInstance().getTextureManager().getTexture(PALETTE);
         var indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
         pass.setPipeline(RenderSystem.getCompiledPipeline(PIPELINE));
         RenderSystem.bindDefaultUniforms(pass);
         pass.setUniform("Sampler0", texture.getTextureView(), texture.getSampler());
         pass.setUniform("DynamicTransforms", RenderSystem.getDynamicUniforms().writeTransform(
-            RenderSystem.getModelViewMatrixCopy(), new Vector4f(value / 20F, sunAngle, dayFade * cloudFade, easedSize(value))));
+            RenderSystem.getModelViewMatrixCopy(), new Vector4f(value / 20F, sunAngle,
+                dayFade * cloudFade * skyBlend, easedSize(value))));
         pass.setVertexBuffer(0, vertices.slice());
         pass.setIndexBuffer(indices.getBuffer(6), indices.type());
         pass.drawIndexed(6, 1, 0, 0, 0);

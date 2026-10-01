@@ -66,7 +66,8 @@ public final class ParticleWeather {
             var kind = world.getPrecipitationAt(pos);
             if (kind == Biome.Precipitation.NONE || clearance(world, x, y, z, MAX_CARD_EXTENT) <= 0) continue;
             var particle = client.particleEngine.createParticle(kind == Biome.Precipitation.SNOW
-                ? NaturalityParticles.SNOW_CLUSTER : NaturalityParticles.RAIN_CLUSTER, x, y, z, 0, 0, 0);
+                ? NaturalityParticles.SNOW_CLUSTER : NaturalityParticles.RAIN_CLUSTER,
+                x, y, z, 0, 0, 0);
             if (particle instanceof WeatherClusterParticle cluster) { ACTIVE.add(cluster); births++; }
         }
     }

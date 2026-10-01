@@ -25,6 +25,7 @@
     "SoulFireOverlayMixin",
     "FireParticleBindingsMixin",
     "WaterFogMixin",
+    "HeavyRainFogMixin",
     "WaterDripImpactMixin",
     "WaterParticleTypeMixin",
     "ParticleWindMixin",

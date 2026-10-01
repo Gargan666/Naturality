@@ -6,6 +6,7 @@ import naturality.sky.*;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.client.CloudStatus;
+import org.joml.Vector3f;
 
 public final class RainbowGameTest implements FabricClientGameTest {
     private static void check(boolean value, String message) { if (!value) throw new AssertionError(message); }
@@ -31,6 +32,10 @@ public final class RainbowGameTest implements FabricClientGameTest {
             && RainbowRenderer.altitudeFade(208, 200) == 0
             && RainbowRenderer.altitudeFade(208, Double.POSITIVE_INFINITY) == 1,
             "Rainbow fades across the final 16 blocks beneath the rain ceiling");
+        check(RainbowRenderer.skyBlend(new Vector3f(0.8F)) == 1
+            && RainbowRenderer.skyBlend(new Vector3f(0.25F)) < .15F
+            && RainbowRenderer.skyBlend(new Vector3f(0.1F)) < RainbowRenderer.skyBlend(new Vector3f(0.25F)),
+            "Rainbow blends progressively into darker skies");
         var cycle = new RainbowCycle(73);
         for (int i = 0; i < 120000; i++) cycle.tick(true, false, 10);
         check(!cycle.active() && cycle.strength() == 0, "Rainbow never starts at night");
@@ -70,6 +75,11 @@ public final class RainbowGameTest implements FabricClientGameTest {
             server.runCommand("skyevent minecraft:overworld rainbow 20");
             context.waitTicks(75);
             context.takeScreenshot("rainbow-restored");
+            server.runCommand("weather minecraft:overworld rain 19");
+            context.waitTicks(65);
+            context.takeScreenshot("rainbow-dark-rain");
+            server.runCommand("weather minecraft:overworld rain 10");
+            context.waitTicks(65);
             context.runOnClient(client -> client.options.cloudStatus().set(CloudStatus.FANCY));
             context.waitTicks(5);
             var cloudTop = new double[1];

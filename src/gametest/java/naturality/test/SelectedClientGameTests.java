@@ -26,6 +26,7 @@ public final class SelectedClientGameTests implements FabricClientGameTest {
         suites.put("gameplay", new GameplaySettingsGameTest());
         suites.put("fluids", new FluidsGameTest());
         suites.put("water", new WaterVisualsGameTest());
+        suites.put("water-rain", new WaterRainFogGameTest());
         suites.put("waterfall", new WaterfallGameTest());
         suites.put("lava-effects", new LavaEffectsGameTest());
         suites.put("water-ripples", new WaterRipplesGameTest());

@@ -3,6 +3,7 @@ package naturality.client.mixin;
 import java.util.Map;
 import naturality.Naturality;
 import naturality.client.sound.WeatherAudioFilter;
+import naturality.client.sound.UnderwaterAudio;
 import naturality.client.weather.WeatherSoundEnvironment;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.sounds.ChannelAccess;
@@ -27,11 +28,18 @@ public abstract class WeatherAudioEngineMixin {
     private void naturality$filterWeather(boolean paused, CallbackInfo ci) {
         if (paused) return;
         float indoor = WeatherSoundEnvironment.indoor();
+        float underwater = UnderwaterAudio.amount();
         instanceToChannel.forEach((sound, handle) -> {
             Identifier id = sound.getIdentifier();
-            if (id.equals(naturality$rain) || id.equals(naturality$rainAbove)
-                    || id.equals(naturality$weakWind) || id.equals(naturality$strongWind))
-                handle.execute(channel -> ((WeatherAudioFilter) channel).naturality$setIndoorAmount(indoor));
+            boolean weather = id.equals(naturality$rain) || id.equals(naturality$rainAbove)
+                    || id.equals(naturality$weakWind) || id.equals(naturality$strongWind);
+            handle.execute(channel -> ((WeatherAudioFilter) channel)
+                .naturality$setEnvironmentAmounts(weather ? indoor : 0, underwater));
         });
+    }
+
+    @Inject(method = "tick", at = @At("HEAD"))
+    private void naturality$listenerImmersion(boolean paused, CallbackInfo ci) {
+        UnderwaterAudio.update();
     }
 }

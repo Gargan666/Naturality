@@ -1,5 +1,34 @@
 NATURALITY - PROJECT REFERENCE
 =============================
+UNDERWATER AUDIO (2026-10-02)
+All playing sound categories, including music, UI and streamed sources, receive
+a listener-depth low-pass. Smoothstep starts at 1 block beneath the surface and
+reaches full strength at 4 blocks. Uses WaterVisuals.cameraDepth (including its
+overhang and waterfall handling), independently of water visual toggles.
+Underwater gain stays 1: only high frequencies are removed. EFX high-frequency
+gain follows pow(0.015, strength). It multiplies the existing sheltered-weather
+HF filter without introducing any additional overall volume reduction.
+SoundEngine refreshes existing sources each tick; Channel.play attaches the
+current filter before one-shots start. Surfacing removes the underwater part,
+world exit resets the listener state, and channel destruction deletes filters.
+Devices without OpenAL EFX retain normal audio; there is no volume-only fallback.
+The audio client suite verifies depth thresholds, real EFX gains, preserved
+source gain, composition with indoor weather and filter cleanup.
+Validation: build/underwater-audio.log. Subjective listening was not assessed.
+
+WATER / ENVIRONMENTAL FOG FIX (2026-10-02)
+The atmospheric water-material path now includes environmental fog (including
+heavy rain) as well as render-distance fog. Previously it bypassed apply_fog
+and used only the distance term, leaving clear water holes in dense weather haze.
+Fog color and coverage are composed in premultiplied form, then converted back
+to straight alpha before vanilla/OIT processing. This fog covers transmitted
+seabed color without changing submerged terrain's separate absorption path.
+Directional sky color still replaces only the distance contribution. The effect
+stays on depth-tested water geometry, preserving foreground entity occlusion.
+The water-rain client suite captures maximum rain with a dry island and pool in
+both transparency modes. Baseline screenshots: build/water-rain-before/.
+Validation: build/water-rain-after.log (water-rain and water-occlusion).
+
 SNOW / SODIUM SNAPSHOT LIGHTING FIX (2026-10-01)
 WindRendering now queries BlockAndTintGetter.getBrightness(SKY, pos) for both
 snow-on-leaf exposure and foliage tags. Sodium LevelSlice intentionally throws
@@ -45,8 +74,10 @@ lift the ring center farther upward so the arc moves up visibly
 instead of sinking with its reduced radius. The full-size ring center stays at
 a fixed sky elevation; the sun chooses which side of the sky it occupies. As the
 sun approaches the middle, the ring eases larger and fades to zero opacity;
-its radius transition spans about four times the sun-angle range of the opacity
-fade, so both changes overlap near the middle. It returns on the other side as
+the opacity fade is linear and completes well before the slower size transition.
+Both changes overlap near the middle. The rainbow also scales its opacity by
+the current rendered sky brightness so storm-dark skies mute its pastel colors
+instead of leaving the arc brightly lit. It returns on the other side as
 the sun moves away. Its transparent edge
 pixels are added only at the diagonal staircase corners of the opaque arc.
 The existing 10-color palette is
@@ -105,7 +136,7 @@ after the sun, moon, stars and meteors in the same celestial pass.
 SKY EVENT START CHANCES (2026-10-01)
 ------------------------------------
 Quiet Overworld nights now roll independently for a meteor shower each tick,
-with a per-tick probability chosen to give 40% chance over 1200 eligible ticks
+with a per-tick probability chosen to give 10% chance over 1200 eligible ticks
 (one minute). Meteors still cannot start during daytime or when automatic
 weather advancement is paused; active duration remains 12,000-24,000 ticks.
 Aurora's weather-temperature multiplier is substantially steeper. In a plains
@@ -2969,7 +3000,7 @@ automatic scheduling. The command is disabled for non-operators. Overrides are
 saved with the world, with independent settings for each dimension. Missing
 settings receive defaults; strengths clamp to 0-20 on load/save.
 
-Automatic meteor showers roll to start each eligible night tick (40% chance
+Automatic meteor showers roll to start each eligible night tick (10% chance
 over one minute while quiet) and remain active for 12,000-24,000 ticks.
 Active strength eases toward a new random
 1-20 target every 100-600 ticks; inactive strength eases to zero. The
@@ -3521,3 +3552,23 @@ large sway and fast shake from pulling against the current direction.
 At the strongest gusts, the broad sway center also shifts halfway downwind,
 while retaining its limiter against backward movement. The client game-test
 snapshot now covers foliage shelter beneath a roof despite skylight readings.
+HEAVY RAIN FOG AND PARTICLE VARIANTS (2026-10-02)
+Rain fog fades in above rain 90. At rain 100 outdoors, its environmental band
+runs from 12 to 15 blocks. Indoors, the fog remains faint and is deferred toward
+100 blocks to preserve nearby room visuals. Heavy rain cards are selected with
+increasing probability by both rain strength and distance into the fog, using
+the existing heavy_rain_cluster texture variants. Weather tests cover the fog
+ramp, indoor/outdoor range, and distance-based variant probability.
+HEAVY RAIN FOG EASING AND HIGH-WIND FOLIAGE (2026-10-02)
+Heavy rain fog now follows the smoothed outdoor exposure and rain sliders, so
+its boundary eases through shelter transitions. At severe wind, foliage holds
+near its full downwind bend with a narrow sway around that pose; the downwind
+limiter remains active.
+Wind direction continues its independent eased random cycle regardless of
+whether a rain or wind event has activated. Manual direction overrides still
+hold their selected heading until returned to automatic mode.
+HIGH-WIND FOLIAGE SHAKE INTENSITY (2026-10-02)
+The fast high-wind overlay now has larger irregular forward and crosswind
+motion. It is added after the main bend's downwind limiter, so the sustained
+base pose stays stretched while the shake can swing in any direction.
+Crosswind amplitude is reduced relative to the main wind direction.

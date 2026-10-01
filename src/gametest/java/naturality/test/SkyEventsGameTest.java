@@ -11,8 +11,8 @@ public final class SkyEventsGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
         var cycle = new SkyEventCycle(17);
         check(!cycle.active() && cycle.strength() == 0, "Starts quiet");
-        check(Math.abs(1 - Math.pow(1 - SkyEventCycle.START_CHANCE_PER_TICK, 1200) - .4) < .00001,
-            "Quiet night has a 40% meteor start chance per minute");
+        check(Math.abs(1 - Math.pow(1 - SkyEventCycle.START_CHANCE_PER_TICK, 1200) - .1) < .00001,
+            "Quiet night has a 10% meteor start chance per minute");
         var daytime = new SkyEventCycle(17);
         for (int i = 0; i < 100000; i++) daytime.tick(true, false);
         check(!daytime.active(), "Meteor showers cannot start during daytime");

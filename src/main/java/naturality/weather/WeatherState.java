@@ -14,6 +14,17 @@ public record WeatherState(float rain, float wind, float temperature, float dire
         float heavy = Math.max(0, (rain - 50) / 50);
         return rain <= 50 ? rain / 25 : 2 + 6 * heavy * heavy * heavy;
     }
+    /** Heavy rain fog fades in from slider 90 and reaches full strength at 100. */
+    public float heavyRainFog() { return Math.clamp((rain - 90) / 10, 0, 1); }
+    /** Keep indoor rain haze broad and faint; fully exposed rain ends at 15 blocks. */
+    public float heavyRainFogEnd(float outdoorExposure) {
+        float strength = heavyRainFog() * Math.clamp(outdoorExposure, 0, 1);
+        return 100 - 85 * strength;
+    }
+    /** Heavy rain sprite likelihood grows with fog strength and distance into the fog. */
+    public float heavyRainParticleChance(double distance) {
+        return heavyRainFog() * Math.clamp((float)(distance / 15.0), 0, 1);
+    }
     /** Probability of retaining a vanilla ground impact; does not alter rain sounds. */
     public float groundImpactChance() { float t = rain / 100; return t * t; }
     /** Wind motion reaches its former maximum at 75, then rises sharply to 3x at 100. */

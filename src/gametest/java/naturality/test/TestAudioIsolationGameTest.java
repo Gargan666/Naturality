@@ -8,6 +8,7 @@ import org.lwjgl.openal.AL10;
 /** Exercise the real listener hook with the manual-launch and automated-test flags. */
 public final class TestAudioIsolationGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
+        UnderwaterAudioGameTest.run(context);
         context.runOnClient(client -> {
             String original = System.getProperty("naturality.test.muteAudio");
             var listener = new Listener();

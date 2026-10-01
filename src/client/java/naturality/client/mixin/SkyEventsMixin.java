@@ -15,6 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class SkyEventsMixin {
     @Unique private @org.jspecify.annotations.Nullable MeteorShower naturality$meteors;
     @Unique private @org.jspecify.annotations.Nullable RainbowRenderer naturality$rainbow;
+    @Unique private float naturality$rainbowSkyBlend = 1.0F;
     @Inject(method = "render", at = @At("HEAD"))
     private void naturality$prepare(com.mojang.renderpearl.api.buffers.GpuBufferSlice fog,
             net.minecraft.client.renderer.state.level.SkyRenderState state, CallbackInfo ci) {
@@ -23,6 +24,7 @@ public abstract class SkyEventsMixin {
         effect.prepare();
         var rainbow = naturality$rainbow;
         if (rainbow == null) { rainbow = new RainbowRenderer(); naturality$rainbow = rainbow; }
+        naturality$rainbowSkyBlend = RainbowRenderer.skyBlend(state.skyColor);
         rainbow.prepare();
     }
     @Inject(method = "renderSunMoonAndStars", at = @At("TAIL"))
@@ -31,7 +33,7 @@ public abstract class SkyEventsMixin {
         var effect = naturality$meteors;
         if (effect == null) { effect = new MeteorShower(); naturality$meteors = effect; }
         effect.render(pass, rainBrightness);
-        if (naturality$rainbow != null) naturality$rainbow.render(pass, sunAngle);
+        if (naturality$rainbow != null) naturality$rainbow.render(pass, sunAngle, naturality$rainbowSkyBlend);
     }
     @Inject(method = "close", at = @At("HEAD"))
     private void naturality$close(CallbackInfo ci) {
