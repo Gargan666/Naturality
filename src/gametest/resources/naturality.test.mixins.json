@@ -1,0 +1,7 @@
+{
+  "required": true,
+  "package": "naturality.test.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": ["MutedTestListenerMixin", "EndSmokeProbeMixin", "SubmergedMeshProbeMixin"],
+  "injectors": { "defaultRequire": 1 }
+}

@@ -1,0 +1,38 @@
+{
+  "watersplash_loud": {
+    "sounds": [
+      {
+        "name": "naturality:watersplash_loud",
+        "attenuation_distance": 16,
+        "stream": false
+      }
+    ]
+  },
+  "portal_open": {
+    "subtitle": "subtitles.naturality.portal_open",
+    "sounds": [
+      {
+        "name": "minecraft:block.end_portal.spawn",
+        "type": "event"
+      }
+    ]
+  },
+  "wind_weak": {
+    "subtitle": "subtitles.naturality.wind",
+    "sounds": [
+      {
+        "name": "naturality:wind_weak",
+        "stream": true
+      }
+    ]
+  },
+  "wind_strong": {
+    "subtitle": "subtitles.naturality.wind",
+    "sounds": [
+      {
+        "name": "naturality:wind_strong",
+        "stream": true
+      }
+    ]
+  }
+}

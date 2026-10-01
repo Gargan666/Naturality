@@ -1,0 +1,42 @@
+{
+  "required": true,
+  "package": "naturality.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "mixins": [
+        "SnowLayerMixin",
+        "SnowLightEngineMixin",
+        "SnowSkySourcesMixin",
+        "SnowPlacementMixin",
+        "SnowInteractionMixin",
+        "SnowStateMixin",
+        "SnowyGrassMixin",
+        "SnowCollisionMixin",
+        "SnowPickingMixin",
+        "SnowWeatherMixin",
+    "WeatherCommandMixin",
+    "WeatherLevelMixin",
+    "WeatherBiomeMixin",
+    "WeatherServerMixin",
+    "FireShapeMixin",
+    "FireShapeAccessor",
+    "FireShapeAccessor",
+    "FirePlacementMixin",
+    "FireContactMixin",
+    "FirePickingMixin",
+    "EntityPortalCrossingMixin",
+    "PortalCrossingTeleportMixin",
+    "ExampleMixin",
+    "PortalShapeAccessor",
+    "PortalIgnitionMixin",
+    "OpeningPortalTravelMixin",
+    "FadingFireMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "overwrites": {
+    "requireAnnotations": true
+  }
+}
+
+

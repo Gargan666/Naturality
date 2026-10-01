@@ -1,0 +1,42 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Fabric: prepare debug resources",
+            "type": "shell",
+            "command": "./gradlew",
+            "windows": { "command": ".\\gradlew.bat" },
+            "args": ["classes", "clientClasses", "gametestClasses", "--console=plain"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": ["$javac"]
+        },
+        {
+            "label": "Fabric: build",
+            "type": "shell",
+            "command": "./gradlew",
+            "windows": { "command": ".\\gradlew.bat" },
+            "args": ["build", "--console=plain"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "group": { "kind": "build", "isDefault": true },
+            "problemMatcher": ["$javac"]
+        },
+        {
+            "label": "Fabric: run client",
+            "type": "shell",
+            "command": "./gradlew",
+            "windows": { "command": ".\\gradlew.bat" },
+            "args": ["runClient", "--console=plain"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": ["$javac"]
+        },
+        {
+            "label": "Fabric: generate VS Code launch configurations",
+            "type": "shell",
+            "command": "./gradlew",
+            "windows": { "command": ".\\gradlew.bat" },
+            "args": ["vscode", "--console=plain"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": []
+        }
+    ]
+}

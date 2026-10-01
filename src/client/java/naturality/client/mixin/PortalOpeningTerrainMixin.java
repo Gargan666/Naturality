@@ -1,0 +1,22 @@
+package naturality.client.mixin;
+import naturality.client.portal.PortalOpeningClient;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.llamalad7.mixinextras.sugar.Local;
+import net.minecraft.client.renderer.chunk.SectionCompiler;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.RenderShape;
+import net.minecraft.world.level.block.state.BlockState;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+
+@Mixin(SectionCompiler.class)
+public abstract class PortalOpeningTerrainMixin {
+    // Gate before Fabric redirects tessellation to Indigo's alternate renderer.
+    @WrapOperation(method = "compile", at = @At(value = "INVOKE",
+        target = "Lnet/minecraft/world/level/block/state/BlockState;getRenderShape()Lnet/minecraft/world/level/block/RenderShape;"))
+    private RenderShape naturality$animatedModel(BlockState state, Operation<RenderShape> original,
+            @Local(name = "pos") BlockPos pos) {
+        return PortalOpeningClient.hidesTerrain(pos, state) ? RenderShape.INVISIBLE : original.call(state);
+    }
+}

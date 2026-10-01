@@ -1,0 +1,28 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:firefly",
+    "minecraft:egg_crack",
+    "minecraft:dripping_dripstone_lava",
+    "minecraft:dripping_dripstone_water",
+    "minecraft:dripping_honey",
+    "minecraft:dripping_lava",
+    "minecraft:dripping_obsidian_tear",
+    "minecraft:dripping_water",
+    "minecraft:flame",
+    "minecraft:small_flame",
+    "minecraft:soul_fire_flame",
+    "minecraft:totem_of_undying",
+    "minecraft:enchant",
+    "minecraft:witch",
+    "minecraft:portal",
+    "minecraft:reverse_portal",
+    "minecraft:dragon_breath",
+    "minecraft:bubble",
+    "minecraft:bubble_pop",
+    "minecraft:bubble_column_up",
+    "minecraft:current_down",
+    "naturality:waterfall",
+    "naturality:waterfall_big"
+  ]
+}

@@ -1,0 +1,167 @@
+NATURALITY - NETHER PORTAL GLOW
+=============================
+
+BEHAVIOR
+--------
+The glow forms a shallow tunnel around the inside of an active obsidian
+portal frame. Each strip faces into the opening: bottom faces up, top
+faces down, and the side strips face one another. Visible reach is about
+0.875 blocks to either side of the portal's center plane.
+
+When looking from beyond the left edge, the right edge is visible and the
+left edge's back face is hidden. The same rule applies from the right,
+above, or below, and for portals aligned along either X or Z. Between the
+edges, both inward faces can be visible. The actual render camera is used,
+so the rule also applies to third-person views.
+
+Hidden particles remain alive. Their orientation never follows the camera.
+Strips sit exactly on the obsidian's inner faces. A reverse-Z depth bias
+gives them priority over coplanar block faces without moving their geometry
+or disabling depth testing. This applies to ordinary and OIT transparency.
+Their gradient uses the active portal PNG's distinct visible colors, sorted
+by linear-light luminance: lightest at the root, darkest at the last visible
+row, with eased progression through actual intermediate source colors.
+The palette includes resource-pack replacements. The portal surface, rim, and drifting squares render full-bright, without directional shading or ambient occlusion. World illumination no longer changes their brightness; fog and transparency still affect appearance.
+Starting opacity is also averaged from the portal texture's alpha channel.
+It stays at that opacity up to the portal surface (0.125 blocks from the
+center plane), then fades in pixel-sized steps to zero at the strip's tip.
+Opacity is averaged across the source texture; palette colors are not.
+Different backgrounds can still change the perceived blended color.
+The effect does not emit additional light into the world.
+Normal depth testing keeps solid terrain in front of the glow opaque.
+Portal sounds and teleportation are unchanged. Portal-block ambient particles
+are replaced with the square motes described below; other particle emitters
+(including portal particles spawned by commands) are not replaced.
+
+DRIFTING SQUARE MOTES
+--------------------
+The portal's normal ambient spawn events now emit sharp, two-sided squares.
+Each starts with the darkest portal palette color and eases through actual palette shades to the lightest as it approaches the surface.
+Squares start outside the portal at zero size and curve inward over 30-45
+ticks. Size depends on distance to the portal surface, growing smoothly to
+one or two standard texture pixels wide as they approach. They disappear
+on arrival or when their source portal is removed or unloaded.
+
+The square's texture X axis follows velocity. It rotates toward the camera around that travel axis: edge-on when viewed along travel, broad from the side.
+Both sides render, with normal terrain depth testing and full-bright light.
+Particle settings and distance limits apply; at most 512 motes coexist.
+The frame glow's one-sided geometry and pixel-wave behavior are separate.
+
+Implementation: PortalMoteParticle.java and PortalMoteGeometry.java under
+src/client/java/naturality/client/particle/. NetherPortalBlockMixin replaces
+only the PORTAL particle call inside the portal block's animateTick method.
+Automated checks cover zero initial size, proximity growth, and orientation
+for diagonal, vertical, opposite-direction, and zero-velocity cases.
+
+PIXEL SLICES AND TUNING
+----------------------
+The fade and slices are now procedural so the outer tip can always reach
+exactly zero opacity without texture padding, sampling seams, or alpha cutoff.
+Your original resources/textures/particle/nether_portal_glow.png is kept intact, but
+editing that PNG no longer changes this effect's shape. The shader uses
+the portal palette and alpha sampled from the active portal texture.
+
+The entrance fade uses expoOut over 10 ticks (half a second), with exact
+zero/one endpoints. Both edge position and depth are quantized into fixed
+1/16-block square cells. Each cell has one color and opacity, sampled with
+nearest filtering. A subtle sine signal is snapped to whole pixel rows,
+so the visible tip ranges from 12 to 15 pixels from the center: a three-pixel
+peak-to-peak wave (1.5-pixel amplitude before snapping).
+The wave has a 24-pixel wavelength and a six-second period. Geometry never
+moves or resizes: only cell colors/alpha change. The root stays anchored
+and adjacent tiles share a continuous wave phase.
+Only two quads per edge are needed; slices do not multiply particle count.
+
+Tune SLICES_PER_BLOCK, WAVE_AMPLITUDE, BASE_REACH and PORTAL_SURFACE in
+PortalGlowGeometry.java. They are passed into the shader as defines.
+Tune the wavelength and speed in shaders/core/portal_glow.fsh.
+
+The client atlas declaration is:
+  src/client/resources/assets/minecraft/atlases/particles.json
+It adds the sprite to the vanilla particle atlas without replacing vanilla
+entries. This effect creates client-local particles directly, so it does
+not require a custom particle type, packet, or server-side registration.
+
+LIFECYCLE AND LIMITS
+-------------------
+A normal portal display tick discovers the connected opening (up to the
+vanilla maximum 21x21). Once discovered, the client maintains one stationary
+particle per portal-block edge touching obsidian. Interior seams do not
+emit strips. There is no once-per-second spawn gate or periodic respawn.
+
+Portal removal, changed edges, unloaded chunks, world changes, and distance
+remove tracked particles. Resource reloads refresh sprites. Particles lost
+when the engine clears or evicts them are replaced after a short check.
+Only loaded chunks are inspected; no chunks are requested by this effect.
+
+Particle settings:
+  All:       glow within 32 blocks of the camera entity
+  Decreased: glow within 16 blocks
+  Minimal:   glow disabled
+The manager caps tracked portal blocks and glow particles at 2048 each.
+These are cosmetic limits; they do not affect portal functionality.
+
+CODE
+----
+src/client/java/naturality/client/particle/PortalGlowController.java
+  Discovery, deduplication, settings, range limits, cleanup, atlas lookup.
+src/client/java/naturality/client/particle/PortalGlowParticle.java
+  Fixed strips, procedural coordinates, full-bright lighting, expoOut,
+  and explicit camera-side rejection during render extraction.
+src/client/java/naturality/client/particle/PortalGlowGeometry.java
+  Portal-axis basis, front-face math, easing, and slice/wave constants.
+src/client/java/naturality/client/particle/PortalGlowRenderLayer.java
+  Coplanar depth bias, transparency blending, and OIT rendering pipelines.
+src/client/java/naturality/client/particle/PortalGlowAppearance.java
+  Samples opacity and uploads a nearest-filtered dynamic palette texture.
+src/client/java/naturality/client/particle/PortalGlowPalette.java
+  Sorts source colors by luminance and builds the light-to-dark lookup table.
+src/client/resources/assets/naturality/shaders/core/portal_glow.fsh
+  Fixed pixel grid, stepped sine animation, eased palette and alpha, fog/OIT.
+src/client/java/naturality/client/mixin/NetherPortalBlockMixin.java
+  Client-only observation hook at the end of NetherPortalBlock.animateTick.
+src/portalGlowTest/java/naturality/client/particle/PortalGlowGeometryTest.java
+  Geometry checks, run automatically by Gradle check/build.
+
+TEST IN GAME
+------------
+Validation on 2026-09-27: the initial implementation was confirmed in game
+by the user. The refinement build passes geometry, coplanarity, expoOut,
+and wave-bound checks. A separate development session successfully loaded
+resources and compiled the registered shaders. The refined appearance still needs an in-world
+visual check; not every scenario below has been manually verified.
+
+1. Run Fabric: run client, then use a creative test world.
+2. Build and light normal obsidian portals in both horizontal orientations.
+3. View each opening straight on, then from beyond its left and right edges.
+   The farther wall should glow; the nearer wall should disappear from behind.
+4. Fly above and below: ceiling/floor follow the same one-sided rule.
+5. Check from the other side of the portal and in third-person view.
+6. Break the frame and confirm the glow disappears with the portal.
+7. Check All / Decreased / Minimal particles and reload resources (F3+T).
+8. Try a large portal and two nearby portals; check that strips do not
+   accumulate or appear across internal portal-block seams.
+
+Portal emissivity also uses PortalMaterialEmissiveMixin (baked material emission 15) and PortalStateEmissiveMixin (full-bright state lighting), in addition to the CPU quad lighting hook. Restart the client to rebuild portal models.
+
+MOTE APPROACH: Spawn centers are strictly more than 0.3 blocks from the portal surface (minimum 0.3001). Distant motes have a 4:1 aspect ratio along texture X / travel, easing back to squares with proximity. Opacity is unchanged above 0.1 blocks, then fades linearly to zero at contact. Growth and color progression use smoothstep proximity. The portal_mote fragment shader clips transverse width and supports the complete fade in regular and OIT rendering.
+
+OPENING: Newly ignited portals hold the glow and portal particles off until the one-second surface reveal completes. The glow appears immediately at full opacity and 150% reach; the surface/glow/mote palette flashes to 200% brightness and 200% saturation. All three multipliers ease back with expo-out over two seconds. The initial fire fades over 0.5 seconds. The server-side portalIntroAnimation setting in config/naturality-server.json controls this sequence; all client visual toggles remain independent. See PROJECT_REFERENCE.txt for synchronization and test details.
+
+OCCLUSION: GPU depth bias is disabled. Glow faces sit 1/1024 block inward from the supporting frame surface to avoid coplanar z-fighting. Rear-side glow is clipped at the portal surface, with no glow inside the 0.25-block portal slab. This prevents the far glow drawing over the portal and avoids angle-dependent bleed through foreground blocks.
+
+OPENING SOUND: A positional End portal activation sound plays once at the opening pulse. Event: naturality:portal_open, Blocks category. See PROJECT_REFERENCE.txt for custom sound replacement.
+
+Opening audio is downmixed to mono in memory to enable normal positional distance fading; vanilla End portal audio remains unchanged.
+
+AUDIO: Mod Menu has opening, ambient and travel volume sliders (0-100%). Destroyed portal ambience stops on the next client tick. Aborted entry audio fades out over 0.25 seconds.
+
+CROSSING VISUALS: The portal surface is now opaque. Entering hitboxes receive a pixelated palette glow strongest at half immersion, visible only from the entry side. Player overlay strength follows physical depth with brightness-dependent expo easing and no minimum alpha. Fully crossing teleports players and entities; backing out cancels. See PROJECT_REFERENCE.txt.
+
+ENTITY RAYS: Hitbox silhouettes now extrude the same pixelated, waving rays as the frame. Covered frame intervals disappear and join the exposed entity boundary, including at the feet. The surface halo remains with filled corners. Completed portals write depth so the surface cannot overpaint foreground rays.
+
+Halo gradient rows use stable rounding to avoid interpolation speckles; outward rays start just ahead of the surface halo rather than intersecting its plane.
+
+MODEL OUTLINES: Entry rays, surface halos and frame shadows now follow the animated model's intersection with the portal on the 16-pixel grid. Unsupported non-model renderers retain hitbox fallback. Teleport timing remains based on physical hitbox crossing. See PROJECT_REFERENCE.txt for implementation and scope.
+
+CAMERA / ARRIVAL: The overlay becomes fully opaque before the camera's near plane crosses the portal. Destination arrivals retain an active crossing: walking outward exits it, while reversing through the portal returns immediately without first stepping away. Standing still does not trigger another teleport.

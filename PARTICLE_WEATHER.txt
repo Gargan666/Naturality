@@ -1,0 +1,61 @@
+CLUSTERED RAIN AND SNOW
+======================
+Replacement artwork:
+  resources/textures/particle/rain_cluster.png, rain_cluster_1.png, rain_cluster_2.png
+  resources/textures/particle/snow_cluster.png, snow_cluster_1.png, snow_cluster_2.png
+
+These are temporary, transparent 128x128 PNGs. Each contains 25-50 marks scattered
+across one square card. Replace any of these files with your artwork, rebuild, and reload
+resources/restart the client. Use a transparent background, leave a clear margin,
+and draw rain streaks vertically. Snow uses dots/small flakes. White/grayscale is
+recommended: world light applies to both, with biome water color tinting on rain. Other square
+resolutions work; resolution does not change the card's 3.6-4.6 block width.
+Particle JSON files under src/client/resources/assets/naturality/particles select
+random image variants if more textures are listed. They are not animation strips.
+
+Each cluster is one simulated particle and one quad, rather than 25 independently
+simulated droplets. Sprite Y stays parallel to velocity. Cards rotate around that axis toward the viewer position, independently of camera rotation.
+Rain streaks follow the actual falling direction; each card has a 50% horizontal
+mirror chance.
+Wind tilts the trajectory. Snow falls about ten times slower, with horizontal sway and gentle fall-speed changes.
+Particles stay at world positions as the camera moves. They fade on birth/expiry,
+near the camera, at the edge of the effect and approaching surfaces.
+
+Natural weather has at most 1536 tracked cluster particles and at most 80 births
+from 320 spawn attempts per tick. A shared particle-engine limit is 1600 including
+manually spawned cards. At weather-radius setting 10, the actual radius is 15 blocks.
+Target counts: rain 25 = 70, rain 50 = 141, rain 75 = 193, rain 100 = 563.
+Density grows cubically above 50. Radius is 1.5 times the setting, capped at 36 blocks.
+Decreased particles halves the budget; Minimal quarters it rather than removing
+weather entirely. Existing particle-engine limits/eviction remain in force.
+
+Loaded heightmaps are checked across each card's entire conservative footprint;
+no chunks are loaded. Cards terminate before entering roofs, ground or water.
+This intentionally fades a whole cluster near uneven terrain instead of simulating
+individual droplet collisions; a small surface clearance can be visible. Vanilla
+rain impacts are thinned by (rain/100)^2: 1% retained at 10, 6.25% at 25,
+25% at 50 and 100% at 100. Sounds, water/lava rings and server snow/ice remain.
+Biome and temperature queries choose rain/snow; dry biomes produce neither. Existing
+cards retire on biome/type changes, clear weather, disabling, distance/lifetime
+expiry, dimension changes or particle-engine resource reload eviction.
+
+The vanilla precipitation sheet pass is skipped only while Naturality weather is
+active in a weather-capable dimension. Disabled profiles and unmodded servers keep
+the vanilla path. Nether and End remain disabled. Both classic and improved
+transparency use Minecraft's translucent particle rendering and local light.
+
+Implementation: ParticleWeather, WeatherClusterParticle, WeatherRendererMixin;
+RAIN_CLUSTER/SNOW_CLUSTER registrations and rain_cluster/snow_cluster particle JSON.
+Verification: gradlew assemble; gradlew runClientGameTest
+  -PclientTests=particle-weather,weather
+The focused particle suite checks budgets, replacement of sheets, position-facing
+orientation including head-on views, slow/swaying snow, roofs, dry biomes, clear
+weather and dimension cleanup, with screenshots in both transparency modes.
+
+
+
+
+The velocity constraint applies to snow too: whole-card in-plane spin is removed
+because it rotates sprite Y away from velocity. Exact head-on views use a stable
+perpendicular fallback normal without releasing the axis lock.
+

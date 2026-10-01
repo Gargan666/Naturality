@@ -1,0 +1,43 @@
+{
+	"schemaVersion": 1,
+	"id": "naturality",
+	"version": "${version}",
+	"name": "Naturality",
+	"description": "The Minecraft I envisioned",
+	"authors": [
+		"Gargan"
+	],
+	"contact": {
+		"homepage": "https://github.com/Gargan666/Naturality",
+		"sources": "https://github.com/Gargan666/Naturality",
+		"issues": "https://github.com/Gargan666/Naturality/issues"
+	},
+	"license": "CC0-1.0",
+	"icon": "assets/naturality/icon.png",
+	"environment": "*",
+	"entrypoints": {
+        "modmenu": ["naturality.client.config.NaturalityModMenu"],
+		"main": [
+			"naturality.Naturality"
+		],
+		"client": [
+			"naturality.client.NaturalityClient"
+		],
+		"fabric-datagen": [
+			"naturality.client.NaturalityDataGenerator"
+		]
+	},
+	"mixins": [
+		"naturality.mixins.json",
+		{
+			"config": "naturality.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.19.5",
+		"minecraft": "~26.3",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

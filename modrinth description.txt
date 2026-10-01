@@ -1,0 +1,36 @@
+- NATURALITY -
+The Minecraft I envisioned
+
+Naturality is a mod aiming to lean into the "pixel" aesthetic of minecraft, overhauling and changing many systems to better fit the style.
+Changes are mostly intended for singleplayer, but I'll try my best to make all serverside changes toggleable.
+I cannot guarantee that the mod works with other mods (especially visual mods) perfectly.
+
+- FEATURES -
+
+- Fluids -
+
+Both lava and water share a bunch of visual overhauls, many being inspired by and similar to mods you may have seen before!
+
+
+Dynamic textures
+
+By recreating the actual mathematical formulas used to create vanilla fluid textures, this mod renders them in real time with randomization, getting rid of that clear tiling present in vanilla textures! Intended to look as similar as possible to vanilla textures.
+
+
+Splashes
+
+
+
+
+As a disclaimer to anyone reading this, I want to make it VERY clear that this is vibecoded. Say what you want
+about the questionable morality of doing so, but for me, it was the only way for me to be able to create this mod
+the way I wanted it. 
+I had many ideas for ways to visually and technically "improve" minecraft, but this is more a proof of concept that
+shows what I think minecraft should look like, and not that I think it is objectively better than anything else.
+I also want to make it clear I have absolutely zero intention of profiting off this mod.
+
+Many of the effects in the mod are inspired off other projects, but no assets were directly ripped from other's work. This mod is not a replacement for other mods, so please check out mods that are intended to work as part of a modpack.
+
+Assistance for developing code.
+Programmed visual effects were designed by me, but developed by AI. 
+All visual design was done by me personally.

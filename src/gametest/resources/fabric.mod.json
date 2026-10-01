@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "naturality-tests",
+  "version": "1.0.0",
+  "name": "Naturality opening integration tests",
+  "environment": "client",
+  "mixins": ["naturality.test.mixins.json"],
+  "entrypoints": {
+    "fabric-client-gametest": ["naturality.test.SelectedClientGameTests"]
+  }
+}

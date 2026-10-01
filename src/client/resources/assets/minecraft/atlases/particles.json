@@ -1,0 +1,9 @@
+{
+  "sources": [
+    {
+      "type": "minecraft:single",
+      "resource": "naturality:particle/nether_portal_glow",
+      "sprite": "naturality:particle/nether_portal_glow"
+    }
+  ]
+}

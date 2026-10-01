@@ -1,0 +1,53 @@
+# gradle
+
+.gradle/
+build/
+out/
+classes/
+
+# eclipse
+
+*.launch
+
+# idea
+
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# vscode
+
+.settings/
+.vscode/*
+!.vscode/tasks.json
+!.vscode/extensions.json
+# Local Java installation and machine-specific VS Code settings
+.tools/
+bin/
+.classpath
+.project
+
+# macos
+
+*.DS_Store
+
+# fabric
+
+run/
+
+# Local logs and credentials
+logs/
+*.log
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# java
+
+hs_err_*.log
+replay_*.log
+*.hprof
+*.jfr
