@@ -9,6 +9,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SnowLayerBlock;
 import net.minecraft.world.level.block.SnowyBlock;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
@@ -16,6 +17,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 public final class SnowGeometry {
     public static final ThreadLocal<net.minecraft.world.level.ClipContext> PICK = new ThreadLocal<>();
     public static final int MAX_DEPTH = 32;
+    private static final float WATER_SURFACE = 7F / 8F;
     public static boolean isFoliage(net.minecraft.world.level.block.state.BlockState state) {
         return state.getBlock() instanceof net.minecraft.world.level.block.VegetationBlock
             || state.getBlock() instanceof net.minecraft.world.level.block.SugarCaneBlock
@@ -28,6 +30,7 @@ public final class SnowGeometry {
         for(int depth=1;depth<=MAX_DEPTH;depth++) {
             var below=pos.below(depth);var support=level.getBlockState(below);
             if(NoSnowBlocks.contains(support))return false;
+            if(support.getFluidState().is(FluidTags.WATER))return false;
             if(support.is(Blocks.SNOW)) {
                 if(support.getValue(SnowLayerBlock.LAYERS)!=8)return false;
                 continue;
@@ -50,6 +53,7 @@ public final class SnowGeometry {
         for (int depth = 1; depth <= MAX_DEPTH - stacked; depth++) {
             var supportPos = pos.below(depth);
             var support = level.getBlockState(supportPos);
+            boolean waterlogged = support.getFluidState().is(FluidTags.WATER);
             if (NoSnowBlocks.contains(support)) break;
             if (support.getBlock() instanceof net.minecraft.world.level.block.LiquidBlock
                     || support.getBlock() instanceof net.minecraft.world.level.block.BaseFireBlock) break;
@@ -69,21 +73,32 @@ public final class SnowGeometry {
             if (support.isAir()) break;
             // A vertical continuation hides this segment's upper surfaces.
             // Keep scanning through it so snow still reaches exposed ground.
-            if (level.getBlockState(supportPos.above()).is(support.getBlock())) continue;
+            if (level.getBlockState(supportPos.above()).is(support.getBlock())) {
+                if (waterlogged) break;
+                continue;
+            }
             // Cactus has a solid, inset upper face. Coat that face while also
             // continuing to the exposed ground beneath the column. Other
             // foliage is walk-through and only receives ground snow.
-            if (SnowSupportOnly.contains(support)) continue;
+            if (SnowSupportOnly.contains(support)) {
+                if (waterlogged) break;
+                continue;
+            }
             if (isFoliage(support) && !(support.getBlock() instanceof net.minecraft.world.level.block.CactusBlock
-                    && !level.getBlockState(supportPos.above()).is(support.getBlock()))) continue;
+                    && !level.getBlockState(supportPos.above()).is(support.getBlock()))) {
+                if (waterlogged) break;
+                continue;
+            }
             var boxes = SnowSupportModels.boxes(level,supportPos);
             var cellTops = new ArrayList<FireSurface.Patch>();
             for (var b : boxes) {
-                if (b.maxX <= b.minX || b.maxZ <= b.minZ) continue;
+                if (b.maxX <= b.minX || b.maxZ <= b.minZ
+                        || (waterlogged && b.maxY <= WATER_SURFACE + 1e-5)) continue;
                 cellTops.add(new FireSurface.Patch((float)b.minX, (float)b.maxY - depth, (float)b.minZ,
                     (float)(b.maxX-b.minX), 0, 0, (float)(b.maxZ-b.minZ)));
             }
             tops.addAll(FireSurface.exposed(cellTops));
+            if (waterlogged) break;
             if (!exposesGround(level,supportPos)) break;
         }
         // Each partial support gets its own coating; a complete footprint ends
@@ -93,6 +108,7 @@ public final class SnowGeometry {
     /** Whether some of the ground remains exposed through the support's footprint. */
     public static boolean exposesGround(BlockGetter level,BlockPos pos) {
         var state=level.getBlockState(pos);
+        if(state.getFluidState().is(FluidTags.WATER))return false;
         if(state.getBlock() instanceof net.minecraft.world.level.block.BaseFireBlock)return false;
         if(isFoliage(state) || SnowSupportOnly.contains(state))return true;
         VoxelShape footprint=Shapes.empty();

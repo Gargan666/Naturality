@@ -82,6 +82,40 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                 check(!((net.minecraft.world.item.BlockItem)waterSnow.getItem()).place(waterClick).consumesAction(),
                     "Player snow placement rejects water");
                 check(level.getBlockState(water.above()).isAir(),"Rejected water snow leaves the surface clear");
+                for (int index=0;index<3;index++) {
+                    var waterlogged = new BlockPos(14+index*2,100,6);
+                    level.setBlock(waterlogged.below(),Blocks.STONE.defaultBlockState(),3);
+                    var block = switch(index) {
+                        case 0 -> Blocks.OAK_SLAB;
+                        case 1 -> Blocks.OAK_FENCE;
+                        default -> Blocks.COBBLESTONE_WALL;
+                    };
+                    var state = block.defaultBlockState().setValue(
+                        net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED,true);
+                    level.setBlock(waterlogged,state,3);
+                    var patches = SnowGeometry.surfaces(level,waterlogged.above());
+                    if (index==0) {
+                        check(patches.isEmpty(),"Submerged waterlogged slab has no snow surface");
+                        check(!Blocks.SNOW.defaultBlockState().canSurvive(level,waterlogged.above()),
+                            "Snow cannot be placed on a submerged waterlogged block");
+                    } else {
+                        check(!patches.isEmpty(),"Waterlogged fence or wall retains its exposed top");
+                        check(patches.stream().allMatch(p -> p.y() >= -1e-5),
+                            "Waterlogged support has no ground snow beneath the water");
+                        check(Blocks.SNOW.defaultBlockState().canSurvive(level,waterlogged.above()),
+                            "Snow can cover the exposed top of a waterlogged support");
+                    }
+                    var stack = new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.SNOW,1);
+                    var click = new net.minecraft.world.item.context.BlockPlaceContext(level,null,
+                        net.minecraft.world.InteractionHand.MAIN_HAND,stack,
+                        new net.minecraft.world.phys.BlockHitResult(
+                            new Vec3(waterlogged.getX()+.5,waterlogged.getY()+1,waterlogged.getZ()+.5),
+                            Direction.UP,waterlogged,false));
+                    check(((net.minecraft.world.item.BlockItem)stack.getItem()).place(click).consumesAction()==(index!=0),
+                        "Snow item only places on a waterlogged block's exposed top");
+                    check(level.getBlockState(waterlogged.above()).is(index==0?Blocks.AIR:Blocks.SNOW),
+                        "Waterlogged placement stays above its support");
+                }
                 var mixed=new BlockPos(11,100,5);
                 level.setBlock(mixed,Blocks.FIRE.defaultBlockState(),18);
                 level.setBlock(mixed.above(),Blocks.SNOW.defaultBlockState(),18);

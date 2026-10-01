@@ -17,7 +17,7 @@ Visual design is by Gargan; implementation was developed with AI assistance.
 
 ## Requirements and installation
 
-This project targets **Minecraft 26.3**, **Fabric Loader 0.19.5 or newer**, **Fabric API**, and **Java 25**. Exact development dependency versions are in [`gradle.properties`](gradle.properties).
+This project is for **Minecraft 26.3**, **Fabric Loader 0.19.5 or newer**, **Fabric API**, and **Java 25**. Exact development dependency versions are in [`gradle.properties`](gradle.properties).
 
 Place the built `naturality-1.0.0.jar` and a compatible Fabric API JAR in the Fabric instance's `mods` folder. The `-sources.jar` is for developers. [Mod Menu](https://modrinth.com/mod/modmenu) is optional and provides access to the configuration screen; without it, edit `config/naturality.json` while the game is closed.
 
