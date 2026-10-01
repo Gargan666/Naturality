@@ -33,6 +33,7 @@ public abstract class SnowPlacementMixin {
         }
         var level = context.getLevel();
         var target = context.getClickedPos();
+        if (naturality.snow.NoSnowBlocks.contains(level.getBlockState(target))) return InteractionResult.FAIL;
         // A displaced snow hit still names its saved owner. Vanilla offsets side
         // hits to an adjacent cell before we get here, so recover that owner first.
         var clicked=context.replacingClickedOnBlock() ? target : target.relative(context.getClickedFace().getOpposite());

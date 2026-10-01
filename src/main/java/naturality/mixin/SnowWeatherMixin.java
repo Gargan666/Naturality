@@ -35,8 +35,8 @@ public abstract class SnowWeatherMixin {
                 !=net.minecraft.world.level.biome.Biome.Precipitation.SNOW
                 || level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK,surface)>=10)return;
         var old=level.getBlockState(surface);
-        if(old.getBlock() instanceof BaseFireBlock
-                && !Blocks.SNOW.defaultBlockState().canSurvive(level,surface))return;
+        if(naturality.snow.NoSnowBlocks.contains(old)
+                || !Blocks.SNOW.defaultBlockState().canSurvive(level,surface))return;
         int layers=old.is(Blocks.SNOW)?old.getValue(SnowLayerBlock.LAYERS):0;
         if(layers>=max)return;
         var snow=Blocks.SNOW.defaultBlockState().setValue(SnowLayerBlock.LAYERS,layers+1);

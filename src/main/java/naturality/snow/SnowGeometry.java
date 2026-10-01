@@ -27,6 +27,7 @@ public final class SnowGeometry {
     public static boolean usesVanillaGeometry(BlockGetter level, BlockPos pos) {
         for(int depth=1;depth<=MAX_DEPTH;depth++) {
             var below=pos.below(depth);var support=level.getBlockState(below);
+            if(NoSnowBlocks.contains(support))return false;
             if(support.is(Blocks.SNOW)) {
                 if(support.getValue(SnowLayerBlock.LAYERS)!=8)return false;
                 continue;
@@ -49,6 +50,7 @@ public final class SnowGeometry {
         for (int depth = 1; depth <= MAX_DEPTH - stacked; depth++) {
             var supportPos = pos.below(depth);
             var support = level.getBlockState(supportPos);
+            if (NoSnowBlocks.contains(support)) break;
             if (support.getBlock() instanceof net.minecraft.world.level.block.LiquidBlock
                     || support.getBlock() instanceof net.minecraft.world.level.block.BaseFireBlock) break;
             if (support.is(Blocks.SNOW)) {

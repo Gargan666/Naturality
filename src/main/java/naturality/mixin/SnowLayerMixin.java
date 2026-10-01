@@ -18,6 +18,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class SnowLayerMixin {
     @Inject(method = "canSurvive", at = @At("HEAD"), cancellable = true)
     private void naturality$support(BlockState state, LevelReader level, BlockPos pos, CallbackInfoReturnable<Boolean> cir) {
+        if (naturality.snow.NoSnowBlocks.contains(level.getBlockState(pos))
+                || naturality.snow.NoSnowBlocks.contains(level.getBlockState(pos.below()))) {
+            cir.setReturnValue(false);
+            return;
+        }
         if (naturality.snow.ShapeRecursionGuard.active()) return;
         if (!naturality.config.GameplaySettings.snowWrapping(level)) return;
         cir.setReturnValue(!SnowGeometry.surfaces(level, pos).isEmpty());

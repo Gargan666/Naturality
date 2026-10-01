@@ -67,6 +67,21 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                 var unlitCampfire=Blocks.CAMPFIRE.defaultBlockState().setValue(CampfireBlock.LIT,false);
                 check(!naturality.snow.SnowSupportOnly.contains(unlitCampfire),"Unlit campfire can receive ordinary snow coating");
                 level.removeBlock(supportOnly,false);
+                var water = new BlockPos(12,100,6);
+                level.setBlock(water,Blocks.WATER.defaultBlockState(),3);
+                check(naturality.snow.NoSnowBlocks.contains(level.getBlockState(water)),
+                    "Water is in the configurable nosnow block tag");
+                check(!Blocks.SNOW.defaultBlockState().canSurvive(level,water.above()),
+                    "Snow cannot survive above water");
+                check(!Blocks.SNOW.defaultBlockState().canSurvive(level,water),
+                    "Snow cannot replace a water block");
+                var waterSnow = new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.SNOW,1);
+                var waterClick = new net.minecraft.world.item.context.BlockPlaceContext(level,null,
+                    net.minecraft.world.InteractionHand.MAIN_HAND,waterSnow,
+                    new net.minecraft.world.phys.BlockHitResult(new Vec3(12.5,101,6.5),Direction.UP,water,false));
+                check(!((net.minecraft.world.item.BlockItem)waterSnow.getItem()).place(waterClick).consumesAction(),
+                    "Player snow placement rejects water");
+                check(level.getBlockState(water.above()).isAir(),"Rejected water snow leaves the surface clear");
                 var mixed=new BlockPos(11,100,5);
                 level.setBlock(mixed,Blocks.FIRE.defaultBlockState(),18);
                 level.setBlock(mixed.above(),Blocks.SNOW.defaultBlockState(),18);
