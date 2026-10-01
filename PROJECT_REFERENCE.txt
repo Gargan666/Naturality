@@ -1,6 +1,25 @@
 NATURALITY - PROJECT REFERENCE
 =============================
+SNOW / SODIUM SNAPSHOT LIGHTING FIX (2026-10-01)
+WindRendering now queries BlockAndTintGetter.getBrightness(SKY, pos) for both
+snow-on-leaf exposure and foliage tags. Sodium LevelSlice intentionally throws
+from getLightEngine because live light-engine reads are unsafe on mesh workers;
+its getBrightness reads the captured lighting snapshot. The snow-compat client
+suite checks bright/dark snapshot-only views and rebuilds snow-covered leaves
+across chunk boundaries. Run with and without -PsodiumTestJar=path/to/sodium.jar.
+
 Updated: 2026-10-01
+
+SKY EVENTS PER WORLD (2026-10-01)
+--------------------------------
+Sky-event overrides now live in each save's sky_events saved data, with separate
+settings per dimension. The installation-wide naturality-server.json skyEvents
+field is no longer read, so an override from one world cannot activate in a
+different world. Automatic meteor, rainbow, and aurora cycles remain session
+state and are cleared when the server stops. Client event values and live visual
+instances clear on disconnect. A new world starts with automatic events and no
+overrides; existing installation-wide overrides must be set again in the
+intended world with /skyevent.
 
 GITHUB REPOSITORY SETUP (2026-10-01)
 -----------------------------------
@@ -26,7 +45,9 @@ lift the ring center farther upward so the arc moves up visibly
 instead of sinking with its reduced radius. The full-size ring center stays at
 a fixed sky elevation; the sun chooses which side of the sky it occupies. As the
 sun approaches the middle, the ring eases larger and fades to zero opacity;
-it returns on the other side as the sun moves away. Its transparent edge
+its radius transition spans about four times the sun-angle range of the opacity
+fade, so both changes overlap near the middle. It returns on the other side as
+the sun moves away. Its transparent edge
 pixels are added only at the diagonal staircase corners of the opaque arc.
 The existing 10-color palette is
 drawn with ordinary translucent alpha blending and a fixed pastel palette mix,
@@ -2932,7 +2953,8 @@ The Liquids page groups Water and Lava controls with each master toggle first.
 
 SKY EVENTS / OVERWORLD METEOR SHOWER (2026-09-30)
 ------------------------------------------------
-Sky Events is independent of rain, with explicit per-dimension event pools.
+Sky Events has explicit per-dimension event pools; Rainbow additionally requires
+a moderate rain value.
 The Overworld contains Meteor Shower, Aurora Borealis and Rainbow; the End has an empty pool ready for later
 events. The Nether has none. The server evolves and synchronizes each event's
 0-20 strength to compatible clients on join and every ten ticks. Both server
@@ -2943,17 +2965,9 @@ Use the operator command `/skyevent <dimension> <event> <strength>` to set a
 persistent strength override from 0 to 20. For example,
 `/skyevent minecraft:overworld meteor_shower 12`. Event names are suggested
 for the selected dimension. Run `/skyevent <dimension> <event> auto` to resume
-automatic scheduling. The command is disabled for non-operators. Dedicated servers
-can also edit naturality-server.json:
-  "skyEvents": {
-    "minecraft:overworld": {
-      "meteor_shower": { "override": false, "strength": 10 },
-      "aurora_borealis": { "override": false, "strength": 10 },
-      "rainbow": { "override": false, "strength": 10 }
-    },
-    "minecraft:the_end": {}
-  }
-Missing settings receive defaults; strengths clamp to 0-20 on load/save.
+automatic scheduling. The command is disabled for non-operators. Overrides are
+saved with the world, with independent settings for each dimension. Missing
+settings receive defaults; strengths clamp to 0-20 on load/save.
 
 Automatic meteor showers roll to start each eligible night tick (40% chance
 over one minute while quiet) and remain active for 12,000-24,000 ticks.
@@ -2982,8 +2996,8 @@ the render pass; a single static quad is shared by every instance and released
 with SkyRenderer. World changes/disconnects clear sprites and spawning remainder;
 disconnect also clears synchronized strength. Resource packs can replace frames.
 
-Implementation: naturality.sky (type pools, settings, cycle, payload and command),
-client.sky.MeteorShower, SkyEventsMixin and server config.
+Implementation: naturality.sky (type pools, per-world settings, cycle, payload and command),
+client.sky.MeteorShower and SkyEventsMixin.
 Focused validation: gradlew assemble runClientGameTest -PclientTests=sky-events.
 The suite checks automatic start/stop/easing, bounds, gamerule freeze, animation
 frames, fade-in-only opacity, network strength, spawning, zero-strength expiry,
@@ -2998,7 +3012,7 @@ The Sky Events config-menu slider page was removed in favor of the server comman
 /skyevent <dimension> <event> <strength>, with the 0-20 range and dimension
 aware event suggestions. /skyevent <dimension> <event> auto clears an override
 and resumes the weather-like automatic cycle. Both command forms require the
-normal gamemaster permission and save the override to naturality-server.json.
+normal gamemaster permission and save the override with the world.
 Unsupported dimension/event combinations return a command error.
 
 Meteor sprites are now 25% smaller (3-6 sky units tall, about 0.64-1.29 wide)
@@ -3080,7 +3094,7 @@ The Overworld event pool now also contains aurora_borealis. Aurora can start and
 render during both daytime and nighttime. Meteor Shower remains night-only.
 Use /skyevent minecraft:overworld aurora_borealis 20 to preview full strength,
 0 to fade it away, and auto to restore natural occurrence. Overrides persist
-in naturality-server.json using the existing per-dimension skyEvents map.
+in that world's saved sky-event settings, independently per dimension.
 Missing aurora settings are added automatically when existing configs load.
 
 Natural auroras are local to occupied 1024x1024-block regions. Players sharing a
@@ -3415,3 +3429,95 @@ does not paint over foreground entities or leak celestial bodies through terrain
 OverworldFogGameTest freezes sunset time and checks that turning 30 degrees
 preserves the horizon base RGB, with terrain screenshots before/after the turn.
 Validation: assemble and the focused fog,water-occlusion client suites passed; sunset terrain/open/turned screenshots inspected. Log: build/directional-fog-test.log.
+AUTONOMOUS RAIN AND WIND STARTS (2026-10-01)
+Automatic rain and wind now remain at 0 until independent start rolls succeed.
+Each start begins with a randomized boost, then the slider wanders smoothly for
+its active period before easing back to zero. ADVANCE_WEATHER pauses the cycles;
+manual slider overrides remain direct. Newly initialized worlds start automatic
+rain and wind at 0 and temperature at 50.
+
+CLIMATE-BASED ICE MELT (2026-10-01)
+During Naturality weather, sampled surface ice melts whenever the custom
+biome/temperature precipitation result is rain. Snowy biome conditions prevent
+this forced melt; existing high-temperature snow and ice thaw remains in place.
+
+BLOCK BREAKING PARTICLE TEXELS (2026-10-01)
+Vanilla terrain fragments sample a quarter of the block's particle sprite from
+fractional UV offsets. TerrainParticlePixelMixin chooses integer source-texel
+origins and preserves a quarter-texture crop. TerrainParticleExtractMixin emits
+the crop as per-texel quads and omits zero to four distinct random texels per
+fragment, creating crisp pixel-aligned cutouts and occasional transparent holes.
+Larger source sprites emit more quads because each sampled texel remains its own
+visible pixel. Mixin registration is in naturality.client.mixins.json. Full Gradle
+verification was unavailable because the cached Loom plugin metadata could not
+resolve offline and external network access is blocked. A direct Java 25 source
+compile emitted all three class files without source diagnostics, then reported
+a sandbox access error while closing a cached dependency archive.
+WATER RENDERER COMPATIBILITY (2026-10-01)
+Sodium 0.9.3-alpha.1+mc26.3 has a dedicated optional water bridge. Its own
+SodiumChunkSection.renderGroup draws the mask using Sodium's compressed vertices,
+region buffers and sorting. SodiumWaterPipelineMixin supplies matching shader
+layouts, a mask pipeline, and the shared Naturality terrain fragment shader;
+sodium_water.vsh adapts Sodium vertices to that shader. Procedural water, depth
+absorption, floor shimmer, refraction and model rims work in both transparency
+modes without changing Sodium settings. The bridge does not bundle Sodium.
+Its source API was checked against:
+https://github.com/CaffeineMC/sodium/tree/mc26.3-0.9.3-alpha.1
+Water and foliage wind are supported; other terrain features, such as
+procedural fire, may still need Sodium compatibility work.
+
+Unknown renderers without the vanilla TerrainUniform still skip the extra mask
+pass safely. Both mask/depth views are invalidated to prevent stale-frame reads.
+The water suite checks missing buffers, real mask creation, both transparency
+modes, toggles and resource reloads. Optional local Sodium test invocation:
+  gradlew runClientGameTest -PclientTests=water -PsodiumTestJar=path/to/sodium.jar
+Omit sodiumTestJar for vanilla testing. Never use both copies in a test runtime.
+
+FOLIAGE WIND RENDERER COMPATIBILITY (2026-10-01)
+FoliageWindModel supplies position-dependent wind markers through Fabric's model
+API, including Sodium, which bypasses vanilla/Indigo tagging hooks. Initial model
+baking also recognizes LeavesBlock before block tags are bound. Existing snow
+and plant markers are preserved, and submerged foliage is excluded.
+Both terrain vertex shaders share foliage_wind.glsl, preserving pixel stepping,
+root anchors, vine attachments and snow-on-leaf movement. Sodium binds the same
+wind uniform and respects the foliage wind toggle in both transparency modes.
+The wind-compat suite checks leaf, grass, cane and vine geometry markers and
+captures enabled/disabled wind in both modes. Run the targeted regression with:
+  gradlew runClientGameTest -PclientTests=wind-compat,water
+Add -PsodiumTestJar=path/to/sodium.jar to check the Sodium renderer.
+
+MODEL CAPTURE OVERLOAD FIX (2026-10-01)
+Shield special rendering uses a nine-argument submitModel overload whose seventh
+argument is a SpriteId, not a color integer. PortalModelCapture now dispatches
+default adapters before handling the canonical submission, preventing the
+SpriteId-to-Integer ClassCastException in water rims and portal outlines.
+The water suite explicitly captures a shield-bearing model, with and without
+Sodium. This crash is independent of the missing terrain-buffer failure.
+
+WORLD-BOUND WEATHER SYNCHRONIZATION (2026-10-01)
+Weather slider profiles and server cycles remain scoped to each saved world.
+Each server session now tags synchronized weather packets with a unique token;
+when the token changes, the client clears its dimension cache before applying
+new states, preventing active weather from a previously loaded world leaking
+into the next one.
+DOWNWIND FOLIAGE OVERLAY SHAKE (2026-10-01)
+The fast high-wind foliage shake now modulates a positive downwind displacement
+instead of alternating around zero. Its irregular world-space phases remain,
+while the overlay motion no longer reverses against the current wind angle.
+OPEN-AIR WIND SHELTER TEST (2026-10-01)
+Wind exposure now requires direct sky access or an unobstructed collision ray
+from the subject to a nearby sky-visible sample. Window daylight no longer
+counts as outdoor exposure through glass. Particle drift uses its own position;
+foliage wind scales with the player's smoothed open-air exposure, preserving
+wind under open-sided overhangs while suppressing it inside enclosed rooms.
+FOLIAGE WIND EXPOSURE IS POSITION-LOCAL (2026-10-02)
+Foliage wind no longer follows the player's indoor/outdoor state. Chunk mesh
+wind tags trace from each foliage block through collision shapes to nearby
+sky-visible open air, so plants inside a roofed building stay still regardless
+of where the player walks. Open-sided overhangs remain exposed. Particle wind
+continues to test each particle's own position. At wind above 80, the combined
+foliage displacement is clamped to the downwind half-plane, preventing the
+large sway and fast shake from pulling against the current direction.
+At the strongest gusts, the broad sway center also shifts halfway downwind,
+while retaining its limiter against backward movement. The client game-test
+snapshot now covers foliage shelter beneath a roof despite skylight readings.

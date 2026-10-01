@@ -6,7 +6,6 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;
 import java.util.ArrayList;
 import java.util.Locale;
-import naturality.config.NaturalityServerConfig;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -33,10 +32,7 @@ public final class SkyEventCommand {
                 var level = DimensionArgument.getDimension(context, "dimension");
                 var type = find(level, StringArgumentType.getString(context, "event"));
                 int strength = IntegerArgumentType.getInteger(context, "strength");
-                var settings = NaturalityServerConfig.get().skyEvents.get(id(level)).get(type.id);
-                settings.strength = strength;
-                settings.override = true;
-                NaturalityServerConfig.get().save();
+                SkyEventWorldData.get(level.getServer()).override(level, type, true, strength);
                 String visibility = "";
                 if (type == SkyEventType.RAINBOW && strength > 0) {
                     float rain = SkyEvents.rainfall(level);
@@ -53,8 +49,8 @@ public final class SkyEventCommand {
             event.then(Commands.literal("auto").executes(context -> {
                 var level = DimensionArgument.getDimension(context, "dimension");
                 var type = find(level, StringArgumentType.getString(context, "event"));
-                NaturalityServerConfig.get().skyEvents.get(id(level)).get(type.id).override = false;
-                NaturalityServerConfig.get().save();
+                var data = SkyEventWorldData.get(level.getServer());
+                data.override(level, type, false, data.settings(level, type).strength);
                 context.getSource().sendSuccess(() -> Component.literal("Sky event " + type.label + " in " + id(level)
                     + " returned to automatic scheduling."), true);
                 return Command.SINGLE_SUCCESS;
@@ -81,7 +77,7 @@ public final class SkyEventCommand {
         lines.append(':');
         boolean advance = level.getGameRules().get(net.minecraft.world.level.gamerules.GameRules.ADVANCE_WEATHER);
         for (var type : pool) {
-            var settings = NaturalityServerConfig.get().skyEvents.get(dimension).get(type.id);
+            var settings = SkyEventWorldData.get(level.getServer()).settings(level, type);
             float value = SkyEvents.strength(level, type);
             boolean active;
             String detail;

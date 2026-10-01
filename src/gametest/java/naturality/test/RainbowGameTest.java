@@ -2,7 +2,6 @@ package naturality.test;
 
 import naturality.client.sky.RainbowRenderer;
 import naturality.client.weather.ParticleWeather;
-import naturality.config.NaturalityServerConfig;
 import naturality.sky.*;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -47,9 +46,6 @@ public final class RainbowGameTest implements FabricClientGameTest {
         cycle.tick(true, false, 10);
         check(!cycle.active() && cycle.strength() < 20, "Sunset ends automatic rainbow activity");
 
-        var config = NaturalityServerConfig.get();
-        var saved = config.skyEvents;
-        config.skyEvents = SkyEvents.defaults();
         var previousClouds = new CloudStatus[1];
         context.runOnClient(client -> {
             previousClouds[0] = client.options.cloudStatus().get();
@@ -115,8 +111,6 @@ public final class RainbowGameTest implements FabricClientGameTest {
                 "Rain twenty suppresses even a rainbow override"));
             server.runCommand("skyevent minecraft:overworld rainbow auto");
         } finally {
-            config.skyEvents = saved;
-            config.save();
             context.runOnClient(client -> client.options.cloudStatus().set(previousClouds[0]));
         }
     }

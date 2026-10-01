@@ -17,19 +17,31 @@ public final class WeatherThaw {
     }
     public static void tick(ServerLevel level, LevelChunk chunk, int tickSpeed) {
         var weather = WeatherSystem.state(level);
-        if (!naturality.config.NaturalityServerConfig.get().weatherThaw || tickSpeed <= 0 || weather == null || chance(weather.temperature()) <= 0) return;
+        if (!naturality.config.NaturalityServerConfig.get().weatherThaw || tickSpeed <= 0 || weather == null) return;
         var random = level.getRandom();
+        float snowChance = chance(weather.temperature());
         for (int i=0; i<8; i++) {
-            if (random.nextFloat() >= chance(weather.temperature())) continue;
             int x=chunk.getPos().getMinBlockX()+random.nextInt(16);
             int z=chunk.getPos().getMinBlockZ()+random.nextInt(16);
             var surface = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING, new BlockPos(x,0,z));
             // Thin snow may sit above the heightmap; ice and thick snow are below it.
-            if (!thawAt(level, surface) && !thawAt(level, surface.below())) {
+            boolean thawed = random.nextFloat() < snowChance && thawAt(level, surface);
+            if (!thawed) thawed = random.nextFloat() < snowChance && thawAt(level, surface.below());
+            if (!thawed) {
                 // Snow above signs/other non-motion-blocking shapes lives above
                 // the ordinary weather heightmap but must still thaw normally.
                 var visible = level.getHeightmapPos(Heightmap.Types.WORLD_SURFACE, new BlockPos(x,0,z)).below();
-                if (visible.getY() > surface.getY()) thawAt(level, visible);
+                if (visible.getY() > surface.getY() && random.nextFloat() < snowChance)
+                    thawed = thawAt(level, visible);
+            }
+            if (!thawed) {
+                // Ice melts as soon as the custom climate classifies this biome
+                // as rainy, independent of the faster high-temperature thaw roll.
+                thawRainIceAt(level, surface);
+                thawRainIceAt(level, surface.below());
+                thawRainIceAt(level, surface.below(2));
+                var visible = level.getHeightmapPos(Heightmap.Types.WORLD_SURFACE, new BlockPos(x,0,z)).below();
+                if (visible.getY() > surface.getY()) thawRainIceAt(level, visible);
             }
         }
     }
@@ -49,6 +61,18 @@ public final class WeatherThaw {
             level.setBlockAndUpdate(pos, Blocks.WATER.defaultBlockState());
             level.neighborChanged(pos, Blocks.WATER, null);
         }
+        return true;
+    }
+
+    private static boolean thawRainIceAt(ServerLevel level, BlockPos pos) {
+        var weather = WeatherSystem.state(level);
+        if (!naturality.config.NaturalityServerConfig.get().weatherThaw || weather == null
+                || !naturality.util.LoadedChunks.has(level, pos)
+                || !level.getBlockState(pos).is(Blocks.ICE)
+                || WeatherSystem.precipitation(level, level.getBiome(pos).value(), pos) != Biome.Precipitation.RAIN)
+            return false;
+        level.setBlockAndUpdate(pos, Blocks.WATER.defaultBlockState());
+        level.neighborChanged(pos, Blocks.WATER, null);
         return true;
     }
 }

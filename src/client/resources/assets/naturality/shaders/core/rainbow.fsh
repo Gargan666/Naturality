@@ -14,8 +14,13 @@ void main() {
     float daylight = smoothstep(0.0, 0.14, sunHeight);
     float horizon = smoothstep(0.0, 0.075, skyHeight);
     // Sample the whole curved ring at one square sky-space cell per sun pixel.
-    float sideFade = smoothstep(0.0, 0.5, abs(sin(ColorModulator.y)));
-    float radius = radians(mix(28.0, 46.0, ColorModulator.w) + 9.0 * (1.0 - sideFade));
+    // Opacity fades near the side switch; radius takes four times as much
+    // celestial rotation to settle, and keeps changing during that fade.
+    float middleDistance = abs(atan(sin(ColorModulator.y), cos(ColorModulator.y)));
+    float sideFade = smoothstep(0.0, 0.5, middleDistance);
+    float sizeProgress = smoothstep(0.0, 2.0, middleDistance);
+    float middleExpansion = pow(1.0 - sizeProgress, 2.0);
+    float radius = radians(mix(28.0, 46.0, ColorModulator.w) + 9.0 * middleExpansion);
     float pixelSize = 1.875;
     vec2 cell = floor(ringPlane / pixelSize);
     vec2 pixelCenter = (cell + 0.5) * pixelSize;

@@ -7,16 +7,23 @@ import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
 import com.mojang.renderpearl.api.pipeline.UniformType;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.HashMap;
+import java.util.Map;
 import naturality.weather.WeatherSystem;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.block.BlockAndTintGetter;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.block.*;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.LightLayer;
+import net.minecraft.world.phys.Vec3;
 
 public final class WindRendering {
     public static final BindGroupLayout LAYOUT = BindGroupLayout.builder().withUniform("NaturalityWind", UniformType.UNIFORM_BUFFER).build();
     private static @org.jspecify.annotations.Nullable GpuBuffer uniform;
+    private static final ThreadLocal<ExposureCache> EXPOSURE_CACHE = ThreadLocal.withInitial(ExposureCache::new);
+    private static final int[] EXPOSURE_DISTANCES = {4, 8};
+    private static final int[] EXPOSURE_HEIGHTS = {3};
     private WindRendering() {}
     /** Reserved tint-alpha markers, below the water occupancy range 246..254. */
     public static int tag(BlockState state) {
@@ -32,7 +39,7 @@ public final class WindRendering {
     /** Connected segments sample one continuous world-space field at their shared edges. */
     public static int vertexTag(net.minecraft.client.renderer.block.BlockAndTintGetter level, net.minecraft.core.BlockPos pos,
             BlockState state, float x, float y, float z) {
-        if (tag(state) != 255 && level.getLightEngine().getLayerListener(LightLayer.SKY).getLightValue(pos) == 0) return 255;
+        if (tag(state) != 255 && !windExposed(level, pos)) return 255;
         if (connected(state)) {
             if (state.getBlock() instanceof VineBlock) {
                 int mask = vineSupportMask(state);
@@ -53,7 +60,71 @@ public final class WindRendering {
         return vertexTag(state,x,y,z);
     }
     public static boolean exposed(net.minecraft.client.renderer.block.BlockAndTintGetter level, net.minecraft.core.BlockPos pos) {
-        return level.getLightEngine().getLayerListener(LightLayer.SKY).getLightValue(pos) > 0;
+        // Chunk render views may expose only their thread-safe lighting snapshot.
+        return level.getBrightness(LightLayer.SKY, pos) > 0;
+    }
+    /** Test exposure at the foliage itself; player location must not control plants indoors. */
+    public static boolean windExposed(net.minecraft.client.renderer.block.BlockAndTintGetter level,
+            net.minecraft.core.BlockPos pos) {
+        var cache = EXPOSURE_CACHE.get();
+        if (cache.view != level) {
+            cache.view = level;
+            cache.values.clear();
+        }
+        long key = pos.asLong();
+        var cached = cache.values.get(key);
+        if (cached != null) return cached;
+        boolean result = hasOpenSkyPath(level, pos);
+        if (cache.values.size() >= 4096) cache.values.clear();
+        cache.values.put(key, result);
+        return result;
+    }
+    private static boolean hasOpenSkyPath(net.minecraft.client.renderer.block.BlockAndTintGetter level,
+            net.minecraft.core.BlockPos pos) {
+        if (level.getBrightness(LightLayer.SKY, pos) <= 0) return false;
+        Vec3 origin = new Vec3(pos.getX() + .5, pos.getY() + .5, pos.getZ() + .5);
+        if (openSkyColumn(level, origin)) return true;
+        for (int distance : EXPOSURE_DISTANCES) for (int dy : EXPOSURE_HEIGHTS)
+            for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
+                if ((dx == 0 && dz == 0) || Math.max(Math.abs(dx), Math.abs(dz)) != 1) continue;
+                Vec3 target = origin.add(dx * distance, dy, dz * distance);
+                var targetPos = net.minecraft.core.BlockPos.containing(target);
+                if (level.getBrightness(LightLayer.SKY, targetPos.above(5)) <= 0) continue;
+                if (passable(level, targetPos) && openSkyColumn(level, target) && clearRay(level, origin, target)) return true;
+            }
+        return false;
+    }
+    private static boolean openSkyColumn(net.minecraft.client.renderer.block.BlockAndTintGetter level, Vec3 origin) {
+        Vec3 top = origin.add(0, 5, 0);
+        var topPos = net.minecraft.core.BlockPos.containing(top);
+        return level.getBrightness(LightLayer.SKY, topPos) > 0 && passable(level, topPos)
+            && clearRay(level, origin, top);
+    }
+    private static boolean passable(net.minecraft.client.renderer.block.BlockAndTintGetter level,
+            net.minecraft.core.BlockPos pos) {
+        var state = level.getBlockState(pos);
+        return state.is(BlockTags.LEAVES) || state.getBlock() instanceof VegetationBlock
+            || state.getCollisionShape(level, pos).isEmpty();
+    }
+    private static boolean clearRay(net.minecraft.client.renderer.block.BlockAndTintGetter level, Vec3 from, Vec3 to) {
+        double span = Math.max(Math.max(Math.abs(to.x - from.x), Math.abs(to.y - from.y)), Math.abs(to.z - from.z));
+        int steps = Math.max(1, (int)Math.ceil(span * 4));
+        net.minecraft.core.BlockPos previous = null;
+        for (int i = 1; i < steps; i++) {
+            var sample = from.lerp(to, i / (double)steps);
+            var pos = net.minecraft.core.BlockPos.containing(sample);
+            if (previous != null && pos.equals(previous)) continue;
+            previous = pos;
+            var state = level.getBlockState(pos);
+            if (state.is(BlockTags.LEAVES) || state.getBlock() instanceof VegetationBlock) continue;
+            var shape = state.getCollisionShape(level, pos);
+            if (!shape.isEmpty() && shape.clip(from, to, pos) != null) return false;
+        }
+        return true;
+    }
+    private static final class ExposureCache {
+        private @org.jspecify.annotations.Nullable BlockAndTintGetter view;
+        private final Map<Long, Boolean> values = new HashMap<>();
     }
     public static int vineSupportMask(BlockState state) {
         if (!(state.getBlock() instanceof VineBlock)) return 0;
@@ -92,11 +163,12 @@ public final class WindRendering {
         var client = Minecraft.getInstance();
         var level = client.level;
         var s = !naturality.config.NaturalityConfig.get().effects.foliageWind || level == null ? null : WeatherSystem.state(level);
+        float windScale = s == null ? 0 : 1;
         float time = level == null ? 0 : (level.getGameTime() % 24000
             + client.getDeltaTracker().getGameTimeDeltaPartialTick(false)) / 20F;
         var data = ByteBuffer.allocateDirect(16).order(ByteOrder.nativeOrder());
-        data.putFloat(s == null ? 0 : s.windX()).putFloat(s == null ? 0 : s.windZ())
-            .putFloat(time).putFloat(s == null ? 0 : s.wind() / 100).flip();
+        data.putFloat(s == null ? 0 : s.windX() * windScale).putFloat(s == null ? 0 : s.windZ() * windScale)
+            .putFloat(time).putFloat(s == null ? 0 : s.wind() / 100 * windScale).flip();
         if (uniform != null) uniform.close();
         uniform = RenderSystem.getDevice().createBuffer(() -> "Naturality wind", 128, data);
         pass.setUniform("NaturalityWind", uniform);

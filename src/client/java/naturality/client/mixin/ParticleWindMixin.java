@@ -7,8 +7,10 @@ import naturality.client.particle.PortalGlowParticle;
 import naturality.weather.WeatherSystem;
 import net.minecraft.client.particle.Particle;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.FluidTags;
+import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -25,7 +27,10 @@ public abstract class ParticleWindMixin implements WindParticleControl.Access {
     @Override public void naturality$applyWind() {
         Particle self = (Particle)(Object)this;
         var pos = BlockPos.containing(x, y, z);
-        boolean sheltered = !naturality.client.weather.WindRendering.exposed(level, pos);
+        var cameraEntity = Minecraft.getInstance().getCameraEntity();
+        boolean sheltered = cameraEntity == null
+            || !naturality.client.weather.WeatherSoundEnvironment.hasOpenSkyAccess(level,
+                new Vec3(x, y, z), cameraEntity);
         var fluid = level.getFluidState(pos);
         boolean underwater = fluid.is(FluidTags.WATER)
             && y < pos.getY() + fluid.getHeight(level, pos);

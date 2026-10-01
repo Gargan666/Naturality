@@ -6,6 +6,7 @@ import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.SnowLayerBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraft.world.phys.shapes.Shapes;
@@ -16,6 +17,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(SnowLayerBlock.class)
 public abstract class SnowLayerMixin {
+    @Inject(method = "canBeReplaced(Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/item/context/BlockPlaceContext;)Z", at = @At("HEAD"), cancellable = true)
+    private void naturality$replaceEmptyOwner(BlockState state, BlockPlaceContext context, CallbackInfoReturnable<Boolean> cir) {
+        var level = context.getLevel();
+        var pos = context.getClickedPos();
+        if (naturality.config.GameplaySettings.snowWrapping(level) && level.getBlockState(pos) == state
+                && SnowGeometry.emptyOwnerCell(level, pos, state.getValue(SnowLayerBlock.LAYERS)))
+            cir.setReturnValue(true);
+    }
     @Inject(method = "canSurvive", at = @At("HEAD"), cancellable = true)
     private void naturality$support(BlockState state, LevelReader level, BlockPos pos, CallbackInfoReturnable<Boolean> cir) {
         if (naturality.snow.NoSnowBlocks.contains(level.getBlockState(pos))

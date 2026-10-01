@@ -44,6 +44,7 @@ public final class SnowOverlayModel extends WrapperBlockStateModel {
         boolean lowerDoublePlant=state.getBlock() instanceof DoublePlantBlock
             && state.getValue(DoublePlantBlock.HALF)==net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER;
         if(overlay!=null && !(state.getBlock() instanceof GrassBlock)
+                && !naturality.snow.NoSnowSideOverlay.contains(state)
                 && !naturality.snow.SnowSupportOnly.contains(state)
                 && !coveredByContinuation && !lowerDoublePlant) {
             var owner=snowOwner(level,pos);

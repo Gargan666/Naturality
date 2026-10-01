@@ -46,9 +46,9 @@ tasks.named('runClientGameTest') {
 	systemProperty 'naturality.test.muteAudio', 'true'
 	doFirst {
 		def selection = systemProperties['naturality.test.suites'].toString().split(',').collect { it.trim() }
-		def valid = ['chunks', 'aurora', 'rainbow', 'sky-events', 'sunset', 'glint', 'snow', 'rain-splash', 'particle-weather', 'weather-commands', 'weather', 'gameplay', 'config', 'fire', 'water', 'waterfall', 'lava-effects', 'water-ripples', 'water-occlusion', 'short-distance', 'fluids', 'flame', 'leaves', 'smoke', 'clouds', 'fog', 'lighting', 'dynamic-lighting', 'portal', 'end-portal', 'audio', 'all']
+		def valid = ['wind-compat', 'snow-compat', 'chunks', 'aurora', 'rainbow', 'sky-events', 'sunset', 'glint', 'snow', 'rain-splash', 'particle-weather', 'weather-commands', 'weather', 'gameplay', 'config', 'fire', 'water', 'waterfall', 'lava-effects', 'water-ripples', 'water-occlusion', 'short-distance', 'fluids', 'flame', 'leaves', 'smoke', 'clouds', 'fog', 'lighting', 'dynamic-lighting', 'portal', 'end-portal', 'audio', 'all']
 		if (selection.any { !valid.contains(it) }) {
-			throw new GradleException('Choose relevant suites with -PclientTests=fog,lighting (available: chunks, aurora, rainbow, sky-events, sunset, glint, snow, rain-splash, particle-weather, weather-commands, weather, gameplay, config, fire, water, waterfall, lava-effects, water-ripples, water-occlusion, short-distance, fluids, flame, leaves, smoke, clouds, fog, lighting, dynamic-lighting, portal, end-portal, audio; all explicitly runs everything).')
+			throw new GradleException('Choose relevant suites with -PclientTests=fog,lighting (available: wind-compat, snow-compat, chunks, aurora, rainbow, sky-events, sunset, glint, snow, rain-splash, particle-weather, weather-commands, weather, gameplay, config, fire, water, waterfall, lava-effects, water-ripples, water-occlusion, short-distance, fluids, flame, leaves, smoke, clouds, fog, lighting, dynamic-lighting, portal, end-portal, audio; all explicitly runs everything).')
 		}
 	}
 }
@@ -64,6 +64,10 @@ dependencies {
 	// Available in the development client without bundling it in Naturality.
 	clientRuntimeOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
 	clientCompileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
+	// Optional local compatibility test dependency; never bundled in the mod.
+	if (providers.gradleProperty('sodiumTestJar').isPresent()) {
+		clientRuntimeOnly files(providers.gradleProperty('sodiumTestJar').get())
+	}
 }
 
 processResources {

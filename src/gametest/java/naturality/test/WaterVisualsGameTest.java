@@ -45,6 +45,21 @@ public final class WaterVisualsGameTest implements FabricClientGameTest {
                 float surface = WaterVisuals.surface(0, 0);
                 if (Math.abs(surface - 102.875F) > 0.01 || Float.isNaN(surface))
                     throw new AssertionError("Incorrect elevated water surface: " + surface);
+                if (!WaterVisuals.ready()) throw new AssertionError("Water rendering must be active for missing-buffer regression");
+                var shieldBearer=net.minecraft.world.entity.EntityTypes.ZOMBIE.create(client.level,net.minecraft.world.entity.EntitySpawnReason.COMMAND);
+                shieldBearer.setId(-9100);
+                shieldBearer.setPos(client.player.position());
+                shieldBearer.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND,
+                    new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.SHIELD));
+                if(naturality.client.portal.PortalModelCapture.mesh(shieldBearer,shieldBearer.position(),client.gameRenderer.mainCamera(),1).isEmpty())
+                    throw new AssertionError("Shield-bearing models must support outline capture");
+                // Reproduce replacement terrain renderers which omit vanilla's UBO.
+                var unavailable = new net.minecraft.client.renderer.chunk.ChunkSectionsToRender.DrawSeparate(
+                    null, java.util.Map.of(), 0, new com.mojang.renderpearl.api.buffers.GpuBufferSlice[0]);
+                naturality.client.fluid.WaterComposite.render(client.gameRenderer.mainRenderTarget(), unavailable);
+                if (naturality.client.fluid.WaterComposite.maskView()!=null
+                        || naturality.client.fluid.WaterComposite.depthView()!=null)
+                    throw new AssertionError("Missing terrain buffers must not expose stale water textures");
             });
             for (boolean oit : new boolean[]{false, true}) {
                 context.runOnClient(client -> client.options.improvedTransparency().set(oit));
@@ -53,6 +68,8 @@ public final class WaterVisualsGameTest implements FabricClientGameTest {
                 world.getConnection().waitForClientboundPackets();
                 context.waitTicks(10);
                 context.runOnClient(client -> {
+                    if (naturality.client.fluid.WaterComposite.maskView()==null)
+                        throw new AssertionError("Water mask must render, including with Sodium, OIT="+oit);
                     if (naturality.client.fluid.WaterIntersection.lastPixelCount == 0)
                         throw new AssertionError("Posed pig legs must intersect the water surface, OIT="+oit);
                 });

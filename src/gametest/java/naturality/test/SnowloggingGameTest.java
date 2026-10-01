@@ -332,6 +332,35 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                 }
                 check(moreSnow.getCount()==7,"One snow item consumed per successful layer");
 
+                var sideSupport=new BlockPos(-9,100,7);
+                level.setBlock(sideSupport,Blocks.OAK_FENCE.defaultBlockState(),3);
+                var sideOwner=sideSupport.above();
+                level.setBlock(sideOwner,Blocks.SNOW.defaultBlockState(),3);
+                var sideStack=new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STONE,1);
+                var sidePlacement=new net.minecraft.world.item.context.BlockPlaceContext(level,null,
+                    net.minecraft.world.InteractionHand.MAIN_HAND,sideStack,
+                    new net.minecraft.world.phys.BlockHitResult(new Vec3(-8,100.05,7.5),Direction.EAST,sideOwner,false));
+                check(((net.minecraft.world.item.BlockItem)sideStack.getItem()).place(sidePlacement).consumesAction(),
+                    "A block places beside the visible height of displaced snow");
+                check(level.getBlockState(sideSupport.east()).is(Blocks.STONE)
+                    && level.getBlockState(sideOwner).is(Blocks.SNOW)
+                    && level.getBlockState(sideOwner.east()).isAir(),
+                    "Side placement uses the physical neighboring cell, not the snow owner's height");
+
+                var emptySupport=new BlockPos(-9,100,8);
+                level.setBlock(emptySupport,Blocks.FERN.defaultBlockState(),3);
+                var emptyOwner=emptySupport.above();
+                level.setBlock(emptyOwner,Blocks.SNOW.defaultBlockState().setValue(SnowLayerBlock.LAYERS,8),3);
+                check(SnowGeometry.emptyOwnerCell(level,emptyOwner,8),"Foliage ground snow has an empty saved cell");
+                var fillStack=new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.STONE,1);
+                var fillContext=new net.minecraft.world.item.context.BlockPlaceContext(level,null,
+                    net.minecraft.world.InteractionHand.MAIN_HAND,fillStack,
+                    new net.minecraft.world.phys.BlockHitResult(new Vec3(-8.5,101.5,8.5),Direction.UP,emptyOwner,false));
+                check(((net.minecraft.world.item.BlockItem)fillStack.getItem()).place(fillContext).consumesAction()
+                    && level.getBlockState(emptyOwner).is(Blocks.STONE)
+                    && level.getBlockState(emptyOwner.above()).isAir(),
+                    "A block replaces logically stored snow without pushing it upward");
+
                 level.removeBlock(stackOwner.above(),false);level.removeBlock(stackOwner,false);level.removeBlock(stackSupport,false);
                 var gatePos=caneBase.above();
                 for(var facing:Direction.Plane.HORIZONTAL)for(boolean open:new boolean[]{false,true}) {
@@ -369,6 +398,26 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                     .toAabbs().stream().anyMatch(b->b.contains(new Vec3(.95,.125,.95))),"Ground collision is included below stacked supports");
                 var slab=new BlockPos(-6,101,0);
                 check(level.getBlockState(slab).is(Blocks.SNOW),"Snow remains on bottom slab");
+                check(SnowGeometry.coversFoot(level,slab.below(),
+                    new net.minecraft.world.phys.AABB(-5.75,100.5,.25,-5.25,102,.75)),
+                    "Snow inside a partial block supplies the walking surface sound");
+                check(!SnowGeometry.coversFoot(level,slab.below(),
+                    new net.minecraft.world.phys.AABB(-5.75,101.5,.25,-5.25,103,.75)),
+                    "Snow away from the feet does not override the walking sound");
+                check(naturality.snow.NoSnowSideOverlay.contains(Blocks.SNOW_BLOCK.defaultBlockState())
+                    && !naturality.snow.NoSnowSideOverlay.contains(Blocks.STONE.defaultBlockState()),
+                    "Only snow blocks are excluded from the side overlay by default");
+                level.setBlock(slab,Blocks.SNOW.defaultBlockState().setValue(SnowLayerBlock.LAYERS,8),3);
+                check(!level.getBlockState(slab).isViewBlocking(level,slab,
+                    new net.minecraft.world.phys.AABB(-6,100.5,0,-5,100.6,1)),
+                    "Full displaced snow does not trigger the clipped-into-block overlay");
+                level.setBlock(slab,Blocks.SNOW.defaultBlockState(),3);
+                var ordinarySnow=new BlockPos(1,100,20);
+                level.setBlock(ordinarySnow,Blocks.SNOW.defaultBlockState().setValue(SnowLayerBlock.LAYERS,8),3);
+                check(level.getBlockState(ordinarySnow).isViewBlocking(level,ordinarySnow,
+                    new net.minecraft.world.phys.AABB(1,100,20,2,101,21)),
+                    "Ordinary full snow retains vanilla camera overlay behavior");
+                level.setBlock(ordinarySnow,Blocks.SNOW.defaultBlockState(),3);
                 var shape=SnowGeometry.shape(level,slab,1);
                 near(shape.min(Direction.Axis.Y),-.5,"Snow lowers to slab top");
                 near(shape.max(Direction.Axis.Y),-.375,"One layer stays one eighth block thick");

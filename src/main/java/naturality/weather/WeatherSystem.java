@@ -1,6 +1,8 @@
 package naturality.weather;
 
 import java.util.Map;
+import java.util.Random;
+import java.util.UUID;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import naturality.config.NaturalityServerConfig;
@@ -20,7 +22,11 @@ public final class WeatherSystem {
     private static final long SEASON_HOLD = 48000; // Two steady days, then one transition day.
     private static final Map<ServerLevel, WeatherState> STATES = new WeakHashMap<>();
     private static final Map<ServerLevel, Long> CLOCKS = new WeakHashMap<>();
+    private static final Map<ServerLevel, WeatherChannel> RAIN_CYCLES = new WeakHashMap<>();
+    private static final Map<ServerLevel, WeatherChannel> WIND_CYCLES = new WeakHashMap<>();
+    private static final Map<net.minecraft.server.MinecraftServer, Long> SERVER_SESSIONS = new WeakHashMap<>();
     private static final Map<Identifier, WeatherState> CLIENT = new ConcurrentHashMap<>();
+    private static @org.jspecify.annotations.Nullable Long CLIENT_SESSION;
     private WeatherSystem() {}
     public static @org.jspecify.annotations.Nullable WeatherState state(Level level) {
         if (level.isClientSide()) return CLIENT.get(level.dimension().identifier());
@@ -33,9 +39,14 @@ public final class WeatherSystem {
     }
     private static final WeatherProfile DISABLED = new WeatherProfile(false);
     public static void receive(WeatherPayload p) {
+        Long previousSession = CLIENT_SESSION;
+        if (previousSession == null || previousSession.longValue() != p.worldSession()) {
+            CLIENT.clear();
+            CLIENT_SESSION = p.worldSession();
+        }
         if (p.enabled()) CLIENT.put(p.dimension(), p.state()); else CLIENT.remove(p.dimension());
     }
-    public static void clearClient() { CLIENT.clear(); }
+    public static void clearClient() { CLIENT.clear(); CLIENT_SESSION = null; }
     public static Biome.Precipitation precipitation(Level level, Biome biome, BlockPos pos) {
         var normal = biome.getPrecipitationAt(pos, level.getSeaLevel());
         var state = state(level);
@@ -49,6 +60,7 @@ public final class WeatherSystem {
     public static void initialize() {
         PayloadTypeRegistry.clientboundPlay().register(WeatherPayload.TYPE, WeatherPayload.CODEC);
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+            SERVER_SESSIONS.put(server, UUID.randomUUID().getLeastSignificantBits());
             var legacy = NaturalityServerConfig.takeLegacyWeather();
             if (!legacy.isEmpty()) {
                 var stored = server.getDataStorage().get(WeatherWorldData.TYPE);
@@ -56,7 +68,10 @@ public final class WeatherSystem {
                 NaturalityServerConfig.get().save();
             }
         });
-        ServerLifecycleEvents.SERVER_STOPPED.register(_ -> { STATES.clear(); CLOCKS.clear(); });
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
+            STATES.clear(); CLOCKS.clear(); RAIN_CYCLES.clear(); WIND_CYCLES.clear();
+            SERVER_SESSIONS.remove(server);
+        });
         ServerPlayConnectionEvents.JOIN.register((handler, _, server) -> {
             for (var level : server.getAllLevels()) send(handler.player, level);
         });
@@ -77,31 +92,38 @@ public final class WeatherSystem {
     private static void send(net.minecraft.server.level.ServerPlayer player, ServerLevel level) {
         if (ServerPlayNetworking.canSend(player, WeatherPayload.TYPE)) {
             var current = state(level);
-            ServerPlayNetworking.send(player, new WeatherPayload(level.dimension().identifier(), current != null,
+            long session = SERVER_SESSIONS.computeIfAbsent(level.getServer(), _ -> UUID.randomUUID().getLeastSignificantBits());
+            ServerPlayNetworking.send(player, new WeatherPayload(level.dimension().identifier(), session, current != null,
                 current == null ? WeatherState.CLEAR : current));
         }
     }
     private static void advance(ServerLevel level) {
         var p = profile(level);
-        if (!p.enabled) { STATES.remove(level); CLOCKS.remove(level); return; }
+        if (!p.enabled) { STATES.remove(level); CLOCKS.remove(level); RAIN_CYCLES.remove(level); WIND_CYCLES.remove(level); return; }
         long seed = level.getSeed() ^ level.dimension().identifier().hashCode();
         var old = STATES.get(level);
         boolean cycle = level.getGameRules().get(GameRules.ADVANCE_WEATHER) || old == null;
         long time = CLOCKS.getOrDefault(level, level.getGameTime());
         if (cycle) time++;
         CLOCKS.put(level, time);
-        var vanilla = level.getWeatherData();
-        float rain = vanilla.isRaining() ? (vanilla.isThundering()
-            ? 50 + 50 * noise(seed, time, 4700) : 5 + 44 * noise(seed, time, 3100)) : 0;
-        float wind = p.minWind + (p.maxWind - p.minWind) * noise(seed + 71, time, 5300);
-        float temp = automaticTemperature(p, seed, time);
+        var rainCycle = RAIN_CYCLES.computeIfAbsent(level, _ -> new WeatherChannel(seed ^ 0x5241494EL));
+        var windCycle = WIND_CYCLES.computeIfAbsent(level, _ -> new WeatherChannel(seed ^ 0x57494E44L));
+        float rain = rainCycle.tick(cycle, time, 0, 100,
+            1 - Math.pow(.6, 1.0 / 12000), 6000, 18000, 5000);
+        float wind = windCycle.tick(cycle, time, p.minWind, p.maxWind,
+            1 - Math.pow(.65, 1.0 / 6000), 8000, 24000, 4200);
+        float temp = old == null ? 50 : automaticTemperature(p, seed, time);
         float direction = 360 * noise(seed + 311, time, 23000);
         if (!cycle && old != null) { wind = old.wind(); temp = old.temperature(); direction = old.direction(); }
-        // Retain the vanilla wet/dry clock, sleeping and advance_weather behavior.
-        // /weather now edits independent profile overrides instead of that clock.
-        // Wet periods contain continuous intensity, not an enumerated event type.
+        // The advance_weather gamerule pauses these autonomous slider cycles.
+        // /weather edits independent profile overrides, not the vanilla clock.
         float targetDirection = p.overrideDirection ? p.direction : direction;
         if (old != null) targetDirection = cycle ? approachDirection(old.direction(), targetDirection, .5F) : old.direction();
+        if (old == null) {
+            STATES.put(level, new WeatherState(p.overrideRain ? p.rain : 0,
+                p.overrideWind ? p.wind : 0, p.overrideTemperature ? p.temperature : 50, targetDirection));
+            return;
+        }
         var target = new WeatherState(p.overrideRain ? p.rain : rain, p.overrideWind ? p.wind : wind,
             p.overrideTemperature ? p.temperature : temp, targetDirection);
         if (old != null) target = new WeatherState(approach(old.rain(), target.rain(), .5F),
@@ -148,6 +170,43 @@ public final class WeatherSystem {
         x = (x ^ (x >>> 30)) * 0xBF58476D1CE4E5B9L;
         x = (x ^ (x >>> 27)) * 0x94D049BB133111EBL;
         return ((x ^ (x >>> 31)) >>> 40) / (float)0xFFFFFF;
+    }
+
+    /** A slider stays at zero until its own weather event starts, then wanders until it ends. */
+    private static final class WeatherChannel {
+        private final Random random;
+        private final long seed;
+        private boolean active;
+        private int remaining;
+        private int age;
+        private float value;
+        private float initialBoost;
+
+        private WeatherChannel(long seed) { this.seed = seed; random = new Random(seed); }
+
+        private float tick(boolean advance, long time, int minimum, int maximum, double startChance,
+                int minimumDuration, int maximumDuration, int noisePeriod) {
+            if (!advance) return value;
+            if (active) {
+                age++;
+                if (--remaining <= 0) active = false;
+            } else if (value <= .01F && random.nextDouble() < startChance) {
+                active = true;
+                age = 0;
+                remaining = minimumDuration + random.nextInt(maximumDuration - minimumDuration + 1);
+                initialBoost = minimum + (maximum - minimum) * (.18F + random.nextFloat() * .14F);
+                value = Math.max(value, initialBoost);
+            }
+            float target = 0;
+            if (active) {
+                float randomized = minimum + (maximum - minimum) * noise(seed, time, noisePeriod);
+                float transition = Math.clamp(age / 1200F, 0, 1);
+                transition = transition * transition * (3 - 2 * transition);
+                target = initialBoost + (randomized - initialBoost) * transition;
+            }
+            value += Math.clamp(target - value, -.04F, .04F);
+            return value;
+        }
     }
 }
 

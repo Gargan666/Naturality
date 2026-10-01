@@ -2,15 +2,31 @@
 #extension GL_ARB_separate_shader_objects : require
 
 #include <minecraft:fog.glsl>
+#ifdef NATURALITY_SODIUM
+#include <sodium:globals.glsl>
+#define FogColor u_FogColor
+#define FogEnvironmentalStart u_EnvironmentFog.x
+#define FogEnvironmentalEnd u_EnvironmentFog.y
+#define FogRenderDistanceStart u_RenderFog.x
+#define FogRenderDistanceEnd u_RenderFog.y
+#define UseRgss int(u_UseRGSS)
+#define TextureSize (1.0 / u_TexelSize)
+#define Sampler0 u_BlockTex
+#define Sampler2 u_LightTex
+#else
 #include <minecraft:globals.glsl>
+#include <minecraft:terrainglobals.glsl>
+#endif
 #include <minecraft:texture_sampling.glsl>
 #include <minecraft:oit.glsl>
-#include <minecraft:terrainglobals.glsl>
 #include <naturality:pixel_lighting.glsl>
 #include <naturality:procedural_fluids.glsl>
+#include <naturality:feature_settings.glsl>
+#ifndef NATURALITY_SODIUM
 #include <naturality:procedural_fire.glsl>
+#endif
 #include <naturality:water.glsl>
-#ifndef MULTIDRAW_TERRAIN
+#if !defined(MULTIDRAW_TERRAIN) && !defined(NATURALITY_SODIUM)
     #include <minecraft:chunksection.glsl>
 #endif
 
@@ -123,9 +139,11 @@ void main() {
     vec4 color = (UseRgss == 1 ? sampleRGSS(Sampler0, texCoord0, 1.0f / TextureSize) : sampleNearest(Sampler0, texCoord0, 1.0f / TextureSize)) * lighting;
     if (naturalityFluidKind >= 0)
         color = naturality_fluid_color(naturalityFluidKind, naturalityBlockPosition, naturalitySectionOrigin, naturalityFluidUV, naturalityFlow) * lighting;
+    #ifndef NATURALITY_SODIUM
     if (naturalityFireKind >= 0)
         color = naturality_fire_color(naturalityFireKind, naturalityFireUV,
             naturality_fire_resolution(naturalityBlockPosition, naturalityFireUV), naturalityFireSeed);
+    #endif
     if (waterSprite && WaterMap.w != 0 && WaterSwitches.x != 0)
         color.a = 0.60;
     if (waterSprite && WaterMap.w != 0 && WaterSwitches.x != 0) {
@@ -207,6 +225,9 @@ void main() {
     // strip must keep atmospheric fog even though the lower face is submerged.
     bool submergedTerrain = naturalitySubmerged != 0 && WaterSwitches.x != 0
         && (naturalitySubmerged == 9 || fract(naturalityBlockPosition.y) < float(naturalitySubmerged) / 9.0);
+    #ifdef NATURALITY_SODIUM
+    submergedTerrain = !waterSprite && waterDepth > 0.02 && WaterSwitches.x != 0;
+    #endif
     fragColor = calculateFinalColor(color, waterSprite, submergedTerrain);
     #endif
 }

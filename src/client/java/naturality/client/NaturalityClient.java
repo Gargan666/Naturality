@@ -18,6 +18,8 @@ public class NaturalityClient implements ClientModInitializer {
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents.CLIENT_STOPPING.register(_ -> naturality.client.weather.WindRendering.close());
         naturality.client.fire.SurfaceFireModel.initialize();
         naturality.client.snow.SurfaceSnowModel.initialize();
+        naturality.client.weather.FoliageWindModel.initialize();
+        naturality.client.weather.FoliageWindModel.initialize();
         naturality.client.fire.ProceduralFire.initialize();
         naturality.client.fluid.ProceduralFluids.initialize();
         naturality.client.fluid.WaterVisuals.initialize();

@@ -10,6 +10,8 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.BaseFireBlock;
 import net.minecraft.world.level.block.LiquidBlock;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.core.BlockPos;
 import org.spongepowered.asm.mixin.Mixin;
 
 @Mixin(BlockItem.class)
@@ -20,9 +22,32 @@ public abstract class SnowPlacementMixin {
         if (!naturality.config.GameplaySettings.snowWrapping(context.getLevel())) return original.call(context);
         if (((BlockItem)(Object)this).getBlock() != Blocks.SNOW) {
             var level=context.getLevel();var pos=context.getClickedPos();
+            // A side hit on snow displaced into a lower cell still names its
+            // saved owner. Place against the neighboring cell at the hit height.
+            var face=context.getClickedFace();
+            var hit=context.getClickLocation();
+            var owner=context.replacingClickedOnBlock() ? pos : pos.relative(face.getOpposite());
+            var ownerState=level.getBlockState(owner);
+            if(face.getAxis().isHorizontal() && ownerState.is(Blocks.SNOW) && hit.y < owner.getY()) {
+                var shape=naturality.snow.SnowGeometry.shape(level,owner,
+                    ownerState.getValue(net.minecraft.world.level.block.SnowLayerBlock.LAYERS));
+                var local=hit.subtract(owner.getX(),owner.getY(),owner.getZ());
+                if(shape.toAabbs().stream().anyMatch(b -> local.y>=b.minY-1e-5 && local.y<=b.maxY+1e-5
+                        && local.x>=b.minX-1e-5 && local.x<=b.maxX+1e-5
+                        && local.z>=b.minZ-1e-5 && local.z<=b.maxZ+1e-5)) {
+                    var side=new BlockPos(owner.getX(),net.minecraft.util.Mth.floor(hit.y),owner.getZ()).relative(face);
+                    var redirected=new BlockPlaceContext(level,context.getPlayer(),context.getHand(),context.getItemInHand(),
+                        new BlockHitResult(hit,face,side,false));
+                    if(!redirected.getClickedPos().equals(side)) return InteractionResult.FAIL;
+                    return original.call(redirected);
+                }
+            }
             var previous=level.getBlockState(pos);
+            boolean emptyOwner=previous.is(Blocks.SNOW) && naturality.snow.SnowGeometry.emptyOwnerCell(level,pos,
+                previous.getValue(net.minecraft.world.level.block.SnowLayerBlock.LAYERS));
             var result=original.call(context);
             if(result.consumesAction() && previous.is(Blocks.SNOW)
+                    && !emptyOwner
                     && !level.getBlockState(pos).is(Blocks.SNOW)
                     && naturality.snow.SnowGeometry.exposesGround(level,pos)) {
                 var destination=pos.above();

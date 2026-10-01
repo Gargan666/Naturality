@@ -1,7 +1,6 @@
 package naturality.sky;
 
 import java.util.*;
-import naturality.config.NaturalityServerConfig;
 import naturality.weather.WeatherSystem;
 import net.fabricmc.fabric.api.event.lifecycle.v1.*;
 import net.fabricmc.fabric.api.networking.v1.*;
@@ -26,7 +25,7 @@ public final class SkyEvents {
         String id = level.dimension().identifier().toString();
         if (!SkyEventType.pool(id).contains(type)) return 0;
         if (type == SkyEventType.RAINBOW && (isNight(level) || !RainbowCycle.validRain(rainfall(level)))) return 0;
-        var settings = NaturalityServerConfig.get().skyEvents.get(id).get(type.id);
+        var settings = SkyEventWorldData.get(level.getServer()).settings(level, type);
         if (settings.override) return Math.clamp(settings.strength, 0, 20);
         if (type == SkyEventType.RAINBOW) {
             var cycle = RAINBOWS.get(level);
@@ -77,7 +76,7 @@ public final class SkyEvents {
         for (var type : SkyEventType.pool(level.dimension().identifier().toString())) {
             float value = strength(level, type);
             if (type == SkyEventType.AURORA_BOREALIS
-                    && !NaturalityServerConfig.get().skyEvents.get(level.dimension().identifier().toString()).get(type.id).override)
+                    && !SkyEventWorldData.get(level.getServer()).settings(level, type).override)
                 value = player.level() == level ? AuroraEvents.strength(level, player.blockPosition()) : 0;
             ServerPlayNetworking.send(player, new SkyEventPayload(level.dimension().identifier(), type.id, value));
         }

@@ -57,10 +57,16 @@ public final class WaterComposite {
     }
 
     public static void beginFrame() { captured = false; }
+    public static boolean drawingMask() { return drawingMask; }
     public static @org.jspecify.annotations.Nullable GpuTextureView maskView() { return captured && !drawingMask && mask != null ? mask.getColorTextureView() : null; }
     public static @org.jspecify.annotations.Nullable GpuTextureView depthView() { return captured && scene != null ? scene.getDepthTextureView() : null; }
 
     public static void render(RenderTarget target, ChunkSectionsToRender chunks) {
+        // Replacement terrain renderers may provide no vanilla terrain uniforms.
+        // Invalidate last frame's mask before skipping: it must not be sampled later.
+        captured = false;
+        boolean sodium = chunks instanceof naturality.client.fluid.SodiumWaterBridge;
+        if (!sodium && ((naturality.client.mixin.WaterLayersAccess) chunks).naturality$terrainTransform() == null) return;
         var colorView = target.getColorTextureView();
         if (!WaterVisuals.ready() || colorView == null) return;
         var scene = WaterComposite.scene;
@@ -79,18 +85,22 @@ public final class WaterComposite {
         scene.copyColorFrom(target);
         scene.copyDepthFrom(target);
         mask.copyDepthFrom(target);
-        captured = true;
         var client = Minecraft.getInstance();
         drawingMask = true;
         try (var pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
                 () -> "Naturality water surface depth mask", maskColor, Optional.of(new Vector4f()),
                 mask.getDepthTextureView(), OptionalDouble.empty())) {
             RenderSystem.bindDefaultUniforms(pass);
-            ((naturality.client.mixin.WaterLayersAccess) chunks).naturality$renderWaterMask(
+            if (sodium) {
+                chunks.renderGroup(ChunkSectionLayerGroup.TRANSLUCENT, pass,
+                    RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST),
+                    client.getTextureManager().getTexture(naturality.client.AtlasLocations.BLOCKS).getTextureView(), false);
+            } else ((naturality.client.mixin.WaterLayersAccess) chunks).naturality$renderWaterMask(
                 ChunkSectionLayerGroup.TRANSLUCENT.layers(), RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST), pass,
                 client.getTextureManager().getTexture(naturality.client.AtlasLocations.BLOCKS).getTextureView(),
                 client.gameRenderer.lightmap(), MASK, MASK_MULTIDRAW);
         } finally { drawingMask = false; }
+        captured = true;
         var transform = RenderSystem.getDynamicUniforms().writeTransform(RenderSystem.getModelViewMatrixCopy(), new Vector4f(1));
         try (var pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
                 () -> "Naturality directional water fog and pixel refraction", colorView, Optional.empty())) {

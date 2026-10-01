@@ -2,7 +2,6 @@ package naturality.test;
 
 import naturality.sky.*;
 import naturality.client.sky.*;
-import naturality.config.NaturalityServerConfig;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.client.CloudStatus;
@@ -40,13 +39,10 @@ public final class AuroraGameTest implements FabricClientGameTest {
             }
         }
         check(varied, "Curtain height varies between shared panel edges");
-        var config = NaturalityServerConfig.get();
-        var saved = config.skyEvents;
         boolean oldFog = naturality.config.NaturalityConfig.get().fog.enabled;
         int oldSegments = naturality.config.NaturalityConfig.get().effects.auroraSegments;
         var oldClouds = new CloudStatus[1];
         boolean[] oldOit = new boolean[1];
-        config.skyEvents = SkyEvents.defaults();
         context.runOnClient(client -> {
             oldClouds[0] = client.options.cloudStatus().get();
             oldOit[0] = client.options.improvedTransparency().get();
@@ -120,9 +116,9 @@ public final class AuroraGameTest implements FabricClientGameTest {
             context.waitTicks(100);
             context.runOnClient(client -> check(AuroraRenderer.drawnPanels() == 0, "Zero override fades all curtains away"));
             server.runCommand("skyevent minecraft:overworld aurora_borealis auto");
-            server.runOnServer(s -> check(!config.skyEvents.get("minecraft:overworld").get("aurora_borealis").override, "Auto releases override"));
+            server.runOnServer(s -> check(!SkyEventWorldData.get(s).settings(s.overworld(), SkyEventType.AURORA_BOREALIS).override,
+                "Auto releases override"));
         } finally {
-            config.skyEvents = saved; config.save();
             naturality.config.NaturalityConfig.get().fog.enabled = oldFog;
             naturality.config.NaturalityConfig.get().effects.auroraSegments = oldSegments;
             context.runOnClient(client -> {

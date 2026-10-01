@@ -59,11 +59,13 @@ public final class PortalModelCapture implements VertexConsumer {
         var collector=(SubmitNodeCollector)Proxy.newProxyInstance(SubmitNodeCollector.class.getClassLoader(),
             new Class<?>[]{SubmitNodeCollector.class},(proxy,method,args)-> {
                 if(method.getName().equals("order")) return proxy;
+                // Sprite-based submissions (e.g. shields) also have nine arguments.
+                // Their default adapter resolves sprites into the canonical overload.
+                if(method.isDefault()) return InvocationHandler.invokeDefault(proxy,method,args);
                 if(method.getName().equals("submitModel") && args.length==9) {
                     capture.model((Model<?>)args[0],args[1],(PoseStack)args[2],args[3],(int)args[4],(int)args[5],(int)args[6]);
                     return null;
                 }
-                if(method.isDefault()) return InvocationHandler.invokeDefault(proxy,method,args);
                 return null;
             });
         var dispatcher=Minecraft.getInstance().getEntityRenderDispatcher();

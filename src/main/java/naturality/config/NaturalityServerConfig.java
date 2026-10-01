@@ -22,19 +22,10 @@ public final class NaturalityServerConfig {
     public volatile boolean weatherThaw = true;
     public volatile boolean weatherSnowAccumulation = true;
     public volatile boolean vanillaPortalEntry = false;
-    public volatile java.util.Map<String, java.util.Map<String, naturality.sky.SkyEventSettings>> skyEvents = naturality.sky.SkyEvents.defaults();
 
     @SuppressWarnings({"null", "unused"}) // Validate values populated reflectively by Gson.
 
     public void validate() {
-        var skyDefaults = naturality.sky.SkyEvents.defaults();
-        if (skyEvents != null) skyDefaults.forEach((dimension, events) -> {
-            var saved = skyEvents.get(dimension);
-            if (saved != null) events.replaceAll((id, fallback) -> {
-                var value = saved.get(id); if (value == null) return fallback; value.validate(); return value;
-            });
-        });
-        skyEvents = skyDefaults;
     }
 
     public static java.util.Map<String, naturality.weather.WeatherProfile> takeLegacyWeather() {

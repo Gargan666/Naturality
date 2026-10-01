@@ -14,10 +14,20 @@ import net.minecraft.util.RandomSource;
 public final class WeatherClient {
     private static @org.jspecify.annotations.Nullable WindLoop weak, strong;
     private static @org.jspecify.annotations.Nullable ClientLevel world;
+    private static @org.jspecify.annotations.Nullable Object connection;
     private WeatherClient() {}
     public static void initialize() {
-        ClientPlayConnectionEvents.INIT.register((_, _) -> WeatherSystem.clearClient());
-        ClientPlayConnectionEvents.DISCONNECT.register((_, client) -> { WeatherSystem.clearClient(); stop(client); });
+        ClientPlayConnectionEvents.INIT.register((handler, client) -> {
+            WeatherSystem.clearClient();
+            stop(client);
+            connection = handler;
+        });
+        ClientPlayConnectionEvents.DISCONNECT.register((_, client) -> {
+            WeatherSystem.clearClient();
+            stop(client);
+            connection = null;
+            world = null;
+        });
         ClientPlayNetworking.registerGlobalReceiver(WeatherPayload.TYPE, (payload, _) -> WeatherSystem.receive(payload));
         ClientTickEvents.END_CLIENT_TICK.register(WeatherClient::tick);
     }
@@ -29,6 +39,15 @@ public final class WeatherClient {
         WeatherClient.weak = WeatherClient.strong = null;
     }
     private static void tick(Minecraft client) {
+        // The cache is keyed by dimension, so discard it when the play
+        // connection changes to a different saved world/server session.
+        Object currentConnection = client.getConnection();
+        if (connection != currentConnection) {
+            WeatherSystem.clearClient();
+            stop(client);
+            WeatherSoundEnvironment.reset();
+            connection = currentConnection;
+        }
         if (world != client.level) { stop(client); world = client.level; WeatherSoundEnvironment.reset(); }
         var world = WeatherClient.world;
         if (world == null || client.isPaused()) return;

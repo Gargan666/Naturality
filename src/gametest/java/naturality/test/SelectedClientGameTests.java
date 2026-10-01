@@ -11,6 +11,8 @@ public final class SelectedClientGameTests implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
         var suites = new LinkedHashMap<String, FabricClientGameTest>();
         suites.put("chunks", new ChunkSafetyGameTest());
+        suites.put("snow-compat", new SnowRendererCompatibilityGameTest());
+        suites.put("wind-compat", new WindRendererGameTest());
         suites.put("sky-events", new SkyEventsGameTest());
         suites.put("sunset", new SunsetGameTest());
         suites.put("aurora", new AuroraGameTest());

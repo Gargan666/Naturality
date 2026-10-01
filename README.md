@@ -23,6 +23,10 @@ Place the built `naturality-1.0.0.jar` and a compatible Fabric API JAR in the Fa
 
 ## Setup
 
+Water rendering and foliage wind support Sodium **0.9.3-alpha.1 for Minecraft 26.3**, including
+classic and improved transparency, without disabling Sodium settings. Other
+visual features and shader-pack combinations may still need compatibility work.
+
 Put texture PNGs in [`resources/textures`](resources/textures/) and Ogg Vorbis audio clips in [`resources/sounds`](resources/sounds/). Use mono audio for positional sounds. Edit [`resources/sounds.json`](resources/sounds.json) to connect clips to sound events. Gradle packages these resources automatically for builds and development launches. See [`resources/README.txt`](resources/README.txt) for folder locations and a portal sound replacement example.
 
 See [`PROJECT_REFERENCE.txt`](PROJECT_REFERENCE.txt) for the project layout, versions, build commands, Java setup, and resource workflow.

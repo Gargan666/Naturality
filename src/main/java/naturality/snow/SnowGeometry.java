@@ -12,6 +12,7 @@ import net.minecraft.world.level.block.SnowyBlock;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
+import net.minecraft.world.phys.AABB;
 
 /** One saved snow layer coats the upper envelope of its support and exposed ground. */
 public final class SnowGeometry {
@@ -129,6 +130,27 @@ public final class SnowGeometry {
     }
     public static VoxelShape collisionShape(BlockGetter level, BlockPos pos, int layers) {
         return shape(level,pos,layers,true);
+    }
+    /** The saved snow cell can be entirely empty when its visible layers are displaced below it. */
+    public static boolean emptyOwnerCell(BlockGetter level, BlockPos pos, int layers) {
+        return shape(level,pos,layers).toAabbs().stream()
+            .noneMatch(box -> box.maxY > 1e-5 && box.minY < 1 - 1e-5);
+    }
+    /** Snow may be saved above the block whose surface an entity is walking on. */
+    public static boolean coversFoot(BlockGetter level, BlockPos supportPos, AABB feet) {
+        for (int depth = 0; depth <= MAX_DEPTH; depth++) {
+            BlockPos owner = supportPos.above(depth);
+            var state = level.getBlockState(owner);
+            if (!state.is(Blocks.SNOW)) continue;
+            for (var box : shape(level, owner, state.getValue(SnowLayerBlock.LAYERS)).toAabbs()) {
+                double surfaceY = owner.getY() + box.maxY - 1.0 / 8.0;
+                if (Math.abs(feet.minY - surfaceY) > 0.08) continue;
+                if (feet.maxX > owner.getX() + box.minX && feet.minX < owner.getX() + box.maxX
+                        && feet.maxZ > owner.getZ() + box.minZ && feet.minZ < owner.getZ() + box.maxZ)
+                    return true;
+            }
+        }
+        return false;
     }
     private static VoxelShape shape(BlockGetter level, BlockPos pos, int layers, boolean collision) {
         if (layers <= 0) return Shapes.empty();
