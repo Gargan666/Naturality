@@ -14,8 +14,11 @@ public record WeatherState(float rain, float wind, float temperature, float dire
         float heavy = Math.max(0, (rain - 50) / 50);
         return rain <= 50 ? rain / 25 : 2 + 6 * heavy * heavy * heavy;
     }
-    /** Heavy rain fog fades in from slider 90 and reaches full strength at 100. */
-    public float heavyRainFog() { return Math.clamp((rain - 90) / 10, 0, 1); }
+    /** Heavy rain fog eases in from slider 80, reaching half strength at 90 and full at 100. */
+    public float heavyRainFog() {
+        float t = Math.clamp((rain - 80) / 20, 0, 1);
+        return t * t * (3 - 2 * t);
+    }
     /** Keep indoor rain haze broad and faint; fully exposed rain ends at 15 blocks. */
     public float heavyRainFogEnd(float outdoorExposure) {
         float strength = heavyRainFog() * Math.clamp(outdoorExposure, 0, 1);

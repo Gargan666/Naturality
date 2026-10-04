@@ -28,6 +28,9 @@ public final class FoliageWindModel extends WrapperBlockStateModel {
     }
     @Override public void emitQuads(QuadEmitter emitter,BlockAndTintGetter level,BlockPos pos,BlockState state,
             RandomSource random,Predicate<@org.jspecify.annotations.Nullable Direction> cull) {
+        // Render views (including Sodium's LevelSlice) can be reused after edits.
+        // Cache across vertices of this emission, never across snapshot revisions.
+        WindRendering.clearExposureCache();
         if(!state.getFluidState().isEmpty()) { wrapped.emitQuads(emitter,level,pos,state,random,cull); return; }
         var offset=state.getOffset(pos);
         emitter.pushTransform(quad -> {

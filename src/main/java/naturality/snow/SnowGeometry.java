@@ -26,6 +26,20 @@ public final class SnowGeometry {
     }
     private SnowGeometry() { }
 
+    /** Different materials still form one continuous post or wall. */
+    public static boolean coveredByContinuation(BlockGetter level, BlockPos pos) {
+        var block=level.getBlockState(pos).getBlock();
+        var above=level.getBlockState(pos.above()).getBlock();
+        return block==above
+            || block instanceof net.minecraft.world.level.block.FenceBlock && above instanceof net.minecraft.world.level.block.FenceBlock
+            || block instanceof net.minecraft.world.level.block.WallBlock && above instanceof net.minecraft.world.level.block.WallBlock
+            || block instanceof net.minecraft.world.level.block.FenceGateBlock && above instanceof net.minecraft.world.level.block.FenceGateBlock;
+    }
+
+    public static int maxLayers(BlockGetter level, BlockPos pos) {
+        return surfaces(level,pos).stream().anyMatch(p -> p.y() < -1e-5) ? 7 : 8;
+    }
+
     /** Ordinary snow needs no fitted copies, offsets, or world-dependent mesh. */
     public static boolean usesVanillaGeometry(BlockGetter level, BlockPos pos) {
         for(int depth=1;depth<=MAX_DEPTH;depth++) {
@@ -74,7 +88,7 @@ public final class SnowGeometry {
             if (support.isAir()) break;
             // A vertical continuation hides this segment's upper surfaces.
             // Keep scanning through it so snow still reaches exposed ground.
-            if (level.getBlockState(supportPos.above()).is(support.getBlock())) {
+            if (coveredByContinuation(level,supportPos)) {
                 if (waterlogged) break;
                 continue;
             }
@@ -162,6 +176,7 @@ public final class SnowGeometry {
             return vanillaShape(layers, collision);
         VoxelShape shape = Shapes.empty();
         var patches = surfaces(level,pos);
+        if (patches.stream().anyMatch(p -> p.y() < -1e-5)) layers=Math.min(layers,7);
         for (var p : patches) {
             int count=sliceLayers(patches,p,layers)-(collision?1:0);
             if(count<=0)continue;

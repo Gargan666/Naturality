@@ -12,12 +12,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class WeatherLevelMixin {
     @Inject(method = "getRainLevel", at = @At("HEAD"), cancellable = true)
     private void naturality$rain(float partial, CallbackInfoReturnable<Float> cir) {
-        var s = WeatherSystem.state((Level)(Object)this);
+        var s = WeatherSystem.renderState((Level)(Object)this);
         if (s != null) cir.setReturnValue(s.rainLevel());
     }
     @Inject(method = "getThunderLevel", at = @At("HEAD"), cancellable = true)
     private void naturality$thunder(float partial, CallbackInfoReturnable<Float> cir) {
-        var s = WeatherSystem.state((Level)(Object)this);
+        var s = WeatherSystem.renderState((Level)(Object)this);
         if (s != null) cir.setReturnValue(s.thunderLevel());
     }
     @Inject(method = "isRaining", at = @At("HEAD"), cancellable = true)

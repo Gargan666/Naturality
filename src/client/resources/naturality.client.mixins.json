@@ -3,9 +3,31 @@
   "package": "naturality.client.mixin",
   "compatibilityLevel": "JAVA_25",
   "client": [
+    "EntityShadowRenderMixin",
+    "EntityShadowRenderMixin",
+    "VillagerVisualStateMixin",
+    "VillagerFishingRodCastMixin",
+    "VillagerVisualExtractMixin",
+    "LivingEntityItemResolverAccess",
+    "VillagerHeldToolPoseMixin",
+    "VillagerRodPoseCaptureMixin",
+    "FishingHookModelMixin",
+    "FirstPersonRodTipMixin",
+    "FirstPersonRodFrameMixin",
+    "PhysicsLeadMixin",
+    "RodItemTransformAccess",
+    "FishingOwnerStateMixin",
+    "PlayerRodItemPoseMixin",
+    "VillagerArmSwingMixin",
+    "BreakingPositionMixin",
+    "BreakingMeshMixin",
+    "BreakingSubmitMixin",
     "SodiumWaterSectionMixin",
+    "SodiumSnowCullingMixin",
     "SodiumWaterPipelineMixin",
     "SodiumWaterUniformMixin",
+    "SodiumWindSnapshotMixin",
+    "SodiumWindSnapshotMixin",
     "GlintItemContourMixin",
     "GlintHandContourMixin",
     "GlintEquipmentContourMixin",
@@ -30,6 +52,10 @@
     "WaterParticleTypeMixin",
     "ParticleWindMixin",
     "ParticleGroupWindMixin",
+    "ParticleVisibilityMixin",
+    "ParticleVisibilityEngineMixin",
+    "ParticleVisibilityLevelMixin",
+    "WeatherParticleEngineMixin",
     "WeatherAudioChannelMixin",
     "WeatherAudioEngineMixin",
     "BubblePopTransitionMixin",
@@ -71,6 +97,8 @@
     "EndEyeInsertionMixin",
     "CloudRendererMixin",
     "DynamicBlockLightMixin",
+    "DynamicLightStorageMixin",
+    "DynamicLightDropMixin",
     "DynamicLightCoordsMixin",
     "DynamicLightGeometryMixin",
     "EndPortalBorderStateMixin",
@@ -104,7 +132,4 @@
     "requireAnnotations": true
   }
 }
-
-
-
 

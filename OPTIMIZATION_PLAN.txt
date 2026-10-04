@@ -1,0 +1,914 @@
+NATURALITY - PROJECT-WIDE OPTIMIZATION PLAN
+=========================================
+Date: 2026-10-03
+Status: Planning only. No implementation changes made.
+Project: D:\MINECRAFT MODS\Naturality
+
+1. PURPOSE, SCOPE AND EVIDENCE
+----------------------------
+Reduce CPU frame time, GPU render time, client/server tick cost, allocation
+pressure and movement/reload stutters while preserving the current features,
+appearance, gameplay, configuration and supported renderer behavior.
+
+This plan is based on PROJECT_REFERENCE.txt and inspection of the current
+working tree, including its existing uncommitted work. The production inventory
+contains 307 Java files and 62 shader files. The review followed initialization,
+tick callbacks, model wrappers, render passes, major shaders, shared geometry,
+server systems, resource lifecycles and the existing test entrypoints. It is an
+architectural/source audit, not a line-by-line certification of every file.
+
+No benchmark, game launch, build or regression suite was run for this planning
+task. Costs below are either directly visible in code or hypotheses to measure.
+Loop counts describe algorithmic work, not measured milliseconds or FPS gains.
+The previous validation logs cited by the reference are historical evidence;
+they do not establish a performance baseline for this exact working tree.
+
+The reference contains superseded descriptions. Current code and the most recent
+accepted behavior take precedence. For example, fire uses vanilla exemplars,
+fall spray reaches 72 blocks, and weather/sky overrides are per-world data.
+
+Preservation contract:
+* Keep all existing defaults, controls, reset behavior, configuration keys,
+  particle densities/ranges, animation timing, pixel grids, colors and alpha.
+* Keep classic and improved transparency, the vanilla/Fabric path and the
+  supported Sodium path. Preserve resource-pack behavior and safe fallbacks.
+* Keep server authority, snow/fire collision and selection, portal travel,
+  weather probabilities, save compatibility and world/dimension isolation.
+* Preserve pause, live toggles, reload, resize, disconnect and shutdown behavior.
+* Never load/generate chunks to service a visual effect or availability check.
+* Mesh workers keep immutable snapshots. Cached live-world objects are not a
+  substitute for the snow and Sodium snapshot safety fixes.
+* Preserve random sequence/order where a refactor could change gameplay or
+  visible effect selection. Do not silently replace the existing RNG behavior.
+
+Out of scope: lowering quality settings, reducing particle counts, shortening
+view ranges, reducing light precision, changing the visual design, replacing
+the renderer, updating Minecraft/dependencies, or changing gameplay to save CPU.
+
+2. PRIORITIES
+-------------
+P0 = establish evidence and equivalence before optimizing.
+P1 = concrete redundant work or likely substantial cost; implement first.
+P2 = useful follow-up, conditional on measurements and dependency work.
+P3 = cleanup or higher-risk redesign; lower expected immediate frame-time value.
+
+ID   Priority  Work area                         Main benefit       Risk
+O00  P0        Repeatable baseline/profiling       Evidence           Low
+O01  P1        Duplicate hooks/cheap early exits   CPU/meshing        Low
+O02  P1        Reuse frame and upload buffers     CPU/native/GPU     Medium
+O03  P1        Incremental water-column map       Tick spikes        Medium
+O04  P1        Shared waterfall/lavafall scan     Tick time/GC       Medium
+O05  P1/P2     Dynamic-light update/dirty work     Ticks/meshing      High
+O06  P1/P2     Snow/wind geometry and snapshots    Meshing/server     High
+O07  P1/P2     Fluid rims and model capture       Frame CPU/GC       Medium-high
+O08  P1/P2     Restrict glint contour work         GPU/frame CPU      Medium
+O09  P2        Terrain/water/fog shader work       GPU                High
+O10  P2        Portal geometry/topology reuse     Frame CPU/GC       Medium
+O11  P2        Cloud and sky submission           CPU/GPU            Medium
+O12  P2        Particle geometry and queries      CPU/GPU/GC         Medium
+O13  P2        Procedural texture/breaking work    Uploads/hitches    Medium
+O14  P2        Audio updates                      CPU/audio queue    Low-medium
+O15  P2/P3     Server weather/snow/network work   Server tick time   Medium-high
+O16  P3        Dead code/config/build cleanup     Maintenance        Low-medium
+
+Expected value depends on the scene. O03/O04 are strong candidates for movement
+and tick lag; O05/O06 for chunk rebuild load; O07 for crowds in fluids; O08/O09
+for GPU-bound rendering. Reorder after O00 if the measurements disagree.
+
+3. O00 - BASELINE, PROFILING AND ACCEPTANCE
+----------------------------------------
+Capture the exact source state, config, resource packs, renderer/JAR versions,
+Java version, GPU/driver, resolution, render/simulation distances, particle and
+transparency settings. Preserve the existing working tree; do not benchmark a
+clean branch that omits the recent fixes. Use isolated fixture worlds or copies,
+never modify the user's original saves for a benchmark.
+
+Separate four costs:
+* CPU frame/extraction/submission work on the client thread.
+* GPU time, including copies, masks, transparency passes and overdraw.
+* Client and integrated/dedicated server tick time.
+* Background meshing, queue backlog, allocations, GC and native/GPU memory.
+
+Do not add CPU and GPU timings as though their work cannot overlap. A reduction
+in allocations or draw calls is supporting evidence, not proof of faster frames.
+
+Method:
+1. Warm shaders, resources, JIT compilation and already-generated chunks.
+2. Run a repeatable camera/input route for 60 seconds, at least three repetitions
+   per build. Alternate baseline/candidate runs to expose thermal or cache drift.
+3. Also record cold start, first effect use, resource reload and rapid movement
+   separately. Their one-time hitches must not disappear inside average FPS.
+4. Hold resolution and settings constant. Record the normal capped experience
+   and an uncapped diagnostic run if the cap hides differences.
+5. Use JDK 25 Flight Recorder for CPU stacks, allocation/GC and thread behavior.
+   Use the low-overhead default configuration for longer observations and short
+   profile recordings for diagnosis. Compare profiler-free runs for final timing.
+6. Use available renderer/backend GPU timing or a compatible GPU capture tool
+   for per-pass costs. Read timing results asynchronously; never stall every
+   frame to retrieve a GPU result. Verify tool/backend support before choosing it.
+7. Add development-only counters/timers where profiles need attribution. Keep
+   them cheap or disabled in release builds; do not log every particle/block.
+
+JFR reference: Oracle's JDK 25 java manual documents default/profile recordings
+and the extra overhead of profile.jfc:
+https://docs.oracle.com/en/java/javase/25/docs/specs/man/java.html
+Use the bundled .tools/jdk-25 tools and their help for the actual recording
+command. JFR does not replace a GPU profiler.
+
+Record per scenario:
+* CPU/GPU frame milliseconds: median, p95, p99; counts over 16.7/33.3/50 ms.
+* Client/server tick milliseconds and server ticks exceeding 50 ms.
+* Chunk rebuild requests, unique dirty sections, rebuild duration and backlog.
+* Allocations/second, GC pauses, retained heap, native buffers and GPU targets.
+* Scanned columns/cells, model captures, emitted quads, bytes uploaded/copied,
+  buffer creations and render-pass counts for the affected feature.
+
+Scene set:
+A. Dry plains/cave: stationary, walking and crossing 32-block map boundaries.
+B. Ocean/swamp/elevated pool/waterfall: above, below and under an overhang;
+   render distances 2, 8 and 16 chunks; third-person foreground entity occlusion.
+C. Waterfalls and lavafalls: dry control, many active falls, fast entry and removal.
+D. Dynamic lights: 1/16/64 sources, both hands, drop handoff, stationary and
+   moving sources, walls/leaves/slabs, high altitude, geometry edits and toggles.
+E. Snowy forest: wind 0/100, dense leaf coatings, ordinary snow, tall partial
+   support columns, chunk boundaries, saved-world reopening and roof edits.
+F. Water/lava crowds: pigs/boats/striders/shields, overlap, wakes and impacts.
+G. Glint: empty control, dropped/framed items, mobs, both hands and GUI preview;
+   near/far silhouettes and GUI scale 3.
+H. Portals: many Nether openings/crossings, ordinary and larger End openings,
+   border edits, eye insertion and resource-pack models.
+I. Weather/sky: rain 0/50/100, snow, indoor/outdoor transitions, two cloud layers,
+   aurora, rainbow, meteors and minimum/large cloud cell widths.
+J. Server: several players, hot/cold weather, snow compaction, portals and
+   occupied aurora regions; include a dedicated-server smoke test.
+K. Lifecycle: resize, pause, reload, live settings changes and repeated world swaps.
+
+Use deterministic clocks/seeds and scripted motion in visual fixtures where
+possible. Pair screenshots with mesh/light/geometry assertions; a screenshot
+alone cannot establish collision, light propagation or network equivalence.
+
+Acceptance for each patch:
+* Required behavior tests and relevant screenshot comparisons pass.
+* Its targeted cost improves beyond observed run-to-run noise, or it is explicitly
+  classified as maintenance cleanup with no performance claim.
+* No material regression in other representative scenes, especially p99 spikes.
+* Reused caches are bounded and do not grow across repeated reload/world cycles.
+* Keep a before/after results table and an independently revertible patch.
+* Agree numerical performance targets after measuring the baseline. Do not
+  promise an unsupported percentage improvement or a particular FPS today.
+
+4. O01 - REMOVE DUPLICATE REGISTRATION AND REORDER EARLY EXITS
+-----------------------------------------------------------
+Evidence:
+src/client/java/naturality/client/NaturalityClient.java calls
+FoliageWindModel.initialize() twice consecutively. FoliageWindModel.initialize
+registers a ModelLoadingPlugin callback without an idempotence guard. Qualifying
+models can therefore receive two wrappers and repeated cache/transform work.
+
+src/client/java/naturality/client/mixin/ParticleWindMixin.java computes outdoor
+exposure and fluid queries before checking disabled wind, dead particles,
+immune types, weather cards, portal particles, landed leaves or missing weather.
+WeatherSoundEnvironment can test 24 nearby sky samples and collision rays.
+
+Plan:
+* Remove the duplicate foliage registration; verify one effective wrapper per
+  eligible model through initial bake and reload. Audit remaining registrations
+  for the same mistake, rather than adding guards indiscriminately everywhere.
+* In particle wind, perform cheap exclusions first and clear accumulated drift
+  on the same paths as today. Only eligible particles need environmental queries.
+* Hoist immutable probe distances instead of allocating their array per query.
+* Do not simply exit when wind strength is zero: previously accumulated drift
+  still decays and can move the particle. Preserve that behavior.
+
+Validation: wind-compat,snow-compat,weather,smoke,leaves,particle-weather,portal;
+repeat relevant model tests with Sodium and both transparency modes.
+Measure wrapper/transform counts, skipped exposure calls and particle tick time.
+
+5. O02 - REUSE GPU/CPU BUFFERS AT THEIR ACTUAL UPDATE FREQUENCY
+------------------------------------------------------------
+Evidence:
+* WindRendering.bind creates a direct ByteBuffer and closes/recreates its GPU
+  uniform on every binding, including repeated terrain/transparency passes.
+* WaterVisuals.prepareFrame does the same for its 112-byte uniform each frame.
+* ProceduralFire.upload recreates the 80-byte bounds/clock uniform every tick
+  and rewrites 128 unchanged frame-top metadata entries with the clock pixel.
+* GlintContours creates/closes native builders and GPU vertex buffers for its
+  batches each capture/render cycle.
+* CloudLayerRenderer already uses MappableRingBuffer; that is a local example
+  of the supported engine mechanism, not a new dependency to introduce.
+
+Plan:
+* Prepare a wind snapshot once per render frame/view, then bind the same slice
+  across the compatible draws. Keep time/partial tick and weather values exact.
+* Use engine-supported reusable/ring buffers and reusable staging memory for
+  water, wind, fire and contour vertices. Grow capacity when necessary rather
+  than reallocating on every draw; bound retained peak capacity.
+* Separate reload/config constants from frame/tick values where layouts allow.
+  Upload static fire metadata on reload and the clock at the current 20 Hz rate.
+* Track whether a buffer is per world, per frame, per view or per render pass.
+  World, hands and inventory preview must not overwrite each other's data.
+* Confirm the engine's in-flight GPU lifetime rules before reuse. Ring rotation,
+  slices and fences must prevent writes to resources still used by older draws.
+* Retain teardown for resize/reload/shutdown. A buffer cache is not an excuse to
+  retain models, world references or old GPU attachments indefinitely.
+
+ProceduralFluids.refreshBounds is already keyed by configuration changes; it is
+not the same per-frame problem. Avoid refactoring cold allocations for symmetry.
+
+Validation: fluids,fire,water,wind-compat,glint,clouds; repeated reload/resize and
+Sodium OIT testing. Check native/GPU allocations, upload count and frame time.
+
+6. O03 - MAKE THE WATER MAP INCREMENTAL
+-------------------------------------
+Evidence: WaterVisuals.tick maps 256x256 columns. Every 32-block recenter rebuilds
+all 256 tiles/65,536 columns synchronously. A stationary tick refreshes eight
+tiles plus the camera tile, then filters the entire map and uploads all of it.
+Columns can walk down through up to 254 additional fluid cells.
+
+Plan, in small stages:
+1. Reuse overlapping columns on recenter using a shifted or circular map.
+   Refresh newly exposed strips and all invalidated retained columns. A pure
+   32-block shift exposes 8,192 new columns rather than 65,536; this is a work
+   count opportunity, not a predicted speedup.
+2. Attach validity/version information to chunks/columns. Account for block and
+   fluid changes, chunk arrival/unload, biome updates and world replacement.
+   Reuse must not keep stale data that the old full recenter would have refreshed.
+3. Keep the existing background refresh as a safety path until all invalidation
+   sources are demonstrated. Preserve camera-tile priority and the current
+   maximum normal refresh delay; do not trade correctness for slower refresh.
+4. Recompute the 25-block separable turbidity filter only when inputs change.
+   Then evaluate dirty-region updates with a 12-block dependency halo. Recenter
+   changes clamped outer-edge samples as well; include those dependencies.
+5. Upload changed rectangles/tiles when the texture API supports it efficiently.
+   Coalesce neighboring writes and compare against a full upload when many
+   regions are dirty. More tiny uploads can cost more than one full upload.
+6. Reuse same-frame camera depth, biome and local-light computations. If caching
+   the surface height across frames, invalidate it on fluid/roof/map changes and
+   still subtract the exact current camera Y for smooth depth transitions.
+
+Non-negotiable details: distinct wet/dry mask versus turbidity, exact height and
+depth encoding, falling-water receiving pools, swamp interpolation, map-edge
+fade, covered/stacked fallback and the 16-block overhang estimate.
+
+Do not skip camera-depth calculation when water visuals are disabled: underwater
+audio and the immersion overlay use it independently. Do not introduce a visible
+warm-up hole by spreading the initial complete map over frames without equivalent
+data ready before it can be sampled. Startup scheduling is a later experiment.
+
+Validation: water,water-occlusion,water-rain,short-distance,fluids,fog,clouds,audio.
+Add differential map checks over negative coordinates, diagonal recenters,
+teleports, same-tick edits, chunk unload/reload and biome transitions.
+Measure recenter p99, cells scanned, filter time and uploaded bytes.
+
+7. O04 - SHARE AND PRUNE WATERFALL/LAVAFALL DISCOVERY
+-------------------------------------------------
+Evidence: WaterfallSplash and LavafallSplash have parallel caches and scans.
+Each processes 256 columns per tick through a 161-cell vertical window
+(RANGE 72 + 8 search margin in both directions). With both active and columns
+loaded this visits up to 82,432 vertical positions per tick before neighbor,
+surface, border validation and fall-emission queries. Dry areas pay this too.
+Each detector then collects/sorts candidates and revalidates active borders.
+
+Plan:
+* Introduce one nearby-fluid discovery pass that reads a position once and
+  dispatches water/lava classification. Keep separate effect states and policies.
+* Skip sections proven to contain neither relevant fluid, using palette/section
+  metadata or a maintained summary. Waterlogged blocks must count. A heightmap
+  alone is insufficient: cave falls and stacked fluid bodies must still work.
+* Reuse loaded chunk/section handles and mutable cursor positions within a scan.
+  Clamp scans outside actual terrain bounds while preserving no-load behavior.
+* Reuse surface results within the same tick/version; invalidation includes
+  neighboring heights, source/flow state and receiving-pool changes.
+* Preserve the center-out scan schedule and separate water/lava random streams,
+  budgets, nearest-256 selection, tie behavior, warm starts and activation state.
+* Replace whole-list sorting with stable bounded selection only if profiling
+  shows candidate sorting is significant and selected/output order stays equal.
+* Introduce dirty columns after the shared pass is correct. Retain loaded-only
+  periodic discovery and immediate revalidation before spawning at cached borders.
+
+Do not lower the 72-block range, 36-block full-density distance, birth budgets or
+warm-start density. Do not combine opposite-fluid quenching with ordinary rings.
+
+Validation: waterfall,lava-effects,water-ripples,particle-weather; include tall
+falls, slopes, underground pools, removal, rapid movement and all particle modes.
+Measure dry-world work as well as active-fall work, allocation rate and entry spikes.
+
+8. O05 - OPTIMIZE DYNAMIC LIGHTS WITHOUT CHANGING THE FIELD
+--------------------------------------------------------
+Evidence:
+* DynamicLighting.tick traverses rendering entities every tick, builds sources,
+  resolves collision-aware placement, sorts them and builds identity maps before
+  it can take the movement-interval early exit.
+* LightSourcePlacement collects AABBs from neighborhoods repeatedly; embedded
+  emitters can allocate and sort many escape candidates.
+* FractionalLightField rebuilds propagation from all selected sources. It already
+  uses primitive maps and brightness-bucket queues; preserve that good structure.
+* DynamicLightGeometryMixin globally invalidates on setBlocksDirty.
+* publish diffs light cells, then calls setSectionDirtyWithNeighbors for each
+  changed section; neighboring rebuild regions can overlap heavily.
+* Source comparison follows the distance-sorted list. A camera-induced ordering
+  change can make an otherwise identical emitter set look changed.
+
+Stage A: cheaper discovery and publication (P1).
+* Resolve item/entity emission before calculating hand transforms or collision
+  placement. Cache registry/type lookups with explicit config invalidation.
+* Reuse bounded scratch lists/maps, use primitive keys where measured, and compare
+  selected source identity/light/position independently of ordering. Preserve
+  nearest-source membership, tie selection and immediate membership/brightness
+  changes even between scheduled movement updates.
+* Reuse exact placement results for unchanged position/owner and unchanged
+  collision neighborhoods. Start with same-tick reuse; broaden only with reliable
+  geometry/chunk revision keys. Do not rank sources using an uncorrected position
+  when collision resolution could change which sources fall within the cap.
+* Form the union of affected sections plus the same AO/light neighbor halo before
+  scheduling rebuilds. Verify the renderer's existing deduplication first; avoid
+  adding a redundant cache if requests are already coalesced cheaply.
+* Retain atomic publication and old-source removal. Keep server-packet underlay
+  repair, high-altitude field queries and both integer/fractional consumers.
+
+Stage B: locality-aware propagation (P2, higher risk).
+* Restrict invalidation to edits intersecting a source/field dependency region.
+  Include chunk availability, collision and opacity changes, not only block IDs.
+* Group overlapping source influence regions and recompute changed groups while
+  retaining unchanged groups. Expand dependencies conservatively around edits.
+* If incremental decrease/increase propagation is justified, account for light
+  previously supplied by removed sources and replacement by weaker sources.
+  The field is a maximum, not an additive sum; subtraction is not correct.
+* Keep the current complete rebuild as a reference/fallback. Compare every cell
+  on randomized small fixtures before enabling incremental operation.
+
+Keep the user's update interval and 1/16 precision, 20-tick predicted-drop bridge,
+leaf/glass/partial-block occlusion and server isolation. Background propagation
+is not a first step: publishing late snapshots would change the response timing.
+
+Validation: dynamic-lighting,lighting,chunks,water,fluids; add source-order-only
+changes, overlapping lights, weaker-light reveal on removal, edits outside/inside
+influence, and all toggle/drop/altitude cases from the reference.
+Measure placement calls, propagated cells, unique dirty sections and mesh backlog.
+
+9. O06 - REUSE SNOW/FIRE/WIND GEOMETRY WITH SAFE SNAPSHOT SCOPES
+------------------------------------------------------------
+Evidence:
+* FoliageWindModel clears WindRendering's exposure cache for each model emission
+  because renderer views can be reused with changed contents. Exposure can test
+  multiple rays, nearby columns and collision shapes per foliage block.
+* SnowOverlayModel searches up to 32 cells for owners and builds snow shapes,
+  top patches, face intervals and texel clipping data during model emission.
+  Its fallback sprite identification can linearly search the loaded atlas.
+* SurfaceSnowModel builds small float arrays for each generated face.
+* SnowRenderRegionCacheMixin requests up to 36 additional SectionCopy entries
+  for a region when wrapping is enabled. Underlying copies may already be cached;
+  36 requests must not be reported as 36 new physical copies without measuring.
+* SnowGeometry/FireSurface compute contextual geometry also used by selection,
+  collision, placement, support and lighting. Ordinary snow already has a fast
+  path and culled overlays are already skipped.
+
+Plan:
+* First remove the duplicate foliage wrapper under O01.
+* Create a mesh-job/emission context with an explicit immutable snapshot identity
+  or generation. Share exposure, owner lookup and support geometry within that
+  scope. Clear on job completion, cancellation or snapshot replacement.
+* Preserve the current per-emission invalidation until a correct job generation
+  exists. Caching only by LevelSlice object identity recreates the stale-roof bug.
+* Cache invariant sprite alpha masks/texel runs and UV-to-sprite lookup metadata
+  per atlas generation. Keep model offsets, UV orientation, resource-pack texture
+  resolution and first-frame alpha semantics identical.
+* Reuse computed patch/shape data among render operations in the same context;
+  use scalar face emission or scratch arrays instead of allocating arrays per quad.
+* Preserve original quad order where transparency can depend on it. Coalesce
+  geometry only if texture sampling, wind anchors, light/AO, normals, depth bias
+  and boundary behavior remain equivalent.
+* Consider more selective extra snow snapshots only after proving the absence of
+  any owner/support/overlay dependency above AND below the section. A section
+  containing no snow can still depend on a snow owner up to 32 blocks away.
+* Preserve Sodium's eight-block wind snapshot expansion and snapshot brightness
+  reads. Do not shrink its border simply because ordinary meshes need less data.
+* Main-thread/server shape caches need different invalidation from render caches:
+  block/neighborhood, tags, wrapping settings and shape context all matter. Prefer
+  scoped reuse and immutable vanilla support templates before a global cache.
+
+Keep the shared 32-cell recursion budget, fire/snow reentrancy guard, ordinary
+snow culling, displaced-section visibility, leaf/snow wind alignment, exact
+collision layer rules and saved-owner skylight behavior.
+
+Validation: snow,snow-compat,wind-compat,chunks,fire,weather,gameplay,lighting.
+Include reused snapshots after roof edits, all coordinate signs, tall support
+columns and save/close/reopen. Compare emitted vertices/light/markers as well as
+screenshots. Measure per-section time, shape/exposure calls, quads and allocations.
+
+10. O07 - SHARE FLUID MODEL CAPTURE AND COMPACT RIM/WAKES
+------------------------------------------------------
+Evidence:
+* WaterIntersection and LavaIntersection independently enumerate and sort nearby
+  entities, search surface candidates, capture models and build pixel geometry.
+* Surface candidates are queried again after capture; wake pixels independently
+  query surface, light and tint for the same block.
+* WaterIntersectionGeometry transforms every model quad for each surface plane
+  and tests rectangles repeatedly across a 16x16 pixel grid.
+* Wake maps use constructed String keys; rendered pixels contain four Vec3
+  objects plus a Pixel record. These structures are rebuilt during extraction.
+* PortalModelCapture creates a reflective proxy, extracts render state, runs
+  model animation and collects a Vec3 array per quad on each capture.
+* FlatModelAlpha caches texture masks but repeats reflective field discovery
+  and constructs posed texel-run prisms during capture.
+
+Plan:
+* Share a nearby-entity snapshot between the two liquid rim systems at the same
+  extraction phase. Preserve each feature's filters, candidate/capture limits,
+  interpolation, frustum tests and nearest ordering.
+* Cache raw posed liquid-capture geometry for one frame/view/partial tick and
+  entity, with an explicit capture mode and coordinate origin. Water and lava
+  can consume it without rerunning the model for each liquid.
+* Portal capture has different flat-alpha/fallback semantics. Do not force it
+  through the liquid cache unless both modes can be derived exactly; unsupported
+  liquid models must still receive no invented hitbox rim.
+* Cache WaterSurface/LavaSurface results, light and tint by position within the
+  frame. Include invalid results. Reproject wakes onto the current surface and
+  refresh live light so old splashes respond to torches being added/removed.
+* Replace String wake keys with packed block keys plus local pixel indexing,
+  or per-block pixel arrays. Account for full signed coordinates and height;
+  do not overflow a world-coordinate integer multiplied by 16.
+* Use bounded flat primitive vertex/pixel storage, and reserve capacity based on
+  observed workloads. Keep extraction output alive until all render submissions
+  have consumed it; only scratch data can be overwritten immediately.
+* Rasterize the existing rectangle union once per tile/triangle plane, then
+  derive the same inset rim from occupancy/distance data with a sufficient halo.
+  Match subpixel distances, slope triangle selection, negative positions and
+  cross-tile unions against the old algorithm. A crude binary dilation is not
+  automatically equivalent to the current continuous rectangle tests.
+* Replace Proxy dispatch with a typed geometry-only collector if the current
+  SubmitNodeCollector interface supports this cleanly. Preserve default adapters
+  and the SpriteId submitModel overload that previously caused the shield crash.
+* Cache reflective accessors by concrete class, or use an appropriate accessor
+  for known renderer types with a tested fallback. Cache negative lookups too.
+* Cache local alpha-cut topology separately from the animated pose; only pose
+  transformations need to run again. Retain texture/UV limits and fallbacks.
+
+Validation: water,lava-effects,waterfall,portal,glint and checkPortalGlow geometry
+checks. Cover striders, shields, animated limbs, boats, overlaps, slopes,
+cauldrons, negative coordinates and 64-candidate boundary cases.
+Measure captures/entity/frame, surface queries, vertices and allocations/frame.
+
+11. O08 - LIMIT GLINT CONTOUR WORK TO WHERE IT CAN CONTRIBUTE
+----------------------------------------------------------
+Evidence: GlintContours captures batches into a full-resolution RGBA32F + D32
+mask, copying depth, allocating/uploading vertices and drawing a fullscreen edge
+pass. glint_contour.fsh performs a 7x7 source search, and sometimes a second 7x7
+search for distance-adaptive raster size. Empty screen regions still enter the
+first search. World/hand and preview targets already have separate lifecycles.
+
+Plan:
+1. Reuse native builders and GPU vertex storage under O02.
+2. Track conservative screen bounds of captured geometry and restrict the edge
+   draw with a scissor or equivalent region mechanism. Expand bounds to include
+   every coarse-grid sample center, search offset and output fringe. Derive the
+   expansion from the shader, not just the visible nominal outline width.
+3. For disjoint silhouettes, evaluate a conservative tile occupancy mask only
+   after the simple scissor is measured. Avoid drawing expensive searches across
+   large empty gaps if the added pass/metadata genuinely saves GPU time.
+4. Preserve or explicitly clear unused mask regions when reusing attachments;
+   a tighter scissor must never expose a previous frame's silhouette.
+5. Audit color/depth format needs. A smaller format or split color/depth storage
+   is optional only after precision/readback and occlusion comparisons. The mask
+   alpha carries distance/depth information, so RGBA8 is not a drop-in substitute.
+
+Keep source-depth tie selection, silhouette union, interior exclusion, 15-block
+world fade, near-to-far raster sizing, hand projection, GUI portrait alpha,
+inventory atlas isolation/scale-3 alignment, pulse and resource-pack glint color.
+
+Do not blindly remove distant zero-color silhouettes: their occupancy can affect
+another object's contour. Any distance cull must prove it cannot change the union
+or depth result. Near-plane clipping also requires conservative bounds/fallback.
+
+Validation: glint,lighting,fog with world items, armor, mobs, both hands, frames,
+GUI portraits, resizing and empty frames. Reuse existing GPU mask readbacks.
+Measure full-screen versus affected pixel area, edge-pass GPU time and uploads.
+
+12. O09 - REDUCE TERRAIN, WATER AND FOG SHADER WORK
+------------------------------------------------
+Evidence:
+* The shared terrain shader computes water-column/daylight and other lighting
+  expressions across broad material paths; alpha-only OIT needs only part of
+  the complete color calculation, but still must reproduce coverage exactly.
+* water_optics.fsh integrates 24 intervals per participating pixel; it already
+  skips above-water sky/dry pixels using scene depth and the water mask.
+* WaterComposite copies scene color/depth and replays translucent terrain into
+  an RGBA32F + D32 water mask. Underwater finishing adds another color copy/draw.
+* Matrix inversion appears in some fragment reconstruction paths. Whether the
+  shader compiler already hoists uniform work must be measured, not assumed.
+
+Plan:
+* Profile each pass/material first; compare CPU- and GPU-limited scenes.
+* Use uniform feature gates and specialized mask/alpha-only variants to avoid
+  calculations whose outputs cannot affect the active pass. Keep discard/alpha
+  parity between classic, OIT depth, transmittance and accumulation passes.
+* Compute shared expressions once, remove duplicate texture fetches where values
+  really match, and consider preparing inverse matrices once per view if GPU
+  analysis demonstrates an actual cost.
+* Retain derivative evaluations before divergent branches. Moving dFdx/dFdy or
+  derivative-dependent texture sampling under per-pixel water/material tests can
+  reintroduce unstable seams and shimmer even if the code looks cheaper.
+* Distinguish terrain shimmer-only demand from refraction/depth demand. Skip
+  entire postprocess stages only when their outputs AND their mask/depth textures
+  are unused by every remaining consumer. Invalidate stale views on every skip.
+* Consider restricting the water mask replay to sections known to contain visible
+  water, with conservative material/section metadata. Preserve renderer-specific
+  compressed vertices and sorting; do not assume a vanilla buffer exists on Sodium.
+* Evaluate smaller target formats only after enumerating channels and precision
+  needed by all consumers. Record resolution-dependent memory/copy bandwidth.
+* Explore combining underwater finishing with optics only as a separate high-risk
+  change after a render dependency diagram proves equal sampling/composition.
+  Preserve which color each refraction sample reads and when transparency closes.
+
+Explicitly keep:
+* The actual depth-tested water mask; a wet column is not visible water coverage.
+* Celestial-free atmospheric sampling, environmental rain fog and the End-only
+  fullscreen edge fog; no new overlay over foreground entities.
+* The existing water/terrain/transparent-entity/cloud ordering and OIT equations.
+* Current 24-step integration, resolution, palettes, grids, fog density and
+  refraction/shimmer formulas until an algebraically equivalent path is proven.
+* Sodium's existing texture-unit budget, including the uniform fire clock.
+
+There is a separate verification checkpoint before mask optimizations:
+WaterComposite clears its mask with new Vector4f(), whereas GlintContours
+explicitly uses (0,0,0,0) because default W is 1. The water mask uses alpha as
+coverage. Inspect actual empty-mask pixels and determine whether this is an
+independent correctness issue. Do not assume it is correct or silently bundle
+a visual behavior fix into a performance patch.
+
+Validation: water,water-occlusion,water-rain,short-distance,fluids,fog,lighting,
+clouds,fire,wind-compat,snow-compat; classic/OIT on both renderer paths.
+Measure per-pass GPU time, overdraw, target bytes and copy/upload bandwidth.
+
+13. O10 - REUSE PORTAL TOPOLOGY AND STATIC MODEL WORK
+---------------------------------------------------
+Evidence: EndPortalBorderState.extract performs a bounded connected-opening
+search and gathers neighbor model quads separately for each portal tile each
+frame. PortalOpeningClient deduplicates BLOCKS.values into a new HashSet per tick
+and extracts baked parts for maintained custom portal surfaces. Portal crossing
+silhouettes legitimately depend on the current posed entity each frame.
+
+Plan:
+* Start with per-frame caching of End portal connectivity/border model inputs
+  shared by tiles. Keep tile-specific clipping, camera-side rejection and glow
+  ownership separate. Preserve the per-tile eight-block/256-cell search bounds
+  for larger openings; an unrestricted component union could change appearance.
+* Later persist only stable topology with chunk/block/reload invalidation.
+  Include neighboring boundary blocks, lighting and tint in the dependency model.
+* Store openings once in an active-opening collection plus a block lookup index,
+  avoiding repeated deduplication without sacrificing worker-safe lookup.
+* Cache static portal/fire model geometry by state/position seed/resource epoch.
+  Keep reveal, fire fade, palette pulse and camera transforms dynamic.
+* Reuse per-frame crossing capture data where semantically equal under O07.
+  Do not freeze animated silhouettes or the frame-light occlusion snapshot.
+* Leave completed custom portal surfaces in place until the existing safe handoff;
+  their retention prevents a known asynchronous chunk-rebuild flash.
+
+Validation: portal,end-portal,audio,fire and checkPortalGlow. Include broken frames,
+both axes/sides, partial traversal, return travel, foreground occlusion, large
+openings, border replacement, tile removal and resource reload.
+Measure connectivity visits, baked-model queries, capture counts and frame time.
+
+14. O11 - CLOUD AND SKY WORK
+---------------------------
+Evidence: CloudLayerRenderer already has compact three-byte faces, occupancy
+data, cached meshes and ring-buffer uniforms. It rebuilds each layer when its
+camera/cloud texture cell changes. AuroraRenderer caches nine tiles and draws
+each; stars, sun beams, rainbow and meteors already reuse static geometry.
+
+Plan:
+* Precompute valid cloud relative-cell traversal order for each radius, retaining
+  the exact classic far-to-near order, rather than retesting the circular range
+  inside every rebuild. Reuse modulo/occupancy work where possible.
+* Measure rebuild spikes at small configured cell widths and larger distances.
+  Consider incremental strips or reusable tile meshes only if the existing
+  cache is still expensive; keep cross-tile side suppression and sort order.
+* Preserve camera-height cap transitions in shader uniforms; they already avoid
+  mesh rebuilding and must not be converted into per-frame geometry updates.
+* Add conservative aurora tile/ribbon visibility bounds only if useful. Include
+  maximum animated displacement and its extended far-plane behavior; ordinary
+  terrain-frustum tests could incorrectly remove visible distant curtains.
+* Profile meteor per-instance submission before batching. If beneficial, group
+  compatible texture/frame draws or use supported instancing while preserving
+  animation, ordering/blend semantics, orientation and per-instance transforms.
+* Keep star/sun/rainbow static meshes and GPU animation. They are lower priority
+  than scans, meshing and fullscreen work; avoid rewriting already cheap systems.
+
+Keep two cloud layers, depth/alpha agreement, shared OIT cloud depth, transparency
+ordering, aurora joins/palette/parallax and event timing/strength behavior.
+Validation: clouds,aurora,rainbow,sky-events,fog,water,short-distance.
+
+15. O12 - PARTICLE QUERY AND GEOMETRY COST
+---------------------------------------
+Evidence: particle wind executes after native particle ticks; weather births
+perform footprint heightmap checks; biome-water tint can be queried repeatedly
+at the same positions; TerrainParticleExtractMixin emits individual crop texels
+and allocates a transformed Vector3f per retained pixel.
+
+Plan:
+* Apply O01 exclusions before particle exposure tests. Share chunk/heightmap
+  reads within the tick and exact query results where inputs match.
+* Do not substitute one exposure result for an entire block: sub-block origins,
+  collision-ray paths and glass/partial-block boundaries can differ visibly.
+* Cache biome tint by the same discrete sample position and biome/color generation
+  for one extraction/tick where valid. Preserve movement and resource changes.
+* Share the weather spawn-clearance maximum-height calculation for identical
+  footprints. Preserve center-based ground contact for existing cards; the
+  conservative full-card clearance applies to births, not their landing rule.
+* Keep the crop/hole choice already made once by TerrainParticlePixelMixin.
+  Precompute reusable UV/local-position stencils where useful, reuse transform
+  scratch values and hoist the repeated layer lookup. Light/color/rotation are
+  already computed outside the pixel loops; retain that existing optimization.
+* Investigate merging adjacent retained texels into rectangle runs with matching
+  UV interpolation. Keep every original hole, source texel, crop and physical
+  pixel size, including high-resolution packs. If the particle submission API
+  cannot express the identical shape cheaply, keep individual quads.
+* Batch compatible geometry, but preserve depth-writing splash faces versus
+  ordinary translucent rings/rims and classic transparency ordering.
+
+Do not reduce weather card density, fragment detail, lifetimes, wind collision,
+leaf rests, warm starts, bubbles or fluid impact eligibility to improve timings.
+Do not merge water/lava palette rules merely because their motion is similar.
+
+Validation: particle-weather,rain-splash,smoke,flame,leaves,waterfall,lava-effects,
+water-ripples,breaking. Add an explicit terrain-fragment crop/hole/geometry test:
+the breaking suite primarily validates mining overlays, not all particle output.
+Measure particles/quads, environmental queries, allocation rate and overdraw.
+
+16. O13 - PROCEDURAL TEXTURES, BREAKING VARIANTS AND RESOURCE WORK
+--------------------------------------------------------------
+Evidence: ProceduralFluids already shares four bounded 64x64 simulations and one
+seven-level RGBA heat texture, updating at tick rate. BreakingTextures lazily
+creates up to 32 variants x 10 stages x 2 transparency modes and caches sources;
+each variant recomputes its pixel-coordinate permutation during generation.
+
+Plan:
+* Measure fluid simulation versus pixel packing/mip construction/upload costs.
+  Optimize array access, wrap indices and packing without changing equations,
+  update order, RNG progression, rounding or mip averaging.
+* Avoid GPU simulation migration as a default optimization: synchronization and
+  numerical differences could change the exact palette/pattern behavior.
+* Under disabled/no-consumer conditions, consider suppressing unnecessary uploads
+  while keeping the CPU simulation advancing exactly as now. On re-enable,
+  upload the current state before the first draw; splash heat/shimmer are consumers
+  too. Freezing a disabled simulation would change its re-enabled appearance.
+* Apply O02's static fire metadata/clock separation and preserve the 20 Hz clock.
+* Cache breaking source-coordinate permutations by dimensions and variant;
+  reuse them across all damage stages with the same size. Indexed fixed-size
+  caches can replace boxed small-key maps if that simplifies this bounded pool.
+* Profile first-mining texture creation and high-resolution packs separately.
+  Optional bounded preparation at resource-load time may move a hitch, but must
+  not eagerly upload all 640 textures without memory/startup evidence.
+* Any memory-budgeted eviction must retain textures referenced by submitted
+  draws and regenerate exactly the same pixels. Preserve classic/OIT separation,
+  lazy fallback, reload cleanup and resource-pack source resolution.
+* Inventory all NativeImage, texture, view and buffer owners; verify release
+  paths on failure, reload, renderer close and shutdown, not only the happy path.
+
+Validation: fluids,fire,breaking,water,waterfall,lava-effects,portal; both renderers
+where relevant. Preserve all-stage palette/alpha/coverage/per-ring assertions.
+Measure first-use latency, resource reload time, bytes uploaded and peak memory.
+
+17. O14 - AVOID UNCHANGED AUDIO FILTER UPDATES
+-------------------------------------------
+Evidence: WeatherAudioEngineMixin schedules a channel callback for every playing
+sound each unpaused tick. WeatherAudioChannelMixin can repeat EFX gain/filter
+attachment calls even when the environment amounts and attachment are unchanged.
+WeatherSoundEnvironment also queries the camera's outdoor exposure each tick.
+
+Plan:
+* Compare the exact effective indoor/underwater values and the last successfully
+  applied filter state before issuing redundant OpenAL updates. Do not introduce
+  a quantization threshold or slow down the existing transition for performance.
+* Track whether a filter is attached so repeated dry/outdoor ticks do not keep
+  detaching an already detached filter. Reset state on channel/device recreation.
+* If profiling warrants it, avoid scheduling unchanged channel callbacks using
+  a listener-environment version plus per-channel applied version. New channels,
+  weather classification and play-before-first-sample still require initialization.
+* Share the already computed listener environment within a tick. Preserve exact
+  collision-aware shelter, smoothing, current camera depth and world reset.
+* Keep all OpenAL work on the audio thread and preserve streamed/music/UI sounds,
+  weather filtering composition, normal source gain and non-EFX fallback behavior.
+
+Validation: audio,weather,water,portal, including sound/device reload, one-shots,
+streamed audio, surfacing, world exit and filter deletion. Add a short manual
+listening comparison; muted automated suites cannot assess sound quality.
+Measure queued callbacks and OpenAL updates, not just render FPS.
+
+18. O15 - SERVER TICKS, SAVED CHUNKS AND NETWORKING
+------------------------------------------------
+Evidence:
+* WeatherThaw samples eight columns per ticking chunk and performs repeated
+  heightmap/weather/state queries. Work remains possible at temperature <= 50
+  because climate-driven ice melt is separate from warm-weather snow thaw.
+* SnowLighting's saved-chunk callback already filters sections with maybeHas
+  snow, then scans each qualifying section's 4,096 states and repairs fitted
+  owners. Those repair calls are a correctness requirement.
+* SnowCompaction is bounded and contact-driven but performs contextual snow
+  owner/shape searches on footsteps/landings.
+* WeatherSystem and SkyEvents synchronize every ten ticks across players and
+  dimensions; AuroraEvents builds occupied-region chance data each tick.
+
+Plan:
+* Reuse per-level tick settings/weather and per-column height/biome samples within
+  a thaw operation. Invalidate/requery after any mutation that changes a needed
+  heightmap or block. Preserve call order and PRNG consumption where observable.
+* Add no-snow/no-ice fast paths only with reliable section/chunk summaries and
+  unchanged random semantics. Never skip thaw merely because temperature <= 50.
+* Measure saved-chunk snow repair separately. If costly, identify fitted owners
+  once, reuse their geometry and deduplicate required lighting checks with proof
+  of equivalence. Do not defer visible skylight repair and reintroduce dark patches.
+  Keep chunk-local X/Z for ChunkSkyLightSources.update.
+* Reuse immutable support templates and scoped query results for compaction and
+  shape hooks under O06. Keep landing/footstep thresholds, shared pressure expiry,
+  last-layer protection and support-removal transactions exactly as now.
+* Build identical weather payload data once per dimension/send cycle, then send
+  it to the same recipients. Share sky payloads only when their values match;
+  aurora strength depends on the receiving player's occupied region.
+* Profile packet volume before protocol changes. Do not simply send only the
+  current dimension: other effects use synchronized Overworld information.
+* Do not suppress unchanged packets without checking interpolation/reset behavior,
+  joining and dimension transitions. Prefer serialization/allocation savings
+  while preserving the existing ten-tick cadence first.
+* Reuse occupied-region scratch data while preserving one aurora attempt per
+  occupied region, coldest-player climate selection and the same random timing.
+* Keep portal transaction validation every required tick, server permissions,
+  cancellation behavior and physical crossing/arrival logic intact.
+
+Validation: weather,weather-commands,sky-events,aurora,rainbow,snow,chunks,
+gameplay,portal,config plus dedicated-server initialization and multi-client
+join/change-dimension tests. Measure server tick distribution and packet bytes.
+Network savings are likely lower priority for the intended singleplayer use.
+
+19. O16 - REMOVE PROVEN DEAD CODE AND REDUCE MAINTENANCE COST
+----------------------------------------------------------
+Confirmed cleanup candidates:
+* ExampleMixin and ExampleClientMixin are registered empty injection scaffolding.
+  Remove their Java classes and corresponding mixin JSON entries together.
+* Naturality's "Hello Fabric world!" startup message/template commentary is stale.
+* FireSimulation has test references in SurfaceFireGameTest but no production
+  caller found; current ProceduralFire uses exemplar frames and a clock. Remove
+  or move the historical simulation out of production only after migrating its
+  obsolete test intent to the active fire guarantees. Do not delete coverage for
+  current exemplar identity, connected fire, geometry, timing or reload behavior.
+* build.gradle and SelectedClientGameTests maintain parallel suite selections;
+  establish one simple source of truth if it can serve both without extra
+  runtime complexity. Include breaking in validation/error help consistently.
+* Project documentation mixes current contracts with many superseded revisions.
+  Separate the current behavior/specification from chronological implementation
+  history so future optimizations do not restore intentionally removed behavior.
+
+Duplication to consolidate after behavior tests exist:
+* Water/lava fall discovery, surface utilities, entry tracking, intersection and
+  wake bookkeeping have substantial structural overlap. Extract shared mechanics
+  incrementally, with explicit liquid policies for tint, cauldrons, sound, contact,
+  timing, palette, droplets and quenching. Avoid a single giant effect framework.
+* Small frame-resource/lifecycle helpers can centralize buffer allocation and
+  cleanup. Keep ownership visible and renderer-specific pass ordering explicit.
+* Configuration descriptors could reduce repeated labels/search/reset/clamp/reload
+  logic in NaturalityCategoryScreen and config classes. Preserve serialized keys,
+  live application, remote-server restrictions, pending slider edits and scroll.
+  This is maintenance work, not a likely steady-state frame-rate improvement.
+
+Important false positives:
+* FirePalette is used by LavaEffects; it is not dead with FireSimulation.
+* An empty initialize() may trigger class initialization that registers particle
+  types, pipelines or other static resources. Audit static side effects first.
+* NaturalityDataGenerator is referenced in fabric.mod.json despite having no
+  providers. Treat it as declared development scaffolding; keep it unless a
+  separate check establishes that removing it preserves the build workflow.
+* A PNG can remain an atlas/sprite handle even when its pixels no longer shape
+  an effect. PortalGlowController still references nether_portal_glow. Do not
+  delete assets solely because historical prose calls their artwork unused.
+* Mixins, entrypoints, reflection, translation/resource IDs, data tags and shader
+  include paths are references too. A Java text search alone does not prove dead code.
+* Diagnostic counters used by existing client tests are not automatically unused.
+* Null checks, recursion guards, no-load checks and compatibility fallback mixins
+  implement real behavior. Do not remove them to make the code shorter.
+
+Keep client-only classes out of common/server code. Keep the existing warning
+policy and optional Sodium dependency. Do not bundle test code or packaged JARs.
+Formatting compressed methods can make later audits easier, but shorter files,
+wildcard-import removal and cosmetic rewrites do not themselves reduce lag.
+
+Validation: assemble/build, relevant suites, mixin startup on client and server,
+config round trips/menu/search, resource reload and the Java warning audit.
+State code-size/maintenance gains separately from measured runtime gains.
+
+20. SHARED CACHE AND RESOURCE CONTRACTS
+-------------------------------------
+Use these rules wherever the implementation above introduces reuse:
+
+Cached object              Safe initial lifetime       Required invalidation
+-------------------------  -------------------------  --------------------------
+Wind/snow render queries   One immutable mesh job      New/cancelled snapshot
+Fluid surface/light/tint   One extraction frame/tick   Mutations before reuse
+Posed model capture        One frame/view/partial      Entity pose/context change
+Atlas masks/UV metadata    One resource generation     Atlas/model/tag reload
+Water columns              Versioned spatial window   Fluid/chunk/biome/world edit
+Portal topology            One frame initially        Neighbor/chunk/resource edit
+Dynamic-light placement    Exact source + geometry    Position/collision/chunk edit
+GPU uniform slice          One frame/view in flight   Ring rotation/resource close
+Audio applied state        One actual channel/device  New channel/device/reset
+
+Persistent caches must include enough context to distinguish world, dimension,
+resource generation, relevant configuration and neighborhood revision. Use
+explicit bounds/eviction, clear negative results on invalidation, and avoid
+long-lived references to old worlds or mutable render snapshots.
+
+Worker jobs may compute from immutable snapshots. They must never query a live
+ClientLevel to fill a missing cached position. Publish complete immutable results;
+discard results whose world/config/resource generation has changed.
+
+Avoid one global mutable scratch buffer for code invoked concurrently or
+recursively. Use job-local/thread-local storage with scoped cleanup. Pool only
+objects shown to be costly; bounded primitive storage is often simpler than
+complex object pools with difficult ownership.
+
+Preserve the distinction between tick, frame and view. A client tick snapshot
+cannot replace animated per-frame pose capture. One global frame buffer cannot
+be reused across different projection matrices without the correct view key.
+
+21. IMPLEMENTATION SEQUENCE AND CHECKPOINTS
+-----------------------------------------
+Each batch should be small enough to review and revert independently. Do not
+rewrite every subsystem in one patch. Re-evaluate priority after each measurement.
+
+Batch  Depends on   Deliverable
+-----  ----------  ----------------------------------------------------------
+  0    None        O00 fixtures, source snapshot and baseline measurements.
+  1    0           O01 duplicate registration and cheap particle exclusions.
+  2    0           O02 frame uniforms/fire metadata, then contour buffer reuse.
+  3    0           O03 water-map reuse; filtering/uploads as separate follow-ups.
+  4    0           O04 shared/pruned fluid discovery, preserving spawn sequence.
+  5    0,1         O05 stage A light discovery/comparison/dirty-section work.
+  6    1,5         O06 snapshot-scoped geometry/exposure reuse and overlay data.
+  7    0,4         O07 capture/surface/wake reuse, then exact raster optimization.
+  8    2,0         O08 bounded contour draw area; optional format experiments.
+  9    2,3,8       O09 individually measured shader/pass optimizations.
+ 10    7,0         O10 portal reuse; O11/O12 measured cloud/particle follow-ups.
+ 11    2,0         O13/O14 upload, breaking-first-use and audio improvements.
+ 12    0,6         O15 server/network work where server profiles justify it.
+ 13    Tests       O16 incremental cleanup/documentation/config consolidation.
+ 14    All chosen  Representative combined benchmark and full release regression.
+
+O05 stage B incremental lighting, more selective snow snapshots, cross-frame
+model caches, reduced-precision targets and pass fusion are independent later
+experiments. Their higher risk does not need to delay the earlier safe savings.
+
+For each batch keep:
+* The observed problem and exact source revision/config.
+* The mechanism expected to reduce work, plus the invariant it must preserve.
+* The focused before/after counters and frame/tick measurements.
+* Regression results and screenshot differences for the affected paths.
+* A bounded resource/invalidation design and rollback point.
+* A short conclusion: keep, revise or revert, based on evidence.
+
+22. VALIDATION COMMANDS AND FINAL COMPLETION CRITERIA
+----------------------------------------------------
+These are proposed commands for implementation, not checks run for this plan.
+Run from the project root using the local JDK 25 setup in PROJECT_REFERENCE.txt.
+
+Routine compile/package:
+  .\gradlew.bat assemble
+
+Example focused water batch:
+  .\gradlew.bat runClientGameTest "-PclientTests=water,water-occlusion,water-rain,short-distance"
+
+Example meshing batch:
+  .\gradlew.bat runClientGameTest "-PclientTests=wind-compat,snow-compat,chunks,snow"
+
+Repeat the relevant compatibility suites in a separate runtime with the supported
+local Sodium JAR, never two Sodium copies:
+  .\gradlew.bat runClientGameTest "-PclientTests=water,fire,wind-compat,snow-compat,breaking" "-PsodiumTestJar=<absolute-path-to-supported-sodium.jar>"
+
+Geometry/build checks and editor-equivalent warning audit:
+  .\gradlew.bat build
+  powershell -File scripts/check-java-warnings.ps1 -Offline
+
+Offline Gradle mode is appropriate only when all required dependency metadata is
+cached. Do not mistake offline resolution failure for a source-code regression.
+Record pre-existing warning diagnostics separately; introduce no new warnings and
+do not loosen the warning policy to get an optimization through verification.
+
+Use focused suites while iterating. A complete client regression is warranted
+at the end of a project-wide optimization campaign; it is not required after
+every small patch. Compare the shipped JAR/runtime as well as development mode.
+
+Complete when:
+1. Every implemented batch passes its equivalence checks on applicable renderers
+   and transparency modes, with matching resource-pack and lifecycle behavior.
+2. Repeated representative benchmarks demonstrate improvement in the targeted
+   frame/tick/stutter metric without a material regression elsewhere.
+3. No unbounded cache, sustained retained-memory growth, new blocking chunk query,
+   unsafe worker access or GPU/audio resource leak appears during a soak run.
+4. Existing configuration, save and networking compatibility remain intact.
+5. Current documentation reflects the implementation; dead-code removal is
+   supported by usage checks, not guesses about seemingly redundant safeguards.
+6. The final report distinguishes measured improvements, maintenance reductions,
+   rejected experiments and remaining bottlenecks. There is no requirement to
+   implement a speculative optimization that fails to show a useful benefit.
+
+Recommended starting scope after baseline: O01, O02, O03 and O04, followed by
+O05 stage A and O06 if chunk rebuilding dominates, or O08/O09 if GPU time dominates.
+This targets repeated work while keeping the project's current visual quality.

@@ -59,7 +59,7 @@ public abstract class IndigoSubmergedTerrainMixin {
         for (int i = 0; i < 4; i++) {
             int color = quad.color(i);
             int alpha = color >>> 24;
-            if (alpha == 255 || alpha >= 64 && alpha <= 117 || alpha >= 128 && alpha <= 192 || alpha >= 201 && alpha <= 240) quad.color(i, (color & 0xFFFFFF) | (tag << 24));
+            if (alpha == 255 || alpha >= 64 && alpha <= 117 || alpha >= 118 && alpha <= 192 || alpha >= 201 && alpha <= 240) quad.color(i, (color & 0xFFFFFF) | (tag << 24));
         }
     }
 }

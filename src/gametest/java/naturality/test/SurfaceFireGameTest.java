@@ -317,6 +317,10 @@ public final class SurfaceFireGameTest implements FabricClientGameTest {
             context.takeScreenshot("fire-connected-wall");
             context.waitTicks(10);
             context.takeScreenshot("fire-connected-wall-later");
+            context.runOnClient(client -> client.options.improvedTransparency().set(true));
+            context.waitTicks(10);
+            context.takeScreenshot("fire-connected-wall-oit");
+            context.runOnClient(client -> client.options.improvedTransparency().set(false));
             var reload = new java.util.concurrent.atomic.AtomicReference<java.util.concurrent.CompletableFuture<Void>>();
             context.runOnClient(client -> reload.set(client.reloadResourcePacks()));
             context.waitFor(client -> reload.get().isDone());

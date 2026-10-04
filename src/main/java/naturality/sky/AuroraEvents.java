@@ -23,6 +23,18 @@ public final class AuroraEvents {
     private static final Map<ServerLevel, Map<Region, Cell>> STATES = new WeakHashMap<>();
     private AuroraEvents() {}
     public static void clear() { STATES.clear(); }
+    private static String prefix(ServerLevel level) { return "aurora/"+level.dimension().identifier()+"/"; }
+    public static void restore(ServerLevel level) {
+        var cells=STATES.computeIfAbsent(level,_ -> new HashMap<>());
+        naturality.weather.EnvironmentWorldData.get(level.getServer()).entries().forEach((key,saved) -> {
+            if(!key.startsWith(prefix(level)))return;
+            var region=new Region(saved.getOrDefault("x",0L).intValue(),saved.getOrDefault("z",0L).intValue());
+            var cell=new Cell(0);cell.cycle.restore(saved);
+            cell.lastSeen=saved.getOrDefault("lastSeen",level.getGameTime());
+            cell.chance=naturality.weather.EnvironmentWorldData.number(saved,"chance");
+            cells.put(region,cell);
+        });
+    }
     public static float strength(ServerLevel level, BlockPos pos) {
         var cells = STATES.get(level);
         var cell = cells == null ? null : cells.get(Region.at(pos));
@@ -56,8 +68,16 @@ public final class AuroraEvents {
             cell.lastSeen = time;
             cell.chance = chance;
             cell.cycle.tick(advance, chance);
+            var saved=new HashMap<>(cell.cycle.snapshot());
+            saved.put("x",(long)region.x);saved.put("z",(long)region.z);
+            saved.put("lastSeen",cell.lastSeen);saved.put("chance",naturality.weather.EnvironmentWorldData.bits(chance));
+            naturality.weather.EnvironmentWorldData.get(level.getServer()).write(prefix(level)+region.x+","+region.z,saved);
         });
         // Vacated regions do not accumulate events. Forget them after one minute.
-        cells.entrySet().removeIf(entry -> time - entry.getValue().lastSeen > 1200);
+        cells.entrySet().removeIf(entry -> {
+            if(time-entry.getValue().lastSeen<=1200)return false;
+            naturality.weather.EnvironmentWorldData.get(level.getServer()).remove(prefix(level)+entry.getKey().x+","+entry.getKey().z);
+            return true;
+        });
     }
 }

@@ -1,13 +1,25 @@
 package naturality.sky;
 
-import java.util.Random;
+import naturality.weather.SavedRandom;
 
 /** Rare local events at any time of day; climate changes the chance of starting. */
 public final class AuroraCycle {
-    private final Random random;
+    private final SavedRandom random;
     private int nextAttempt, remaining, retarget;
     private float strength, target;
-    public AuroraCycle(long seed) { random = new Random(seed); nextAttempt = 200 + random.nextInt(401); }
+    public AuroraCycle(long seed) { random = new SavedRandom(seed); nextAttempt = 200 + random.nextInt(401); }
+    public java.util.Map<String,Long> snapshot() {
+        return java.util.Map.of("random",random.state(),"nextAttempt",(long)nextAttempt,"remaining",(long)remaining,"retarget",(long)retarget,"strength",naturality.weather.EnvironmentWorldData.bits(strength),"target",naturality.weather.EnvironmentWorldData.bits(target));
+    }
+    public void restore(java.util.Map<String,Long> data) {
+        if(data.isEmpty())return;
+        random.restore(data.getOrDefault("random",random.state()));
+        nextAttempt=data.getOrDefault("nextAttempt",0L).intValue();
+        remaining=data.getOrDefault("remaining",0L).intValue();
+        retarget=data.getOrDefault("retarget",0L).intValue();
+        strength=naturality.weather.EnvironmentWorldData.number(data,"strength");
+        target=naturality.weather.EnvironmentWorldData.number(data,"target");
+    }
     public float strength() { return strength; }
     public boolean active() { return remaining > 0; }
     public int nextAttempt() { return nextAttempt; }

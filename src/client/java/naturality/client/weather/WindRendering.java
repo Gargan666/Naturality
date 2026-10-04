@@ -16,15 +16,17 @@ import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.block.*;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.LightLayer;
-import net.minecraft.world.phys.Vec3;
 
 public final class WindRendering {
     public static final BindGroupLayout LAYOUT = BindGroupLayout.builder().withUniform("NaturalityWind", UniformType.UNIFORM_BUFFER).build();
     private static @org.jspecify.annotations.Nullable GpuBuffer uniform;
     private static final ThreadLocal<ExposureCache> EXPOSURE_CACHE = ThreadLocal.withInitial(ExposureCache::new);
-    private static final int[] EXPOSURE_DISTANCES = {4, 8};
-    private static final int[] EXPOSURE_HEIGHTS = {3};
     private WindRendering() {}
+    public static void clearExposureCache() {
+        var cache = EXPOSURE_CACHE.get();
+        cache.values.clear();
+        cache.view = null;
+    }
     /** Reserved tint-alpha markers, below the water occupancy range 246..254. */
     public static int tag(BlockState state) {
         if (connected(state)) return 100;
@@ -42,19 +44,45 @@ public final class WindRendering {
         if (tag(state) != 255 && !windExposed(level, pos)) return 255;
         if (connected(state)) {
             if (state.getBlock() instanceof VineBlock) {
-                int mask = vineSupportMask(state);
+                // Pin only the upper edge of an attached strand's first block.
+                // Lower joins keep the ordinary shared wind field on both sides.
+                if (y >= .999F && !level.getBlockState(pos.above()).is(state.getBlock())) {
+                    boolean attached=false, movingLeaf=false;
+                    if(state.getValue(VineBlock.UP)) {
+                        var above=level.getBlockState(pos.above());
+                        if(above.is(BlockTags.LEAVES)) movingLeaf=windExposed(level,pos.above());
+                        attached=!above.is(BlockTags.LEAVES) || !movingLeaf;
+                    }
+                    for (var face : net.minecraft.core.Direction.Plane.HORIZONTAL) {
+                        if (!state.getValue(VineBlock.getPropertyForFace(face))) continue;
+                        var supportPos=pos.relative(face);
+                        var support=level.getBlockState(supportPos);
+                        if(support.is(BlockTags.LEAVES)) {
+                            boolean moving=windExposed(level,supportPos);
+                            movingLeaf |= moving;
+                            attached |= !moving;
+                        } else attached |= support.isFaceSturdy(level,supportPos,face.getOpposite());
+                    }
+                    if (attached) return 101;
+                    if (movingLeaf) return 232;
+                }
+                int mask = solidVineSupportMask(level,pos,state);
                 // All cells touching a shared vertex contribute the same constraints,
                 // keeping vertical joins and wall/corner joins connected.
                 for (int dx = x < .001F ? -1 : 0; dx <= (x > .999F ? 1 : 0); dx++)
                     for (int dy = y < .001F ? -1 : 0; dy <= (y > .999F ? 1 : 0); dy++)
                         for (int dz = z < .001F ? -1 : 0; dz <= (z > .999F ? 1 : 0); dz++)
                             if (dx != 0 || dy != 0 || dz != 0)
-                                mask |= vineSupportMask(level.getBlockState(pos.offset(dx,dy,dz)));
+                                mask |= solidVineSupportMask(level,pos.offset(dx,dy,dz),level.getBlockState(pos.offset(dx,dy,dz)));
                 return 102 + mask;
             }
-            // Only the bottom of a cane column is anchored, never each segment's bottom.
-            if (state.getBlock() instanceof SugarCaneBlock && y < .001F
-                    && !level.getBlockState(pos.below()).is(state.getBlock())) return 101;
+            // Mark height above the shared stalk root, including identical
+            // markers on both sides of each segment join.
+            if (state.getBlock() instanceof SugarCaneBlock) {
+                int depth=0;
+                while(depth<62 && level.getBlockState(pos.below(depth+1)).is(state.getBlock())) depth++;
+                return Math.clamp(depth+Math.round(y),0,63);
+            }
             return 100;
         }
         return vertexTag(state,x,y,z);
@@ -74,53 +102,10 @@ public final class WindRendering {
         long key = pos.asLong();
         var cached = cache.values.get(key);
         if (cached != null) return cached;
-        boolean result = hasOpenSkyPath(level, pos);
+        boolean result = naturality.weather.WindShapes.raw(() -> naturality.weather.WindShelter.hasOpenSkyPath(level, pos, p -> level.getBrightness(LightLayer.SKY,p)));
         if (cache.values.size() >= 4096) cache.values.clear();
         cache.values.put(key, result);
         return result;
-    }
-    private static boolean hasOpenSkyPath(net.minecraft.client.renderer.block.BlockAndTintGetter level,
-            net.minecraft.core.BlockPos pos) {
-        if (level.getBrightness(LightLayer.SKY, pos) <= 0) return false;
-        Vec3 origin = new Vec3(pos.getX() + .5, pos.getY() + .5, pos.getZ() + .5);
-        if (openSkyColumn(level, origin)) return true;
-        for (int distance : EXPOSURE_DISTANCES) for (int dy : EXPOSURE_HEIGHTS)
-            for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
-                if ((dx == 0 && dz == 0) || Math.max(Math.abs(dx), Math.abs(dz)) != 1) continue;
-                Vec3 target = origin.add(dx * distance, dy, dz * distance);
-                var targetPos = net.minecraft.core.BlockPos.containing(target);
-                if (level.getBrightness(LightLayer.SKY, targetPos.above(5)) <= 0) continue;
-                if (passable(level, targetPos) && openSkyColumn(level, target) && clearRay(level, origin, target)) return true;
-            }
-        return false;
-    }
-    private static boolean openSkyColumn(net.minecraft.client.renderer.block.BlockAndTintGetter level, Vec3 origin) {
-        Vec3 top = origin.add(0, 5, 0);
-        var topPos = net.minecraft.core.BlockPos.containing(top);
-        return level.getBrightness(LightLayer.SKY, topPos) > 0 && passable(level, topPos)
-            && clearRay(level, origin, top);
-    }
-    private static boolean passable(net.minecraft.client.renderer.block.BlockAndTintGetter level,
-            net.minecraft.core.BlockPos pos) {
-        var state = level.getBlockState(pos);
-        return state.is(BlockTags.LEAVES) || state.getBlock() instanceof VegetationBlock
-            || state.getCollisionShape(level, pos).isEmpty();
-    }
-    private static boolean clearRay(net.minecraft.client.renderer.block.BlockAndTintGetter level, Vec3 from, Vec3 to) {
-        double span = Math.max(Math.max(Math.abs(to.x - from.x), Math.abs(to.y - from.y)), Math.abs(to.z - from.z));
-        int steps = Math.max(1, (int)Math.ceil(span * 4));
-        net.minecraft.core.BlockPos previous = null;
-        for (int i = 1; i < steps; i++) {
-            var sample = from.lerp(to, i / (double)steps);
-            var pos = net.minecraft.core.BlockPos.containing(sample);
-            if (previous != null && pos.equals(previous)) continue;
-            previous = pos;
-            var state = level.getBlockState(pos);
-            if (state.is(BlockTags.LEAVES) || state.getBlock() instanceof VegetationBlock) continue;
-            var shape = state.getCollisionShape(level, pos);
-            if (!shape.isEmpty() && shape.clip(from, to, pos) != null) return false;
-        }
-        return true;
     }
     private static final class ExposureCache {
         private @org.jspecify.annotations.Nullable BlockAndTintGetter view;
@@ -133,6 +118,18 @@ public final class WindRendering {
             | (state.getValue(VineBlock.NORTH) ? 4 : 0)
             | (state.getValue(VineBlock.SOUTH) ? 8 : 0);
     }
+    private static int solidVineSupportMask(BlockAndTintGetter level,net.minecraft.core.BlockPos pos,BlockState state) {
+        int mask=vineSupportMask(state);
+        for(var face:net.minecraft.core.Direction.Plane.HORIZONTAL) {
+            var supportPos=pos.relative(face);
+            var support=level.getBlockState(supportPos);
+            if(support.is(BlockTags.LEAVES) || !support.isFaceSturdy(level,supportPos,face.getOpposite())) {
+                int bit=switch(face) { case WEST -> 1; case EAST -> 2; case NORTH -> 4; case SOUTH -> 8; default -> 0; };
+                mask &= ~bit;
+            }
+        }
+        return mask;
+    }
     /** Leaf vertices and their snow share one block-center phase, including boundary vertices. */
     public static int leafTag(float x,float y,float z) {
         return 160 + Math.clamp((int)Math.floor(x+.002F),0,1)
@@ -143,6 +140,12 @@ public final class WindRendering {
     public static int vertexTag(BlockState state,float x,float y,float z) {
         if (state.is(BlockTags.LEAVES)) return leafTag(x,y,z);
         if(tag(state)==241) {
+            // Crop geometry spans -1/16..15/16 above farmland. Encode which
+            // integer cell each vertex occupies so every corner finds one root.
+            if (state.getBlock() instanceof CropBlock) return 120
+                + Math.clamp((int)Math.floor(x+.002F),0,1)
+                + 2*Math.clamp((int)Math.floor(z+.002F),0,1)
+                + 4*Math.clamp((int)Math.floor(y+.002F)+1,0,1);
             int upper=state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.DOUBLE_BLOCK_HALF)
                 && state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.DOUBLE_BLOCK_HALF)
                     ==net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER ? 1 : 0;
@@ -154,6 +157,7 @@ public final class WindRendering {
     }
     public static int vertexTag(BlockState state, float y) {
         if (tag(state) != 241) return tag(state);
+        if (state.getBlock() instanceof CropBlock) return vertexTag(state,.5F,y,.5F);
         if (state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.DOUBLE_BLOCK_HALF)
             && state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.DOUBLE_BLOCK_HALF)
                 == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER) y += 1;
@@ -175,7 +179,3 @@ public final class WindRendering {
     }
     public static void close() { if (uniform != null) { uniform.close(); uniform = null; } }
 }
-
-
-
-

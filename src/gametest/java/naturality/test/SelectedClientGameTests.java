@@ -10,9 +10,17 @@ import java.util.Arrays;
 public final class SelectedClientGameTests implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
         var suites = new LinkedHashMap<String, FabricClientGameTest>();
+        suites.put("environment-persistence", new EnvironmentPersistenceGameTest());
+        suites.put("entity-shadow", new EntityShadowGameTest());
+        suites.put("crowd-panic", new CrowdPanicGameTest());
+        suites.put("villagers", new VillagerWorkGameTest());
+        suites.put("butcher", new ButcherWorkGameTest());
+        suites.put("villager-bread", new VillagerBreadGameTest());
+        suites.put("breaking", new BreakingTexturesGameTest());
         suites.put("chunks", new ChunkSafetyGameTest());
         suites.put("snow-compat", new SnowRendererCompatibilityGameTest());
         suites.put("wind-compat", new WindRendererGameTest());
+        suites.put("wind-shapes", new WindShapesGameTest());
         suites.put("sky-events", new SkyEventsGameTest());
         suites.put("sunset", new SunsetGameTest());
         suites.put("aurora", new AuroraGameTest());
@@ -22,9 +30,11 @@ public final class SelectedClientGameTests implements FabricClientGameTest {
         suites.put("rain-splash", new RainSplashGameTest());
         suites.put("weather", new WeatherGameTest());
         suites.put("particle-weather", new ParticleWeatherGameTest());
+        suites.put("particle-visibility", new ParticleVisibilityGameTest());
         suites.put("weather-commands", new WeatherCommandsGameTest());
         suites.put("gameplay", new GameplaySettingsGameTest());
         suites.put("fluids", new FluidsGameTest());
+        suites.put("fluid-tail", new FluidTailGameTest());
         suites.put("water", new WaterVisualsGameTest());
         suites.put("water-rain", new WaterRainFogGameTest());
         suites.put("waterfall", new WaterfallGameTest());

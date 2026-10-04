@@ -31,7 +31,7 @@ public final class SnowSupportModels {
         }
         if(state.getBlock() instanceof FenceBlock || state.getBlock() instanceof FenceGateBlock)
             return naturality.fire.FireGeometry.supportBoxes(level,pos);
-        return state.getShape(level,pos).toAabbs();
+        return naturality.weather.WindShapes.raw(() -> state.getShape(level,pos).toAabbs());
     }
     private static AABB box(double x,double y,double z,double xx,double yy,double zz) {
         return new AABB(x/16,y/16,z/16,xx/16,yy/16,zz/16);

@@ -45,28 +45,35 @@ layout(location = 15) flat out int naturalitySubmerged;
 #include <naturality:foliage_wind.glsl>
 
 void main() {
+    bool fallingFluidTail = (UV2.x & 4096) != 0;
+    ivec2 lightCoords = UV2 & ivec2(4095);
     vec3 pos = Position + (ChunkPosition - CameraBlockPos) + CameraOffset;
     int foliageTag = int(round(Color.a * 255.0));
-    bool snowSurface = foliageTag == 192 || (foliageTag >= 128 && foliageTag <= 159);
-    if (foliageTag >= 128 && foliageTag <= 159) foliageTag += 32;
+    int windTag = foliageTag;
+    bool snowLeafOverlay = foliageTag >= 224 && foliageTag <= 231;
+    bool anchoredCrop = foliageTag >= 120 && foliageTag <= 127;
+    bool snowSurface = foliageTag == 192 || (foliageTag >= 128 && foliageTag <= 159 && !anchoredCrop);
+    if (anchoredCrop) foliageTag = 64;
+    else if (foliageTag >= 128 && foliageTag <= 159) foliageTag += 32;
     bool anchoredPlant = foliageTag >= 64 && foliageTag <= 99;
     bool attachedLeaf = foliageTag >= 160 && foliageTag <= 191;
     bool supportedVine = foliageTag >= 102 && foliageTag <= 117;
     bool connectedPlant = foliageTag == 100 || foliageTag == 101 || supportedVine;
-    bool windFoliage = connectedPlant || anchoredPlant || attachedLeaf || (foliageTag >= 201 && foliageTag <= 240);
+    bool windFoliage = foliageTag <= 63 || connectedPlant || anchoredPlant || attachedLeaf || snowLeafOverlay
+        || (foliageTag >= 201 && foliageTag <= 240);
     gl_Position = ProjMat * ModelViewMat * vec4(pos, 1.0);
 
     sphericalVertexDistance = fog_spherical_distance(pos);
     cylindricalVertexDistance = fog_cylindrical_distance(pos);
     #ifndef OIT_ALPHA_ONLY
-    vertexColor = sample_lightmap(Sampler2, UV2);
+    vertexColor = sample_lightmap(Sampler2, lightCoords);
     #else
     vertexColor = vec4(1.0);
     #endif
     texCoord0 = UV0;
     // Section-local positions retain precision; section origins are multiples of 16 blocks.
     naturalityBlockPosition = Position;
-    naturalityLightLevels = (vec2(UV2) + 8.0) / 256.0;
+    naturalityLightLevels = (vec2(lightCoords) + 8.0) / 256.0;
     naturalityShade = Color;
     if (windFoliage || snowSurface) naturalityShade.a = 1.0;
     int waterTag = int(round(Color.a * 255.0));
@@ -108,8 +115,9 @@ void main() {
         }
     }
 
+    if (fallingFluidTail) naturalityFlow.z = -1.0;
     if (windFoliage) {
-        vec2 offset = naturality_wind_offset(Position, ChunkPosition, foliageTag);
+        vec2 offset = naturality_wind_offset(Position, ChunkPosition, windTag);
         pos.xz += offset;
         gl_Position = ProjMat * ModelViewMat * vec4(pos, 1.0);
     }

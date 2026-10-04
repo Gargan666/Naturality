@@ -23,7 +23,7 @@ Place the built `naturality-1.0.0.jar` and a compatible Fabric API JAR in the Fa
 
 ## Setup
 
-Water rendering and foliage wind support Sodium **0.9.3-alpha.1 for Minecraft 26.3**, including
+Water rendering, animated fire, and foliage wind support Sodium **0.9.3-alpha.1 for Minecraft 26.3**, including
 classic and improved transparency, without disabling Sodium settings. Other
 visual features and shader-pack combinations may still need compatibility work.
 

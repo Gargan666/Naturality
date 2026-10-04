@@ -13,6 +13,7 @@ public abstract class SodiumWaterUniformMixin {
     private void naturality$bind(CallbackInfo ci,@Local(argsOnly=true) RenderPass pass) {
         com.mojang.blaze3d.systems.RenderSystem.bindDefaultUniforms(pass);
         naturality.client.fluid.ProceduralFluids.bind(pass);
+        naturality.client.fire.ProceduralFire.bindSodium(pass);
         naturality.client.weather.WindRendering.bind(pass);
         naturality.client.fluid.WaterVisuals.bind(pass);
         naturality.client.fluid.WaterVisuals.bindScene(pass);

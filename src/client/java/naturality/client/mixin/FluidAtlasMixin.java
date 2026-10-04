@@ -19,6 +19,8 @@ public abstract class FluidAtlasMixin {
     @Inject(method = "upload", at = @At("TAIL"))
     private void naturality$fluidBounds(SpriteLoader.Preparations preparations, CallbackInfo ci) {
         if (((TextureAtlas) (Object) this).location().equals(naturality.client.AtlasLocations.BLOCKS)) {
+            naturality.client.breaking.BreakingTextures.reset();
+            naturality.client.shadow.BlockGridShadow.reset();
             naturality.client.portal.FlatModelAlpha.clear();
             naturality.client.snow.SnowOverlayModel.atlasLoaded(texturesByName);
             ProceduralFluids.atlasLoaded(texturesByName);

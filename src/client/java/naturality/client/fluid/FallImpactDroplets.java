@@ -41,6 +41,9 @@ public final class FallImpactDroplets {
         var previous=lava?LAVA_ACTIVE:WATER_ACTIVE;
         var activeNow=new HashSet<Face>();
         for(var positions:columns)for(var pos:positions) {
+            if(naturality.client.particle.FallParticleBudget.exhausted(level))break;
+            if(naturality.client.particle.ParticleVisibility.outsideView(pos.getX()-1.5,pos.getY()-1.5,pos.getZ()-1.5,
+                pos.getX()+2.5,pos.getY()+2.5,pos.getZ()+2.5))continue;
             double distance=net.minecraft.world.phys.Vec3.atCenterOf(pos).distanceTo(eye);
             double density=FallParticleDensity.multiplier(distance);
             if(density<=0 || !naturality.util.LoadedChunks.has(level, pos) || !falling(level,pos,lava))continue;
@@ -83,6 +86,7 @@ public final class FallImpactDroplets {
                     : (big?NaturalityParticles.WATERFALL_BIG:NaturalityParticles.WATERFALL);
                 double speedScale=lava?.5:2;
                 var spray=client.particleEngine.createParticle(sprayType,x,y,z,0,0,0);
+                if(spray==null)return;
                 double gx=waterSurface!=null?waterSurface.height(.75,.5)-waterSurface.height(.25,.5)
                     :lavaSurface!=null?lavaSurface.height(.75,.5)-lavaSurface.height(.25,.5):0;
                 double gz=waterSurface!=null?waterSurface.height(.5,.75)-waterSurface.height(.5,.25)
@@ -106,8 +110,10 @@ public final class FallImpactDroplets {
         if (level == null) return;
         var config = naturality.config.NaturalityConfig.get().liquids;
         if (lava ? !config.lavaFallDroplets : !config.waterFallDroplets) return;
+        if(naturality.client.particle.ParticleVisibility.hidden(level,x-.4,y-.4,z-.4,x+.4,y+.4,z+.4,true,!lava))return;
         var random=ThreadLocalRandom.current();
         for(int i=0,count=2+random.nextInt(3);i<count;i++) {
+            if(!naturality.client.particle.FallParticleBudget.allowDroplet(level))return;
             var particle=client.particleEngine.createParticle(lava?NaturalityParticles.LAVA_SPLASH:ParticleTypes.SPLASH,
                 x,y+.06,z,0,0,0);
             if(particle instanceof ImpactDroplet drop) {

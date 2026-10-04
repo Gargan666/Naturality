@@ -1,7 +1,6 @@
 package naturality.weather;
 
 import java.util.Map;
-import java.util.Random;
 import java.util.UUID;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
@@ -25,12 +24,22 @@ public final class WeatherSystem {
     private static final Map<ServerLevel, WeatherChannel> RAIN_CYCLES = new WeakHashMap<>();
     private static final Map<ServerLevel, WeatherChannel> WIND_CYCLES = new WeakHashMap<>();
     private static final Map<net.minecraft.server.MinecraftServer, Long> SERVER_SESSIONS = new WeakHashMap<>();
-    private static final Map<Identifier, WeatherState> CLIENT = new ConcurrentHashMap<>();
+    private static final Map<Identifier, ClientWeather> CLIENT = new ConcurrentHashMap<>();
+    private static final long CLIENT_BLEND_NANOS = 500_000_000L;
     private static @org.jspecify.annotations.Nullable Long CLIENT_SESSION;
     private WeatherSystem() {}
     public static @org.jspecify.annotations.Nullable WeatherState state(Level level) {
-        if (level.isClientSide()) return CLIENT.get(level.dimension().identifier());
+        if (level.isClientSide()) {
+            var weather = CLIENT.get(level.dimension().identifier());
+            return weather == null ? null : weather.target;
+        }
         return level instanceof ServerLevel server && profile(level).enabled ? STATES.get(server) : null;
+    }
+    /** Frame-time weather visuals blend sparse network snapshots without changing gameplay state. */
+    public static @org.jspecify.annotations.Nullable WeatherState renderState(Level level) {
+        if (!level.isClientSide()) return state(level);
+        var weather = CLIENT.get(level.dimension().identifier());
+        return weather == null ? null : weather.at(System.nanoTime());
     }
     public static WeatherProfile profile(Level level) {
         var server = level.getServer();
@@ -44,9 +53,28 @@ public final class WeatherSystem {
             CLIENT.clear();
             CLIENT_SESSION = p.worldSession();
         }
-        if (p.enabled()) CLIENT.put(p.dimension(), p.state()); else CLIENT.remove(p.dimension());
+        if (p.enabled()) {
+            long now = System.nanoTime();
+            var previous = CLIENT.get(p.dimension());
+            var from = previous == null ? p.state() : previous.at(now);
+            CLIENT.put(p.dimension(), new ClientWeather(from, p.state(), now));
+        } else CLIENT.remove(p.dimension());
     }
     public static void clearClient() { CLIENT.clear(); CLIENT_SESSION = null; }
+    private record ClientWeather(WeatherState from, WeatherState target, long startedAt) {
+        WeatherState at(long now) {
+            float progress = Math.clamp((now - startedAt) / (float)CLIENT_BLEND_NANOS, 0, 1);
+            return interpolate(from, target, progress);
+        }
+    }
+    public static WeatherState interpolate(WeatherState from, WeatherState to, float progress) {
+        float t = Math.clamp(progress, 0, 1);
+        t = t * t * (3 - 2 * t);
+        return new WeatherState(from.rain() + (to.rain() - from.rain()) * t,
+            from.wind() + (to.wind() - from.wind()) * t,
+            from.temperature() + (to.temperature() - from.temperature()) * t,
+            (from.direction() + angularDistance(from.direction(), to.direction()) * t + 360) % 360);
+    }
     public static Biome.Precipitation precipitation(Level level, Biome biome, BlockPos pos) {
         var normal = biome.getPrecipitationAt(pos, level.getSeaLevel());
         var state = state(level);
@@ -61,6 +89,7 @@ public final class WeatherSystem {
         PayloadTypeRegistry.clientboundPlay().register(WeatherPayload.TYPE, WeatherPayload.CODEC);
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             SERVER_SESSIONS.put(server, UUID.randomUUID().getLeastSignificantBits());
+            for(var level:server.getAllLevels())restore(level);
             var legacy = NaturalityServerConfig.takeLegacyWeather();
             if (!legacy.isEmpty()) {
                 var stored = server.getDataStorage().get(WeatherWorldData.TYPE);
@@ -78,6 +107,7 @@ public final class WeatherSystem {
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             for (var level : server.getAllLevels()) {
                 advance(level);
+                snapshot(level);
                 if (server.getTickCount() % 10 == 0)
                     for (var player : server.getPlayerList().getPlayers()) send(player, level);
             }
@@ -130,6 +160,27 @@ public final class WeatherSystem {
             approach(old.wind(), target.wind(), .5F), approach(old.temperature(), target.temperature(), p.overrideTemperature ? .25F : .005F), targetDirection);
         STATES.put(level, target);
     }
+    private static String key(ServerLevel level) { return "weather/"+level.dimension().identifier(); }
+    private static void restore(ServerLevel level) {
+        var data=EnvironmentWorldData.get(level.getServer());
+        var saved=data.read(key(level));
+        if(saved.isEmpty())return;
+        STATES.put(level,new WeatherState(EnvironmentWorldData.number(saved,"rain"),EnvironmentWorldData.number(saved,"wind"),
+            EnvironmentWorldData.number(saved,"temperature"),EnvironmentWorldData.number(saved,"direction")));
+        CLOCKS.put(level,saved.getOrDefault("clock",0L));
+        long seed=level.getSeed() ^ level.dimension().identifier().hashCode();
+        var rain=new WeatherChannel(seed ^ 0x5241494EL);rain.restore(data.read(key(level)+"/rain"));RAIN_CYCLES.put(level,rain);
+        var wind=new WeatherChannel(seed ^ 0x57494E44L);wind.restore(data.read(key(level)+"/wind"));WIND_CYCLES.put(level,wind);
+    }
+    private static void snapshot(ServerLevel level) {
+        var state=STATES.get(level);if(state==null)return;
+        var data=EnvironmentWorldData.get(level.getServer());
+        data.write(key(level),Map.of("rain",EnvironmentWorldData.bits(state.rain()),"wind",EnvironmentWorldData.bits(state.wind()),
+            "temperature",EnvironmentWorldData.bits(state.temperature()),"direction",EnvironmentWorldData.bits(state.direction()),
+            "clock",CLOCKS.getOrDefault(level,0L)));
+        var rain=RAIN_CYCLES.get(level);if(rain!=null)data.write(key(level)+"/rain",rain.snapshot());
+        var wind=WIND_CYCLES.get(level);if(wind!=null)data.write(key(level)+"/wind",wind.snapshot());
+    }
     private static float approach(float from, float to, float step) { return from + Math.clamp(to - from, -step, step); }
     public static float angularDistance(float from, float to) { return (to - from + 540) % 360 - 180; }
     public static float approachDirection(float from, float to, float step) {
@@ -178,7 +229,7 @@ public final class WeatherSystem {
 
     /** A slider stays at zero until its own weather event starts, then wanders until it ends. */
     private static final class WeatherChannel {
-        private final Random random;
+        private final SavedRandom random;
         private final long seed;
         private boolean active;
         private int remaining;
@@ -186,7 +237,17 @@ public final class WeatherSystem {
         private float value;
         private float initialBoost;
 
-        private WeatherChannel(long seed) { this.seed = seed; random = new Random(seed); }
+        private WeatherChannel(long seed) { this.seed = seed; random = new SavedRandom(seed); }
+        private Map<String,Long> snapshot() {
+            return Map.of("random",random.state(),"active",active?1L:0L,"remaining",(long)remaining,"age",(long)age,
+                "value",EnvironmentWorldData.bits(value),"boost",EnvironmentWorldData.bits(initialBoost));
+        }
+        private void restore(Map<String,Long> data) {
+            if(data.isEmpty())return;
+            random.restore(data.getOrDefault("random",random.state()));active=data.getOrDefault("active",0L)!=0;
+            remaining=data.getOrDefault("remaining",0L).intValue();age=data.getOrDefault("age",0L).intValue();
+            value=EnvironmentWorldData.number(data,"value");initialBoost=EnvironmentWorldData.number(data,"boost");
+        }
 
         private float tick(boolean advance, long time, int minimum, int maximum, double startChance,
                 int minimumDuration, int maximumDuration, int noisePeriod) {

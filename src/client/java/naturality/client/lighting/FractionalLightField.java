@@ -46,6 +46,13 @@ public final class FractionalLightField {
         return Math.clamp((int)Math.round((strength - distance) * 16), 0, 240);
     }
 
+    public void addBlock(BlockPos source, int strength) {
+        long key = source.asLong();
+        int value = Math.clamp(strength * 16, 0, 240);
+        seeds.put(key, Math.max(seeds.get(key), value));
+        offer(key, value);
+    }
+
     public Long2IntOpenHashMap seeds() { return seeds; }
 
     public Long2IntOpenHashMap propagate() {
@@ -80,7 +87,9 @@ public final class FractionalLightField {
         var cached = blocks.get(key);
         if (cached != null) return cached;
         var pos = BlockPos.of(key);
-        var result = level.isOutsideBuildHeight(pos) || !naturality.util.LoadedChunks.has(level, pos)
+        // Build limits constrain terrain, not entity light. Loaded columns have
+        // open air above/below their terrain and can still contain flying entities.
+        var result = !naturality.util.LoadedChunks.has(level, pos)
             ? Blocks.BEDROCK.defaultBlockState() : level.getBlockState(pos);
         blocks.put(key, result);
         return result;

@@ -15,6 +15,7 @@ public final class WeatherSoundEnvironment {
         {.70710678, .70710678}, {.70710678, -.70710678},
         {-.70710678, .70710678}, {-.70710678, -.70710678}
     };
+    private static final double[] DISTANCES = {2, 4, 8};
     private static float indoor = 1;
     private static boolean initialized;
 
@@ -30,7 +31,7 @@ public final class WeatherSoundEnvironment {
 
     private static float openSkyExposure(Level level, Vec3 origin, Entity context) {
         if (level.canSeeSky(BlockPos.containing(origin))) return 1;
-        for (double distance : new double[] {2, 4, 8}) {
+        for (double distance : DISTANCES) {
             float reach = distance <= 2 ? 1 : distance <= 4 ? .85F : .65F;
             for (double[] direction : DIRECTIONS) {
                 Vec3 sample = origin.add(direction[0] * distance, 0, direction[1] * distance);

@@ -24,6 +24,7 @@ public class Naturality implements ModInitializer {
         naturality.snow.SnowLighting.initialize();
 		NaturalitySounds.initialize();
         NaturalityParticles.initialize();
+        naturality.villager.VillagerBobbers.initialize();
 		naturality.portal.PortalOpeningManager.initialize();
 		// This code runs as soon as Minecraft is in a mod-load-ready state.
 		// However, some things (like resources) may still be uninitialized.
@@ -36,5 +37,6 @@ public class Naturality implements ModInitializer {
 		return Identifier.fromNamespaceAndPath(MOD_ID, path);
 	}
 }
+
 
 

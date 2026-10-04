@@ -42,8 +42,11 @@ public final class WaterfallGameTest implements FabricClientGameTest {
             server.runCommand("fill -1 101 0 1 106 0 water[level=8]");
             world.getConnection().waitForClientboundPackets();context.waitTicks(45);
             world.getConnection().waitForChunksRender();
+            context.runOnClient(c->WaterParticleTintChecks.check(c));
+            server.runCommand("tp @a 4.5 179 -5.5 35 0");
+            world.getConnection().waitForClientboundPackets();context.waitTicks(3);
             context.runOnClient(c->{
-                WaterParticleTintChecks.check(c);
+
                 var droplet=c.particleEngine.createParticle(net.minecraft.core.particles.ParticleTypes.SPLASH,5,180,5,0,0,0);
                 check(droplet instanceof naturality.client.particle.ImpactDroplet,"Impact spray must support landing lifetime");
                 ((naturality.client.particle.ImpactDroplet)droplet).naturality$landBeforeExpiring();
@@ -52,6 +55,10 @@ public final class WaterfallGameTest implements FabricClientGameTest {
                 check(droplet.isAlive(),"Impact droplet must outlive vanilla's maximum airborne lifetime");
                 for(int tick=0;tick<120 && droplet.isAlive();tick++)droplet.tick();
                 check(!droplet.isAlive(),"Impact droplet must terminate on water or ground contact");
+            });
+            server.runCommand("tp @a 4.5 102.5 -5.5 35 12");
+            world.getConnection().waitForClientboundPackets();context.waitTicks(3);
+            context.runOnClient(c->{
                 check(naturality.client.fluid.FallImpactDroplets.vertical(c.level,new BlockPos(0,100,0),false),"Vertical water impact emits droplets");
                 check(!naturality.client.fluid.FallImpactDroplets.vertical(c.level,new BlockPos(5,100,5),false),"Resting pool must not emit droplets");
                 check(!naturality.client.fluid.FallImpactDroplets.vertical(c.level,new BlockPos(0,100,0),true),"Water fall must not emit lava droplets");
@@ -137,6 +144,9 @@ public final class WaterfallGameTest implements FabricClientGameTest {
             server.runCommand("fill -9 100 -9 9 100 9 stone");
             world.getConnection().waitForClientboundPackets();context.waitTicks(70);
             world.getConnection().waitForChunksRender();
+            context.runOnClient(c->WaterParticleTintChecks.check(c));
+            server.runCommand("tp @a 4.5 179 -5.5 35 0");
+            world.getConnection().waitForClientboundPackets();context.waitTicks(3);
             context.runOnClient(c->{
                 var foot=new BlockPos(0,101,0);
                 check(!WaterfallSplash.impactColumn(c.level,foot),"Supported falling foot without resting water must not emit");

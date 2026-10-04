@@ -13,6 +13,10 @@ public final class LavaEffectsGameTest implements FabricClientGameTest {
         context.runOnClient(c->{saved[0]=NaturalityConfig.get().liquids.water;saved[1]=NaturalityConfig.get().liquids.lava;saved[2]=c.options.improvedTransparency().get();NaturalityConfig.get().liquids.water=false;NaturalityConfig.get().liquids.lava=true;});
         try(var world=context.worldBuilder().create()) {
             var server=world.getServer();
+            var weather=new naturality.weather.WeatherProfile(true);
+            weather.overrideRain=weather.overrideTemperature=true;
+            weather.rain=0;weather.temperature=50;
+            server.runOnServer(s->naturality.weather.WeatherWorldData.get(s).setProfile("minecraft:overworld",weather));
             server.runCommand("gamemode spectator @a");server.runCommand("time set 6000");
             server.runCommand("tp @a 4 104 -5 35 25");
             server.runCommand("fill -8 99 -8 8 99 8 stone");server.runCommand("fill -8 100 -8 8 100 8 lava");
@@ -57,11 +61,12 @@ public final class LavaEffectsGameTest implements FabricClientGameTest {
                 server.runCommand("kill @e[tag=lava_drop]");context.waitTicks(70);
             }
             server.runCommand("summon pig 0 100.5 0 {NoAI:1b,NoGravity:1b,Invulnerable:1b,Tags:[\"lava_rim\"]}");
-            server.runOnServer(s -> s.setWeatherParameters(0, 12000, true, false));context.waitTicks(100);
+            // Naturality's profile overrides the vanilla weather timer; allow its 0.5/tick transition.
+            server.runOnServer(s -> weather.rain=100);context.waitTicks(220);
             context.runOnClient(c->{check(LavaIntersection.lastPixelCount>0,"Lava model rim rendered");check(LavaRipples.rainSmokeSpawnCount>0,"Sky exposed lava receives rain smoke");});
             context.takeScreenshot("lava-rim-rain");
             server.runCommand("kill @e[tag=lava_rim]");
-            server.runOnServer(s -> s.setWeatherParameters(12000, 0, false, false));
+            server.runOnServer(s -> weather.rain=0);
             context.runOnClient(c->naturality.client.portal.FlatModelAlpha.lastCutPixels=0);
             server.runCommand("summon strider 0 100.2 0 {NoAI:1b,NoGravity:1b,Invulnerable:1b,Tags:[\"alpha_strider\"]}");
             world.getConnection().waitForClientboundPackets();context.waitTicks(12);

@@ -27,6 +27,7 @@ public abstract class SodiumWaterPipelineMixin {
             .withFragmentShader("core/terrain").withShaderDefine("NATURALITY_SODIUM")
             .withBindGroupLayout(net.minecraft.client.renderer.BindGroupLayouts.FOG)
             .withBindGroupLayout(ProceduralFluids.LAYOUT)
+            .withBindGroupLayout(naturality.client.fire.ProceduralFire.SODIUM_LAYOUT)
             .withBindGroupLayout(naturality.client.weather.WindRendering.LAYOUT)
             .withBindGroupLayout(WaterVisuals.LAYOUT)
             .withBindGroupLayout(BindGroupLayout.builder()

@@ -96,11 +96,11 @@ public final class WeatherGameTest implements FabricClientGameTest {
                     check(client.getSoundManager().getSoundEvent(naturality.NaturalitySounds.WIND_STRONG.location()) != null, "Strong wind registered");
                     var cane=Blocks.SUGAR_CANE.defaultBlockState();
                     var root=new BlockPos(-8,101,3);
-                    check(WindRendering.vertexTag(client.level,root,cane,.5F,0,.5F)==101,"Only cane root is pinned");
+                    check(WindRendering.vertexTag(client.level,root,cane,.5F,0,.5F)==0,"Only cane root is pinned");
                     for(int h=0;h<3;h++) {
                         int top=WindRendering.vertexTag(client.level,root.above(h),cane,.5F,1,.5F);
                         int bottom=WindRendering.vertexTag(client.level,root.above(h+1),cane,.5F,0,.5F);
-                        check(top==100 && top==bottom,"Cane shared edge uses identical world-space wind");
+                        check(top==h+1 && top==bottom,"Cane joints share increasing height above the root");
                     }
                     check(WindRendering.tag(Blocks.VINE.defaultBlockState())==100
                         && WindRendering.tag(Blocks.WEEPING_VINES.defaultBlockState())==100
@@ -259,7 +259,8 @@ public final class WeatherGameTest implements FabricClientGameTest {
         check(new WeatherState(25,0,50,0).thunderLevel() == 0, "Normal rain without thunder");
         check(new WeatherState(50,0,50,0).precipitationDensity() == 2, "Storm doubles normal rain density");
         check(new WeatherState(100,100,50,0).precipitationDensity() == 8, "Downpour has sharply increased density");
-        check(new WeatherState(90,0,50,0).heavyRainFog() == 0, "Heavy rain fog starts at 90");
+        check(new WeatherState(80,0,50,0).heavyRainFog() == 0, "Heavy rain fog starts smoothly at 80");
+        check(new WeatherState(90,0,50,0).heavyRainFog() == .5F, "Heavy rain fog is halfway at 90");
         check(new WeatherState(100,0,50,0).heavyRainFog() == 1, "Maximum rain fully enables fog");
         check(new WeatherState(100,0,50,0).heavyRainFogEnd(1) == 15
             && new WeatherState(100,0,50,0).heavyRainFogEnd(0) == 100,
@@ -275,6 +276,9 @@ public final class WeatherGameTest implements FabricClientGameTest {
         check(new WeatherState(0,100,50,0).strongWindGain() == 1, "Strong wind endpoint");
         check(WeatherSystem.automaticDirection(1234, 0) != WeatherSystem.automaticDirection(1234, 23000),
             "Wind direction wanders automatically without a wind activation event");
+        var blended=WeatherSystem.interpolate(new WeatherState(0,0,50,350),new WeatherState(100,100,50,10),.5F);
+        check(blended.rain()==50 && blended.wind()==50 && blended.direction()==0,
+            "Frame-time weather interpolation eases sliders and wraps direction across north");
         var invalid = new WeatherProfile(); invalid.rain = -10; invalid.wind = 110; invalid.temperature = -100;
         invalid.validate(); check(invalid.rain == 0 && invalid.wind == 100 && invalid.temperature == 0, "Clamp persisted sliders");
     }

@@ -1,15 +1,26 @@
 package naturality.sky;
 
-import java.util.Random;
+import naturality.weather.SavedRandom;
 
 /** Daytime rain-only sky event with a probability peak at rain strength ten. */
 public final class RainbowCycle {
     private static final double PEAK_TICK_CHANCE = 1 - Math.pow(.7, 1.0 / 1200);
-    private final Random random;
+    private final SavedRandom random;
     private int remaining;
     private boolean active;
     private float strength, target;
-    public RainbowCycle(long seed) { random = new Random(seed); }
+    public RainbowCycle(long seed) { random = new SavedRandom(seed); }
+    public java.util.Map<String,Long> snapshot() {
+        return java.util.Map.of("random",random.state(),"remaining",(long)remaining,"active",active?1L:0L,"strength",naturality.weather.EnvironmentWorldData.bits(strength),"target",naturality.weather.EnvironmentWorldData.bits(target));
+    }
+    public void restore(java.util.Map<String,Long> data) {
+        if(data.isEmpty())return;
+        random.restore(data.getOrDefault("random",random.state()));
+        remaining=data.getOrDefault("remaining",0L).intValue();
+        active=data.getOrDefault("active",0L)!=0;
+        strength=naturality.weather.EnvironmentWorldData.number(data,"strength");
+        target=naturality.weather.EnvironmentWorldData.number(data,"target");
+    }
     public boolean active() { return active; }
     public float strength() { return strength; }
     public int remaining() { return remaining; }

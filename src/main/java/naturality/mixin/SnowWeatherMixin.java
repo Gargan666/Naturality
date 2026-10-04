@@ -30,6 +30,7 @@ public abstract class SnowWeatherMixin {
                 && !(level.getBlockState(surface).getBlock() instanceof BaseFireBlock))return;
         int max=Math.min(8,naturality.weather.WeatherSnow.accumulationLimit(level,
             level.getGameRules().get(GameRules.MAX_SNOW_ACCUMULATION_HEIGHT)));
+        max=Math.min(max,naturality.snow.SnowGeometry.maxLayers(level,surface));
         if(max<=0 || naturality.weather.WeatherSystem.precipitation(level,
                 level.getBiome(surface).value(),surface)
                 !=net.minecraft.world.level.biome.Biome.Precipitation.SNOW

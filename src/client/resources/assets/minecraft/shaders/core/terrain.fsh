@@ -22,9 +22,7 @@
 #include <naturality:pixel_lighting.glsl>
 #include <naturality:procedural_fluids.glsl>
 #include <naturality:feature_settings.glsl>
-#ifndef NATURALITY_SODIUM
 #include <naturality:procedural_fire.glsl>
-#endif
 #include <naturality:water.glsl>
 #if !defined(MULTIDRAW_TERRAIN) && !defined(NATURALITY_SODIUM)
     #include <minecraft:chunksection.glsl>
@@ -100,6 +98,10 @@ void main() {
         vec4 bounds = NaturalityFluidBounds[i];
         waterSprite = waterSprite || (bounds.x >= 0.0 && all(greaterThanEqual(texCoord0, bounds.xy)) && all(lessThanEqual(texCoord0, bounds.zw)));
     }
+    bool fallingFluidTail = naturalityFlow.z < -0.5;
+    // Each sixteenth-block row has constant opacity; the lowest row is invisible.
+    float tailOpacity = clamp(floor(fract(naturalityBlockPosition.y) * 16.0) / 15.0, 0.0, 1.0);
+    if (fallingFluidTail && tailOpacity <= 0.0) discard;
     #ifdef NATURALITY_WATER_MASK
     if (!waterSprite) discard;
     fragColor = vec4(gl_FragCoord.z, cylindricalVertexDistance, sphericalVertexDistance, 1.0);
@@ -139,11 +141,9 @@ void main() {
     vec4 color = (UseRgss == 1 ? sampleRGSS(Sampler0, texCoord0, 1.0f / TextureSize) : sampleNearest(Sampler0, texCoord0, 1.0f / TextureSize)) * lighting;
     if (naturalityFluidKind >= 0)
         color = naturality_fluid_color(naturalityFluidKind, naturalityBlockPosition, naturalitySectionOrigin, naturalityFluidUV, naturalityFlow) * lighting;
-    #ifndef NATURALITY_SODIUM
     if (naturalityFireKind >= 0)
         color = naturality_fire_color(naturalityFireKind, naturalityFireUV,
             naturality_fire_resolution(naturalityBlockPosition, naturalityFireUV), naturalityFireSeed);
-    #endif
     if (waterSprite && WaterMap.w != 0 && WaterSwitches.x != 0)
         color.a = 0.60;
     if (waterSprite && WaterMap.w != 0 && WaterSwitches.x != 0) {
@@ -224,6 +224,7 @@ void main() {
                 gl_FragCoord.xy / vec2(textureSize(NaturalityWaterAtmosphere, 0))).rgb;
         color.rgb = mix(arrivalFog, color.rgb, chunkVisibility);
     }
+    if (fallingFluidTail) color.a *= tailOpacity;
     #ifdef ALPHA_CUTOUT
     if (color.a < ALPHA_CUTOUT) {
         discard;

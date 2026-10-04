@@ -13,7 +13,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.attribute.EnvironmentAttributes;
 import net.minecraft.world.level.biome.Biome;
-import net.minecraft.world.level.levelgen.Heightmap;
 
 /** Bounded, camera-near spawning; existing cards always move in world coordinates. */
 public final class ParticleWeather {
@@ -33,6 +32,13 @@ public final class ParticleWeather {
     public static void clear() { for (var p : ACTIVE) p.remove(); ACTIVE.clear(); }
     public static int radius(Minecraft client) { return Math.clamp(Math.round(client.options.weatherRadius().get() * 1.5F), 0, 36); }
     private static void tick(Minecraft client) {
+        var level = client.level;
+        if (level == null) { clear(); world = null; return; }
+        WeatherParticleContext.begin(level);
+        try { tickParticles(client); }
+        finally { WeatherParticleContext.end(); }
+    }
+    private static void tickParticles(Minecraft client) {
         if (world != client.level) { clear(); world = client.level; }
         var world = ParticleWeather.world;
         if (world == null || !enabled(world)) { clear(); return; }
@@ -63,7 +69,7 @@ public final class ParticleWeather {
             if (y + MAX_CARD_EXTENT > cloudTop) continue;
             var pos = BlockPos.containing(x, y, z);
             if (!naturality.util.LoadedChunks.has(world, pos)) continue;
-            var kind = world.getPrecipitationAt(pos);
+            var kind = WeatherParticleContext.precipitation(world, pos);
             if (kind == Biome.Precipitation.NONE || clearance(world, x, y, z, MAX_CARD_EXTENT) <= 0) continue;
             var particle = client.particleEngine.createParticle(kind == Biome.Precipitation.SNOW
                 ? NaturalityParticles.SNOW_CLUSTER : NaturalityParticles.RAIN_CLUSTER,
@@ -94,8 +100,9 @@ public final class ParticleWeather {
         double floor = level.getMinY();
         for (int bx = (int)Math.floor(x-extent); bx <= (int)Math.floor(x+extent); bx++)
             for (int bz = (int)Math.floor(z-extent); bz <= (int)Math.floor(z+extent); bz++) {
-                if (!naturality.util.LoadedChunks.has(level, new BlockPos(bx, (int)y, bz))) return -1;
-                floor = Math.max(floor, level.getHeight(Heightmap.Types.MOTION_BLOCKING, bx, bz));
+                int height = WeatherParticleContext.floor(level, bx, bz);
+                if (height == Integer.MIN_VALUE) return -1;
+                floor = Math.max(floor, height);
             }
         return y - extent - floor;
     }

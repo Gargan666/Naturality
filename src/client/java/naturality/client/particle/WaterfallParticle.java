@@ -54,6 +54,7 @@ public final class WaterfallParticle extends SingleQuadParticle implements Borde
         if(!frames.isEmpty())setSprite(frames.get(Math.min(frames.size()-1,age/2)));
         if(warmFadeTicks>0)alpha=0.8F*(5-warmFadeTicks--)/4;
     }
+    @Override public java.util.Optional<net.minecraft.core.particles.ParticleLimit> getParticleLimit() {return FallParticleBudget.OPTIONAL_LIMIT;}
     @Override public float getQuadSize(float partial) {return initialSize*borderSizeMultiplier;}
     @Override protected Layer getLayer(){return Layer.TRANSLUCENT;}
 }

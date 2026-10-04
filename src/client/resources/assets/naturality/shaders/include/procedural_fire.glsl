@@ -2,7 +2,9 @@
 #define NATURALITY_PROCEDURAL_FIRE
 #include <naturality:fire_uniforms.glsl>
 #include <naturality:feature_settings.glsl>
+#ifndef NATURALITY_SODIUM
 uniform sampler2D NaturalityFireHeat;
+#endif
 uniform sampler2D NaturalityFirePalette;
 
 // Derive a face's physical dimensions before quantizing its UVs. A four-pixel-wide
@@ -63,7 +65,11 @@ vec4 naturality_fire_color(int kind, vec2 uv, vec2 resolution, vec3 seed) {
     vec2 cell = floor(clamp(uv, 0.0, 0.999999) * resolution);
     vec2 point = (cell + 0.5) / resolution;
     ivec3 key = ivec3(round(seed * 255.0));
+    #ifdef NATURALITY_SODIUM
+    int tick = NaturalityFireInfo.z;
+    #else
     int tick = int(round(texelFetch(NaturalityFireHeat, ivec2(0), 0).b * 255.0));
+    #endif
     if (!NATURALITY_FIRE_VARIATION) {
         ivec2 pixel = clamp(ivec2(floor(point * 16.0)), ivec2(0), ivec2(15));
         int frame = (tick + (kind % 2 == 0 ? 16 : 0)) % 32;

@@ -25,6 +25,11 @@ public final class ProceduralFire {
         .withUniform("NaturalityFire", UniformType.UNIFORM_BUFFER)
         .withUniform("NaturalityFireHeat", UniformType.COMBINED_IMAGE_SAMPLER)
         .withUniform("NaturalityFirePalette", UniformType.COMBINED_IMAGE_SAMPLER).build();
+    // Use a uniform clock to stay within Sodium OIT's texture-unit budget.
+    public static final BindGroupLayout SODIUM_LAYOUT = BindGroupLayout.builder()
+        .withUniform("NaturalityFire", UniformType.UNIFORM_BUFFER)
+        .withUniform("NaturalityFirePalette", UniformType.COMBINED_IMAGE_SAMPLER).build();
+    private static ByteBuffer boundsData;
     private static final String[] SPRITES = {"fire_0", "fire_1", "soul_fire_0", "soul_fire_1"};
     private static long animationTicks;
     private static final int[] frameTops = new int[128];
@@ -78,8 +83,7 @@ public final class ProceduralFire {
                 .putFloat(sprite == null ? -1 : sprite.getU1()).putFloat(sprite == null ? -1 : sprite.getV1());
         }
         data.putInt(16).putInt(32).putInt(0).putInt(0).flip();
-        if (bounds != null) bounds.close();
-        bounds = RenderSystem.getDevice().createBuffer(() -> "Naturality fire sprites", 128, data);
+        boundsData = data;
         if (heatView == null) {
 
             image = new NativeImage(129, 1, false);
@@ -95,6 +99,11 @@ public final class ProceduralFire {
         var image = ProceduralFire.image;
         var heat = ProceduralFire.heat;
         if (image == null || heat == null) return;
+        if (boundsData != null) {
+            boundsData.putInt(72, (int) (animationTicks % 32));
+            if (bounds != null) bounds.close();
+            bounds = RenderSystem.getDevice().createBuffer(() -> "Naturality fire sprites", 128, boundsData);
+        }
         image.setPixel(0, 0, 0xFF000000 | (int) (animationTicks % 32));
         for (int i = 0; i < frameTops.length; i++) image.setPixel(i + 1, 0, 0xFF000000 | frameTops[i]);
         RenderSystem.getDevice().createCommandEncoder().writeToTexture(heat, image, 0, 0, 0, 0);
@@ -105,6 +114,11 @@ public final class ProceduralFire {
         if (bounds == null || heatView == null) throw new IllegalStateException("Fire atlas not loaded");
         pass.setUniform("NaturalityFire", bounds);
         pass.setUniform("NaturalityFireHeat", heatView, RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
+        pass.setUniform("NaturalityFirePalette", paletteView, RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
+    }
+    public static void bindSodium(RenderPass pass) {
+        if (bounds == null || paletteView == null) throw new IllegalStateException("Fire atlas not loaded");
+        pass.setUniform("NaturalityFire", bounds);
         pass.setUniform("NaturalityFirePalette", paletteView, RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
     }
     public static long ticks() { return animationTicks; }

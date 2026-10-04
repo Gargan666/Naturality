@@ -17,7 +17,7 @@ public abstract class HeavyRainFogMixin {
     @Inject(method = "setupFog", at = @At("RETURN"))
     private void naturality$heavyRainFog(Camera camera, int distance, DeltaTracker delta,
             float darken, ClientLevel level, CallbackInfoReturnable<FogData> cir) {
-        var weather = WeatherSystem.state(level);
+        var weather = WeatherSystem.renderState(level);
         if (weather == null || camera.getFluidInCamera() != FogType.NONE) return;
         float strength = weather.heavyRainFog();
         if (strength <= 0) return;

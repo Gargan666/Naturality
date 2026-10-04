@@ -1,15 +1,27 @@
 package naturality.sky;
 
-import java.util.Random;
+import naturality.weather.SavedRandom;
 
 /** Night-only random start roll and weather-like active clock, independent of vanilla rain. */
 public final class SkyEventCycle {
     public static final double START_CHANCE_PER_TICK = 1 - Math.pow(.9, 1.0 / 1200);
-    private final Random random;
+    private final SavedRandom random;
     private int remaining, retarget;
     private boolean active;
     private float strength, target;
-    public SkyEventCycle(long seed) { random = new Random(seed); }
+    public SkyEventCycle(long seed) { random = new SavedRandom(seed); }
+    public java.util.Map<String,Long> snapshot() {
+        return java.util.Map.of("random",random.state(),"remaining",(long)remaining,"retarget",(long)retarget,"active",active?1L:0L,"strength",naturality.weather.EnvironmentWorldData.bits(strength),"target",naturality.weather.EnvironmentWorldData.bits(target));
+    }
+    public void restore(java.util.Map<String,Long> data) {
+        if(data.isEmpty())return;
+        random.restore(data.getOrDefault("random",random.state()));
+        remaining=data.getOrDefault("remaining",0L).intValue();
+        retarget=data.getOrDefault("retarget",0L).intValue();
+        active=data.getOrDefault("active",0L)!=0;
+        strength=naturality.weather.EnvironmentWorldData.number(data,"strength");
+        target=naturality.weather.EnvironmentWorldData.number(data,"target");
+    }
     public float strength() { return strength; }
     public boolean active() { return active; }
     public int remaining() { return remaining; }

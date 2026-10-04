@@ -8,6 +8,12 @@ import naturality.client.particle.PortalGlowRenderLayer;
 public class NaturalityClient implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
+        net.minecraft.client.renderer.entity.EntityRenderers.register(
+            naturality.villager.VillagerBobbers.TYPE, naturality.client.villager.VillagerBobberRenderer::new);
+        net.minecraft.client.renderer.entity.EntityRenderers.register(
+            naturality.villager.VillagerBobbers.PLAYER_RETURN, naturality.client.villager.PlayerFishingReturnRenderer::new);
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents.CLIENT_STOPPING.register(_ -> naturality.client.breaking.BreakingTextures.reset());
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents.CLIENT_STOPPING.register(_ -> naturality.client.shadow.BlockGridShadow.reset());
         naturality.client.config.GameplaySettingsClient.initialize();
         naturality.client.weather.WeatherClient.initialize();
         naturality.client.sky.SkyEventsClient.initialize();
@@ -18,7 +24,6 @@ public class NaturalityClient implements ClientModInitializer {
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents.CLIENT_STOPPING.register(_ -> naturality.client.weather.WindRendering.close());
         naturality.client.fire.SurfaceFireModel.initialize();
         naturality.client.snow.SurfaceSnowModel.initialize();
-        naturality.client.weather.FoliageWindModel.initialize();
         naturality.client.weather.FoliageWindModel.initialize();
         naturality.client.fire.ProceduralFire.initialize();
         naturality.client.fluid.ProceduralFluids.initialize();

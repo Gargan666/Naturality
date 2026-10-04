@@ -46,6 +46,23 @@ public final class SkyEvents {
     public static void initialize() {
         PayloadTypeRegistry.clientboundPlay().register(SkyEventPayload.TYPE, SkyEventPayload.CODEC);
         SkyEventCommand.initialize();
+        ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+            for(var level:server.getAllLevels()) {
+                var data=naturality.weather.EnvironmentWorldData.get(server);
+                var cycles=STATES.computeIfAbsent(level,_ -> new EnumMap<>(SkyEventType.class));
+                for(var type:SkyEventType.pool(level.dimension().identifier().toString())) {
+                    var saved=data.read(key(level,type));
+                    if(type==SkyEventType.METEOR_SHOWER) {
+                        var cycle=new SkyEventCycle(level.getSeed() ^ level.getGameTime() ^ type.id.hashCode());
+                        cycle.restore(saved);cycles.put(type,cycle);
+                    } else if(type==SkyEventType.RAINBOW) {
+                        var cycle=new RainbowCycle(level.getSeed() ^ level.getGameTime() ^ type.id.hashCode());
+                        cycle.restore(saved);RAINBOWS.put(level,cycle);
+                    }
+                }
+                AuroraEvents.restore(level);
+            }
+        });
         ServerLifecycleEvents.SERVER_STOPPED.register(_ -> { STATES.clear(); RAINBOWS.clear(); AuroraEvents.clear(); });
         ServerPlayConnectionEvents.JOIN.register((handler, _, server) -> {
             for (var level : server.getAllLevels()) send(handler.player, level);
@@ -64,9 +81,14 @@ public final class SkyEvents {
                     .tick(level.getGameRules().get(GameRules.ADVANCE_WEATHER), isNight(level));
                 if (server.getTickCount() % 10 == 0)
                     for (var player : server.getPlayerList().getPlayers()) send(player, level);
+                var data=naturality.weather.EnvironmentWorldData.get(server);
+                cycles.forEach((type,cycle) -> data.write(key(level,type),cycle.snapshot()));
+                var rainbow=RAINBOWS.get(level);
+                if(rainbow!=null)data.write(key(level,SkyEventType.RAINBOW),rainbow.snapshot());
             }
         });
     }
+    private static String key(ServerLevel level,SkyEventType type) { return "sky/"+level.dimension().identifier()+"/"+type.id; }
     public static boolean isNight(net.minecraft.world.level.Level level) {
         long time = Math.floorMod(level.getOverworldClockTime(), 24000L);
         return time >= 13000 && time < 23000;

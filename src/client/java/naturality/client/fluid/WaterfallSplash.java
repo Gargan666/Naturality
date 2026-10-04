@@ -103,18 +103,20 @@ public final class WaterfallSplash {
             int column=SCAN_ORDER[cursor];
             cursor=(cursor+1)%SCAN_ORDER.length;
             int x=center.getX()-SEARCH_RANGE+column%WIDTH,z=center.getZ()-SEARCH_RANGE+column/WIDTH;
-            refreshColumn(x,z);
+            if(!naturality.client.particle.ParticleVisibility.outsideView(x-2,center.getY()-SEARCH_RANGE-2,z-2,x+3,center.getY()+SEARCH_RANGE+3,z+3))refreshColumn(x,z);
         }
         FallImpactDroplets.along(client,false,FALLS.values());
         var nearby=new ArrayList<Border>();
         for(var borders:COLUMNS.values())for(var border:borders)
-            if(Vec3.atCenterOf(border.pool).distanceToSqr(eye)<RANGE*RANGE && validBorder(world,border))nearby.add(border);
+            if(Vec3.atCenterOf(border.pool).distanceToSqr(eye)<RANGE*RANGE && !naturality.client.particle.ParticleVisibility.outsideView(border.pool.getX()-2,border.pool.getY()-2,border.pool.getZ()-2,
+                border.pool.getX()+3,border.pool.getY()+3,border.pool.getZ()+3) && validBorder(world,border))nearby.add(border);
         nearby.sort(Comparator.comparingDouble(b->Vec3.atCenterOf(b.pool).distanceToSqr(eye)));
         int budget=144;
         int warmBudget=96;
         var activeNow=new HashSet<Border>();
         float rate=client.options.particles().get()==ParticleStatus.DECREASED?0.36F:0.72F;
         for(int i=0;i<Math.min(256,nearby.size());i++) {
+            if(naturality.client.particle.FallParticleBudget.exhausted(world))break;
             var border=nearby.get(i);
             double density=FallParticleDensity.multiplier(Vec3.atCenterOf(border.pool).distanceTo(eye));
             if(density>=0.12 && (ACTIVE.contains(border) || warmBudget>0)) {

@@ -40,16 +40,23 @@ public final class SurfaceSnowModel extends WrapperBlockStateModel {
             if(below.is(net.minecraft.tags.BlockTags.LEAVES)){leafDepth=d;break;}
             if(!below.is(Blocks.SNOW))break;
         }
-        boolean exposedLeaves=leafDepth>0 && naturality.client.weather.WindRendering.exposed(level,pos);
-        for (var p : SnowGeometry.shape(level,pos,state.getValue(SnowLayerBlock.LAYERS)).toAabbs()) {
+        // Use the supporting leaf's wind shelter result, not skylight at the
+        // snow block. Those can differ under a canopy and make the cap drift
+        // away from leaves which are correctly sheltered from wind.
+        boolean exposedLeaves=leafDepth>0
+            && naturality.client.weather.WindRendering.windExposed(level,pos.below(leafDepth));
+        var shape = SnowGeometry.shape(level,pos,state.getValue(SnowLayerBlock.LAYERS));
+        var visibility = new SnowFaceVisibility(level,pos,shape);
+        for (var p : shape.toAabbs()) {
             SnowSectionVisibility.record(pos,p.minY);
             float x=(float)p.minX, X=(float)p.maxX, z=(float)p.minZ, Z=(float)p.maxZ, y=(float)p.minY, Y=(float)p.maxY;
-            face(e, material, leafDepth, exposedLeaves, (int)Math.floor(y+1e-5), Direction.UP, new float[][]{{x,Y,z},{x,Y,Z},{X,Y,Z},{X,Y,z}});
-            face(e, material, leafDepth, exposedLeaves, (int)Math.floor(y+1e-5), Direction.DOWN, new float[][]{{x,y,Z},{x,y,z},{X,y,z},{X,y,Z}});
-            face(e, material, leafDepth, exposedLeaves, (int)Math.floor(y+1e-5), Direction.NORTH, new float[][]{{X,Y,z},{X,y,z},{x,y,z},{x,Y,z}});
-            face(e, material, leafDepth, exposedLeaves, (int)Math.floor(y+1e-5), Direction.SOUTH, new float[][]{{x,Y,Z},{x,y,Z},{X,y,Z},{X,Y,Z}});
-            face(e, material, leafDepth, exposedLeaves, (int)Math.floor(y+1e-5), Direction.WEST, new float[][]{{x,Y,z},{x,y,z},{x,y,Z},{x,Y,Z}});
-            face(e, material, leafDepth, exposedLeaves, (int)Math.floor(y+1e-5), Direction.EAST, new float[][]{{X,Y,Z},{X,y,Z},{X,y,z},{X,Y,z}});
+            // Moving leaf caps retain all faces: a static neighbor can reveal a face as they sway.
+            if (exposedLeaves || visibility.visible(p,Direction.UP)) face(e, material, leafDepth, exposedLeaves, (int)Math.floor(y+1e-5), Direction.UP, new float[][]{{x,Y,z},{x,Y,Z},{X,Y,Z},{X,Y,z}});
+            if (exposedLeaves || visibility.visible(p,Direction.DOWN)) face(e, material, leafDepth, exposedLeaves, (int)Math.floor(y+1e-5), Direction.DOWN, new float[][]{{x,y,Z},{x,y,z},{X,y,z},{X,y,Z}});
+            if (exposedLeaves || visibility.visible(p,Direction.NORTH)) face(e, material, leafDepth, exposedLeaves, (int)Math.floor(y+1e-5), Direction.NORTH, new float[][]{{X,Y,z},{X,y,z},{x,y,z},{x,Y,z}});
+            if (exposedLeaves || visibility.visible(p,Direction.SOUTH)) face(e, material, leafDepth, exposedLeaves, (int)Math.floor(y+1e-5), Direction.SOUTH, new float[][]{{x,Y,Z},{x,y,Z},{X,y,Z},{X,Y,Z}});
+            if (exposedLeaves || visibility.visible(p,Direction.WEST)) face(e, material, leafDepth, exposedLeaves, (int)Math.floor(y+1e-5), Direction.WEST, new float[][]{{x,Y,z},{x,y,z},{x,y,Z},{x,Y,Z}});
+            if (exposedLeaves || visibility.visible(p,Direction.EAST)) face(e, material, leafDepth, exposedLeaves, (int)Math.floor(y+1e-5), Direction.EAST, new float[][]{{X,Y,Z},{X,y,Z},{X,y,z},{X,Y,z}});
         }
     }
     private static void face(QuadEmitter e, Material.Baked material, int leafDepth, boolean exposedLeaves, int lightShift, Direction normal, float[][] points) {

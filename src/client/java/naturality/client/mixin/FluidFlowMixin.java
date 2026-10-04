@@ -2,9 +2,12 @@ package naturality.client.mixin;
 
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
 import net.minecraft.client.renderer.block.FluidRenderer;
+import net.minecraft.client.renderer.block.FluidStateModelSet;
+import net.minecraft.core.Direction;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.world.level.block.state.BlockState;
@@ -12,6 +15,8 @@ import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.material.Fluids;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
+import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 
@@ -20,6 +25,7 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
  */
 @Mixin(FluidRenderer.class)
 public abstract class FluidFlowMixin {
+    @Shadow @Final private FluidStateModelSet fluidModels;
     @Unique private static final ThreadLocal<FlowCorners> naturality$corners = new ThreadLocal<>();
 
     @WrapMethod(method = "tesselate")
@@ -31,10 +37,22 @@ public abstract class FluidFlowMixin {
                 naturality$corners.set(new FlowCorners(level, pos, state));
             else naturality$corners.remove();
             original.call(level, pos, output, block, state);
+            // Fabric's fluid handler re-enters this method for the same block.
+            // Only the outer call emits the visual continuation.
+            if(naturality$corners.get()!=null && (previous==null || previous.level!=level || !previous.pos.equals(pos)))
+                naturality.client.fluid.FallingFluidTail.emit(level,pos,block,state,fluidModels.get(state),output,naturality$corners.get()::light);
         } finally {
             if (previous == null) naturality$corners.remove();
             else naturality$corners.set(previous);
         }
+    }
+
+    @WrapOperation(method="tesselate",at=@At(value="INVOKE",target="Lnet/minecraft/client/renderer/block/FluidRenderer;shouldRenderFace(Lnet/minecraft/world/level/material/FluidState;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/Direction;Lnet/minecraft/world/level/material/FluidState;)Z"))
+    private boolean naturality$openTail(FluidState fluid,BlockState block,Direction side,FluidState neighbor,Operation<Boolean> original) {
+        var corners=naturality$corners.get();
+        if(side==Direction.DOWN && corners!=null
+            && naturality.client.fluid.FallingFluidTail.eligible(corners.level,corners.pos,fluid))return false;
+        return original.call(fluid,block,side,neighbor);
     }
 
     @ModifyVariable(method = "vertex", at = @At("HEAD"), argsOnly = true, ordinal = 0)
@@ -54,7 +72,8 @@ public abstract class FluidFlowMixin {
     private int naturality$vertexLight(int light, VertexConsumer builder, float x, float y, float z,
             int color, float u, float v, int originalLight) {
         var corners = naturality$corners.get();
-        return corners == null ? light : corners.light(x, y, z, light);
+        if(corners==null)return light;
+        return corners.light(x,y,z,light);
     }
 
     @Unique private static final class FlowCorners {

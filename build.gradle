@@ -42,11 +42,21 @@ fabricApi {
 
 // Explicit suite selection prevents a small visual change from running every test.
 tasks.named('runClientGameTest') {
-	systemProperty 'naturality.test.suites', providers.gradleProperty('clientTests').getOrElse('')
+    systemProperty 'naturality.test.suites', providers.gradleProperty('clientTests').getOrElse('')
 	systemProperty 'naturality.test.muteAudio', 'true'
 	doFirst {
 		def selection = systemProperties['naturality.test.suites'].toString().split(',').collect { it.trim() }
 		def valid = ['wind-compat', 'snow-compat', 'chunks', 'aurora', 'rainbow', 'sky-events', 'sunset', 'glint', 'snow', 'rain-splash', 'particle-weather', 'weather-commands', 'weather', 'gameplay', 'config', 'fire', 'water', 'water-rain', 'waterfall', 'lava-effects', 'water-ripples', 'water-occlusion', 'short-distance', 'fluids', 'flame', 'leaves', 'smoke', 'clouds', 'fog', 'lighting', 'dynamic-lighting', 'portal', 'end-portal', 'audio', 'all']
+		valid.add('breaking')
+		valid.add('entity-shadow')
+		valid.add('particle-visibility')
+		valid.add('villagers')
+		valid.add('butcher')
+        valid.add('villager-bread')
+		valid.add('crowd-panic')
+		valid.add('wind-shapes')
+		valid.add('fluid-tail')
+		valid.add('environment-persistence')
 		if (selection.any { !valid.contains(it) }) {
 			throw new GradleException('Choose relevant suites with -PclientTests=fog,lighting (available: wind-compat, snow-compat, chunks, aurora, rainbow, sky-events, sunset, glint, snow, rain-splash, particle-weather, weather-commands, weather, gameplay, config, fire, water, water-rain, waterfall, lava-effects, water-ripples, water-occlusion, short-distance, fluids, flame, leaves, smoke, clouds, fog, lighting, dynamic-lighting, portal, end-portal, audio; all explicitly runs everything).')
 		}

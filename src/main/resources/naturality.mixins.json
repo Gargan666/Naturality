@@ -3,6 +3,24 @@
   "package": "naturality.mixin",
   "compatibilityLevel": "JAVA_25",
   "mixins": [
+    "CrowdPanicMixin",
+    "ButcherBreedingMixin",
+    "ButcherTemptGoalMixin",
+    "VillagerBreadMixin",
+    "FishingHookReturnMixin",
+    "FishingHookLootAccess",
+    "VillagerWorkVisualsMixin",
+    "VillagerTradeDisplayMixin",
+    "VillagerStationPathMixin",
+    "VillagerFarmlandLandingMixin",
+    "VillagerWorkMixin",
+    "VillagerSuppliesMixin",
+    "VillagerComposterMixin",
+    "WindShapeMixin",
+    "WindPushMixin",
+    "WindCollisionScanMixin",
+    "WindPickingMixin",
+    "WindClimbingMixin",
         "SnowLayerMixin",
         "SnowLightEngineMixin",
         "SnowSkySourcesMixin",
@@ -39,5 +57,3 @@
     "requireAnnotations": true
   }
 }
-
-

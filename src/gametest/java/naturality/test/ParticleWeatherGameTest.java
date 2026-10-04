@@ -3,6 +3,7 @@ package naturality.test;
 import naturality.NaturalityParticles;
 import naturality.client.particle.WeatherClusterParticle;
 import naturality.client.weather.ParticleWeather;
+import naturality.client.weather.WeatherParticleContext;
 import naturality.weather.WeatherProfile;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -47,6 +48,7 @@ public final class ParticleWeatherGameTest implements FabricClientGameTest {
                 check(ParticleWeather.radius(c)==15, "Weather reaches 50 percent farther");
                 check(ParticleWeather.activeCount()>320 && ParticleWeather.activeCount()<=ParticleWeather.MAX_CLUSTERS, "Downpour is substantially denser but bounded");
                 check(ParticleWeather.snowCount()==0, "Warm plains use rain cards");
+                checkSharedQueries(c);
                 for (boolean snowKind : new boolean[]{false,true}) {
                     var layouts = new java.util.HashSet<String>();
                     boolean flipped=false, unflipped=false;
@@ -63,7 +65,8 @@ public final class ParticleWeatherGameTest implements FabricClientGameTest {
                         layouts.add(Math.min(probe.left,probe.right)+":"+probe.top);
                         card.remove();
                     }
-                    check(layouts.size()==3 && flipped && unflipped, "All three textures and both sprite flip states are used");
+                    check(layouts.size()==(snowKind ? 3 : 6) && flipped && unflipped,
+                        "All snow or regular/heavy rain textures and both sprite flip states are used: " + layouts.size());
                 }
                 try(var renderer=new WeatherEffectRenderer()) {
                     var state=new WeatherRenderState();
@@ -146,6 +149,50 @@ public final class ParticleWeatherGameTest implements FabricClientGameTest {
         } finally {
             context.runOnClient(c->{ParticleWeather.clear();c.options.particles().set(quality[0]);c.options.weatherRadius().set(radius[0]);c.options.improvedTransparency().set(oit[0]);});
         }
+    }
+
+    private static void checkSharedQueries(net.minecraft.client.Minecraft client) {
+        var level = java.util.Objects.requireNonNull(client.level);
+        var config = naturality.config.NaturalityConfig.get().effects;
+        boolean enabled = config.weatherParticles;
+        WeatherParticleContext.begin(level);
+        var first = WeatherParticleContext.state(level);
+        try {
+            check(first == WeatherParticleContext.state(level), "Cards share one snapshot during a pass");
+            var weather = naturality.weather.WeatherSystem.state(level);
+            check(weather != null && first.rainWindX() == weather.windX() * .34
+                && first.snowWindZ() == weather.windZ() * .10, "Shared wind keeps the original scaling");
+            for (int repeat=0;repeat<2;repeat++) {
+                for (int x : new int[]{-17,-1,0,16}) for (int y : new int[]{100,118}) {
+                    var pos = new net.minecraft.core.BlockPos(x,y,0);
+                    check(WeatherParticleContext.precipitation(level,pos) == level.getPrecipitationAt(pos),
+                        "Cached precipitation matches the full block position");
+                    check(WeatherParticleContext.waterTint(level,pos)
+                        == net.minecraft.client.renderer.BiomeColors.getAverageWaterColor(level,pos),
+                        "Cached tint matches the biome query");
+                    check(WeatherParticleContext.floor(level,x,0)
+                        == level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING,x,0),
+                        "Cached floor matches the heightmap across positive and negative columns");
+                }
+            }
+            int distant = 20_000_000;
+            check(WeatherParticleContext.floor(level,distant,distant) == Integer.MIN_VALUE,
+                "Missing chunks have no cached ground surface");
+            check(level.getChunkSource().getChunkNow(distant >> 4,distant >> 4) == null,
+                "Weather queries do not load distant chunks");
+        } finally {
+            WeatherParticleContext.end();
+        }
+        try {
+            config.weatherParticles = false;
+            check(!WeatherParticleContext.state(level).enabled(), "Unbatched ticks see setting changes immediately");
+            WeatherParticleContext.begin(level);
+            check(!WeatherParticleContext.state(level).enabled(), "A new pass does not reuse the previous enabled state");
+        } finally {
+            WeatherParticleContext.end();
+            config.weatherParticles = enabled;
+        }
+        check(WeatherParticleContext.state(level).enabled(), "Ending a pass releases its disabled snapshot");
     }
 }
 

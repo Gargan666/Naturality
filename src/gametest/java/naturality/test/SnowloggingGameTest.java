@@ -187,11 +187,12 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                 }
                 level.setBlockAndUpdate(removal,Blocks.OAK_FENCE.defaultBlockState());
                 level.setBlockAndUpdate(removal.above(),Blocks.SNOW.defaultBlockState().setValue(SnowLayerBlock.LAYERS,8));
-                level.setBlockAndUpdate(removal.above(2),Blocks.SNOW.defaultBlockState().setValue(SnowLayerBlock.LAYERS,2));
+                check(level.getBlockState(removal.above()).getValue(SnowLayerBlock.LAYERS)==7,
+                    "Offset snow writes are capped at seven layers");
                 level.destroyBlock(removal,false);
-                check(level.getBlockState(removal).getValue(SnowLayerBlock.LAYERS)==8
-                        && level.getBlockState(removal.above()).getValue(SnowLayerBlock.LAYERS)==2,
-                        "Support removal preserves overflow snow layers");
+                check(level.getBlockState(removal).getValue(SnowLayerBlock.LAYERS)==7
+                        && level.getBlockState(removal.above()).isAir(),
+                        "Support removal preserves all seven offset snow layers");
                 check(level.getBlockState(removal.above(2)).isAir(),"Overflow owner moves down too");
                 level.removeBlock(removal.above(),false);level.removeBlock(removal,false);
                 var compact = new BlockPos(11,100,6);
@@ -290,6 +291,15 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                     "Lower fence segments do not get internal snow caps");
                 check(columnPatches.stream().anyMatch(p->Math.abs(p.y()+3)<1e-5),
                     "Stacked fence still gets ground snow");
+                level.setBlock(fenceColumn.above(),Blocks.BIRCH_FENCE.defaultBlockState(),3);
+                level.setBlock(fenceColumn.above(2),Blocks.SPRUCE_FENCE.defaultBlockState(),3);
+                check(SnowGeometry.coveredByContinuation(level,fenceColumn)
+                    && SnowGeometry.coveredByContinuation(level,fenceColumn.above())
+                    && !SnowGeometry.coveredByContinuation(level,fenceColumn.above(2)),
+                    "Only the top post in a mixed-material fence pillar gets an overlay");
+                check(SnowGeometry.surfaces(level,fenceColumn.above(3)).stream()
+                    .noneMatch(p->p.y()<0 && p.y()>-3),
+                    "Mixed-material pillars do not gain intermediate snow layers");
                 var chainColumn=new BlockPos(10,100,6);
                 var chain=net.minecraft.core.registries.BuiltInRegistries.BLOCK.getValue(
                     net.minecraft.resources.Identifier.withDefaultNamespace("chain"));
@@ -323,14 +333,14 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                     var sideClick=new net.minecraft.world.item.context.BlockPlaceContext(level,null,
                         net.minecraft.world.InteractionHand.MAIN_HAND,moreSnow,
                         new net.minecraft.world.phys.BlockHitResult(new Vec3(10.5,100.05,0),Direction.NORTH,stackOwner,false));
-                    check(((net.minecraft.world.item.BlockItem)moreSnow.getItem()).place(sideClick).consumesAction(),
-                        "Repeated lower side clicks add snow instead of placing an orphan");
-                    var expected=count<=8?stackOwner:stackOwner.above();
-                    check(level.getBlockState(expected).getValue(SnowLayerBlock.LAYERS)==(count<=8?count:count-8),
-                        "Layers accumulate on the correct saved owner, including overflow");
+                    check(((net.minecraft.world.item.BlockItem)moreSnow.getItem()).place(sideClick).consumesAction()==(count<=7),
+                        "Lower side clicks add snow up to seven layers, then reject overflow");
+                    check(level.getBlockState(stackOwner).getValue(SnowLayerBlock.LAYERS)==Math.min(count,7)
+                            && level.getBlockState(stackOwner.above()).isAir(),
+                        "Seven-layer coating remains in place without a transient overflow block");
                     check(level.getBlockState(stackOwner.north()).isAir(),"No transient adjacent snow block");
                 }
-                check(moreSnow.getCount()==7,"One snow item consumed per successful layer");
+                check(moreSnow.getCount()==10,"Rejected overflow attempts do not consume snow items");
 
                 var sideSupport=new BlockPos(-9,100,7);
                 level.setBlock(sideSupport,Blocks.OAK_FENCE.defaultBlockState(),3);
@@ -439,8 +449,9 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                 var stairPatches=SnowGeometry.surfaces(level,stairs);
                 double mergedTop=Double.NaN;
                 for(var p:stairPatches) {
-                    double top=p.y()+SnowGeometry.sliceLayers(stairPatches,p,8)/8.0;
-                    if(Double.isNaN(mergedTop))mergedTop=top;else near(top,mergedTop,"Eight layers merge stair snow tops");
+                    double top=p.y()+SnowGeometry.sliceLayers(stairPatches,p,7)/8.0;
+                    if(Double.isNaN(mergedTop))mergedTop=top;else check(Math.abs(top-mergedTop)<=.125+1e-5,
+                        "Seven-layer stair slices approach each other within one layer");
                 }
                 check(level.getBlockState(fence.below(2)).getValue(SnowyBlock.SNOWY),"Ground under fence becomes snowy grass");
                 check(!level.getBlockState(slab.below(2)).getValue(SnowyBlock.SNOWY),"Ground sheltered by full slab footprint stays green");
@@ -637,6 +648,11 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
             server.runCommand("tp @a -3 102 2 0 20");
             world.getConnection().waitForClientboundPackets();world.getConnection().waitForChunksRender();context.waitTicks(5);
             context.takeScreenshot("snow-model-rods-and-stair-clipping");
+            server.runCommand("setblock -7 100 10 oak_planks");
+            server.runCommand("setblock -7 101 10 snow");
+            server.runCommand("setblock -6 101 10 stone_slab[type=bottom]");
+            server.runCommand("setblock -7 101 9 stone_slab[type=top]");
+            world.getConnection().waitForClientboundPackets();
             context.runOnClient(client -> {
                 var ordinary=new BlockPos(11,100,6);
                 check(SnowGeometry.usesVanillaGeometry(client.level,ordinary),"Ground snow uses vanilla geometry");
@@ -658,6 +674,28 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                             && q.v(0)>=overlaySprite.getV0() && q.v(0)<overlaySprite.getV1())buriedOverlay[0]++;
                     }),client.level,buried,buriedState,net.minecraft.util.RandomSource.create(0),d->true);
                 check(buriedOverlay[0]==0,"Culled support faces generate no hidden snow overlay quads");
+                var overhangSupport=new BlockPos(-7,100,10);
+                var overhangState=client.level.getBlockState(overhangSupport);
+                int[] edgeOverlays=new int[Direction.values().length];
+                float[] overlayURange={Float.POSITIVE_INFINITY,Float.NEGATIVE_INFINITY};
+                client.getModelManager().getBlockStateModelSet().get(overhangState).emitQuads(
+                    net.fabricmc.fabric.api.client.renderer.v1.Renderer.get().quadEmitter(q->{
+                        if(q.u(0)>=overlaySprite.getU0() && q.u(0)<overlaySprite.getU1()
+                            && q.v(0)>=overlaySprite.getV0() && q.v(0)<overlaySprite.getV1())
+                        {
+                            edgeOverlays[q.lightFace().ordinal()]++;
+                            if(q.lightFace()==Direction.WEST)for(int vertex=0;vertex<4;vertex++) {
+                                overlayURange[0]=Math.min(overlayURange[0],q.u(vertex));
+                                overlayURange[1]=Math.max(overlayURange[1],q.u(vertex));
+                            }
+                        }
+                    }),client.level,overhangSupport,overhangState,net.minecraft.util.RandomSource.create(0),d->false);
+                check(edgeOverlays[Direction.EAST.ordinal()]==0,
+                    "Roof slab hiding a snow edge suppresses the overlay on the exposed wall below");
+                check(edgeOverlays[Direction.WEST.ordinal()]>0 && edgeOverlays[Direction.NORTH.ordinal()]>0,
+                    "Exposed snow edges retain overlays, including gaps below high overhangs");
+                check((overlayURange[1]-overlayURange[0])/(overlaySprite.getU1()-overlaySprite.getU0())>.9F,
+                    "Clipped overlay strips collectively use the full sprite width instead of repeating its first column");
                 var state=Blocks.SNOW.defaultBlockState();
                 var wrapped=client.getModelManager().getBlockStateModelSet().get(state);
                 for(boolean smooth:new boolean[]{false,true}) {

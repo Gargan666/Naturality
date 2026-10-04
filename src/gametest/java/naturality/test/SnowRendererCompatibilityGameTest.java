@@ -12,6 +12,7 @@ public final class SnowRendererCompatibilityGameTest implements FabricClientGame
     @Override public void runTest(ClientGameTestContext context) {
         try(var world=context.worldBuilder().create()) {
         context.runOnClient(client -> {
+            SnowFaceVisibilityChecks.run();
             for(int brightness : new int[]{0,15}) {
                 var snapshot=(BlockAndTintGetter)java.lang.reflect.Proxy.newProxyInstance(
                     BlockAndTintGetter.class.getClassLoader(),new Class<?>[]{BlockAndTintGetter.class},
@@ -59,6 +60,43 @@ public final class SnowRendererCompatibilityGameTest implements FabricClientGame
             world.getConnection().waitForClientboundPackets();
             world.getConnection().waitForChunksRender();
             context.waitTicks(10);
+            server.runCommand("setblock 5 100 0 stone_slab[type=bottom]");
+            server.runCommand("setblock 5 101 0 snow[layers=7]");
+            server.runCommand("setblock 6 100 0 stone");
+            server.runCommand("setblock 6 101 0 snow[layers=8]");
+            world.getConnection().waitForClientboundPackets();
+            context.runOnClient(client -> {
+                var fittedPos=new BlockPos(5,101,0);
+                var fittedState=client.level.getBlockState(fittedPos);
+                int[] faces=new int[net.minecraft.core.Direction.values().length];
+                client.getModelManager().getBlockStateModelSet().get(fittedState).emitQuads(
+                    net.fabricmc.fabric.api.client.renderer.v1.Renderer.get().quadEmitter(q -> faces[q.lightFace().ordinal()]++),
+                    client.level,fittedPos,fittedState,net.minecraft.util.RandomSource.create(0),direction -> false);
+                if(faces[net.minecraft.core.Direction.DOWN.ordinal()]!=0
+                        || faces[net.minecraft.core.Direction.EAST.ordinal()]!=0
+                        || faces[net.minecraft.core.Direction.UP.ordinal()]==0)
+                    throw new AssertionError("Fitted snow emission must remove buried bottom and fully covered side, retaining its top");
+                if(!net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("sodium"))return;
+                try {
+                    var type=Class.forName("net.caffeinemc.mods.sodium.client.render.chunk.compile.pipeline.BlockRenderer");
+                    var renderer=type.getConstructors()[0].newInstance(null,null);
+                    var base=Class.forName("net.caffeinemc.mods.sodium.client.render.model.AbstractBlockRenderContext");
+                    var levelField=base.getDeclaredField("level");levelField.setAccessible(true);levelField.set(renderer,client.level);
+                    var slab=Blocks.STONE_SLAB.defaultBlockState();
+                    var stateField=base.getDeclaredField("state");stateField.setAccessible(true);stateField.set(renderer,slab);
+                    if(net.minecraft.world.level.block.Block.shouldRenderFace(slab,
+                            client.level.getBlockState(new BlockPos(5,101,0)),net.minecraft.core.Direction.EAST))
+                        throw new AssertionError("Fixture must reproduce incorrect state-only snow occlusion");
+                    var posField=base.getDeclaredField("pos");posField.setAccessible(true);
+                    var draw=base.getMethod("shouldDrawSide",net.minecraft.core.Direction.class);
+                    posField.set(renderer,new BlockPos(4,101,0));
+                    if(!(boolean)draw.invoke(renderer,net.minecraft.core.Direction.EAST))
+                        throw new AssertionError("Sodium must keep the face behind displaced slab snow");
+                    posField.set(renderer,new BlockPos(7,101,0));
+                    if((boolean)draw.invoke(renderer,net.minecraft.core.Direction.WEST))
+                        throw new AssertionError("Sodium must still cull against ordinary full snow");
+                } catch(ReflectiveOperationException e) { throw new AssertionError("Sodium snow culling check",e); }
+            });
         }
     }
 }

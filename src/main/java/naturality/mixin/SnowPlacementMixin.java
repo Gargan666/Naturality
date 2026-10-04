@@ -16,6 +16,20 @@ import org.spongepowered.asm.mixin.Mixin;
 
 @Mixin(BlockItem.class)
 public abstract class SnowPlacementMixin {
+    @org.spongepowered.asm.mixin.Unique
+    private InteractionResult naturality$placeSnow(BlockPlaceContext context, Operation<InteractionResult> original) {
+        var pos=context.getClickedPos();
+        var state=context.getLevel().getBlockState(pos);
+        var below=context.getLevel().getBlockState(pos.below());
+        if(!state.is(Blocks.SNOW) && below.is(Blocks.SNOW)
+                && below.getValue(net.minecraft.world.level.block.SnowLayerBlock.LAYERS)>=7
+                && naturality.snow.SnowGeometry.maxLayers(context.getLevel(),pos.below())==7)
+            return InteractionResult.FAIL;
+        if(state.is(Blocks.SNOW) && state.getValue(net.minecraft.world.level.block.SnowLayerBlock.LAYERS)>=7
+                && naturality.snow.SnowGeometry.maxLayers(context.getLevel(),pos)==7)
+            return InteractionResult.FAIL;
+        return original.call(context);
+    }
     @WrapMethod(method="place")
     private InteractionResult naturality$fitSnowPlacement(BlockPlaceContext context, Operation<InteractionResult> original) {
         if (naturality.snow.ShapeRecursionGuard.active()) return original.call(context);
@@ -65,11 +79,11 @@ public abstract class SnowPlacementMixin {
         var clickedState=level.getBlockState(clicked);
         // Snow used on a flame extinguishes it at its saved position.
         if(clickedState.getBlock() instanceof BaseFireBlock)
-            return original.call(BlockPlaceContext.at(context,clicked,Direction.UP));
+            return naturality$placeSnow(BlockPlaceContext.at(context,clicked,Direction.UP),original);
         if(level.getBlockState(target).getBlock() instanceof BaseFireBlock)
-            return original.call(BlockPlaceContext.at(context,target,Direction.UP));
+            return naturality$placeSnow(BlockPlaceContext.at(context,target,Direction.UP),original);
         if(clickedState.is(Blocks.SNOW) && naturality.snow.SnowGeometry.surfaces(level,clicked).stream().anyMatch(p -> p.y()<0))
-            return original.call(BlockPlaceContext.at(context,clicked,Direction.UP));
+            return naturality$placeSnow(BlockPlaceContext.at(context,clicked,Direction.UP),original);
         // Placement can also target an air/support cell beneath the saved snow.
         // Resolve it before the air fast path creates a short-lived second block.
         var hit=context.getClickLocation();
@@ -82,13 +96,13 @@ public abstract class SnowPlacementMixin {
                 if(shape.toAabbs().stream().anyMatch(b -> local.x>=b.minX-1e-5 && local.x<=b.maxX+1e-5
                         && local.z>=b.minZ-1e-5 && local.z<=b.maxZ+1e-5
                         && local.y>=b.minY-.125-1e-5 && local.y<=b.maxY+1e-5))
-                    return original.call(BlockPlaceContext.at(context,owner,Direction.UP));
+                    return naturality$placeSnow(BlockPlaceContext.at(context,owner,Direction.UP),original);
                 break;
             }
             if(up>=2 && !naturality.snow.SnowGeometry.exposesGround(level,owner))break;
         }
         var state = level.getBlockState(target);
-        if (state.isAir() || state.is(Blocks.SNOW)) return original.call(context);
+        if (state.isAir() || state.is(Blocks.SNOW)) return naturality$placeSnow(context,original);
         // Snow must never replace a plant. Resolve the occupied partial cell to
         // the saved snow above it before vanilla rejects/replaces the target.
         for (int step=0; step<naturality.snow.SnowGeometry.MAX_DEPTH-1; step++) {
@@ -98,7 +112,7 @@ public abstract class SnowPlacementMixin {
             target = target.above();
             state = level.getBlockState(target);
             if (state.isAir() || state.is(Blocks.SNOW))
-                return original.call(BlockPlaceContext.at(context,target,Direction.UP));
+                return naturality$placeSnow(BlockPlaceContext.at(context,target,Direction.UP),original);
         }
         return InteractionResult.FAIL;
     }

@@ -1,5 +1,483 @@
+VILLAGER EVENING BREAD (2026-10-04)
+Farmers record working during the scheduled 2000-9000 work period. After that
+shift ends, they use their existing bread or craft it from inventory wheat at
+three wheat per bread. During the evening before bedtime (9000-12000), they
+walk to reachable villagers within 32 blocks of their job site, display bread,
+and toss one real item at a time. They favor villagers with less bread, wait
+five seconds between throws and avoid repeatedly serving the same recipient
+for one minute. They reserve one piece until their own daily meal is finished.
+All professions accept bread subject to normal inventory capacity and vanilla
+pickup rules. Awake, safe villagers randomly begin a normal 32-tick bread use
+while off work, consuming one actual inventory piece. Other villagers wait
+30-60 seconds between meals; farmers may eat only once per day after their
+recorded shift, including later while awake at home. Sleeping, trading, panic,
+raids and hiding interrupt the routine. Worked/eaten day markers persist through
+saves; temporary displayed bread is excluded from saved equipment to avoid duplication.
+Validation: villager-bread checks work-hour restrictions, one-per-day meals,
+reload persistence, later-day meals, all profession pickup eligibility, random
+non-farmer meals, wheat use and actual walking/tossing/pickup. Log: build/villager-bread.log.
+
+FARMER PLANTING (2026-10-04)
+Harvesting leaves the plot empty for at least 20 ticks before replanting. Planting
+is a separate task: the farmer displays the actual seed/vegetable from its inventory,
+looks directly at the plot, waits 12 ticks to show its intent, then plants and swings.
+Only the displayed item is consumed, one per successful placement. Batch harvesting
+and fertilizing priorities are preserved. Villager tests check the gap, hand item and look target.
+Log: build/farmer-planting.log.
+
+BUTCHER VILLAGER WORK (2026-10-04)
+Butchers receive four wheat, four carrots and four wheat seeds when first taking
+the profession. A saved grant flag prevents refills on reload or profession
+changes. ButcherWork replaces their work package during adult work hours; panic,
+trading, night and missing job sites interrupt it. It searches within 24 blocks
+of its shop for a reachable adult pair compatible with one of its available
+foods (wheat for cows/sheep, carrots for pigs, wheat seeds for chickens), feeds each parent once, and waits for an actual breeding notification.
+Twenty ticks after the child is born it equips an iron sword, swings and deals
+six damage at a one-second attack interval until one selected parent is dead, leaving the other parent alive.
+Working swords use the fisherman rod holding orientation and player item scale,
+accounting for the sword model's different baked rotation. Trade displays keep their ordinary pose.
+Babies and unrelated adults are never harvest targets. Parent drops are tracked,
+approached and transferred into the villager's real inventory with pickup visuals.
+The butcher returns to its station and selects another pair/material as needed.
+It chooses the nearest reachable eligible animal with a same-species partner, regardless
+of species/food order or previous selections. Held breeding food attracts livestock through
+their vanilla temptation goals, retaining normal speed, range, stop distance and AI priorities.
+Wheat attracts cows/sheep, seeds attract chickens and carrots attract pigs; trade displays do not lure.
+When that pair lacks enough food to feed both parents, it seeks a reachable working farmer
+within 48 blocks. The farmer pauses its work, faces the butcher and displays
+each provision before tossing a reserved eight-item stack to the butcher.
+Provision deliveries supply eight wheat, eight carrots and eight wheat seeds;
+they are replenishment grants, not deductions from the farmer's crop inventory.
+Both workers resume after delivery. With no eligible adult pair, the butcher waits
+at its shop without requesting supplies, allowing babies to grow. Standard villager inventory capacity applies.
+Validation: -PclientTests=butcher,villagers tests cow breeding, parent harvesting,
+baby/remaining-parent safety, sword holding, drop pickup, starter persistence, chicken fallback,
+eight-item farmer deliveries, pig/sheep breeding and harvesting, and existing farmer/fisherman behavior.
+Active cycles finish before the behavior duration renews, preventing lost drop collection.
+Log: build/butcher-nearest-tempt.log.
+
+FALLING FLUID VISUAL TAILS (2026-10-03)
+------------------------------------
+Actively falling water/lava ending above air gets a one-block visual continuation
+of its animated flowing side texture. The extension has four double-sided walls,
+no bottom or top cap, and no fluid state, collision or gameplay effect. Its alpha
+falls in sixteen world-aligned pixel rows from full strength to zero. The actual
+falling block's original bottom face is replaced by the same downward-facing
+still-texture underside, recessed upward by half a block (0.5 minus the standard
+0.001 inset). It uses the real fluid's layer, tint and lighting and is not faded.
+The extension itself has no horizontal cap. Resting fluid,
+fluid-to-fluid joins and fluid above ground do not gain a tail. Water/lava master
+settings gate their respective tails. Lava tail geometry uses the translucent
+terrain layer, retaining emissive lava colors; water retains biome tint/lighting.
+Implementation: FallingFluidTail, FluidFlowMixin and terrain shaders. A spare
+light-coordinate bit marks tail vertices, is stripped before lightmap sampling,
+and becomes a negative flow flag for the shared fragment shader. Native vanilla
+fluid tessellation supplies the geometry; alternate renderers replacing that
+tessellator need equivalent mesh emission. FluidTailGameTest checks both fluids,
+air/solid/continuous-fluid cases, section-boundary walls and recessed underside,
+with side/below screenshots in both transparency modes. Run -PclientTests=fluid-tail.
+Fabric fluid-handler recursion is guarded so each block emits exactly one tail.
+Seamless join: actual falling-fluid sides retain vanilla's reverse face layer,
+and the extension includes a matching reversed quad with the same row fade.
+Extension vertices sample
+the same interpolated light field as actual fluid vertices, so their shared join
+positions have identical light, tint and directional shade. The fluid-tail suite
+asserts exact shared endpoints, lighting, tint, matching reverse quads and the
+underside's raised position. There is no special culling of actual falling sides.
+Validation: fluid-tail client suite passed, including mesh assertions confirming
+double-sided walls, no cap at the extension, and one recessed actual-fluid cap.
+
+CROWD PANIC (2026-10-03)
+Successful attacks from living entities alert same-entity-type peaceful mobs
+within a spherical 16-block radius of the struck mob. CrowdPanicMixin shares
+the vanilla recent damage source and timestamp server-side. Goal-based animals
+and brain-based villagers use their normal hit reactions, with the normal
+40-tick stimulus timeout. Neighbors take no damage, knockback or hurt animation;
+signals never relay, so crowds cannot extend the original radius. Mob selection
+uses the naturality:crowd_panic entity-type tag. Its 45 default vanilla types
+are explicitly listed in
+src/main/resources/data/naturality/tags/entity_type/crowd_panic.json.
+Add or remove entity IDs in values to customize selection, including hostile
+or modded mobs; there is no hard-coded hostile exclusion. Data packs can extend
+the same tag, or replace its list with replace: true, then apply with /reload.
+Source-file edits require rebuilding the mod. Environmental damage, rejected
+hits, dead recipients and mobs with AI disabled are excluded. Non-hostile mobs
+retain their species-specific vanilla response; neutral mobs may defend themselves
+where vanilla AI normally does so. No extra universal flee goal is installed.
+Validation: assemble and runClientGameTest -PclientTests=crowd-panic. The suite
+checks sheep/cow movement, villager panic, species/radius isolation, untouched
+neighbor health, hostile/environmental exclusions, rejected hits and expiration.
+Log: build/crowd-panic-test.log.
+
+VILLAGER FISHING CAST AND HELD TOOLS (2026-10-03)
+Lead width is now 0.075 blocks (1.5 times the previous width). Flat color
+interpolation preserves crisp brown stripe boundaries instead of blended bands.
+Both rope types sweep moving links against nearby voxel collision boxes and
+resolve to the nearest face, preserving damped sliding velocity. Collision is
+interleaved with length constraints, avoiding roof jumps and thin-block tunneling.
+Validation: wall/floor/swept-contact regressions, rope client suite and assemble
+(build/rope-contact-crisp-lead.log).
+Enchanted bobbers use a double-sided alpha-cutout glint material. Vanilla item
+glint culls back faces, which hid the authored zero-thickness fin from one side.
+The dedicated material retains the existing item glint shaders and contours
+while matching the plain bobber's no-cull behavior.
+Validation: enchanted villager/player fishing client suite and assemble passed
+(build/bobber-glint-fin.log).
+Fishing lines and leads use a client-side 24-link Verlet chain with pinned
+endpoints, gravity, damped inertia, fixed 40 Hz steps, length constraints and
+simple solid-block collision. Chains reset across worlds/teleports and expire
+when unused. Leads use the fishing line's camera-facing geometry with brown
+coloring, endpoint-light shading and 0.05-block thickness. Lead chains use stable
+animal/holder UUID keys, preserving inertia across render-state replacement.
+These are visual physics; vanilla server leash pulling and fishing rules still apply.
+Lead changes passed the fishing/rope client suite and assemble
+(build/lead-shared-line.log).
+First-person rod-tip conversion applies walking/hurt bob before FOV conversion
+and removes world projection bob afterward, preserving alignment during walking.
+Validation: villagers suite checks pinned/moving endpoints, finite rope links,
+enchanted casts and retrieval, walking and leashed-animal screenshots, plus
+assemble (build/rope-final-assemble.log). The rope regression run passed before
+final cache/shader guards; a later rerun was blocked by unrelated
+EntityShadowGameTest references to removed BlockGridShadow.snappedCenter.
+Fishing lines use a dedicated vanilla-derived line shader that preserves edge
+orientation across curve segments. Shared endpoints use the analytic curve
+tangent, avoiding twisted segments and angle-dependent holes. The shader uses
+a short direction sample to avoid crossing the camera plane. Enchanted rods
+apply the existing item glint shader and world contour effects to the custom
+bobber model; player retrieval entities synchronize the rod's glint state.
+Validation: villagers client suite with enchanted cast, steep-angle screenshot,
+retrieval glint assertion and assemble (build/fishing-line-joins-glint.log).
+First-person rod attachment has a small leftward view-space correction. Fishing
+line width now uses each vertex's camera distance and screen projection, rather than
+the bobber's distance for the entire line. Near-hand width uses one transformed
+rod texture pixel, including the sprite's foreshortening, and tapers continuously
+with perspective toward the water. Validation: focused villagers client suite
+and assemble (build/fishing-line-distance-fix.log). Submitted entity poses are
+camera-relative world space; using their Z component as depth caused large
+black wedges at some camera headings. Full vector distance avoids that zero
+crossing, with a near-camera width limit for extreme close-ups.
+Third-person player lines now measure the rod tip from the animated item-in-hand
+layer, including the player's arm pose and item display transform. Lines resolve
+the endpoint during geometry rendering after item submission, independently of
+hook/player submission order. Returning catches use the same endpoint. The
+focused villagers suite verifies that the measured tip moves during a client
+arm swing and captures first-person and third-person views.
+Validation: build/fishing-player-swing-attachment.log (passed).
+The first-person player fishing line now measures the current hand render pose
+before world submission, applying the held item's transform and HUD/world
+projection ratio. This includes camera arm lag, equip and swing movement.
+Returning player bobbers use the same measured endpoint. Villager work rods
+sit a little lower and farther forward. Their joined arms use the vanilla
+zombie punch swing curve, inverted to lift their arms, for item-use and
+crop-break swing events.
+Validation: focused villagers suite passed (build/fishing-hand-pixel-swing.log).
+The focused game test waits for
+the hand equip animation before its player bobber screenshot. Villager line
+capture selects the furthest rendered item extent along the fishing rod's
+shaft rather than the highest world-space corner. This improves attachment
+as the villager turns. The work rod now cancels its baked 55-degree item-model
+rotation, leaving the sprite plane upright, and flips its horizontal direction
+so the reel hangs outward. The model keeps player scale. The line follows the
+transformed shaft tip with its transparent sprite border removed. Validation:
+focused villagers suite passed (build/fishing-flat-flipped-final.log).
+The player and villager fishing lines now meet the top of the custom bobber's
+thin upper fin. Their rendered width tapers with camera distance. The caught
+item displayed on a returning bobber is twice its previous rendered size.
+The villager rod's work pose uses a player-sized item and turns the sprite
+forward from its crossed arms, with the rod visible from the villager's side.
+The focused client suite captures relative side and front screenshots for
+further visual tuning (build/fishing-rod-forward-test.log).
+Fishermen equip an actual vanilla fishing rod and use its vanilla cast item-model
+property while their hook is out. They search connected resting source water,
+choose a reachable dry shore, and cast toward a deep, central part of the pool.
+Their hook is a separately registered entity: it flies outward with gravity and
+drag, floats at the water surface, dips for a bite, then reels toward the
+villager with the caught item visibly attached. The bite lasts one second
+before retrieval. Player and villager floats now use the Blockbench cube-and-fin
+model and its 16x16 texture from resources/entity models, copied into the client
+assets. The villager's independent renderer keeps the curved line starting at
+the visible rod tip. Throw, splash, and retrieve use vanilla fishing sounds.
+Walking away, trading, changing work, and losing the target remove the hook.
+Catch timing remains as described below; catches use vanilla fishing loot.
+Vanilla FishingHook is Player-owned and its tick, client spawn, rendering, and
+retrieval paths assume a Player. Therefore villager fishing uses its own hook
+entity; future changes to the vanilla rod's item model apply to the equipped
+rod, while future vanilla hook physics changes may need porting.
+For both player and villager catches, the bobber flies back in five ticks with
+a small item on the hook. Only player catches grant the item on arrival;
+villager catches remain visual and never enter or overflow from inventory.
+Vanilla player fishing still determines loot, advancement/stat credit, and rod
+durability at reel-in. The bobber model remains at its authored base rotation
+for player and villager hooks, including during return. The player hook
+renderer cancels vanilla's camera-facing flat-quad transform before submitting
+the model. NO_OVERLAY prevents white texture pixels from being damage-tinted red.
+Work tools use the player's third-person right-hand item transform. The rod
+has a diagonal, forward-tilted side pose with its handle at the connected arm
+and its tip pointing up and outward, using the same item-model scale as the
+player's third-person fishing rod. Other work tools keep a larger diagonal
+pose. ShowTradesToPlayer items retain the ordinary ground-item transform and
+crossed-arm pose, even for
+swords and tools. The trade-display state is synchronized so clients can
+distinguish offers from work tools.
+Validation: assemble and the focused villagers client suite passed
+(build/fishing-rod-side-final.log), covering central source-water targeting,
+the separate hook entity, vanilla cast model property, bite delay, visible
+retrieval item, player pickup, and cleanup on trade. The updated full-inventory
+visual-catch suite, vanilla open-water loot check, and corrected bobber colors
+passed in build/fishing-visual-loot-final.log. Player-bobber front and side
+captures plus the player-scale rod pose passed in
+build/fishing-fixed-model-player-scale.log.
+WATERFALL PARTICLE BUDGET AND CAMERA CULLING (2026-10-03)
+Waterfall and lavafall spray share at most 64 admitted particles per client
+world tick and 768 live or queued particles, using the native ParticleLimit
+accounting. Warm-started spray uses the same limits. Impact droplets have a
+separate shared allowance of 64 spawn attempts per tick. Particle engine clears
+and world changes release both budgets. Overloaded scenes intentionally reduce
+effect density; animation, movement, tint and collision behavior remain intact.
+Supported sprite particles outside the camera cull frustum are rejected and
+removed before simulation. Native rendering continues to use frustum culling.
+Full particle bounds are checked, preserving visible edges; panorama mode skips
+the extra view rejection. Falls skip off-screen column scans and border surface
+checks, and stop emission work when the shared tick allowance is exhausted.
+Waterfall spray treats fully filled water cells as occluders with the same
+whole-volume coverage proof used for terrain. Ordinary particles retain water
+transparency. Shallow surfaces and waterlogged shapes fail open. Water coverage
+is cached within the existing bounded query budget and invalidated by updates.
+Validation: assemble; particle-visibility and waterfall client suites with the
+default renderer and Sodium. Tests cover 64 births, 768 queued particles,
+water-specific occlusion, off-screen spawning, holes and transparent materials.
+Logs: build/particle-budget-default-final.log and build/particle-budget-sodium.log.
+No FPS benchmark has been collected in the user's dense waterfall scene.
+
 NATURALITY - PROJECT REFERENCE
 =============================
+PARTICLE OCCLUSION AND SPAWN REJECTION (2026-10-03)
+ParticleVisibility shares conservative visibility decisions between nearby
+sprite particles. Waterfall/lavafall spray and rain/snow have known maximum
+spawn bounds and can be rejected before construction. Other ordinary quad
+particles are checked before engine insertion. Existing hidden particles are
+removed before their next scheduled simulation check; particle-group cleanup
+still releases engine limits normally. Custom extractors without known bounds,
+including the portal glow/mote renderers, are left alone.
+ParticleOcclusion walks toward a group's enclosing volume and projects all
+eight corners onto opaque block planes. Every cell in the projected rectangle
+must be an opaque full model block before rejection; an off-centre hole or
+visible edge preserves the particle. Water, glass, leaves, invisible barriers,
+partial blocks and displaced snow layers cannot act as full occluders. Fully
+embedded ordinary sprites can be rejected using their actual visual bounds.
+Visual bounds include sprite rotation radius and previous/current positions.
+New border spray bounds allow its later size enlargement.
+Caches expire on world/time/camera changes and engine clear/reload. Terrain
+notifications invalidate cached block and region decisions within the same tick.
+Existing groups are staggered across four tick phases. Each camera/tick snapshot
+allows at most 256 region tests and 16384 uncached block queries; rays take at
+most 160 steps. Unknown visibility, exhausted budgets and missing chunks fail
+open. This removes confirmed hidden work without promising exhaustive occlusion
+or discarding off-screen particles solely because the camera faces away.
+Validation: assemble and particle-visibility passed with Indigo and Sodium;
+waterfall passed with both. Weather, smoke and leaves passed during the broader
+regression run; its later lava fixture used obsolete vanilla rain state and was
+updated to the current weather profile. Corrected lava-effects passed with
+Sodium. Final visibility test also opens/closes a hole within one tick.
+Dense test: 104 rejected spawns, 3 region tests, 20 block queries. Logs:
+build/particle-visibility-test.log, build/particle-visibility-regression.log,
+build/particle-visibility-sodium.log and build/particle-visibility-final.log.
+No diagnostics in changed production files; 33 existing warnings elsewhere
+(build/particle-visibility-audit.log). No FPS benchmark of the user's scene yet.
+
+ACTIVE VILLAGER PROFESSIONS (2026-10-03)
+Farmers now distribute bone meal in rounds: among reachable immature crops,
+they first prefer those with fewer applications this round, then the younger
+crop. The application count resets after the ripe batch has been harvested.
+This prevents repeated fertilizing of one crop while its neighbors remain at
+their original age. At the composter, farmers keep feeding surplus plantable
+seeds after vanilla's 20-item limit until it reaches level 7 or no surplus
+remains; the normal scheduled tick ripens it to level 8, and the next station
+visit collects bone meal. Ten of each seed are still reserved for planting.
+Harvesters approach crops closely enough to collect the dropped seeds. The
+focused client suite verifies one application per crop, the ready/ripened
+composter states, and bone meal returning to the farmer's inventory
+(build/villager-compost-rounds.log).
+Every villager treats the block above its own claimed job site as blocked during
+walking path searches, so it works beside its station instead of climbing onto
+it. All villagers leave farmland intact when landing on it from a fall, while
+normal fall damage still applies. Farmers and fishermen choose a reachable spot
+beside their station for workstation visits. The villagers suite checks paths around both
+composters and barrels plus a direct falling-villager farmland landing.
+Validation: assemble and villagers client suite passed after the station approach
+change (build/villager-stations-final.log).
+Farmers and fishermen now use a dedicated server-side WORK behavior. Farmers
+search eight blocks horizontally and three vertically, using bone meal on
+reachable immature crops before harvesting. They spend their available supply
+across crops, then harvest and replant the whole ripe batch before fertilizing
+again. If all reachable crops are already mature, harvesting starts even with
+bone meal left, avoiding a stalled workday. Batch-order regression and the full
+villagers suite passed with assemble (build/villager-batch-test.log). Successful field
+actions are at least one second apart. Bone meal is displayed in hand before use
+and consumed from the real inventory. Normal mob_griefing rules apply to farming
+and composting. Workstation visits preserve vanilla bread crafting, trade
+restocking and composting. They continue after the vanilla 20-seed batch until
+the composter is ready or no surplus plantable seeds remain. Ten of each seed
+are reserved for planting. Ready compost goes into the inventory;
+overflow drops normally. Visits are attempted every 600 ticks during work.
+Village STRUCTURE spawns get 15 bone meal once when they become farmers.
+Pending supplies survive saving, including villagers initially without a job;
+loading, changing professions, breeding and command spawns never refill them.
+
+Fishermen search within 16 horizontal blocks and -4/+3 vertical blocks for a
+reachable dry bank beside connected source water with no flow. Falling/flowing
+water and waterlogged blocks are excluded. They hold a rod, face the water,
+cast toward the water body's interior, emit ripples/splashes, and catch one
+item every randomized 200-300 ticks (10-15 seconds). Each catch rolls the same
+fishing loot table and open-water eligibility check used by players, regardless
+of the villager's trade offers.
+It is shown on the returning hook, then disappears; no item is stored, picked
+up, or dropped. A full villager inventory does not limit fishing. The hook is a
+villager-owned entity, and its catch cooldown remains separate from the
+player's fishing minigame logic. Fishermen return to their barrel periodically
+to restock trades.
+
+Both behaviors stop for trading, schedule changes, panic and loss of profession
+or job. Temporary held tools are restored on stop. Searches inspect loaded
+chunks only, pathfinding is capped at 24 attempts per candidate group, and failed targets
+are skipped temporarily so blocked nearby targets do not starve farther ones.
+Implementation: villager/ProfessionWork and VillagerWork/Supplies/Composter mixins.
+Focused validation: gradlew assemble runClientGameTest -PclientTests=villagers.
+The suite checks live farming/fishing, compost collection, save/load supplies,
+profession cycling, source/falling water, catch pools, trading, mob_griefing and
+end-of-work tool cleanup. Logs: build/villager-build.log, build/villager-test.log.
+Validation: assemble and the expanded villagers suite passed. The Java audit
+has no diagnostics in the new villager files; 28 existing warnings elsewhere
+remain (build/villager-audit.log and build/java-audit/diagnostics.log).
+
+SNOW MESH AND PLACEMENT OPTIMIZATION (2026-10-03)
+SurfaceSnowModel now rejects fully hidden fitted-box faces before allocating
+their vertices. SnowFaceVisibility subtracts conservative occlusion from a thin
+outward face probe, including internal box joins, opaque support/neighbors and
+adjacent fitted snow saved at the owner's height. Partially covered faces remain
+intact. Tests cover displaced slab snow, transparent neighbors, unequal heights,
+internal steps and actual emitted faces. Animated leaf caps retain all faces;
+neighboring leaf snow is never treated as a static occluder.
+Occluder queries are reused only within one model emission. SnowOverlayModel
+similarly builds snow blockers once and shares translated cell/column blockers
+between its texel-strip visibility checks. The non-foliage row grid is inserted
+once instead of repeating it for every horizontal texel. UVs and clipping rules
+are unchanged; caches do not survive world changes, resource reloads or meshing.
+SnowStateMixin resolves the 7/8-layer geometry limit only for eight-layer states,
+allocates a movable snow-column list only when needed, and checks for snow above
+before evaluating removed-block geometry. SnowPlacementMixin checks layer count
+before resolving its support limit. Placement/stacking rules remain unchanged.
+Validation: assemble and snow-compat,snow passed with Indigo; snow-compat passed
+with Sodium. Logs: build/snow-optimization-test.log and
+build/snow-optimization-sodium-compat.log. The full snow suite directly constructs
+an Indigo-only renderer and cannot run under Sodium; its attempted run is in
+build/snow-optimization-sodium-test.log. Java audit reports no diagnostics in
+changed production snow files, with 28 warnings elsewhere at validation time
+(build/snow-optimization-audit.log). Frame-time improvements are not benchmarked.
+
+VINE ANCHORS ON MOVING LEAVES (2026-10-03)
+Leaf-attached vine top vertices use marker 232 and sample the supporting leaf's
+block-edge wind offset, preserving the inset vine plane. Sheltered leaf supports
+and solid supports retain a fixed anchor. Directional vine restrictions now
+check real sturdy neighboring blocks, excluding leaves and air; inherited face
+flags no longer prevent hanging vines from swaying freely. Shared-edge masks
+still preserve joins next to walls. The wind-compat fixture covers a leaf-supported
+hanging strand as well as the fixed wall anchor.
+
+WEATHER PARTICLE SHARED QUERIES (2026-10-03)
+Rain and snow cards share a lazily captured weather/camera/radius snapshot during
+ParticleEngine.tick, scoped by WeatherParticleEngineMixin with finally cleanup.
+WeatherParticleContext reuses exact-position precipitation and water-tint queries
+and X/Z ground-height queries. Each map is capped at 8192 entries and cleared at
+the end of the pass; spawning gets a separate scope. Queries outside a scope use
+live data, including manually ticked test particles. Missing chunks are never
+loaded. No cached level or snapshot survives the pass.
+Individual cards retain their original smoothing, snow flutter, speed, lifetime,
+fades, orientation and textures. Particle density and spawn budgets are unchanged.
+Distance calculation no longer allocates a temporary vector, and the shared
+particle-limit Optional is reused. Waterfall behavior is unchanged.
+Validation: assemble and particle-weather client suite passed, including shared
+query equivalence, state invalidation, absent chunks, both transparency modes,
+resource reload, roofs, biomes and dimension changes. Log:
+build/weather-particle-optimization-test.log. The existing texture assertion now
+accounts for all six regular/heavy rain sprites (snow still has three).
+Java audit: 25 existing warnings elsewhere; build/weather-particle-audit.log.
+No before/after frame-time or allocation benchmark has been recorded yet.
+
+ATTACHED VINE TOP EDGE (2026-10-03)
+The first block of an attached vine strand pins its upper edge with wind marker
+101. A ceiling attachment or a supported horizontal face qualifies; vines below
+another vine retain ordinary wind displacement at their shared joins. Sideways
+support constraints still prevent movement into the supporting wall.
+
+PROGRESSIVE SUGAR CANE WIND (2026-10-03)
+Cane vertices encode height above the stalk root in wind markers 0-63.
+All segments sample the same horizontal wind phase, with displacement scaled
+by height squared divided by height plus two. The base stays pinned, the first
+segment bends gently, and every subsequent segment adds bend with matching
+displacement at shared joints. Cane uses the lower leaf wind strength rather
+than the grass strength. The wind-compat suite checks connected stalk heights.
+
+CROP WIND ROOT CORRECTION (2026-10-03)
+Crop wind markers 120-127 encode the vertex's cell offsets. The shared shader
+reconstructs one root at crop-block Y minus 1/16, matching the farmland surface.
+Previously marker 118 independently floored each vertex and added 15/16;
+both the bottom and top of the crop then had zero bend weight. Crops now keep
+their bottom pinned while their upper vertices move. The wind-compat test
+checks emitted crop geometry for a shared root and nonzero tip bend weight.
+Validation: Java 25 assemble and runClientGameTest -PclientTests=wind-compat
+passed, including both transparency modes.
+
+DYNAMIC BLOCK BREAKING TEXTURES (2026-10-03)
+Breaking overlays now generate 32 position-stable variants from the loaded
+vanilla/resource-pack damage textures. Rotations, reflections and gentle bends
+of concentric pixel rings retain every original pixel, alpha value and coverage.
+The central origin stays in the middle; half-tile offsets have been removed.
+Variation changes the outward branch paths while preserving each pixel's square
+ring distance from the center, including the central 2x2 area.
+The same mapping applies across all ten stages, so cracks grow coherently
+without reshuffling each frame. This is variation of the original crack art,
+not continuously moving cracks or a change to mining speed.
+Classic and improved-transparency sprites remain separate. Ordinary models,
+Fabric mesh submissions and block entities use the same position selection.
+BreakingMeshMixin captures the texture when Fabric creates its deferred mesh
+submission; wrapping only vanilla SubmitNodeCollection misses that path.
+Textures are generated lazily, cached in a bounded 32 x 10 x 2 pool, and released
+on atlas reload/shutdown. Non-square or unavailable source images use vanilla.
+Implementation: client/breaking/BreakingTextures and the three Breaking mixins.
+Focused test: gradlew runClientGameTest -PclientTests=breaking. Checks all-stage
+palette/alpha/coverage preservation, pattern variety, actual per-position render
+selection on stone/glass/chests, both transparency modes and resource reload.
+Validation logs: build/breaking-test.log and build/breaking-sodium-test.log.
+Assemble and the focused suite passed with both Indigo and Sodium. Java audit:
+no diagnostics in the new breaking classes; 25 existing warnings elsewhere
+are recorded in build/breaking-audit.xml. In-game screenshots were inspected.
+Centered-branch refinement: assemble and breaking suite passed in
+build/breaking-centered-test.log, including per-ring preservation for all stages
+and variants. The rendering hooks are unchanged from the Sodium-tested version.
+
+DYNAMIC LIGHT SOURCE CONTINUITY (2026-10-02)
+Entity emitters now use collision shapes, including leaves, glass and partial
+blocks. Hand positions are swept from a safe owner anchor and stopped 1/64 block
+outside the first hit surface; embedded body/item sources seek a nearby exposed
+face. This fixes the leaf-wall case where a non-opaque block trapped every
+fractional seed ray. Empty portions of slab cells remain usable.
+The propagated client field now supplies integer block-light queries as well as
+fractional render samples. It works in air sections without vanilla light storage
+and treats space beyond terrain build height as air in loaded chunk columns.
+Both precision modes retain occlusion; no server light or chunk loading is added.
+Local drop prediction retains a temporary source until the matching new item
+arrives, bounded to 20 ticks if a drop is rejected or its packets never arrive.
+Source membership/brightness changes bypass the movement update interval, so
+spawned items replace the bridge immediately. Unequipping is not treated as a
+drop; disabled options and world changes clear pending handoffs.
+Validation: assemble and dynamic-lighting client suite passed in
+build/dynamic-lighting-regression.log, covering the actual leaf-wall loss of all
+raw seeds in both hands, collision placement, Y=240/319/340/512 in both modes,
+the real local drop hook before server packets, handoff and expiry, wall occlusion
+and server isolation. Java audit: no warnings in changed files; 23 existing
+warnings elsewhere are recorded in build/dynamic-lighting-audit.log.
+
 UNDERWATER AUDIO (2026-10-02)
 All playing sound categories, including music, UI and streamed sources, receive
 a listener-depth low-pass. Smoothstep starts at 1 block beneath the surface and
@@ -341,7 +819,8 @@ face-occlusion rules. DynamicLightCoordsMixin preserves the fractional values in
 rendered lightmap coordinates, including AO blending. The existing 16x16 surface
 pixel grid and configured brightness bands still apply. Turning the option OFF
 restores the original block-snapped mode. This is not skeletal hand tracking or
-per-frame interpolation; the chosen update interval still controls sampling.
+per-frame interpolation; the chosen update interval controls movement refreshes.
+Source membership and brightness are checked each tick for immediate handoffs.
 Torches, lanterns and luminous
 block items use their default block emission. Lava buckets, glow berries, blaze
 rods/powder and glowstone dust/ink sacs also emit. Entity levels are listed in
@@ -365,8 +844,11 @@ needed. No blocks are placed, server
 lighting is untouched, and gameplay/spawning does not change. State is replaced
 atomically; old source cells are checked when sources move, disappear or are
 disabled. Dimension changes clear the snapshot. Client-only lights are never
-written to the server world. Hand positions inside an opaque wall fall back to
-the owner's eye position to prevent emitting through the wall.
+written to the server world. LightSourcePlacement sweeps hand emitters against
+collision shapes and pushes embedded body sources toward a nearby exposed face.
+DynamicLightStorageMixin overlays the client field on light queries even where
+vanilla has no section storage. DynamicLightDropMixin bridges local throws while
+the server's dropped-item spawn is pending (bounded to 20 ticks).
 
 Validation: gradlew assemble runClientGameTest -PclientTests=dynamic-lighting.
 The focused suite covers menu resets, both hands, movement cleanup, wall blocking,
@@ -2320,6 +2802,15 @@ snow vertices above the block or across section boundaries to reconstruct the
 same phase. The terrain shader restores opaque alpha and retains the existing
 pixel-stepped displacement. Both vanilla and Indigo tessellation tag leaves;
 snow caps carry their support anchor explicitly. Water occupancy takes priority.
+Snow caps now use the supporting leaf's wind exposure result and ignore their
+height in the leaf wind phase, so caps and side coatings stay aligned with the
+leaf even when the snow vertices sit above its surface or under partial canopy.
+Leaf-side snow overlays now receive the same explicit exposure-aware wind tags
+as the leaf mesh, including model offsets; their small face-normal depth bias
+is retained so the coating stays in front of the leaf. Since the masked overlay
+has more vertices than the source leaf quad, its shader displacement now
+interpolates the source face's four corner wind offsets instead of sampling a
+different pixel-stepped field at each overlay subdivision.
 Ground snow under plants stays still. Foliage gets snow_overlay directly on its
 existing vertical cutout quads whenever fitted snow covers its column. The
 source sprite alpha clips the overlay and its vertices receive the usual plant
@@ -3494,8 +3985,8 @@ absorption, floor shimmer, refraction and model rims work in both transparency
 modes without changing Sodium settings. The bridge does not bundle Sodium.
 Its source API was checked against:
 https://github.com/CaffeineMC/sodium/tree/mc26.3-0.9.3-alpha.1
-Water and foliage wind are supported; other terrain features, such as
-procedural fire, may still need Sodium compatibility work.
+Water, animated fire and foliage wind are supported. Other rendering features
+and shader-pack combinations may still need Sodium compatibility work.
 
 Unknown renderers without the vanilla TerrainUniform still skip the extra mask
 pass safely. Both mask/depth views are invalidated to prevent stale-frame reads.
@@ -3553,7 +4044,7 @@ At the strongest gusts, the broad sway center also shifts halfway downwind,
 while retaining its limiter against backward movement. The client game-test
 snapshot now covers foliage shelter beneath a roof despite skylight readings.
 HEAVY RAIN FOG AND PARTICLE VARIANTS (2026-10-02)
-Rain fog fades in above rain 90. At rain 100 outdoors, its environmental band
+Rain fog eases in from rain 80 to 100, reaching half strength at 90. At rain 100 outdoors, its environmental band
 runs from 12 to 15 blocks. Indoors, the fog remains faint and is deferred toward
 100 blocks to preserve nearby room visuals. Heavy rain cards are selected with
 increasing probability by both rain strength and distance into the fog, using
@@ -3572,3 +4063,135 @@ The fast high-wind overlay now has larger irregular forward and crosswind
 motion. It is added after the main bend's downwind limiter, so the sustained
 base pose stays stretched while the shake can swing in any direction.
 Crosswind amplitude is reduced relative to the main wind direction.
+The strong-wind overlay's forward and crosswind amplitudes are each halved.
+LEAF EDGE SEAMS AND CROP WIND ROOTS (2026-10-02)
+Adjacent leaf vertices sample the same quantized world-space wind field to
+close animated gaps without changing leaf geometry. Crop wind tags use a
+dedicated root marker at farmland height (15/16 block), so skewing starts at
+the visible sprite base rather than the block bottom.
+FRAME-SMOOTH CLIENT WEATHER VISUALS (2026-10-03)
+Sparse per-world weather packets now blend client visual sliders over 0.5 seconds
+with smoothstep interpolation. Vanilla rain/thunder visual getters and heavy-rain
+fog use that render state, avoiding packet-rate stepping in sky darkening and fog;
+server-authoritative weather values remain unchanged for gameplay.
+LEAF WIND OVERLAP CORRECTION (2026-10-03)
+Removed outward seam expansion after it caused neighboring leaf cubes to
+overlap and z-fight at strong wind. Leaves and snow-on-leaf now use the same
+world-space vertex phase across block boundaries, preserving alignment without
+growing the foliage geometry.
+
+SODIUM ANIMATED FIRE (2026-10-02)
+Fire model vertex RGB contains animation seeds, not visible tint. The Sodium
+terrain shader now recognizes all four normal/soul fire sprites, decodes local
+UVs and passes those seeds to the shared procedural fire shader. It clears the
+seed tint and excludes fire from wind tagging, matching the vanilla path.
+Sodium binds the fire palette plus the existing fire uniform. Its animation
+clock is stored in NaturalityFireInfo.z, avoiding an extra heat-texture sampler
+and keeping the OIT pipeline within the backend texture-unit limit. Entity fire
+continues using the heat texture for its frame silhouette metadata.
+SurfaceFireGameTest includes an improved-transparency terrain fire view as well
+as animated normal/soul fire, fitted surfaces, entity fire and resource reload.
+Test with -PclientTests=fire,water,wind-compat and optionally
+-PsodiumTestJar=path/to/sodium.jar (Sodium 0.9.3-alpha.1 for Minecraft 26.3).
+
+SODIUM LEAF WIND AT SECTION EDGES (2026-10-02)
+Wind exposure probes reach eight blocks beyond foliage. Sodium normally unpacks
+only a two-block neighbor border and returns zero skylight outside that volume,
+which falsely shelters leaves near section edges. SodiumWindSnapshotMixin expands
+the copied volume to eight blocks within Sodium's existing 3x3x3 section clones;
+meshing continues to use immutable snapshots, without live-world worker queries.
+FoliageWindModel clears exposure results for each model emission so reused render
+views cannot retain an old roof/exposure result across rebuilds. Per-vertex
+queries within that emission still share the cache.
+wind-compat now tests actual Sodium snapshots at snowy spruce section boundaries
+and checks a reused view changing from roofed to open and back. Run with
+-PclientTests=wind-compat,snow-compat, optionally adding -PsodiumTestJar=... .
+
+WIND-DISPLACED HITBOXES (2026-10-03)
+Leaves, vines and snow resting on leaves translate their outline/gameplay shapes
+without stretching. WindShapes samples the broad sway at the block center and
+smoothly removes oscillation from wind 80 to 100; at 100 only the sustained
+base displacement remains. Fast visual shake never moves gameplay shapes.
+Snow uses its supporting leaf's offset. Vine anchors and solid-wall constraints
+are respected; sheltered and waterlogged foliage remains stationary.
+Client and server share weather-driven offsets and geometric shelter probes.
+Offsets are cached per level/tick/weather state. Render snapshots and raw snow
+support geometry retain original shapes to avoid applying wind twice.
+Collision scans and picking include neighboring cells, preserving the saved
+block owner for interactions. Vine climbing follows displaced surfaces, while
+stationary vines retain vanilla climbing behavior.
+Validation: assemble, wind-shapes, wind-compat and snow-compat client suites.
+Hitbox tests cover rigid bounds, snow alignment, sheltered leaves, neighboring
+cell collision/targeting, steady high-wind offsets and displaced vine climbing.
+Logs: build/wind-shapes-test.log and build/wind-shapes-regression.log.
+
+MOVING LEAF COLLISION RESPONSE (2026-10-03)
+WindPush resolves player overlaps with wind-shifted solid foliage before movement
+and during base ticks, including stationary players. It chooses the shortest safe
+escape from overlapping collision boxes, checking the destination and swept path
+against surrounding blocks. If no safe escape exists, movement is blocked until
+space opens rather than allowing traversal through the foliage. Spectators and
+no-physics entities are excluded; vines retain their empty physical collision.
+The same hooks run on client and server. wind-shapes tests simulate advancing
+leaf faces on both sides, inward walking, stationary contact and a nearby player
+without contact, alongside existing snow, targeting and climbing checks.
+Validation: assemble and wind-shapes; build/wind-push-test.log.
+
+BLOCK-GRID ENTITY CIRCLE SHADOWS (2026-10-03)
+BlockGridShadow resamples the loaded vanilla textures/misc/shadow.png into shared
+dynamic textures sized for each entity shadow radius. Each texel always occupies
+1/16 world block; radius advances in 1/16-block steps. ShadowPiece block
+origins anchor the raster grid, including negative coordinates and distant world
+positions. Larger entities receive larger textures rather than stretched pixels.
+Vanilla block eligibility, surface geometry, light/height opacity, distance fade
+and entity-shadow settings remain in use. A transparent one-texel border and
+footprint clipping prevent texture repetition beyond the circle. Textures use
+linear filtering at fixed cell centers and reset on resource reload and client shutdown; resource
+packs supply the source appearance. Failed source loading retains vanilla rendering.
+EntityShadowRenderMixin handles both classic and improved transparency through
+the existing shadow pipeline. Validation: assemble and entity-shadow client suite
+passed, covering size/density, source colors/alpha, negative/distant grid placement,
+adjacent-block continuity, texture caching and screenshots with four entity sizes
+in both transparency modes. Screenshots inspected. Log: build/entity-shadow-test.log.
+
+SMOOTH ENTITY SHADOW COVERAGE (2026-10-03)
+The generated vanilla shadow uses a small tent filter with bilinear source
+sampling and a two-texel border. Diagonal edges gain more faint corner pixels;
+premultiplied filtering preserves source tint around transparent pixels.
+The custom entity_shadow shaders rasterize onto the fixed world grid every frame,
+using subpixel block-origin phase carried in UV1. Each cell has a uniform sampled
+opacity that changes continuously as the interpolated entity center moves.
+The center no longer snaps. Textures remain shared by radius, without per-entity
+texture uploads or extra per-cell geometry. Classic and improved transparency
+retain vanilla shadow blending, depth handling and fog.
+Validation: assemble and entity-shadow passed; synthetic disk coverage/tint,
+negative/distant grid alignment, adjacent block phase, and five subpixel movement
+captures in each transparency mode. Ground-only screenshot comparisons changed
+at all four movement steps, with maximum red-channel changes of 4-5/255 per step.
+Focused production Java warning audit passed without diagnostics.
+Logs: build/entity-shadow-smooth-test.log and build/entity-shadow-smooth-audit.log.
+
+PLAYER INVENTORY PREVIEW OUTLINE DETAIL (2026-10-03)
+The player portrait outline now uses a 3-pixel raster cell and samples the mask at
+one-pixel spacing, giving four times the resolution of the 12-pixel first-person
+hand outline. Inventory item-slot contours and world-distance contours are unchanged.
+Validation: assemble and focused glint rendering suite passed; the suite includes
+an enchanted inventory player preview. Log: build/glint-preview-resolution.log.
+
+PERSISTENT AUTOMATIC WEATHER AND SKY EVENTS (2026-10-04)
+EnvironmentWorldData stores runtime snapshots in each world's saved data, keyed
+by dimension and event/aurora region. Existing override files remain unchanged.
+Weather snapshots retain all four current sliders, seasonal/direction clock,
+active rain/wind timers, easing values, initial boosts and random state. Meteor,
+rainbow and local aurora snapshots retain strength, targets, timers and random
+state. SavedRandom preserves Java Random's sequence across reloads.
+Snapshots update in memory after simulation ticks and participate in normal
+world saves/autosaves. SERVER_STARTED restores them before initial player sync;
+client session clearing still prevents data from another world leaking in.
+No offline time is simulated. New worlds retain rain/wind 0 and temperature 50;
+Nether/End weather defaults remain disabled. Existing worlds without runtime
+snapshots initialize normally and begin retaining their conditions thereafter.
+The environment-persistence suite reopens an actual save after visiting another
+world, verifies independent dimension weather and active sky-event state, and
+checks random continuation after cycle snapshot restoration.
+Validation: assemble and environment-persistence, sky-events, aurora, rainbow, weather-commands passed. Logs: build/environment-persistence.log and build/environment-regression.log.

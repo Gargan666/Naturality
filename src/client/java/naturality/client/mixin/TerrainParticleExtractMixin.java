@@ -59,20 +59,24 @@ public abstract class TerrainParticleExtractMixin extends Particle {
         float pixelQuadSize = Math.min(cellWidth, cellHeight) * 0.5F;
         int color = ARGB.colorFromFloat(alpha, rCol, gCol, bCol);
         int light = getLightCoords(partialTick);
+        int cropStartX = fragment.naturality$cropStartX();
+        int cropStartY = fragment.naturality$cropStartY();
+        var layer = getLayer();
+        var offset = new Vector3f();
 
         for (int row = 0; row < rows; row++) {
-            int sourceY = fragment.naturality$cropStartY() + rows - 1 - row;
+            int sourceY = cropStartY + rows - 1 - row;
+            float v0 = sprite.getV(sourceY / (float) height);
+            float v1 = sprite.getV((sourceY + 1.0F) / height);
             for (int column = 0; column < columns; column++) {
                 if (fragment.naturality$isPixelRemoved(column, row)) continue;
-                int sourceX = fragment.naturality$cropStartX() + column;
+                int sourceX = cropStartX + column;
                 float u0 = sprite.getU((sourceX + 1.0F) / width);
                 float u1 = sprite.getU(sourceX / (float) width);
-                float v0 = sprite.getV(sourceY / (float) height);
-                float v1 = sprite.getV((sourceY + 1.0F) / height);
                 float localX = -size + (column + 0.5F) * cellWidth;
                 float localY = -size + (row + 0.5F) * cellHeight;
-                Vector3f offset = rotation.transform(new Vector3f(localX, localY, 0));
-                state.add(getLayer(), centerX + offset.x, centerY + offset.y, centerZ + offset.z,
+                rotation.transform(offset.set(localX, localY, 0));
+                state.add(layer, centerX + offset.x, centerY + offset.y, centerZ + offset.z,
                     rotation.x, rotation.y, rotation.z, rotation.w, pixelQuadSize,
                     u0, u1, v0, v1, color, light);
             }

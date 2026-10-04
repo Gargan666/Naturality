@@ -15,14 +15,20 @@ public abstract class SnowStateMixin {
     private boolean naturality$snowChange(BlockPos pos, BlockState state, int flags, int limit, Operation<Boolean> original) {
         Level level = (Level)(Object)this;
         if (!naturality.config.GameplaySettings.snowWrapping(level)) return original.call(pos, state, flags, limit);
+        // Every support allows at least seven layers; only an eighth needs geometry resolution.
+        if (state.is(Blocks.SNOW) && state.getValue(net.minecraft.world.level.block.SnowLayerBlock.LAYERS)==8) {
+            int maximum=SnowGeometry.maxLayers(level,pos);
+            if(maximum<8) state=state.setValue(net.minecraft.world.level.block.SnowLayerBlock.LAYERS,maximum);
+        }
         boolean wasSnow = level.getBlockState(pos).is(Blocks.SNOW);
         // Move the saved snow before neighbor updates can destroy it as unsupported.
         // Keep the layer count (including overflow blocks), rather than dropping
         // snow items and trying to reconstruct the coating afterward.
-        var snowColumn = new java.util.ArrayList<BlockState>();
-        if (!level.isClientSide() && state.isAir() && SnowGeometry.exposesGround(level,pos)
-                && level.getBlockState(pos.above()).is(Blocks.SNOW)
+        java.util.List<BlockState> snowColumn = java.util.List.of();
+        if (!level.isClientSide() && state.isAir() && level.getBlockState(pos.above()).is(Blocks.SNOW)
+                && SnowGeometry.exposesGround(level,pos)
                 && level.getBlockState(pos.above()).canSurvive(level,pos)) {
+            snowColumn = new java.util.ArrayList<>();
             for (int i=1;i<=SnowGeometry.MAX_DEPTH;i++) {
                 var snow=level.getBlockState(pos.above(i));
                 if(!snow.is(Blocks.SNOW))break;

@@ -16,19 +16,22 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.phys.Vec3;
 
-/** Client-only virtual emitters. Vanilla propagation supplies occlusion and mesh updates. */
+/** Client-only virtual emitters with an occluded field and a vanilla-light underlay. */
 public final class DynamicLighting {
     private record State(@org.jspecify.annotations.Nullable Object engine, Map<Long, Integer> emitters,
-            it.unimi.dsi.fastutil.longs.Long2IntMap smooth, int sourceCount) {}
-    private record Source(Vec3 position, int light, double distance) {}
+            it.unimi.dsi.fastutil.longs.Long2IntMap field, boolean precise, int sourceCount) {}
+    private record Source(long id, Vec3 position, int light, double distance) {}
+    private record Drop(long id, Vec3 position, ItemStack item, Set<Integer> existingItems, int expires) {}
     private static volatile State state = emptyState();
     private static @org.jspecify.annotations.Nullable ClientLevel level;
     private static int ticks;
     private static boolean dirty = true;
     private static boolean lastSubBlock;
     private static List<Source> previousSources = List.of();
+    private static final List<Drop> pendingDrops = new ArrayList<>();
+    private static long nextDropId = Long.MIN_VALUE;
 
-    private static State emptyState() { return new State(null, Map.of(), it.unimi.dsi.fastutil.longs.Long2IntMaps.EMPTY_MAP, 0); }
+    private static State emptyState() { return new State(null, Map.of(), it.unimi.dsi.fastutil.longs.Long2IntMaps.EMPTY_MAP, false, 0); }
 
     private DynamicLighting() {}
 
@@ -42,7 +45,28 @@ public final class DynamicLighting {
 
     public static int smoothLight(Object engine, long position) {
         State current = state;
-        return current.engine == engine ? current.smooth.get(position) : 0;
+        return current.engine == engine && current.precise ? current.field.get(position) : 0;
+    }
+
+    public static int blockLight(Object engine, long position) {
+        State current = state;
+        return current.engine == engine ? current.field.get(position) / 16 : 0;
+    }
+
+    /** Called before the local inventory prediction removes a thrown item. */
+    public static void beginDrop(LivingEntity owner, ItemStack item) {
+        var config = NaturalityConfig.get().dynamicLighting;
+        var level = DynamicLighting.level;
+        if (level == null || owner.level() != level || !config.enabled || !config.heldItems
+                || !config.droppedItems || itemLight(item) == 0) return;
+        Vec3 position = LightSourcePlacement.resolve(level, handPosition(owner, true), owner.getEyePosition());
+        if (position == null) return;
+        var existing = new HashSet<Integer>();
+        for (Entity entity : level.entitiesForRendering()) if (entity instanceof ItemEntity) existing.add(entity.getId());
+        // Allow one second for the spawn/metadata packets. Only an actual drop
+        // gets this bridge; unequipping a light still extinguishes it immediately.
+        pendingDrops.add(new Drop(nextDropId++, position, item.copy(), existing, ticks + 20));
+        dirty = true;
     }
 
     public static void tick(Minecraft client) {
@@ -52,25 +76,29 @@ public final class DynamicLighting {
             ticks = 0;
             dirty = true;
             previousSources = List.of();
+            pendingDrops.clear();
         }
         var level = DynamicLighting.level;
         if (level == null) return;
         var config = NaturalityConfig.get().dynamicLighting;
         if (!config.enabled) {
-            if (!state.emitters.isEmpty() || !state.smooth.isEmpty()) publish(Map.of(), it.unimi.dsi.fastutil.longs.Long2IntMaps.EMPTY_MAP, 0);
+            if (!state.emitters.isEmpty() || !state.field.isEmpty()) publish(Map.of(), it.unimi.dsi.fastutil.longs.Long2IntMaps.EMPTY_MAP, false, 0);
             previousSources = List.of();
+            pendingDrops.clear();
             ticks = 0;
             return;
         }
-        if (ticks++ % Math.clamp(config.updateTicks, 1, 20) != 0) return;
+        boolean scheduled = ticks++ % Math.clamp(config.updateTicks, 1, 20) == 0;
         var camera = client.gameRenderer.mainCamera().position();
         var sources = new ArrayList<Source>();
         double range = Math.clamp(config.sourceRange, 16, 128);
+        if (!config.heldItems || !config.droppedItems) pendingDrops.clear();
+        pendingDrops.removeIf(drop -> ticks >= drop.expires);
         for (Entity entity : level.entitiesForRendering()) {
             if (entity.isRemoved() || entity.isSpectator() || entity.position().distanceToSqr(camera) > range * range) continue;
             if (config.heldItems && entity instanceof LivingEntity living) {
-                add(sources, living, handPosition(living, true), itemLight(living.getMainHandItem()), camera, config);
-                add(sources, living, handPosition(living, false), itemLight(living.getOffhandItem()), camera, config);
+                add(sources, (long)entity.getId() * 4, handPosition(living, true), living.getEyePosition(), itemLight(living.getMainHandItem()), camera, config);
+                add(sources, (long)entity.getId() * 4 + 1, handPosition(living, false), living.getEyePosition(), itemLight(living.getOffhandItem()), camera, config);
             }
             int bodyLight = config.emissiveMobs
                 ? config.entityLightLevels.getOrDefault(BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString(), 0) : 0;
@@ -78,12 +106,37 @@ public final class DynamicLighting {
             if (config.emissiveMobs && entity instanceof net.minecraft.world.entity.monster.Creeper creeper && creeper.isPowered())
                 bodyLight = config.entityLightLevels.getOrDefault("minecraft:creeper", 15);
             if (config.burningEntities && entity.isOnFire()) bodyLight = Math.max(bodyLight, 15);
-            if (config.droppedItems && entity instanceof ItemEntity item) bodyLight = Math.max(bodyLight, itemLight(item.getItem()));
-            add(sources, entity, entity.position().add(0, entity.getBbHeight() * 0.5, 0), bodyLight, camera, config);
+            if (config.droppedItems && entity instanceof ItemEntity item) {
+                bodyLight = Math.max(bodyLight, itemLight(item.getItem()));
+                for (var iterator = pendingDrops.iterator(); iterator.hasNext();) {
+                    Drop drop = iterator.next();
+                    if (!drop.existingItems.contains(item.getId()) && drop.position.distanceToSqr(item.position()) < 16
+                            && ItemStack.isSameItemSameComponents(drop.item, item.getItem())) {
+                        iterator.remove();
+                        break;
+                    }
+                }
+            }
+            Vec3 body = entity.position().add(0, entity.getBbHeight() * 0.5, 0);
+            add(sources, (long)entity.getId() * 4 + 2, body, body, bodyLight, camera, config);
         }
+        for (Drop drop : pendingDrops) if (drop.position.distanceToSqr(camera) <= range * range)
+            add(sources, drop.id, drop.position, drop.position, itemLight(drop.item), camera, config);
         sources.sort(Comparator.comparingDouble(Source::distance));
         if (sources.size() > Math.clamp(config.maxSources, 8, 128))
             sources.subList(Math.clamp(config.maxSources, 8, 128), sources.size()).clear();
+        // Membership/brightness changes bypass the movement cadence so the first
+        // dropped-item tick replaces the held/bridging light in one publication.
+        boolean sameSources = sources.size() == previousSources.size();
+        if (sameSources) {
+            var identities = new HashMap<Long, Integer>();
+            for (Source source : previousSources) identities.put(source.id, source.light);
+            for (Source source : sources) if (!Objects.equals(identities.get(source.id), source.light)) {
+                sameSources = false;
+                break;
+            }
+        }
+        if (!scheduled && sameSources && !dirty && lastSubBlock == config.subBlockPrecision) return;
         // Distance is only a sorting key; camera movement must not rebuild a fixed field.
         boolean unchanged = sources.size() == previousSources.size();
         for (int i = 0; unchanged && i < sources.size(); i++) {
@@ -91,6 +144,7 @@ public final class DynamicLighting {
             unchanged = a.position.equals(b.position) && a.light == b.light;
         }
         if (unchanged && !dirty && lastSubBlock == config.subBlockPrecision && ticks % 20 != 1) {
+            previousSources = List.copyOf(sources);
             // Server lighting packets can overwrite the integral underlay.
             for (long key : state.emitters.keySet()) level.getLightEngine().checkBlock(BlockPos.of(key));
             return;
@@ -99,37 +153,24 @@ public final class DynamicLighting {
         lastSubBlock = config.subBlockPrecision;
         dirty = false;
         var next = new HashMap<Long, Integer>();
-        if (config.subBlockPrecision) {
-            var field = new FractionalLightField(level);
-            for (Source source : sources) field.add(source.position, source.light);
-            for (var entry : field.seeds().long2IntEntrySet())
-                if (entry.getIntValue() >= 16) next.put(entry.getLongKey(), entry.getIntValue() / 16);
-            publish(next, field.propagate(), sources.size());
-            return;
-        }
+        var field = new FractionalLightField(level);
         for (Source source : sources) {
-            long key = BlockPos.containing(source.position).asLong();
-            if (next.size() >= Math.clamp(config.maxSources, 8, 128) && !next.containsKey(key)) continue;
-            next.merge(key, source.light, Math::max);
+            if (config.subBlockPrecision) field.add(source.position, source.light);
+            else field.addBlock(BlockPos.containing(source.position), source.light);
         }
-        publish(next, it.unimi.dsi.fastutil.longs.Long2IntMaps.EMPTY_MAP, sources.size());
+        for (var entry : field.seeds().long2IntEntrySet())
+            if (entry.getIntValue() >= 16) next.put(entry.getLongKey(), entry.getIntValue() / 16);
+        publish(next, field.propagate(), config.subBlockPrecision, sources.size());
     }
 
-    private static void add(List<Source> sources, Entity entity, Vec3 position, int light,
+    private static void add(List<Source> sources, long id, Vec3 position, Vec3 owner, int light,
             Vec3 camera, NaturalityConfig.DynamicLighting config) {
         var level = DynamicLighting.level;
         if (level == null) return;
         light = Math.clamp((int)Math.round(light * Math.clamp(config.brightnessPercent, 25, 200) / 100.0), 0, 15);
         if (light == 0) return;
-        BlockPos block = BlockPos.containing(position);
-        // A hand can clip a wall. Move its emitter back to the owner instead of
-        // emitting inside the wall and leaking light through it.
-        if (level.getBlockState(block).getLightDampening() >= 15) {
-            position = entity.getEyePosition();
-            block = BlockPos.containing(position);
-        }
-        if (!naturality.util.LoadedChunks.has(level, block) || level.getBlockState(block).getLightDampening() >= 15) return;
-        sources.add(new Source(position, light, position.distanceToSqr(camera)));
+        Vec3 placed = LightSourcePlacement.resolve(level, position, owner);
+        if (placed != null) sources.add(new Source(id, placed, light, placed.distanceToSqr(camera)));
     }
 
     public static Vec3 handPosition(LivingEntity entity, boolean mainHand) {
@@ -150,13 +191,13 @@ public final class DynamicLighting {
         return 0;
     }
 
-    private static void publish(Map<Long, Integer> next, it.unimi.dsi.fastutil.longs.Long2IntMap smooth, int count) {
+    private static void publish(Map<Long, Integer> next, it.unimi.dsi.fastutil.longs.Long2IntMap smooth, boolean precise, int count) {
         var level = DynamicLighting.level;
         if (level == null) return;
         var engine = level.getLightEngine();
         var previous = state.emitters;
-        var oldSmooth = state.smooth;
-        state = new State(engine.getLayerListener(LightLayer.BLOCK), Map.copyOf(next), smooth, count);
+        var oldSmooth = state.field;
+        state = new State(engine.getLayerListener(LightLayer.BLOCK), Map.copyOf(next), smooth, precise, count);
         // Fractional changes can leave integral light unchanged; explicitly rebuild
         // affected sections, including neighbors whose AO samples cross a border.
         var sections = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();

@@ -33,12 +33,14 @@ void main() {
     ivec2 pixel = ivec2(gl_FragCoord.xy);
     if (texelFetch(Sampler0, pixel, 0).a > 0.0) discard;
 
-    // GUI portraits and first-person hands retain their fixed 12-pixel raster.
-    // Only world items and armor become finer with distance.
-    ivec2 coarseCell = (pixel / 12) * 12 + ivec2(6);
+    // Player previews use 3-pixel cells (four times the 12-pixel hand raster).
+    // First-person hands remain fixed; world items and armor vary by distance.
+    int initialCellSize = ColorModulator.x > 0.0 ? 3 : 12;
+    int initialSampleStep = ColorModulator.x > 0.0 ? 1 : 4;
+    ivec2 coarseCell = (pixel / initialCellSize) * initialCellSize + ivec2(initialCellSize / 2);
     vec4 nearest;
     int distanceToShape;
-    findNearest(coarseCell, size, 4, nearest, distanceToShape);
+    findNearest(coarseCell, size, initialSampleStep, nearest, distanceToShape);
     if (nearest.a <= 0.0) discard;
 
     if (ColorModulator.x <= 0.0 && ColorModulator.y <= 0.0) {
@@ -67,6 +69,8 @@ void main() {
         fragColor = vec4(nearest.rgb * nearest.rgb * pulse, GlintAlpha * GlintAlpha * pulse);
     else fragColor = vec4(nearest.rgb * sqrt(pulse), 1.0);
 }
+
+
 
 
 

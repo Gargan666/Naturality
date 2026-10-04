@@ -5,6 +5,7 @@
 #include <sodium:globals.glsl>
 #include <sodium:chunk_vertex.glsl>
 #include <naturality:fluid_uniforms.glsl>
+#include <naturality:fire_uniforms.glsl>
 #include <naturality:water.glsl>
 #include <naturality:foliage_wind.glsl>
 
@@ -76,11 +77,20 @@ void main() {
     }
     naturalityFireKind=-1;
     naturalityFireUV=vec2(0.0);
-    naturalityFireSeed=vec3(0.0);
+    naturalityFireSeed=_vert_color.rgb;
+    for(int i=0;i<4;i++) {
+        vec4 b=NaturalityFireBounds[i];
+        if(b.x>=0.0 && all(greaterThanEqual(texCoord0,b.xy)) && all(lessThanEqual(texCoord0,b.zw))) {
+            naturalityFireKind=i;
+            naturalityFireUV=(texCoord0-b.xy)/(b.zw-b.xy);
+            naturalityShade=vec4(1.0);
+        }
+    }
     naturalitySubmerged=0;
-    int windTag=fluidSprite?255:int(round(_vert_color.a*255.0));
+    int windTag=(fluidSprite || naturalityFireKind>=0)?255:int(round(_vert_color.a*255.0));
     position.xz+=naturality_wind_offset(_vert_position,naturalitySectionOrigin,windTag);
     gl_Position=u_ProjectionMatrix*u_ModelViewMatrix*vec4(position,1.0);
-    if(windTag==192 || (windTag>=128 && windTag<=159))
+    bool anchoredCrop=windTag>=120 && windTag<=127;
+    if(windTag==192 || (windTag>=128 && windTag<=159 && !anchoredCrop))
         gl_Position.z+=gl_Position.w*0.000001;
 }

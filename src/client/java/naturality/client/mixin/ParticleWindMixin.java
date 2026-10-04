@@ -26,19 +26,27 @@ public abstract class ParticleWindMixin implements WindParticleControl.Access {
 
     @Override public void naturality$applyWind() {
         Particle self = (Particle)(Object)this;
-        var pos = BlockPos.containing(x, y, z);
-        var cameraEntity = Minecraft.getInstance().getCameraEntity();
-        boolean sheltered = cameraEntity == null
-            || !naturality.client.weather.WeatherSoundEnvironment.hasOpenSkyAccess(level,
-                new Vec3(x, y, z), cameraEntity);
-        var fluid = level.getFluidState(pos);
-        boolean underwater = fluid.is(FluidTags.WATER)
-            && y < pos.getY() + fluid.getHeight(level, pos);
-        var state = WeatherSystem.state(level);
-        if (!naturality.config.NaturalityConfig.get().effects.particleWind || !self.isAlive() || sheltered || underwater || WindParticleControl.immune(self)
+        if (!naturality.config.NaturalityConfig.get().effects.particleWind || !self.isAlive()
                 || self instanceof WindParticleControl.LeafAccess leaf && leaf.naturality$isLandedLeaf()
                 || self instanceof WeatherClusterParticle || self instanceof PortalMoteParticle
-                || self instanceof PortalGlowParticle || state == null) {
+                || self instanceof PortalGlowParticle || WindParticleControl.immune(self)) {
+            naturality$windX = naturality$windZ = 0;
+            return;
+        }
+        var state = WeatherSystem.state(level);
+        if (state == null) {
+            naturality$windX = naturality$windZ = 0;
+            return;
+        }
+        var pos = BlockPos.containing(x, y, z);
+        var fluid = level.getFluidState(pos);
+        if (fluid.is(FluidTags.WATER) && y < pos.getY() + fluid.getHeight(level, pos)) {
+            naturality$windX = naturality$windZ = 0;
+            return;
+        }
+        var cameraEntity = Minecraft.getInstance().getCameraEntity();
+        if (cameraEntity == null || !naturality.client.weather.WeatherSoundEnvironment.hasOpenSkyAccess(level,
+                new Vec3(x, y, z), cameraEntity)) {
             naturality$windX = naturality$windZ = 0;
             return;
         }
