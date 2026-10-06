@@ -54,6 +54,14 @@ public final class EnvironmentPersistenceGameTest implements FabricClientGameTes
                         "value",state.get(channel),"boost",EnvironmentWorldData.bits(25)));
                     invoke(WeatherSystem.class,"restore",new Class<?>[]{ServerLevel.class},level);
                     index++;
+                    if(SkyEventType.pool(dimension).contains(SkyEventType.END_FLASHES)) {
+                        try {
+                            var method=SkyEvents.class.getDeclaredMethod("cycle",ServerLevel.class,SkyEventType.class);method.setAccessible(true);
+                            ((SkyEventCycle)method.invoke(null,level,SkyEventType.END_FLASHES)).restore(Map.of(
+                                "random",927123L,"active",1L,"remaining",2400L,"retarget",600L,
+                                "strength",EnvironmentWorldData.bits(5),"target",EnvironmentWorldData.bits(5)));
+                        } catch(ReflectiveOperationException e) { throw new AssertionError(e); }
+                    }
                     if(SkyEventType.pool(dimension).contains(SkyEventType.METEOR_SHOWER)) {
                         try {
                             var method=SkyEvents.class.getDeclaredMethod("cycle",ServerLevel.class,SkyEventType.class);method.setAccessible(true);
@@ -87,7 +95,17 @@ public final class EnvironmentPersistenceGameTest implements FabricClientGameTes
             reopened.getConnection().waitForClientboundPackets();context.waitTicks(5);
             reopened.getServer().runOnServer(server -> {
                 var data=EnvironmentWorldData.get(server);
-                expected.forEach((key,value) -> check(data.read(key).equals(value),"Runtime snapshot survives real world reopen: "+key));
+                expected.forEach((key,value) -> {
+                    var actual=data.read(key);
+                    if(key.equals("sky/minecraft:the_end/end_flashes")) {
+                        // This event keeps advancing while weather is disabled, including during loading.
+                        check(actual.get("random").equals(value.get("random")) && actual.get("active")==1L
+                            && actual.get("remaining")<=value.get("remaining")
+                            && actual.get("remaining")>value.get("remaining")-200
+                            && actual.get("strength").equals(value.get("strength")),
+                            "Active End flashes resume after real world reopen");
+                    } else check(actual.equals(value),"Runtime snapshot survives real world reopen: "+key);
+                });
                 for(var level:server.getAllLevels()) {
                     var state=WeatherSystem.state(level);
                     var saved=expected.get("weather/"+level.dimension().identifier());

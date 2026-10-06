@@ -6,7 +6,7 @@
             "type": "shell",
             "command": "./gradlew",
             "windows": { "command": ".\\gradlew.bat" },
-            "args": ["classes", "clientClasses", "gametestClasses", "--console=plain"],
+            "args": ["prepareDebugLaunch", "--console=plain"],
             "options": { "cwd": "${workspaceFolder}" },
             "problemMatcher": ["$javac"]
         },

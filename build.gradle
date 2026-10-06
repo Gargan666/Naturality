@@ -46,19 +46,44 @@ tasks.named('runClientGameTest') {
 	systemProperty 'naturality.test.muteAudio', 'true'
 	doFirst {
 		def selection = systemProperties['naturality.test.suites'].toString().split(',').collect { it.trim() }
-		def valid = ['wind-compat', 'snow-compat', 'chunks', 'aurora', 'rainbow', 'sky-events', 'sunset', 'glint', 'snow', 'rain-splash', 'particle-weather', 'weather-commands', 'weather', 'gameplay', 'config', 'fire', 'water', 'water-rain', 'waterfall', 'lava-effects', 'water-ripples', 'water-occlusion', 'short-distance', 'fluids', 'flame', 'leaves', 'smoke', 'clouds', 'fog', 'lighting', 'dynamic-lighting', 'portal', 'end-portal', 'audio', 'all']
+		def valid = ['wind-compat', 'snow-compat', 'chunks', 'aurora', 'rainbow', 'sky-events', 'end-flashes', 'sunset', 'glint', 'snow', 'rain-splash', 'particle-weather', 'weather-commands', 'weather', 'gameplay', 'config', 'fire', 'water', 'water-rain', 'waterfall', 'lava-effects', 'water-ripples', 'water-occlusion', 'short-distance', 'fluids', 'flame', 'leaves', 'smoke', 'clouds', 'fog', 'lighting', 'dynamic-lighting', 'portal', 'end-portal', 'audio', 'all']
 		valid.add('breaking')
 		valid.add('entity-shadow')
+		valid.add('snow-weather')
+		valid.add('snow-performance')
+		valid.add('fog-culling')
 		valid.add('particle-visibility')
 		valid.add('villagers')
 		valid.add('butcher')
         valid.add('villager-bread')
+        valid.add('villager-gates')
+        valid.add('villager-shelter')
+        valid.add('animal-care')
+        valid.add('reputation')
 		valid.add('crowd-panic')
 		valid.add('wind-shapes')
 		valid.add('fluid-tail')
 		valid.add('environment-persistence')
+		valid.add('snow-worldgen')
+		valid.add('lightning')
+		valid.add('client-startup')
+        valid.add('distortion')
+        valid.add('rise')
+        valid.add('starfall')
+        valid.add('end-weather')
+        valid.add('end-flight')
+        valid.add('end-movement')
+        valid.add('end-mob-ai')
+		valid.add('sky-state')
+        valid.add('mob-arrows')
+        valid.add('fireball-model')
+        valid.add('chorus-flowers')
+        valid.add('smooth-endstone')
+        valid.add('lirestone-worldgen')
+        valid.add('end-terrain')
+        valid.add('end-chunk-performance')
 		if (selection.any { !valid.contains(it) }) {
-			throw new GradleException('Choose relevant suites with -PclientTests=fog,lighting (available: wind-compat, snow-compat, chunks, aurora, rainbow, sky-events, sunset, glint, snow, rain-splash, particle-weather, weather-commands, weather, gameplay, config, fire, water, water-rain, waterfall, lava-effects, water-ripples, water-occlusion, short-distance, fluids, flame, leaves, smoke, clouds, fog, lighting, dynamic-lighting, portal, end-portal, audio; all explicitly runs everything).')
+			throw new GradleException('Choose relevant suites with -PclientTests=fog,lighting (available: wind-compat, snow-compat, chunks, aurora, rainbow, sky-events, end-flashes, sunset, glint, snow, rain-splash, particle-weather, weather-commands, weather, gameplay, config, fire, water, water-rain, waterfall, lava-effects, water-ripples, water-occlusion, short-distance, fluids, flame, leaves, smoke, clouds, fog, lighting, dynamic-lighting, portal, end-portal, audio; all explicitly runs everything).')
 		}
 	}
 }
@@ -80,11 +105,44 @@ dependencies {
 	}
 }
 
+def generateChorusFlowerModel = tasks.register('generateChorusFlowerModel') {
+	description = 'Converts both artist chorus flower exports into game-ready models.'
+	inputs.files('resources/block models/chorus_flower.json', 'resources/block models/chorus_flower_bloom.json')
+	outputs.dir(layout.buildDirectory.dir('generated/chorusFlowerResources'))
+	doLast {
+		inputs.files.each { source ->
+		def model = new groovy.json.JsonSlurper().parse(source)
+		model.textures.replaceAll { key, value ->
+			value.startsWith('resources:') ? value.replaceFirst('resources:', 'naturality:') : value
+		}
+		// Older exports leave the stem texture in the vanilla namespace.
+		if (model.textures['3'] == 'block/chorus_plant') {
+			model.textures['3'] = 'naturality:block/chorus_plant'
+		}
+		if (model.textures.particle == '#texture' && !model.textures.containsKey('texture')) {
+			model.textures.particle = '#4'
+		}
+		model.elements.each { element ->
+			element.faces.entrySet().removeIf { it.value.texture == '#missing' }
+		}
+		def output = new File(outputs.files.singleFile, 'assets/naturality/models/block/' + source.name)
+		output.parentFile.mkdirs()
+		output.setText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(model)) + '\n', 'UTF-8')
+		}
+	}
+}
+
 processResources {
+	from(generateChorusFlowerModel)
+	// The artist texture also replaces every vanilla chorus-plant sprite reference.
+	from('resources/textures/block') {
+		into 'assets/minecraft/textures/block'
+		include 'chorus_plant.png', 'chorus_plant.png.mcmeta'
+	}
 	// Artist-facing resources keep Minecraft's layout beneath the mod namespace.
 	from('resources') {
 		into 'assets/naturality'
-		exclude '**/README.txt', '**/.gitkeep'
+		exclude '**/README.txt', '**/.gitkeep', 'block models/**'
 	}
 
 	def version = project.version
@@ -127,6 +185,30 @@ java {
 
 	sourceCompatibility = JavaVersion.VERSION_25
 	targetCompatibility = JavaVersion.VERSION_25
+}
+
+// launch.cfg is shared by normal and alternate build directories. Refresh its
+// classpath groups whenever launch setup runs, including VS Code's F5 preflight.
+tasks.named('generateDLIConfig') {
+	outputs.upToDateWhen { false }
+}
+
+tasks.register('prepareDebugLaunch') {
+	group = 'fabric'
+	description = 'Builds debug resources and refreshes/verifies Fabric launch metadata.'
+	dependsOn 'classes', 'clientClasses', 'gametestClasses', 'configureClientLaunch'
+	def launchConfig = layout.projectDirectory.file('.gradle/loom-cache/launch.cfg').asFile
+	def modOutputs = (sourceSets.main.output.files + sourceSets.client.output.files).collect { it.absolutePath }
+	doLast {
+		def property = launchConfig.readLines().find { it.trim().startsWith('fabric.classPathGroups=') }
+		def groups = property == null ? [] : property.trim().substring('fabric.classPathGroups='.length())
+			.split(java.util.regex.Pattern.quote(File.pathSeparator + File.pathSeparator))
+			.collect { it.split(java.util.regex.Pattern.quote(File.pathSeparator)).toList() }
+		if (!groups.any { it.containsAll(modOutputs) }) {
+			throw new GradleException('Fabric launch metadata does not group the current main/client outputs. Debug launch stopped to avoid missing shaders.')
+		}
+		logger.lifecycle('Verified Fabric debug classpath: main/client classes and resources belong to the same mod.')
+	}
 }
 
 // VS Code's Java compiler copies source resources but does not execute our

@@ -241,6 +241,36 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                     level.removeBlock(base.above(2),false);
                     level.removeBlock(base.above(),false);
                 }
+                for(var plant:new Block[]{Blocks.TALL_GRASS,Blocks.LARGE_FERN})for(int clickedHeight=0;clickedHeight<=2;clickedHeight++) {
+                    var base=new BlockPos(10,99,0);
+                    var lower=plant.defaultBlockState().setValue(DoublePlantBlock.HALF,
+                        net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER);
+                    var upper=lower.setValue(DoublePlantBlock.HALF,
+                        net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER);
+                    level.setBlock(base.above(),lower,18);
+                    level.setBlock(base.above(2),upper,18);
+                    var stack=new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.SNOW,3);
+                    for(int count=1;count<=2;count++) {
+                        var clicked=base.above(clickedHeight);
+                        var placement=new net.minecraft.world.item.context.BlockPlaceContext(level,null,
+                            net.minecraft.world.InteractionHand.MAIN_HAND,stack,
+                            new net.minecraft.world.phys.BlockHitResult(Vec3.atCenterOf(clicked),Direction.UP,clicked,false));
+                        check(((net.minecraft.world.item.BlockItem)stack.getItem()).place(placement).consumesAction(),
+                            "Snow places and accumulates when clicking either plant half or its support: "+plant);
+                        check(level.getBlockState(base.above(3)).is(Blocks.SNOW)
+                            && level.getBlockState(base.above(3)).getValue(SnowLayerBlock.LAYERS)==count,
+                            "Double-plant snow accumulates in the same owner");
+                    }
+                    check(level.getBlockState(base.above()).equals(lower) && level.getBlockState(base.above(2)).equals(upper),
+                        "Snow preserves both halves of tall grass and large ferns");
+                    check(stack.getCount()==1,"Each successful plant snow placement consumes one item");
+                    var patches=SnowGeometry.surfaces(level,base.above(3));
+                    check(patches.size()==1 && Math.abs(patches.getFirst().y()+2)<1e-5,
+                        "Double plants retain only the ground snow layer");
+                    level.removeBlock(base.above(3),false);
+                    level.removeBlock(base.above(2),false);
+                    level.removeBlock(base.above(),false);
+                }
                 var caneBase = new BlockPos(10,99,0);
                 level.setBlock(caneBase.east(),Blocks.WATER.defaultBlockState(),3);
                 for(int i=1;i<=3;i++) level.setBlock(caneBase.above(i),Blocks.SUGAR_CANE.defaultBlockState(),3);
@@ -544,6 +574,10 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
             server.runCommand("setblock 8 100 -2 tall_grass[half=lower]");
             server.runCommand("setblock 8 101 -2 tall_grass[half=upper]");
             server.runCommand("setblock 8 102 -2 snow");
+            server.runCommand("setblock 9 99 -2 grass_block");
+            server.runCommand("setblock 9 100 -2 large_fern[half=lower]");
+            server.runCommand("setblock 9 101 -2 large_fern[half=upper]");
+            server.runCommand("setblock 9 102 -2 snow");
             server.runCommand("tp @a 5 102 -7 0 0");
             world.getConnection().waitForClientboundPackets();world.getConnection().waitForChunksRender();context.waitTicks(5);
             context.takeScreenshot("snow-overlay-top-stalk-only");
@@ -574,11 +608,12 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                 }
                 check(fenceOverlays[0]==0 && fenceOverlays[1]==0 && fenceOverlays[2]>0,
                     "Only the top fence segment receives snow overlay quads");
+                for(int plantX=8;plantX<=9;plantX++) {
                 int[] grassOverlays={0,0};
                 for(int half=0;half<2;half++) {
-                    var pos=new BlockPos(8,100+half,-2);
+                    var pos=new BlockPos(plantX,100+half,-2);
                     var state=client.level.getBlockState(pos);
-                    check(state.is(Blocks.TALL_GRASS),"Two-block tall grass remains in the snow fixture");
+                    check(state.is(plantX==8?Blocks.TALL_GRASS:Blocks.LARGE_FERN),"Two-block foliage remains in the snow fixture");
                     final int index=half;
                     client.getModelManager().getBlockStateModelSet().get(state).emitQuads(
                         net.fabricmc.fabric.api.client.renderer.v1.Renderer.get().quadEmitter(q->{
@@ -588,6 +623,7 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                 }
                 check(grassOverlays[0]==0 && grassOverlays[1]>0,
                     "Only the upper half of tall foliage gets snow drips");
+                }
                 var cactusPos=new BlockPos(7,102,-2);
                 var cactus=client.level.getBlockState(cactusPos);
                 int[] topFaces={0};

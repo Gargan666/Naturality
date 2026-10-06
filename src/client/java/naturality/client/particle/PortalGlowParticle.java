@@ -72,8 +72,13 @@ public final class PortalGlowParticle extends SingleQuadParticle {
         float pulse = naturality.client.portal.PortalOpeningClient.pulse(portalBlock, partialTick);
         int color = ARGB.colorFromFloat(fadeIn * appearance.opacity(), 1 - pulse, 1, 1);
         int light = 0xF000F0;
+        // Only trim real corners; adjoining collinear frame tiles stay joined.
+        boolean horizontal = inward.getAxis() == Direction.Axis.Y;
+        Direction along = horizontal ? (axis == Direction.Axis.X ? Direction.EAST : Direction.SOUTH) : Direction.UP;
+        double trimStart = isPortal(portalBlock.relative(along.getOpposite())) ? 0 : PortalGlowGeometry.INSET;
+        double trimEnd = isPortal(portalBlock.relative(along)) ? 0 : PortalGlowGeometry.INSET;
         if (naturality.client.portal.PortalCrossingClient.clipFrame(portalBlock, axis, inward,
-                x, y, z, side, eye, color, pulse)) return;
+                x, y, z, side, eye, color, pulse, trimStart, trimEnd)) return;
 
         // This layer interprets UVs as edge position and distance from the portal.
         // Shader slicing gives 16 independently waving strips without 32 extra quads.
@@ -88,6 +93,13 @@ public final class PortalGlowParticle extends SingleQuadParticle {
             submitHalf(state, eye, side * 1.5F, edgeStart, edgeStart + 1,
                 side < 0 ? 1 : 2, side < 0 ? 2 : 1, color, light);
         }
+    }
+
+    private boolean isPortal(BlockPos pos) {
+        if (!naturality.util.LoadedChunks.has(level, pos)) return false;
+        var block = level.getBlockState(pos);
+        return block.is(net.minecraft.world.level.block.Blocks.NETHER_PORTAL)
+            && block.getValue(net.minecraft.world.level.block.NetherPortalBlock.AXIS) == axis;
     }
 
     private void submitHalf(QuadParticleRenderState state, Vec3 eye, float offset,

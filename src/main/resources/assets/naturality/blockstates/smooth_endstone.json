@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "": [
+      { "model": "naturality:block/smooth_endstone" },
+      { "model": "naturality:block/smooth_endstone_mirrored" },
+      { "model": "naturality:block/smooth_endstone", "y": 180 },
+      { "model": "naturality:block/smooth_endstone_mirrored", "y": 180 }
+    ]
+  }
+}

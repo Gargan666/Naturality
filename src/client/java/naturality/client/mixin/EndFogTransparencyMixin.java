@@ -25,6 +25,11 @@ public abstract class EndFogTransparencyMixin {
         naturality$transparentEnd = level.dimension().equals(net.minecraft.world.level.Level.END)
             && EndFogTransparency.isActive(level, camera);
         naturality$caveFog = naturality.client.lighting.HardcoreDarkness.caveFog(level, camera);
+        if (level.dimension().equals(net.minecraft.world.level.Level.END)
+                && camera.getFluidInCamera() == net.minecraft.world.level.material.FogType.NONE
+                && EndFogTransparency.isActive(level, camera)) {
+            cir.getReturnValue().color.set(0.115F, 0.065F, 0.175F, 1.0F);
+        }
     }
 
     // Mark only the uploaded color. The actual FogData/sky clear color is untouched.

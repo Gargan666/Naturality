@@ -13,6 +13,7 @@ import net.minecraft.world.phys.AABB;
 
 /** Entry side stays fixed throughout a crossing, including after the centre crosses the plane. */
 public final class PortalCrossing {
+    public static final double HIDDEN_CLEARANCE = 1.0 / 16;
     public final BlockPos anchor, min, max;
     public final Direction.Axis axis;
     public final int side;
@@ -52,6 +53,32 @@ public final class PortalCrossing {
     public float progress(AABB box) {
         double width = axis == Direction.Axis.X ? box.getZsize() : box.getXsize();
         return (float)Math.clamp(0.5 - signed(box.getCenter().x, box.getCenter().z) / Math.max(width, 0.001), 0, 1);
+    }
+    /** Travel waits until the trailing edge clears the far face, beyond visual immersion. */
+    public boolean fullyCrossed(AABB box) {
+        double trailing = axis == Direction.Axis.X
+            ? (side > 0 ? box.maxZ : box.minZ) : (side > 0 ? box.maxX : box.minX);
+        return (trailing - plane) * side <= -0.25 - HIDDEN_CLEARANCE;
+    }
+    /** Remove only the hidden volume extruded through the opening; the frame stays solid. */
+    public net.minecraft.world.phys.shapes.VoxelShape visibleCollision(net.minecraft.world.phys.shapes.VoxelShape shape) {
+        if(shape.isEmpty()) return shape;
+        var b=shape.bounds();
+        boolean x=axis==Direction.Axis.X;
+        double lo=x?b.minZ:b.minX, hi=x?b.maxZ:b.maxX;
+        if(side>0) hi=Math.min(hi,plane); else lo=Math.max(lo,plane);
+        double left=Math.max(x?b.minX:b.minZ,x?min.getX():min.getZ());
+        double right=Math.min(x?b.maxX:b.maxZ,(x?max.getX():max.getZ())+1);
+        double bottom=Math.max(b.minY,min.getY()), top=Math.min(b.maxY,max.getY()+1);
+        if(lo>=hi || left>=right || bottom>=top) return shape;
+        var hidden=net.minecraft.world.phys.shapes.Shapes.create(x
+            ?new AABB(left,bottom,lo,right,top,hi):new AABB(lo,bottom,left,hi,top,right));
+        return net.minecraft.world.phys.shapes.Shapes.join(shape,hidden,net.minecraft.world.phys.shapes.BooleanOp.ONLY_FIRST);
+    }
+    public static boolean separated(Entity a,Entity b) {
+        var c=get(a);
+        if(c==null || !c.valid(a)) return false;
+        return c.signed(b.getX(),b.getZ())<0;
     }
     public boolean valid(Entity entity) {
         var state=entity.level().getBlockState(anchor);

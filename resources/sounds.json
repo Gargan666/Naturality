@@ -1,4 +1,34 @@
 {
+  "end_ambience_1": {
+    "subtitle": "subtitles.naturality.end_ambience",
+    "sounds": ["naturality:end/weird_1"]
+  },
+  "end_ambience_2": {
+    "subtitle": "subtitles.naturality.end_ambience",
+    "sounds": ["naturality:end/weird_2"]
+  },
+  "end_ambience_3": {
+    "subtitle": "subtitles.naturality.end_ambience",
+    "sounds": ["naturality:end/weird_3"]
+  },
+  "end_ambience_4": {
+    "subtitle": "subtitles.naturality.end_ambience",
+    "sounds": ["naturality:end/weird_4"]
+  },
+  "end_ambience_5": {
+    "subtitle": "subtitles.naturality.end_ambience",
+    "sounds": ["naturality:end/weird_5"]
+  },
+  "end_ambience": {
+    "subtitle": "subtitles.naturality.end_ambience",
+    "sounds": [
+      "naturality:end/weird_1",
+      "naturality:end/weird_2",
+      "naturality:end/weird_3",
+      "naturality:end/weird_4",
+      "naturality:end/weird_5"
+    ]
+  },
   "watersplash_loud": {
     "sounds": [
       {

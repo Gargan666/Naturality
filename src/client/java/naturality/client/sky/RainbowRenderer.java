@@ -75,7 +75,8 @@ public final class RainbowRenderer implements AutoCloseable {
         float t = (float)Math.clamp((cloudTop - cameraY) / 16.0, 0, 1);
         return t * t * (3 - 2 * t);
     }
-    public static float skyBlend(Vector3fc skyColor) {
+    public static float skyBlend(@org.jspecify.annotations.Nullable Vector3fc skyColor) {
+        if (skyColor == null) return 0;
         float luminance = .2126F * skyColor.x() + .7152F * skyColor.y() + .0722F * skyColor.z();
         float brightness = Math.clamp((luminance - .06F) / .55F, 0, 1);
         return brightness * brightness;

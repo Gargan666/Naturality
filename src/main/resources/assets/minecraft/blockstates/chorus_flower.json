@@ -1,0 +1,56 @@
+{
+  "variants": {
+    "bloom=false,facing=up": {
+      "model": "naturality:block/chorus_flower"
+    },
+    "bloom=true,facing=up": {
+      "model": "naturality:block/chorus_flower_bloom"
+    },
+    "bloom=false,facing=down": {
+      "model": "naturality:block/chorus_flower",
+      "x": 180
+    },
+    "bloom=true,facing=down": {
+      "model": "naturality:block/chorus_flower_bloom",
+      "x": 180
+    },
+    "bloom=false,facing=north": {
+      "model": "naturality:block/chorus_flower",
+      "x": 90
+    },
+    "bloom=true,facing=north": {
+      "model": "naturality:block/chorus_flower_bloom",
+      "x": 90
+    },
+    "bloom=false,facing=east": {
+      "model": "naturality:block/chorus_flower",
+      "x": 90,
+      "y": 90
+    },
+    "bloom=true,facing=east": {
+      "model": "naturality:block/chorus_flower_bloom",
+      "x": 90,
+      "y": 90
+    },
+    "bloom=false,facing=south": {
+      "model": "naturality:block/chorus_flower",
+      "x": 90,
+      "y": 180
+    },
+    "bloom=true,facing=south": {
+      "model": "naturality:block/chorus_flower_bloom",
+      "x": 90,
+      "y": 180
+    },
+    "bloom=false,facing=west": {
+      "model": "naturality:block/chorus_flower",
+      "x": 90,
+      "y": 270
+    },
+    "bloom=true,facing=west": {
+      "model": "naturality:block/chorus_flower_bloom",
+      "x": 90,
+      "y": 270
+    }
+  }
+}

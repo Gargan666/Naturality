@@ -11,6 +11,11 @@ import org.spongepowered.asm.mixin.injection.*;
 import org.spongepowered.asm.mixin.injection.callback.*;
 @Mixin(EntityRenderDispatcher.class)
 public abstract class PortalCrossingRenderMixin {
+    @com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod(method="submit")
+    private void naturality$clipBody(EntityRenderState state,CameraRenderState camera,double x,double y,double z,
+            PoseStack poses,SubmitNodeCollector collector,com.llamalad7.mixinextras.injector.wrapoperation.Operation<Void> original) {
+        original.call(state,camera,x,y,z,poses,PortalCrossingClient.clip(state,camera.pos,collector));
+    }
     @Inject(method="extractEntity",at=@At("RETURN"))
     private void naturality$entrySide(Entity entity,float partial,CallbackInfoReturnable<EntityRenderState> ci){
         PortalCrossingClient.remember(entity,ci.getReturnValue());

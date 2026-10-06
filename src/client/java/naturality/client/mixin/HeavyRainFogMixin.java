@@ -27,7 +27,6 @@ public abstract class HeavyRainFogMixin {
         // boundary to keep nearby room details legible while retaining haze.
         float exposure = 1 - naturality.client.weather.WeatherSoundEnvironment.indoor();
         FogData fog = cir.getReturnValue();
-        fog.environmentalStart = 12;
-        fog.environmentalEnd = weather.heavyRainFogEnd(exposure);
+        naturality.client.weather.HeavyRainFog.apply(fog, weather, exposure, distance);
     }
 }

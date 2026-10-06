@@ -42,8 +42,6 @@ public final class FallImpactDroplets {
         var activeNow=new HashSet<Face>();
         for(var positions:columns)for(var pos:positions) {
             if(naturality.client.particle.FallParticleBudget.exhausted(level))break;
-            if(naturality.client.particle.ParticleVisibility.outsideView(pos.getX()-1.5,pos.getY()-1.5,pos.getZ()-1.5,
-                pos.getX()+2.5,pos.getY()+2.5,pos.getZ()+2.5))continue;
             double distance=net.minecraft.world.phys.Vec3.atCenterOf(pos).distanceTo(eye);
             double density=FallParticleDensity.multiplier(distance);
             if(density<=0 || !naturality.util.LoadedChunks.has(level, pos) || !falling(level,pos,lava))continue;
@@ -110,7 +108,6 @@ public final class FallImpactDroplets {
         if (level == null) return;
         var config = naturality.config.NaturalityConfig.get().liquids;
         if (lava ? !config.lavaFallDroplets : !config.waterFallDroplets) return;
-        if(naturality.client.particle.ParticleVisibility.hidden(level,x-.4,y-.4,z-.4,x+.4,y+.4,z+.4,true,!lava))return;
         var random=ThreadLocalRandom.current();
         for(int i=0,count=2+random.nextInt(3);i<count;i++) {
             if(!naturality.client.particle.FallParticleBudget.allowDroplet(level))return;

@@ -113,12 +113,18 @@ public final class PortalEntityGlowState extends QuadParticleRenderState {
 
     public void ray(Direction.Axis axis, double center, int side, double fixed, double start, double end,
                     boolean horizontal, int normal, Vec3 eye, int color, float pulse) {
+        ray(axis, center, side, fixed, start, end, horizontal, normal, eye, color, pulse,
+            PortalGlowOcclusion.RAY_ROOT_OFFSET);
+    }
+
+    public void ray(Direction.Axis axis, double center, int side, double fixed, double start, double end,
+                    boolean horizontal, int normal, Vec3 eye, int color, float pulse, double rootOffset) {
         if (end <= start) return;
         double eyeCoordinate = horizontal ? eye.y : axis == Direction.Axis.X ? eye.x : eye.z;
         if ((eyeCoordinate - fixed) * normal <= PortalGlowGeometry.FACE_EPSILON) return;
         double u0 = horizontal ? start : fixed, y0 = horizontal ? fixed : start;
         double u1 = horizontal ? end : fixed, y1 = horizontal ? fixed : end;
-        double root = center + side * (0.125 + PortalGlowOcclusion.RAY_ROOT_OFFSET);
+        double root = center + side * (0.125 + rootOffset);
         double outer = center + side * (pulse > 0 ? 2 : 1);
         Vec3 outward = horizontal ? new Vec3(0, normal, 0)
             : axis == Direction.Axis.X ? new Vec3(normal, 0, 0) : new Vec3(0, 0, normal);

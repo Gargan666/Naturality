@@ -2,116 +2,101 @@ package naturality.weather;
 
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
-import com.mojang.brigadier.arguments.IntegerArgumentType;
-import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.DimensionArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.Level;
+import java.util.List;
 
-/** Operator commands edit persistent weather targets stored with each world. */
+/** Dimension-first commands with completions restricted to that dimension's pool. */
 public final class WeatherCommands {
     private WeatherCommands() {}
-
+    private static List<String> pool(ServerLevel level) {
+        return level.dimension().equals(Level.END) ? List.of("gravity","starfall","rise")
+            : List.of("rain","wind","temperature","direction");
+    }
+    private static CommandSyntaxException error(String text) {
+        return new SimpleCommandExceptionType(Component.literal(text)).create();
+    }
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        var root = Commands.literal("weather")
-            .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS));
         var target = Commands.argument("dimension", DimensionArgument.dimension())
-            .executes(c -> status(c.getSource(), DimensionArgument.getDimension(c, "dimension")));
-        for (var channel : Channel.values()) target.then(channel(channel));
+            .executes(c -> status(c.getSource(),DimensionArgument.getDimension(c,"dimension")));
+        target.then(Commands.literal("status").executes(c -> status(c.getSource(),DimensionArgument.getDimension(c,"dimension"))));
         target.then(Commands.literal("auto").executes(c -> {
-            var source = c.getSource();
-            var level = DimensionArgument.getDimension(c, "dimension");
-            var p = editableProfile(level);
-            p.overrideRain = p.overrideWind = p.overrideTemperature = p.overrideDirection = false;
-            WeatherSystem.saveProfile(level);
-            source.sendSuccess(() -> Component.literal("Weather in " + dimension(level)
-                + ": all sliders automatic." + disabledNotice(p)), true);
+            var level = DimensionArgument.getDimension(c,"dimension");
+            if (level.dimension().equals(Level.END)) {
+                var cycle=EndWeatherSystem.cycle(level);
+                for(String name:pool(level))cycle.set(name,-1);
+                EndWeatherSystem.save(level);
+            } else {
+                var p=WeatherSystem.profile(level);
+                p.overrideRain=p.overrideWind=p.overrideTemperature=p.overrideDirection=false;
+                WeatherSystem.saveProfile(level);
+            }
+            c.getSource().sendSuccess(() -> Component.literal("Weather in " + level.dimension().identifier()+": all sliders automatic."),true);
             return Command.SINGLE_SUCCESS;
         }));
-        target.then(Commands.literal("status")
-            .executes(c -> status(c.getSource(), DimensionArgument.getDimension(c, "dimension"))));
-        dispatcher.register(root.then(target));
+        target.then(Commands.argument("slider",StringArgumentType.word())
+            .suggests((c,b) -> SharedSuggestionProvider.suggest(pool(DimensionArgument.getDimension(c,"dimension")),b))
+            .then(Commands.argument("value",StringArgumentType.word())
+                .suggests((c,b) -> SharedSuggestionProvider.suggest(List.of("0","50","100","auto"),b))
+                .executes(WeatherCommands::set)));
+        dispatcher.register(Commands.literal("weather").requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS)).then(target));
     }
-
-    private static LiteralArgumentBuilder<CommandSourceStack> channel(Channel channel) {
-        var node = Commands.literal(channel.name().toLowerCase(java.util.Locale.ROOT));
-        var value = Commands.argument("value", IntegerArgumentType.integer(0, channel.maximum()));
-        value.executes(c -> set(c, DimensionArgument.getDimension(c, "dimension"), channel));
-        node.then(value);
-        node.then(Commands.literal("auto").executes(c -> {
-            var source = c.getSource();
-            var level = DimensionArgument.getDimension(c, "dimension");
-            var p = editableProfile(level);
-            channel.automatic(p);
+    private static int set(CommandContext<CommandSourceStack> c) throws CommandSyntaxException {
+        var level=DimensionArgument.getDimension(c,"dimension");
+        String name=StringArgumentType.getString(c,"slider"), text=StringArgumentType.getString(c,"value");
+        if(!pool(level).contains(name))throw error("That slider is not in this dimension's weather pool.");
+        boolean auto=text.equals("auto");
+        int value=-1;
+        if (!auto) {
+            try { value=Integer.parseInt(text); } catch(NumberFormatException e) { throw error("Expected a whole-number slider value or auto."); }
+            int max=name.equals("direction")?360:100;
+            if(value<0 || value>max)throw error("Slider must be between 0 and "+max+".");
+        }
+        if(level.dimension().equals(Level.END)) {
+            EndWeatherSystem.cycle(level).set(name,value);
+            EndWeatherSystem.save(level);
+        } else {
+            var p=WeatherSystem.profile(level);
+            switch(name) {
+                case "rain" -> { p.overrideRain=!auto; if(!auto)p.rain=value; }
+                case "wind" -> { p.overrideWind=!auto; if(!auto)p.wind=value; }
+                case "temperature" -> { p.overrideTemperature=!auto; if(!auto)p.temperature=value; }
+                case "direction" -> { p.overrideDirection=!auto; if(!auto)p.direction=value; }
+                default -> throw error("Unknown weather slider.");
+            }
             WeatherSystem.saveProfile(level);
-            source.sendSuccess(() -> Component.literal("Weather in " + dimension(level) + ": "
-                + channel.label() + " automatic." + disabledNotice(p)), true);
-            return Command.SINGLE_SUCCESS;
-        }));
-        return node;
-    }
-
-    private static int set(CommandContext<CommandSourceStack> context, ServerLevel level, Channel channel) {
-        int value = IntegerArgumentType.getInteger(context, "value");
-        var p = editableProfile(level);
-        channel.set(p, value);
-        WeatherSystem.saveProfile(level);
-        context.getSource().sendSuccess(() -> Component.literal("Weather in " + dimension(level) + ": "
-            + channel.label() + " target " + value + " (override)." + disabledNotice(p)), true);
+        }
+        String result=auto?"automatic":"target "+value+" (override)";
+        String note=
+            !level.dimension().equals(Level.END) && !WeatherSystem.profile(level).enabled?" Weather is disabled in this dimension; settings are saved for later.":"";
+        c.getSource().sendSuccess(() -> Component.literal("Weather in "+level.dimension().identifier()+": "+name+" "+result+"."+note),true);
         return Command.SINGLE_SUCCESS;
     }
-
-    private static WeatherProfile editableProfile(ServerLevel level) {
-        // Reserved/custom dimension profiles default to disabled in world data.
-        return WeatherSystem.profile(level);
-    }
-    private static String dimension(ServerLevel level) { return level.dimension().identifier().toString(); }
-    private static String disabledNotice(WeatherProfile p) {
-        return p.enabled ? "" : " Weather is disabled in this dimension; settings are saved for later.";
-    }
-    private static int status(CommandSourceStack source, ServerLevel level) {
-        var p = WeatherSystem.profile(level);
-        var state = WeatherSystem.state(level);
-        StringBuilder text = new StringBuilder("Weather in " + dimension(level) + ": ");
-        for (var channel : Channel.values()) {
-            if (channel != Channel.RAIN) text.append(", ");
-            text.append(channel.label()).append("=")
-                .append(channel.overridden(p) ? channel.value(p) + " (override)" : "auto");
+    private static int status(CommandSourceStack source,ServerLevel level) {
+        String text;
+        if(level.dimension().equals(Level.END)) {
+            var cycle=EndWeatherSystem.cycle(level); var s=cycle.state();
+            text=String.format(java.util.Locale.ROOT,"gravity %.1f (%s), starfall %d (%s), rise %.1f (%s).",
+                s.gravity(),mode(cycle.override("gravity")),s.starfall(),mode(cycle.override("starfall")),s.rise(),mode(cycle.override("rise")));
+        } else {
+            var p=WeatherSystem.profile(level); var s=WeatherSystem.state(level);
+            text="rain="+(p.overrideRain?p.rain+" (override)":"auto")+", wind="+(p.overrideWind?p.wind+" (override)":"auto")
+                +", temperature="+(p.overrideTemperature?p.temperature+" (override)":"auto")+", direction="+(p.overrideDirection?p.direction+" (override)":"auto");
+            if(s!=null)text+=String.format(java.util.Locale.ROOT,". Current: rain %.1f, wind %.1f, temperature %.1f, direction %.1f",s.rain(),s.wind(),s.temperature(),s.direction());
+            if(!p.enabled)text+=". Weather is disabled in this dimension; settings are saved for later.";
         }
-        if (state != null) text.append(String.format(java.util.Locale.ROOT,
-            ". Current: rain %.1f, wind %.1f, temperature %.1f, direction %.1f", state.rain(), state.wind(), state.temperature(), state.direction()));
-        text.append(disabledNotice(p));
-        source.sendSuccess(() -> Component.literal(text.toString()), false);
+        String message="Weather in "+level.dimension().identifier()+": "+text;
+        source.sendSuccess(() -> Component.literal(message),false);
         return Command.SINGLE_SUCCESS;
     }
-    private enum Channel {
-        RAIN, WIND, TEMPERATURE, DIRECTION;
-        String label() { return name().toLowerCase(java.util.Locale.ROOT); }
-        int maximum() { return this == DIRECTION ? 360 : 100; }
-        void set(WeatherProfile p, int value) {
-            switch (this) {
-                case RAIN -> { p.rain = value; p.overrideRain = true; }
-                case WIND -> { p.wind = value; p.overrideWind = true; }
-                case TEMPERATURE -> { p.temperature = value; p.overrideTemperature = true; }
-                case DIRECTION -> { p.direction = value; p.overrideDirection = true; }
-            }
-        }
-        void automatic(WeatherProfile p) {
-            switch (this) {
-                case RAIN -> p.overrideRain = false;
-                case WIND -> p.overrideWind = false;
-                case TEMPERATURE -> p.overrideTemperature = false;
-                case DIRECTION -> p.overrideDirection = false;
-            }
-        }
-        boolean overridden(WeatherProfile p) {
-            return switch (this) { case RAIN -> p.overrideRain; case WIND -> p.overrideWind; case TEMPERATURE -> p.overrideTemperature; case DIRECTION -> p.overrideDirection; };
-        }
-        int value(WeatherProfile p) {
-            return switch (this) { case RAIN -> p.rain; case WIND -> p.wind; case TEMPERATURE -> p.temperature; case DIRECTION -> p.direction; };
-        }
-    }
+    private static String mode(int override) { return override<0?"auto":"override"; }
 }

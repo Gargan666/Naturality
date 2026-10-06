@@ -101,9 +101,19 @@ public final class PortalOpeningGameTest implements FabricClientGameTest {
             context.waitTicks(12);
             world.getConnection().waitForClientboundPackets();
             context.takeScreenshot("portal-entity-entry-halfway");
+            java.util.UUID boatUuid=server.computeOnServer(s -> {
+                var boat=net.minecraft.world.entity.EntityTypes.OAK_BOAT.create(s.overworld(),net.minecraft.world.entity.EntitySpawnReason.COMMAND);
+                boat.setNoGravity(true);boat.setYRot(45);
+                boat.setPos(seed.getX()+1,seed.getY(),seed.getZ()+0.375);
+                s.overworld().addFreshEntity(boat);
+                naturality.portal.PortalCrossing.set(boat,new naturality.portal.PortalCrossing(boat,seed,Direction.Axis.X,-1));
+                naturality.portal.PortalCrossing.syncToObserver(boat,world.getConnection().getServerPlayer());
+                return boat.getUUID();
+            });
             server.runCommand("tp @a " + (origin.getX()+4) + " " + (origin.getY()+2) + " " + (origin.getZ()-2) + " 45 25");
             world.getConnection().waitForClientboundPackets(); context.waitTicks(4);
             context.takeScreenshot("portal-entity-rays-oblique");
+            context.takeScreenshot("portal-large-boat-clipped-oblique");
             context.runOnClient(client -> {
                 net.minecraft.world.entity.Entity subject=null;
                 for(var entity:client.level.entitiesForRendering()) if(entity.getUUID().equals(pigUuid)) subject=entity;
@@ -122,6 +132,11 @@ public final class PortalOpeningGameTest implements FabricClientGameTest {
                 check(naturality.client.portal.PortalCrossingClient.hidden(renderState,back),"Exit-side observer must not see the entity");
             });
             server.runOnServer(s -> {
+                var boat=s.overworld().getEntity(boatUuid);
+                check(boat!=null,"Large boat must remain in the source dimension while half entered");
+                boat.discard();
+            });
+            server.runOnServer(s -> {
                 var pig=s.overworld().getEntity(pigUuid);
                 check(pig!=null,"Half-entered entity must linger instead of teleporting on a timer");
                 check(Math.abs(naturality.portal.PortalCrossing.get(pig).progress(pig.getBoundingBox())-0.5)<0.001,"Glow must peak at half entry");
@@ -131,7 +146,7 @@ public final class PortalOpeningGameTest implements FabricClientGameTest {
             context.takeScreenshot("portal-entity-exit-hidden");
             server.runOnServer(s -> {
                 var pig=s.overworld().getEntity(pigUuid);
-                pig.setPos(pig.getX(),pig.getY(),seed.getZ()+0.375+pig.getBbWidth()/2+0.02);
+                pig.setPos(pig.getX(),pig.getY(),seed.getZ()+0.625+pig.getBbWidth()/2+naturality.portal.PortalCrossing.HIDDEN_CLEARANCE+0.02);
             });
             server.waitFor(s -> s.getLevel(net.minecraft.world.level.Level.NETHER).getEntity(pigUuid)!=null);
             server.runCommand("tp @a " + (origin.getX()+1.5) + " " + (origin.getY()+1) + " " + (origin.getZ()-2) + " 0 0");
@@ -209,7 +224,7 @@ public final class PortalOpeningGameTest implements FabricClientGameTest {
                 player.setPos(seed.getX()+0.5,seed.getY(),seed.getZ()+0.1);
                 player.xo=player.getX();player.zo=player.getZ();
                 naturality.portal.PortalCrossing.enter(player,seed,Direction.Axis.X);
-                player.setPos(player.getX(),player.getY(),seed.getZ()+0.375+player.getBbWidth()/2+0.02);
+                player.setPos(player.getX(),player.getY(),seed.getZ()+0.625+player.getBbWidth()/2+naturality.portal.PortalCrossing.HIDDEN_CLEARANCE+0.02);
             });
             server.waitFor(s -> world.getConnection().getServerPlayer().level().dimension()==net.minecraft.world.level.Level.NETHER);
             context.waitFor(client -> client.level!=null && client.level.dimension()==net.minecraft.world.level.Level.NETHER);
@@ -219,7 +234,8 @@ public final class PortalOpeningGameTest implements FabricClientGameTest {
                 var crossing=naturality.portal.PortalCrossing.get(player);
                 check(player.level().dimension()==net.minecraft.world.level.Level.NETHER,"Arrival must not bounce back while stationary");
                 check(crossing!=null && !player.isOnPortalCooldown(),"Arrival must retain an active reversible crossing");
-                double normal=crossing.plane-crossing.side*(player.getBbWidth()/2+0.02);
+                check(!crossing.fullyCrossed(player.getBoundingBox()),"Hidden arrival must not immediately return");
+                double normal=crossing.plane-crossing.side*(player.getBbWidth()/2+0.25+naturality.portal.PortalCrossing.HIDDEN_CLEARANCE+0.02);
                 player.setPos(crossing.axis==Direction.Axis.Z?normal:player.getX(),player.getY(),crossing.axis==Direction.Axis.X?normal:player.getZ());
             });
             server.waitFor(s -> world.getConnection().getServerPlayer().level().dimension()==net.minecraft.world.level.Level.OVERWORLD);
@@ -267,16 +283,49 @@ public final class PortalOpeningGameTest implements FabricClientGameTest {
                 naturality.portal.PortalCrossing.enter(pig,pos,axis);
                 var c=naturality.portal.PortalCrossing.get(pig);
                 check(c!=null && c.side==side,"Entry side must work on both portal axes");
+                boolean xAxis=axis==Direction.Axis.X;
+                double hiddenNormal=plane-side*0.4, visibleNormal=plane+side*0.4;
+                var hiddenBox=new net.minecraft.world.phys.AABB(
+                    xAxis?pos.getX()+0.2:hiddenNormal-0.05,pos.getY()+0.2,xAxis?hiddenNormal-0.05:pos.getZ()+0.2,
+                    xAxis?pos.getX()+0.8:hiddenNormal+0.05,pos.getY()+0.8,xAxis?hiddenNormal+0.05:pos.getZ()+0.8);
+                var visibleBox=hiddenBox.move(xAxis?0:visibleNormal-hiddenNormal,0,xAxis?visibleNormal-hiddenNormal:0);
+                check(c.visibleCollision(net.minecraft.world.phys.shapes.Shapes.create(hiddenBox)).isEmpty(),"Hidden opening collisions must be removed for mobs and players");
+                check(!c.visibleCollision(net.minecraft.world.phys.shapes.Shapes.create(visibleBox)).isEmpty(),"Visible-side collisions must remain solid");
+                var frameBox=hiddenBox.move(0,-1,0);
+                check(!c.visibleCollision(net.minecraft.world.phys.shapes.Shapes.create(frameBox)).isEmpty(),"Portal frame collisions must remain solid");
+                var hiddenBlock=pos.offset(xAxis?0:-side,0,xAxis?-side:0);
+                var visibleBlock=pos.offset(xAxis?0:side,0,xAxis?side:0);
+                var oldHidden=level.getBlockState(hiddenBlock);var oldVisible=level.getBlockState(visibleBlock);
+                try {
+                    level.setBlock(hiddenBlock,Blocks.STONE.defaultBlockState(),18);
+                    level.setBlock(visibleBlock,Blocks.STONE.defaultBlockState(),18);
+                    var hiddenCollisions=java.util.stream.StreamSupport.stream(level.getBlockCollisions(pig,new net.minecraft.world.phys.AABB(hiddenBlock)).spliterator(),false).toList();
+                    check(hiddenCollisions.isEmpty(),"Actual hidden block collision scan must ignore obstacles through the opening: axis="+axis+", side="+side+", plane="+c.plane+", opening="+c.min+".."+c.max+", hidden="+hiddenBlock+", shapes="+hiddenCollisions);
+                    check(level.getBlockCollisions(pig,new net.minecraft.world.phys.AABB(visibleBlock)).iterator().hasNext(),"Actual visible block collision scan must retain obstacles");
+                } finally {
+                    level.setBlock(hiddenBlock,oldHidden,18);level.setBlock(visibleBlock,oldVisible,18);
+                }
                 check(c.progress(pig.getBoundingBox())<0.02,"Leading edge must start at zero immersion");
                 naturality.portal.PortalCrossing.tick(pig);
                 check(!pig.portalProcess.processPortalTeleportation(level,pig,true),"First contact must not teleport entities");
                 pig.setPos(axis==Direction.Axis.X?pig.getX():plane,pig.getY(),axis==Direction.Axis.X?plane:pig.getZ());
                 check(Math.abs(c.progress(pig.getBoundingBox())-0.5)<0.001,"Halfway is the glow peak");
                 check(!pig.portalProcess.processPortalTeleportation(level,pig,true),"Half entry must not teleport mobs or creative players");
+                var destination=new net.minecraft.world.level.portal.TeleportTransition(level,
+                    net.minecraft.world.phys.Vec3.atCenterOf(pos),net.minecraft.world.phys.Vec3.ZERO,
+                    0,0,false,false,java.util.Set.of(),arriving -> { });
+                var arrival=naturality.portal.PortalArrival.prepare(destination,c,pig);
+                var exit=new naturality.portal.PortalCrossing(pig,pos,axis,-side);
+                var arrivalBox=pig.getBoundingBox().move(arrival.position().subtract(pig.position()));
+                check(exit.progress(arrivalBox)==1,"Destination body must start fully behind the exit face");
+                check(!exit.fullyCrossed(arrivalBox),"Hidden destination must leave room before return travel");
                 normal=plane-side*(pig.getBbWidth()/2+0.001);
                 pig.setPos(axis==Direction.Axis.X?pig.getX():normal,pig.getY(),axis==Direction.Axis.X?normal:pig.getZ());
                 check(c.progress(pig.getBoundingBox())==1,"Full crossing uses the trailing hitbox edge");
-                check(pig.portalProcess.processPortalTeleportation(level,pig,true),"Full crossing must permit teleport immediately");
+                check(!pig.portalProcess.processPortalTeleportation(level,pig,true),"Clearing the entry face must still wait for the far face");
+                normal=plane-side*(pig.getBbWidth()/2+0.25+naturality.portal.PortalCrossing.HIDDEN_CLEARANCE+0.001);
+                pig.setPos(axis==Direction.Axis.X?pig.getX():normal,pig.getY(),axis==Direction.Axis.X?normal:pig.getZ());
+                check(pig.portalProcess.processPortalTeleportation(level,pig,true),"Clearing the far face must permit teleport immediately");
                 normal=plane+side*(pig.getBbWidth()/2+0.2);
                 pig.setPos(axis==Direction.Axis.X?pig.getX():normal,pig.getY(),axis==Direction.Axis.X?normal:pig.getZ());
                 naturality.portal.PortalCrossing.tick(pig);

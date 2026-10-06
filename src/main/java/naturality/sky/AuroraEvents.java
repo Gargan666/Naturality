@@ -50,18 +50,19 @@ public final class AuroraEvents {
     public static void tick(ServerLevel level) {
         var cells = STATES.computeIfAbsent(level, _ -> new HashMap<>());
         var occupied = new HashMap<Region, Float>();
+        boolean end = level.dimension().equals(net.minecraft.world.level.Level.END);
         var weather = WeatherSystem.state(level);
         float temperature = weather == null ? 50 : weather.temperature();
         for (var player : level.players()) {
             var pos = player.blockPosition();
             var biome = level.getBiome(pos).value();
-            float chance = AuroraCycle.startChance(biome.getBaseTemperature(),
+            float chance = end ? AuroraCycle.END_START_CHANCE : AuroraCycle.startChance(biome.getBaseTemperature(),
                 biome.getPrecipitationAt(pos, level.getSeaLevel()) == Biome.Precipitation.SNOW, temperature);
             // More players in one region never multiply the number of random attempts.
             occupied.merge(Region.at(pos), chance, Math::max);
         }
         long time = level.getGameTime();
-        boolean advance = level.getGameRules().get(GameRules.ADVANCE_WEATHER);
+        boolean advance = end || level.getGameRules().get(GameRules.ADVANCE_WEATHER);
         occupied.forEach((region, chance) -> {
             var cell = cells.computeIfAbsent(region, _ -> new Cell(level.getSeed()
                 ^ (region.x * 341873128712L) ^ (region.z * 132897987541L) ^ time));

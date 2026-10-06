@@ -4,6 +4,7 @@ import naturality.weather.SavedRandom;
 
 /** Rare local events at any time of day; climate changes the chance of starting. */
 public final class AuroraCycle {
+    public static final float END_START_CHANCE = (float)(1 - Math.sqrt(.9));
     private final SavedRandom random;
     private int nextAttempt, remaining, retarget;
     private float strength, target;

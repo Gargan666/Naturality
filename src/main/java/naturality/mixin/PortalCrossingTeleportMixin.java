@@ -15,7 +15,7 @@ public abstract class PortalCrossingTeleportMixin {
             CallbackInfoReturnable<net.minecraft.world.level.portal.TeleportTransition> ci) {
         var crossing=PortalCrossing.get(entity);
         if(portal==Blocks.NETHER_PORTAL && crossing!=null && ci.getReturnValue()!=null)
-            ci.setReturnValue(naturality.portal.PortalArrival.prepare(ci.getReturnValue(),crossing));
+            ci.setReturnValue(naturality.portal.PortalArrival.prepare(ci.getReturnValue(),crossing,entity));
     }
     @SuppressWarnings("null") @Shadow @Final private Portal portal;
     @Shadow private int portalTime;
@@ -33,6 +33,6 @@ public abstract class PortalCrossingTeleportMixin {
             return;
         }
         portalTime++;
-        ci.setReturnValue(allowed && c.valid(entity) && c.progress(entity.getBoundingBox())>=1);
+        ci.setReturnValue(allowed && c.valid(entity) && c.fullyCrossed(entity.getBoundingBox()));
     }
 }

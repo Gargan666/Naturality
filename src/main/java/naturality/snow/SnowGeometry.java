@@ -19,6 +19,14 @@ public final class SnowGeometry {
     public static final ThreadLocal<net.minecraft.world.level.ClipContext> PICK = new ThreadLocal<>();
     public static final int MAX_DEPTH = 32;
     private static final float WATER_SURFACE = 7F / 8F;
+    private static final List<FireSurface.Patch> FLAT = List.of(new FireSurface.Patch(0,0,0,1,0,0,1));
+    private static final VoxelShape[] LAYERS = java.util.stream.IntStream.rangeClosed(0,8)
+        .mapToObj(i -> i == 0 ? Shapes.empty() : Shapes.box(0,0,0,1,i/8.0,1)).toArray(VoxelShape[]::new);
+    // Keys are immutable shape objects, not block states or world positions.
+    private static final ThreadLocal<java.util.IdentityHashMap<VoxelShape,Boolean>> FOOTPRINTS =
+        ThreadLocal.withInitial(java.util.IdentityHashMap::new);
+    private static final ThreadLocal<java.util.Map<List<FireSurface.Patch>,VoxelShape[]>> VOLUMES =
+        ThreadLocal.withInitial(java.util.HashMap::new);
     public static boolean isFoliage(net.minecraft.world.level.block.state.BlockState state) {
         return state.getBlock() instanceof net.minecraft.world.level.block.VegetationBlock
             || state.getBlock() instanceof net.minecraft.world.level.block.SugarCaneBlock
@@ -37,11 +45,19 @@ public final class SnowGeometry {
     }
 
     public static int maxLayers(BlockGetter level, BlockPos pos) {
-        return surfaces(level,pos).stream().anyMatch(p -> p.y() < -1e-5) ? 7 : 8;
+        for (var patch : surfaces(level,pos)) if (patch.y() < -1e-5) return 7;
+        return 8;
     }
 
     /** Ordinary snow needs no fitted copies, offsets, or world-dependent mesh. */
     public static boolean usesVanillaGeometry(BlockGetter level, BlockPos pos) {
+        var cache = SnowGeometryCache.entry(level,pos);
+        if (cache != null && cache.vanilla != null) return cache.vanilla;
+        boolean result = computeVanillaGeometry(level,pos);
+        if (cache != null) cache.vanilla = result;
+        return result;
+    }
+    private static boolean computeVanillaGeometry(BlockGetter level, BlockPos pos) {
         for(int depth=1;depth<=MAX_DEPTH;depth++) {
             var below=pos.below(depth);var support=level.getBlockState(below);
             if(NoSnowBlocks.contains(support))return false;
@@ -59,8 +75,11 @@ public final class SnowGeometry {
     }
 
     public static List<FireSurface.Patch> surfaces(BlockGetter level, BlockPos pos) {
-        if(usesVanillaGeometry(level,pos))return List.of(new FireSurface.Patch(0,0,0,1,0,0,1));
-        return surfaces(level,pos,0);
+        var cache = SnowGeometryCache.entry(level,pos);
+        if (cache != null && cache.surfaces != null) return cache.surfaces;
+        var result = usesVanillaGeometry(level,pos) ? FLAT : surfaces(level,pos,0);
+        if (cache != null) cache.surfaces = result;
+        return result;
     }
     private static List<FireSurface.Patch> surfaces(BlockGetter level, BlockPos pos, int stacked) {
         var tops = new ArrayList<FireSurface.Patch>();
@@ -112,31 +131,42 @@ public final class SnowGeometry {
                 cellTops.add(new FireSurface.Patch((float)b.minX, (float)b.maxY - depth, (float)b.minZ,
                     (float)(b.maxX-b.minX), 0, 0, (float)(b.maxZ-b.minZ)));
             }
-            tops.addAll(FireSurface.exposed(cellTops));
+            tops.addAll(cellTops.size() <= 1 ? cellTops : FireSurface.exposed(cellTops));
             if (waterlogged) break;
             if (!exposesGround(level,supportPos)) break;
         }
         // Each partial support gets its own coating; a complete footprint ends
         // the column. Never subtract an upper post from a lower ground sheet.
-        return tops.stream().filter(p -> p.ux()>1F/16+1e-5 && p.vz()>1F/16+1e-5).toList();
+        tops.removeIf(p -> p.ux()<=1F/16+1e-5 || p.vz()<=1F/16+1e-5);
+        return List.copyOf(tops);
     }
     /** Whether some of the ground remains exposed through the support's footprint. */
     public static boolean exposesGround(BlockGetter level,BlockPos pos) {
         var state=level.getBlockState(pos);
+        if(state.isAir())return false;
         if(state.getFluidState().is(FluidTags.WATER))return false;
         if(state.getBlock() instanceof net.minecraft.world.level.block.BaseFireBlock)return false;
         if(isFoliage(state) || SnowSupportOnly.contains(state))return true;
+        var outline = state.getShape(level,pos);
+        if (outline.isEmpty()) return false;
+        var cache = FOOTPRINTS.get();
+        var cached = cache.get(outline);
+        if (cached != null) return cached;
         VoxelShape footprint=Shapes.empty();
-        for(var box:state.getShape(level,pos).toAabbs())
+        for(var box:outline.toAabbs())
             footprint=Shapes.or(footprint,Shapes.box(box.minX,0,box.minZ,box.maxX,1,box.maxZ));
-        return !footprint.isEmpty() && Shapes.joinIsNotEmpty(Shapes.block(),footprint,
+        boolean result = !footprint.isEmpty() && Shapes.joinIsNotEmpty(Shapes.block(),footprint,
             net.minecraft.world.phys.shapes.BooleanOp.ONLY_FIRST);
+        if (cache.size() >= 2048) cache.clear();
+        cache.put(outline,result);
+        return result;
     }
 
     /** Raised small patches gain one physical layer for every two inventory layers. */
     public static int sliceLayers(List<FireSurface.Patch> patches, FireSurface.Patch patch, int layers) {
-        boolean raised = patches.stream().anyMatch(p -> p.y() < patch.y()-1e-5);
-        return raised && patch.ux()*patch.vz()<.999F ? (layers+1)/2 : layers;
+        if (patch.ux()*patch.vz()<.999F)
+            for (var p : patches) if (p.y() < patch.y()-1e-5) return (layers+1)/2;
+        return layers;
     }
 
     public static VoxelShape shape(BlockGetter level, BlockPos pos, int layers) {
@@ -167,30 +197,57 @@ public final class SnowGeometry {
         return false;
     }
     private static VoxelShape shape(BlockGetter level, BlockPos pos, int layers, boolean collision) {
-        if (layers <= 0) return Shapes.empty();
+        if (layers <= 0 || collision && layers == 1) return Shapes.empty();
+        var cache = SnowGeometryCache.entry(level,pos);
+        int index = layers + (collision ? 9 : 0);
+        var variants = cache == null ? null : cache.shapes;
+        var cached = variants == null ? null : variants[index];
+        if (cached != null) return cached;
+        VoxelShape result = computeShape(level,pos,layers,collision);
+        if (cache != null) {
+            if (variants == null) cache.shapes = variants = new VoxelShape[18];
+            variants[index] = result;
+        }
+        return result;
+    }
+    private static VoxelShape computeShape(BlockGetter level, BlockPos pos, int layers, boolean collision) {
         // Vanilla SnowLayerBlock uses SHAPES[layers] for outline/support and
         // SHAPES[layers - 1] for collision.
         if (!ShapeRecursionGuard.enterSnow()) return vanillaShape(layers, collision);
         try {
         if (level.getBlockState(pos.below()).getBlock() instanceof net.minecraft.world.level.block.BaseFireBlock)
             return vanillaShape(layers, collision);
+        if (usesVanillaGeometry(level,pos)) return vanillaShape(layers,collision);
         VoxelShape shape = Shapes.empty();
         var patches = surfaces(level,pos);
-        if (patches.stream().anyMatch(p -> p.y() < -1e-5)) layers=Math.min(layers,7);
+        if(patches.isEmpty())return shape;
+        // All world-dependent inputs have now been resolved into immutable patches.
+        // Equal layouts share volumes even across different positions and worlds.
+        var volumes=VOLUMES.get();
+        var variants=volumes.get(patches);
+        int variant=layers+(collision?9:0);
+        if(variants!=null && variants[variant]!=null)return variants[variant];
+        for (var p : patches) if (p.y() < -1e-5) { layers=Math.min(layers,7); break; }
         for (var p : patches) {
             int count=sliceLayers(patches,p,layers)-(collision?1:0);
             if(count<=0)continue;
             shape = Shapes.or(shape, Shapes.box(p.x(), p.y(), p.z(),
                 p.x()+p.ux(), p.y()+count/8.0, p.z()+p.vz()));
         }
-        return shape.optimize();
+        shape=shape.optimize();
+        if(variants==null) {
+            if(volumes.size()>=512)volumes.clear();
+            variants=new VoxelShape[18];volumes.put(patches,variants);
+        }
+        variants[variant]=shape;
+        return shape;
         } finally {
             ShapeRecursionGuard.exitSnow();
         }
     }
     private static VoxelShape vanillaShape(int layers, boolean collision) {
         int height = layers - (collision ? 1 : 0);
-        return height <= 0 ? Shapes.empty() : Shapes.box(0, 0, 0, 1, height / 8.0, 1);
+        return LAYERS[Math.max(0,height)];
     }
 
     public static boolean coveredGrass(BlockGetter level, BlockPos grass) {

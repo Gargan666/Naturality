@@ -265,7 +265,10 @@ public final class WaterVisuals {
             && camera.getFluidInCamera() == FogType.NONE
             && !(camera.entity() instanceof LivingEntity e && (e.hasEffect(MobEffects.BLINDNESS) || e.hasEffect(MobEffects.DARKNESS)))
             && !client.gui.hud.getBossOverlay().shouldCreateWorldFog();
-        data.putInt(atmosphere ? 1 : 0).putInt(inWaterfall ? 1 : 0).putInt(0).putInt(0);
+        var weather = level == null ? null : naturality.weather.WeatherSystem.renderState(level);
+        float rainFog = atmosphere && weather != null ? weather.heavyRainFog() : 0;
+        data.putInt(atmosphere ? 1 : 0).putInt(inWaterfall ? 1 : 0)
+            .putInt(Float.floatToRawIntBits(rainFog)).putInt(0);
         data.flip();
         if (uniform != null) uniform.close();
         uniform = RenderSystem.getDevice().createBuffer(() -> "Naturality water frame", 128, data);

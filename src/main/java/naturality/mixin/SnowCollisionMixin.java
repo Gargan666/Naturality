@@ -35,10 +35,14 @@ public abstract class SnowCollisionMixin {
         if (state.is(Blocks.SNOW)) { cir.setReturnValue(SnowGeometry.collisionShape(level,pos,state.getValue(SnowLayerBlock.LAYERS))); return; }
         if (state.isAir()) return;
         var result=cir.getReturnValue();
+        // Added snow is intersected with the unit cell below. A full collision
+        // cube already contains every possible addition, so no search is needed.
+        if(net.minecraft.world.level.block.Block.isShapeFullBlock(result))return;
         for (int above=1;above<=SnowGeometry.MAX_DEPTH;above++) {
             var owner=pos.above(above); var snow=level.getBlockState(owner);
             if (!snow.is(Blocks.SNOW)) { if(above>=2 && !SnowGeometry.exposesGround(level,owner)) break; continue; }
             if (snow.getValue(SnowLayerBlock.LAYERS)==1) continue;
+            if(SnowGeometry.usesVanillaGeometry(level,owner))continue;
             var displaced=SnowGeometry.collisionShape(level,owner,snow.getValue(SnowLayerBlock.LAYERS)).move(0,above,0);
             // Include only the part that belongs in this traversed collision cell.
             result=Shapes.or(result,Shapes.join(displaced,Shapes.block(),BooleanOp.AND));

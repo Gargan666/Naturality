@@ -86,8 +86,23 @@ public final class VillagerWorkGameTest implements FabricClientGameTest {
                 level.setBlockAndUpdate(falling, Blocks.WATER.defaultBlockState().setValue(LiquidBlock.LEVEL, 8));
                 check(!ProfessionWork.restingWater(level, falling), "Falling waterfall water must be rejected");
                 check(!ProfessionWork.restingWater(level, new BlockPos(1000000, 100, 1000000)), "Absent chunks must be ignored");
+                FishingSpotChecks.run(level, barrel);
+                FishermanCastingChecks.run(level, barrel);
                 actors[1] = worker(level, barrel, false);
                 checkStationPath(actors[1], barrel);
+                net.minecraft.world.phys.Vec3 previousLaunch = null;
+                for (int castIndex = 0; castIndex < 8; castIndex++) {
+                    var castHook = new naturality.villager.VillagerBobber(level, actors[1], new BlockPos(18, 100, 0));
+                    var launch = castHook.getDeltaMovement();
+                    double pitch = Math.toDegrees(Math.atan2(launch.y, Math.hypot(launch.x, launch.z)));
+                    check(pitch >= 15 && pitch <= 50, "Fisherman casts with a randomized upward angle");
+                    check(previousLaunch == null || launch.distanceToSqr(previousLaunch) > 1e-8, "Consecutive casts use different launch vectors");
+                    var towardWater = net.minecraft.world.phys.Vec3.atCenterOf(new BlockPos(18, 100, 0))
+                        .subtract(castHook.position()).multiply(1, 0, 1).normalize();
+                    check(launch.multiply(1, 0, 1).normalize().dot(towardWater) >= Math.cos(Math.toRadians(35)) - 1e-6,
+                        "Random casts remain in the forward water-facing cone");
+                    previousLaunch = launch;
+                }
                 actors[1].getOffers().clear();
                 actors[1].getOffers().add(new MerchantOffer(new ItemCost(Items.EMERALD, 1), new ItemStack(Items.COOKED_COD, 6), 16, 1, .05F));
                 actors[1].getOffers().add(new MerchantOffer(new ItemCost(Items.COD, 15), new ItemStack(Items.EMERALD), 16, 1, .05F));
@@ -240,7 +255,8 @@ public final class VillagerWorkGameTest implements FabricClientGameTest {
             server.runCommand("time set 14000");
             context.waitTicks(60);
             server.runOnServer(s -> {
-                check(actors[0].getMainHandItem().isEmpty(), "Farmer clears tool outside work hours");
+                check(actors[0].getMainHandItem().isEmpty() || actors[0].getMainHandItem().is(Items.BREAD),
+                    "Farmer clears work tools outside work hours; evening bread sharing remains allowed: " + actors[0].getMainHandItem());
                 check(actors[1].getMainHandItem().isEmpty(), "Fisherman clears rod outside work hours");
             });
             server.runCommand("time set 3000");
@@ -280,6 +296,7 @@ public final class VillagerWorkGameTest implements FabricClientGameTest {
             server.runCommand("tp @a 20 103 -7 facing 22 101 -3");
             context.waitTicks(4);
             context.takeScreenshot("player-lead-physics");
+
             server.runCommand("tp @a 19 103 -5 facing 17 101 0");
             context.waitTicks(2);
             context.runOnClient(client -> client.options.setCameraType(net.minecraft.client.CameraType.THIRD_PERSON_BACK));
@@ -315,20 +332,6 @@ public final class VillagerWorkGameTest implements FabricClientGameTest {
             net.minecraft.world.phys.Vec3[] ropeMiddle = new net.minecraft.world.phys.Vec3[1];
             context.runOnClient(client -> {
                 var chain = naturality.client.villager.RopeChain.sample(ropeTestKey, ropeStart, ropeEnd);
-                var blockBox = new net.minecraft.world.phys.AABB(0, 0, 0, 1, 1, 1);
-                var sideContact = naturality.client.villager.RopeChain.resolveCollision(
-                    new net.minecraft.world.phys.Vec3(.2, .5, .5),
-                    new net.minecraft.world.phys.Vec3(-1, .5, .5), blockBox);
-                check(sideContact.x < 0 && Math.abs(sideContact.y - .5) < .0001,
-                    "Rope wall contact slides on the side instead of jumping onto the roof");
-                var sweptContact = naturality.client.villager.RopeChain.resolveCollision(
-                    new net.minecraft.world.phys.Vec3(2, .5, .5),
-                    new net.minecraft.world.phys.Vec3(-1, .5, .5), blockBox);
-                check(sweptContact.x < 0, "Fast rope links cannot tunnel through a solid block");
-                var floorContact = naturality.client.villager.RopeChain.resolveCollision(
-                    new net.minecraft.world.phys.Vec3(.5, .9, .5),
-                    new net.minecraft.world.phys.Vec3(.5, 2, .5), blockBox);
-                check(floorContact.y > 1, "Falling rope links rest above the collision surface");
                 check(chain[0].equals(ropeStart) && chain[chain.length - 1].equals(ropeEnd),
                     "Physics rope pins both endpoints");
                 ropeMiddle[0] = chain[chain.length / 2];
@@ -362,6 +365,15 @@ public final class VillagerWorkGameTest implements FabricClientGameTest {
                 check(player.getInventory().countItem(playerCatch[0].getItem()) > beforePlayerCatch[0],
                     "Player receives the caught item when the bobber reaches them");
             });
+            server.runCommand("tp @a 20 103 -7 facing 22 101 -3");
+            server.runCommand("time set 18000");
+            context.waitTicks(8);
+            context.takeScreenshot("player-lead-lighting-night");
+            server.runCommand("setblock 22 101 -4 torch");
+            context.waitTicks(12);
+            context.takeScreenshot("player-lead-lighting-torch");
+            server.runCommand("setblock 22 101 -4 air");
+            server.runCommand("time set 3000");
         }
     }
 

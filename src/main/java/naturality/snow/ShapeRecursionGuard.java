@@ -13,7 +13,7 @@ public final class ShapeRecursionGuard {
     }
     public static void exitFire() {
         var depth = DEPTH.get();
-        if (--depth[0] == 0 && depth[1] == 0) DEPTH.remove();
+        --depth[0];
     }
     public static boolean enterSnow() {
         var depth = DEPTH.get();
@@ -23,12 +23,12 @@ public final class ShapeRecursionGuard {
     }
     public static void exitSnow() {
         var depth = DEPTH.get();
-        if (--depth[1] == 0 && depth[0] == 0) DEPTH.remove();
+        --depth[1];
     }
     public static boolean active() {
         var depth = DEPTH.get();
         boolean active = depth[0] != 0 || depth[1] != 0;
-        if (!active) DEPTH.remove();
         return active;
     }
+    public static boolean fireActive() { return DEPTH.get()[0] != 0; }
 }

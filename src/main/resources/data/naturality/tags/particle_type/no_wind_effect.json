@@ -1,6 +1,7 @@
 {
   "replace": false,
   "values": [
+    "naturality:star_trail",
     "minecraft:firefly",
     "minecraft:egg_crack",
     "minecraft:fishing",
@@ -24,6 +25,8 @@
     "minecraft:bubble_column_up",
     "minecraft:current_down",
     "naturality:waterfall",
-    "naturality:waterfall_big"
+    "naturality:waterfall_big",
+    "naturality:lavafall",
+    "naturality:lavafall_big"
   ]
 }

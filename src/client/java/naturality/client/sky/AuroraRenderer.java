@@ -23,6 +23,13 @@ import org.joml.Vector4f;
 /** Emissive world-space curtains, drawn after terrain fog and before the cloud overlay. */
 public final class AuroraRenderer {
     private static final Identifier PALETTE = Naturality.id("textures/sky/aurora.png");
+    private static final Identifier END_PALETTE = Naturality.id("textures/sky/aurora_end.png");
+    public static Identifier palette(Level level) {
+        return level.dimension().equals(Level.END) ? END_PALETTE : PALETTE;
+    }
+    private static boolean supported(Level level) {
+        return level.dimension().equals(Level.OVERWORLD) || level.dimension().equals(Level.END);
+    }
     private static final RenderPipeline PIPELINE = RenderPipelines.register(RenderPipeline.builder()
         .withLocation(Naturality.id("pipeline/aurora"))
         .withVertexShader(Naturality.id("core/aurora"))
@@ -56,8 +63,9 @@ public final class AuroraRenderer {
         var world = AuroraRenderer.world;
         if (world == null || client.isPaused()) return;
         previousStrength = strength;
-        float target = world.dimension().equals(Level.OVERWORLD)
-            ? SkyEventsClient.strength(world, SkyEventType.AURORA_BOREALIS) : 0;
+        float target = supported(world)
+            ? SkyEventsClient.strength(world, world.dimension().equals(Level.END)
+                ? SkyEventType.END_AURORA : SkyEventType.AURORA_BOREALIS) : 0;
         strength += Math.clamp(target - strength, -.25F, .25F);
         motionPhase += .05F * (.18F + .82F * strength / 20F);
     }
@@ -86,7 +94,7 @@ public final class AuroraRenderer {
         drawnPanels = 0;
         var client = Minecraft.getInstance();
         var world = AuroraRenderer.world;
-        if (world == null || world != client.level || !world.dimension().equals(Level.OVERWORLD)
+        if (world == null || world != client.level || !supported(world)
                 || strength <= .001F) return;
         var camera = client.gameRenderer.mainCamera();
         var player = client.player;
@@ -113,10 +121,10 @@ public final class AuroraRenderer {
         for (int z = tileZ-1; z <= tileZ+1; z++) for (int x = tileX-1; x <= tileX+1; x++)
             TILES.computeIfAbsent(new Key(x,z), AuroraRenderer::build);
         // Texture reload/upload must finish before opening the draw pass.
-        var palette = client.getTextureManager().getTexture(PALETTE);
+        var palette = client.getTextureManager().getTexture(palette(world));
         float partial = client.getDeltaTracker().getGameTimeDeltaPartialTick(false);
         float value = previousStrength + (strength-previousStrength)*partial;
-        float rain = 1 - world.getRainLevel(partial);
+        float rain = world.dimension().equals(Level.END) ? 1 : 1 - world.getRainLevel(partial);
         float phase = motionPhase + partial * .05F * (.18F + .82F * value / 20F);
         var indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
         try (var pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(

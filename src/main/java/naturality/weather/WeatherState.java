@@ -28,6 +28,11 @@ public record WeatherState(float rain, float wind, float temperature, float dire
     public float heavyRainParticleChance(double distance) {
         return heavyRainFog() * Math.clamp((float)(distance / 15.0), 0, 1);
     }
+    /** Snow accelerates smoothly through severe winds, reaching four times its calm fall speed. */
+    public float snowFallMultiplier() {
+        float t=Math.clamp((wind-80)/20,0,1);
+        return 1+3*t*t*(3-2*t);
+    }
     /** Probability of retaining a vanilla ground impact; does not alter rain sounds. */
     public float groundImpactChance() { float t = rain / 100; return t * t; }
     /** Wind motion reaches its former maximum at 75, then rises sharply to 3x at 100. */

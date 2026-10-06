@@ -20,6 +20,8 @@ public final class NaturalityParticles {
         Naturality.id("lavafall"),FabricParticleTypes.simple());
     public static final SimpleParticleType LAVAFALL_BIG=Registry.register(BuiltInRegistries.PARTICLE_TYPE,
         Naturality.id("lavafall_big"),FabricParticleTypes.simple());
+    public static final SimpleParticleType STAR_TRAIL=Registry.register(BuiltInRegistries.PARTICLE_TYPE,
+        Naturality.id("star_trail"),FabricParticleTypes.simple());
     public static void initialize() {}
     private NaturalityParticles() {}
 }

@@ -17,7 +17,11 @@ public class Naturality implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
-		naturality.config.GameplaySettings.initialize();
+		NaturalityBlocks.initialize();
+		naturality.worldgen.LirestoneBoulderFeature.initialize();
+		NaturalityEffects.initialize();
+        naturality.starfall.StarfallEntities.initialize();
+        naturality.config.GameplaySettings.initialize();
         naturality.weather.WeatherSystem.initialize();
         naturality.sky.SkyEvents.initialize();
         naturality.snow.SnowCompaction.initialize();
@@ -25,6 +29,8 @@ public class Naturality implements ModInitializer {
 		NaturalitySounds.initialize();
         NaturalityParticles.initialize();
         naturality.villager.VillagerBobbers.initialize();
+        naturality.villager.FishingSpots.initialize();
+        naturality.villager.Reputation.initialize();
 		naturality.portal.PortalOpeningManager.initialize();
 		// This code runs as soon as Minecraft is in a mod-load-ready state.
 		// However, some things (like resources) may still be uninitialized.

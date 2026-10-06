@@ -50,7 +50,7 @@ public final class WeatherGameTest implements FabricClientGameTest {
                     var frozenPos = new BlockPos(10,101,10);
                     level.setBlockAndUpdate(frozenPos, Blocks.SNOW.defaultBlockState());
                     check(!WeatherThaw.thawAt(level,frozenPos), "Cold weather does not thaw snow" );
-                    check(level.isRaining() && level.isThundering(), "50 must be a vanilla thunderstorm");
+                    check(level.isRaining() && !level.isThundering(), "Rain 50 retains storm visuals without allowing lightning");
                     check(level.getRainLevel(1) == 1 && level.getThunderLevel(1) == 1, "Vanilla lighting levels remain bounded");
                     var pos = new BlockPos(0, 101, 0);
                     var registry = level.registryAccess().lookupOrThrow(Registries.BIOME);
@@ -205,16 +205,17 @@ public final class WeatherGameTest implements FabricClientGameTest {
                 context.waitTicks(20);
                 context.runOnClient(client -> check(WeatherSystem.state(client.level) == null, "Disable clears synchronized state"));
                 p.enabled = true; p.overrideRain = p.overrideWind = p.overrideTemperature = false;
+                server.runCommand("gamerule advance_weather false");
                 server.runOnServer(s -> s.setWeatherParameters(12000, 0, false, false));
                 context.waitTicks(20);
                 server.runOnServer(s -> {
                     var state = WeatherSystem.state(s.overworld());
-                    check(state != null && state.rain() == 0, "Automatic clear follows the vanilla weather clock");
-                    check(state.wind() > 0, "Dry weather has independent wind");
+                    check(state != null && state.rain() == 0, "Automatic rain remains calm before activation");
+                    check(state.wind() == 0, "Paused automatic wind remains calm before activation");
                 });
                 server.runOnServer(s -> s.setWeatherParameters(0, 12000, true, false));
                 context.waitTicks(30);
-                server.runOnServer(s -> check(WeatherSystem.state(s.overworld()).rain() > 0, "Automatic wet period evolves rain"));
+                server.runOnServer(s -> check(WeatherSystem.state(s.overworld()).rain() == 0, "Vanilla rain does not force a paused automatic slider to activate"));
                 server.runCommand("gamerule advance_weather false");
                 // Let the transition finish; subsequent targets must stop evolving.
                 context.waitTicks(110);

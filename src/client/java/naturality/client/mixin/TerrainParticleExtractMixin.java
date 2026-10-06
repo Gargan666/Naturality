@@ -41,6 +41,8 @@ public abstract class TerrainParticleExtractMixin extends Particle {
     private void naturality$emitPixelFragments(QuadParticleRenderState state, Camera camera, float partialTick, CallbackInfo ci) {
         if (!((Object) this instanceof TerrainParticle) || !((Object) this instanceof BlockFragmentPixels fragment)) return;
 
+        if (fragment.naturality$cropWidth() == 0) return;
+
         var rotation = new Quaternionf();
         getFacingCameraMode().setRotation(rotation, camera, partialTick);
         if (roll != 0) rotation.rotateZ(Mth.lerp(partialTick, oRoll, roll));

@@ -84,6 +84,12 @@ vec4 calculateFinalColor(vec4 color, bool waterSprite, bool submergedTerrain) {
         #endif
         float distanceFog = linear_fog_value(cylindricalVertexDistance, distanceStart, distanceEnd);
         result.rgb += (atmosphere - fogColor.rgb) * distanceFog;
+        // Rain haze meets the directional atmosphere (including sunset), not
+        // a uniform horizon color. Leave ordinary cave/environment fog intact.
+        float rainFog = intBitsToFloat(WaterEnvironment.z);
+        float environmentalFog = linear_fog_value(sphericalVertexDistance, FogEnvironmentalStart, FogEnvironmentalEnd);
+        result.rgb += (atmosphere - fogColor.rgb * naturality_world_fog_brightness(fogColor.a))
+            * max(0.0, environmentalFog - distanceFog) * rainFog;
     }
     // Underwater surface extinction belongs to the depth-tested water draw,
     // not a fullscreen pass using opaque depth behind translucent entities.
@@ -181,6 +187,10 @@ void main() {
             FogEnvironmentalStart, FogEnvironmentalEnd,
             FogRenderDistanceStart, FogRenderDistanceEnd, FogColor).rgb;
         fogged += (texture(NaturalityWaterAtmosphere, fogUV).rgb - FogColor.rgb) * waterFog * fogOpacity;
+        float environmentalFog = linear_fog_value(sphericalVertexDistance, FogEnvironmentalStart, FogEnvironmentalEnd);
+        fogged += (texture(NaturalityWaterAtmosphere, fogUV).rgb
+            - FogColor.rgb * naturality_world_fog_brightness(FogColor.a))
+            * max(0.0, environmentalFog - waterFog) * intBitsToFloat(WaterEnvironment.z) * fogOpacity;
         color.a = mix(color.a, 1.0, coverage);
         color.rgb = fogged / max(color.a, 0.0001);
     }

@@ -73,7 +73,8 @@ public final class SkyEventCommand {
             ? player : level.players().isEmpty() ? null : level.players().getFirst();
         var happening = new ArrayList<String>();
         var lines = new StringBuilder("Sky Events in " + dimension);
-        if (observer != null) lines.append(" (local aurora near ").append(observer.getName().getString()).append(')');
+        if (observer != null && (pool.contains(SkyEventType.AURORA_BOREALIS) || pool.contains(SkyEventType.END_AURORA)))
+            lines.append(" (local aurora near ").append(observer.getName().getString()).append(')');
         lines.append(':');
         boolean advance = level.getGameRules().get(net.minecraft.world.level.gamerules.GameRules.ADVANCE_WEATHER);
         for (var type : pool) {
@@ -81,7 +82,19 @@ public final class SkyEventCommand {
             float value = SkyEvents.strength(level, type);
             boolean active;
             String detail;
-            if (type == SkyEventType.METEOR_SHOWER) {
+            if (type == SkyEventType.END_FLASHES) {
+                var cycle = SkyEvents.cycle(level, type);
+                active = settings.override ? settings.strength > 0 : cycle != null && cycle.active();
+                if (active || value > .01F) happening.add(type.label);
+                lines.append('\n').append(type.label).append(": ").append(state(active, value, settings.override))
+                    .append(settings.override ? "; override; automatic starts suppressed" : cycle == null
+                        ? "; scheduler initializing" : cycle.active()
+                        ? "; active for up to " + cycle.remaining() + " more ticks" : "; rolls each quiet tick");
+                double roll = SkyEventCycle.END_FLASH_CHANCE_PER_TICK;
+                lines.append(". Start chance while quiet: tick ").append(percent(roll))
+                    .append(", second ").append(percent(1 - Math.pow(1 - roll, 20)))
+                    .append(", minute ").append(percent(1 - Math.pow(1 - roll, 1200))).append('.');
+            } else if (type == SkyEventType.METEOR_SHOWER) {
                 var cycle = SkyEvents.cycle(level, type);
                 active = settings.override ? settings.strength > 0 : cycle != null && cycle.active();
                 boolean visible = (active || value > .01F) && SkyEvents.isNight(level);
@@ -126,7 +139,7 @@ public final class SkyEventCommand {
                 else {
                     double roll = Math.clamp(local.chance(), 0F, 1F);
                     lines.append("; ").append(local.active() ? "active" : "next roll in " + local.nextAttempt() + " ticks")
-                        .append(". Climate-adjusted roll: ").append(percent(roll))
+                        .append(type == SkyEventType.END_AURORA ? ". Fixed End roll: " : ". Climate-adjusted roll: ").append(percent(roll))
                         .append(" every 600 ticks; estimated while idle: tick ").append(percent(roll / 600))
                         .append(", second ").append(percent(roll / 30))
                         .append(", minute ").append(percent(1 - Math.pow(1 - roll, 2))).append('.');
@@ -134,7 +147,8 @@ public final class SkyEventCommand {
             }
         }
         lines.append("\nCurrently happening here: ").append(happening.isEmpty() ? "none" : String.join(", ", happening));
-        if (!advance) lines.append(". Automatic sky event timers are paused by the weather gamerule");
+        if (!advance && !level.dimension().equals(net.minecraft.world.level.Level.END))
+            lines.append(". Automatic sky event timers are paused by the weather gamerule");
         String message = lines.toString();
         source.sendSuccess(() -> Component.literal(message), false);
         return Command.SINGLE_SUCCESS;

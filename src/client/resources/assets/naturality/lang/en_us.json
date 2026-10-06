@@ -1,4 +1,11 @@
 {
+  "entity.naturality.falling_star": "Falling Star",
+  "entity.naturality.fizzle": "Fizzle",
+  "particle.naturality.star_trail": "Star Trail",
+  "block.naturality.lirestone": "Lirestone",
+  "block.naturality.smooth_endstone": "Smooth End Stone",
+  "effect.naturality.distortion": "Distortion",
+  "subtitles.naturality.end_ambience": "Strange noise echoes",
   "naturality.config.category.sky_events": "Sky Events",
   "naturality.config.liquids.waterDepth": "Water depth darkness",
   "naturality.config.liquids.waterDepth.tooltip": "Clear shallows, dark depths and a visible surface overhead. Local lights remain visible. Swamps are murky.",

@@ -49,7 +49,31 @@ float naturality_world_fog_brightness(float encodedAlpha) {
 }
 
 vec4 apply_fog(vec4 inColor, float sphericalVertexDistance, float cylindricalVertexDistance, float environmentalStart, float environmantalEnd, float renderDistanceStart, float renderDistanceEnd, vec4 fogColor) {
-    if (FogColor.a < 0.0) return inColor;
+    #ifdef NATURALITY_FRAGMENT_FOG
+    // Evaluate surface derivatives before branching, using the distance-fog grid.
+    float silhouetteCellDistance = naturality_fog_cell_distance(cylindricalVertexDistance);
+    #endif
+    if (FogColor.a < 0.0) {
+        // End terrain loses illumination before its silhouette dissolves into
+        // the captured purple atmosphere in the later composite pass.
+        float range = max(renderDistanceEnd, 1.0);
+        float shadow = smoothstep(range * 0.25, range * 0.65, cylindricalVertexDistance);
+        #ifdef NATURALITY_FRAGMENT_FOG
+        if (NATURALITY_FOG_ENABLED && shadow > 0.0 && shadow < 1.0) {
+            float tolerance = max(2.0, cylindricalVertexDistance * 0.05);
+            float pixelDistance = clamp(silhouetteCellDistance,
+                cylindricalVertexDistance - tolerance, cylindricalVertexDistance + tolerance);
+            float pixelShadow = smoothstep(range * 0.25, range * 0.65, pixelDistance);
+            shadow = mix(shadow, naturality_fog_density(pixelShadow),
+                smoothstep(NATURALITY_FOG_BORDER_START, NATURALITY_FOG_BORDER_FULL, shadow));
+        }
+        #endif
+        // All texture and lighting variation vanishes at the silhouette stage.
+        // Multiply by alpha so OIT accumulation retains premultiplied colors.
+        vec3 silhouette = vec3(0.035, 0.008, 0.075)
+            * naturality_world_fog_brightness(FogColor.a) * inColor.a;
+        return vec4(mix(inColor.rgb, silhouette, shadow), inColor.a);
+    }
     float fogValue = total_fog_value(sphericalVertexDistance, cylindricalVertexDistance, environmentalStart, environmantalEnd, renderDistanceStart, renderDistanceEnd);
     float opacity = abs(fogColor.a) >= 2.0 ? 1.0 : fogColor.a;
     float caveBrightness = naturality_world_fog_brightness(fogColor.a);

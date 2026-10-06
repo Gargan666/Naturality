@@ -17,12 +17,17 @@ import net.minecraft.world.level.block.state.BlockState;
 
 /** Snow drips clipped to the actual side quads underneath coated top edges. */
 public final class SnowOverlayModel extends WrapperBlockStateModel {
+    private static final Identifier OVERLAY = Identifier.fromNamespaceAndPath("naturality","block/snow_overlay");
     private static volatile Map<Identifier,TextureAtlasSprite> sprites=Map.of();
-    public static void atlasLoaded(Map<Identifier,TextureAtlasSprite> atlas) { sprites=Map.copyOf(atlas); }
+    private static volatile SnowSpriteLookup spriteLookup=new SnowSpriteLookup(Map.of());
+    public static void atlasLoaded(Map<Identifier,TextureAtlasSprite> atlas) {
+        sprites=Map.copyOf(atlas); spriteLookup=new SnowSpriteLookup(sprites);
+    }
     public SnowOverlayModel(BlockStateModel wrapped) { super(wrapped); }
     @Override public @org.jspecify.annotations.Nullable Object createGeometryKey(BlockAndTintGetter l,BlockPos p,BlockState s,RandomSource r) {
         return !naturality.config.GameplaySettings.clientSnowWrapping()
-            || !naturality.config.NaturalityConfig.get().effects.snowOverlays || snowOwner(l,p)==null
+            || !naturality.config.NaturalityConfig.get().effects.snowOverlays
+            || naturality.snow.NoSnowSideOverlay.contains(s) || naturality.snow.SnowSupportOnly.contains(s) || snowOwner(l,p)==null
             ? wrapped.createGeometryKey(l,p,s,r) : null;
     }
     private static @org.jspecify.annotations.Nullable BlockPos snowOwner(BlockAndTintGetter level,BlockPos pos) {
@@ -41,29 +46,33 @@ public final class SnowOverlayModel extends WrapperBlockStateModel {
     }
     @Override public void emitQuads(QuadEmitter e,BlockAndTintGetter level,BlockPos pos,BlockState state,
             RandomSource random,Predicate<@org.jspecify.annotations.Nullable Direction> cull) {
+        naturality.snow.SnowGeometryCache.begin();
+        try { emitCached(e,level,pos,state,random,cull); }
+        finally { naturality.snow.SnowGeometryCache.end(); }
+    }
+    private void emitCached(QuadEmitter e,BlockAndTintGetter level,BlockPos pos,BlockState state,
+            RandomSource random,Predicate<@org.jspecify.annotations.Nullable Direction> cull) {
         if (!naturality.config.GameplaySettings.clientSnowWrapping() || !naturality.config.NaturalityConfig.get().effects.snowOverlays) { wrapped.emitQuads(e,level,pos,state,random,cull); return; }
-        var overlay=sprites.get(Identifier.fromNamespaceAndPath("naturality","block/snow_overlay"));
+        var overlay=sprites.get(OVERLAY);
+        if (overlay == null || naturality.snow.NoSnowSideOverlay.contains(state)
+                || naturality.snow.SnowSupportOnly.contains(state)) { wrapped.emitQuads(e,level,pos,state,random,cull); return; }
+        boolean lowerDoublePlant=state.getBlock() instanceof DoublePlantBlock
+            && state.getValue(DoublePlantBlock.HALF)==net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER;
+        if(state.getBlock() instanceof GrassBlock || SnowGeometry.coveredByContinuation(level,pos) || lowerDoublePlant) {
+            wrapped.emitQuads(e,level,pos,state,random,cull); return;
+        }
+        var owner=snowOwner(level,pos);
+        if(owner==null) { wrapped.emitQuads(e,level,pos,state,random,cull); return; }
         boolean foliage=SnowGeometry.isFoliage(state);
         var tops=new ArrayList<naturality.fire.FireSurface.Patch>();
         var snowBoxes=new ArrayList<net.minecraft.world.phys.AABB>();
-        boolean coveredByContinuation=SnowGeometry.coveredByContinuation(level,pos);
-        boolean lowerDoublePlant=state.getBlock() instanceof DoublePlantBlock
-            && state.getValue(DoublePlantBlock.HALF)==net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER;
-        if(overlay!=null && !(state.getBlock() instanceof GrassBlock)
-                && !naturality.snow.NoSnowSideOverlay.contains(state)
-                && !naturality.snow.SnowSupportOnly.contains(state)
-                && !coveredByContinuation && !lowerDoublePlant) {
-            var owner=snowOwner(level,pos);
-            if(owner!=null) {
-                int offset=owner.getY()-pos.getY();
-                var snowState=level.getBlockState(owner);
-                for(var box:SnowGeometry.shape(level,owner,snowState.getValue(SnowLayerBlock.LAYERS)).toAabbs())
-                    snowBoxes.add(box.move(0,offset,0));
-                for(var p:SnowGeometry.surfaces(level,owner))tops.add(new naturality.fire.FireSurface.Patch(
-                    p.x(),p.y()+offset,p.z(),p.ux(),p.uz(),p.vx(),p.vz()));
-            }
-        }
-        if(overlay == null || tops.isEmpty()) { wrapped.emitQuads(e,level,pos,state,random,cull);return; }
+        int offset=owner.getY()-pos.getY();
+        var snowState=level.getBlockState(owner);
+        for(var box:SnowGeometry.shape(level,owner,snowState.getValue(SnowLayerBlock.LAYERS)).toAabbs())
+            snowBoxes.add(box.move(0,offset,0));
+        for(var p:SnowGeometry.surfaces(level,owner))tops.add(new naturality.fire.FireSurface.Patch(
+            p.x(),p.y()+offset,p.z(),p.ux(),p.uz(),p.vx(),p.vz()));
+        if(tops.isEmpty()) { wrapped.emitQuads(e,level,pos,state,random,cull);return; }
         boolean leaves=state.getBlock() instanceof LeavesBlock || foliage;
         var sides=new ArrayList<Side>();
         var edgeOcclusion=new EdgeOcclusion(level,pos,snowBoxes);
@@ -78,11 +87,11 @@ public final class SnowOverlayModel extends WrapperBlockStateModel {
                 float topY=q.y(a);
 
                 float[][] p=new float[4][3],uv=new float[4][2];int[] order={a,d,c,b};
-                for(int i=0;i<4;i++){int v=order[i];p[i]=new float[]{q.x(v),q.y(v),q.z(v)};uv[i]=new float[]{q.u(v),q.v(v)};}
+                for(int i=0;i<4;i++){int v=order[i];p[i][0]=q.x(v);p[i][1]=q.y(v);p[i][2]=q.z(v);uv[i][0]=q.u(v);uv[i][1]=q.v(v);}
                 TextureAtlasSprite source=null;
                 if(leaves) {
                     float u=(q.u(a)+q.u(c))/2,v=(q.v(a)+q.v(c))/2;
-                    for(var sprite:sprites.values()) if(u>=sprite.getU0() && u<sprite.getU1() && v>=sprite.getV0() && v<sprite.getV1()) {source=sprite;break;}
+                    source=spriteLookup.find(u,v);
                 }
                 var side=new Side(p,uv,q.lightFace(),source);
                 if(foliage)sides.add(side);
@@ -103,23 +112,33 @@ public final class SnowOverlayModel extends WrapperBlockStateModel {
                         }
                     }
                     Float[] cuts=edges.toArray(Float[]::new);
+                    int runStart=-1;
                     for(int j=0;j<cuts.length-1;j++) {
                         float f=(cuts[j]+cuts[j+1])/2;
                         float x=mix(p[0][0],p[3][0],f),z=mix(p[0][2],p[3][2],f);
-                        if(tops.stream().noneMatch(patch->Math.abs(patch.y()-topY)<1e-4 && patch.contains(x,z)))continue;
-                        double snowTop=snowBoxes.stream().filter(box -> Math.abs(box.minY-topY)<1e-4
+                        boolean coated=false;
+                        for(var patch:tops) if(Math.abs(patch.y()-topY)<1e-4 && patch.contains(x,z)) { coated=true;break; }
+                        double snowTop=topY;
+                        if(coated)for(var box:snowBoxes)if(Math.abs(box.minY-topY)<1e-4
                             && x>=box.minX-1e-5 && x<=box.maxX+1e-5 && z>=box.minZ-1e-5 && z<=box.maxZ+1e-5)
-                            .mapToDouble(box->box.maxY).max().orElse(topY);
-                        if(!edgeOcclusion.exposed(q.lightFace(),x,topY,z,snowTop))continue;
+                            snowTop=Math.max(snowTop,box.maxY);
+                        boolean exposed=coated && edgeOcclusion.exposed(q.lightFace(),x,topY,z,snowTop);
+                        if(exposed && runStart<0)runStart=j;
+                        // Keep visibility sampling at every original boundary, but emit
+                        // one continuous interval instead of sixteen separate meshes.
+                        if(exposed && j<cuts.length-2)continue;
+                        if(runStart<0)continue;
+                        int end=exposed?j+1:j;
                         float[][] clipped=new float[4][3],mapped=new float[4][2];
                         for(int i=0;i<4;i++) {
                             int left=i==0||i==3?0:1,right=i==0||i==3?3:2;
-                            float at=i<2?cuts[j]:cuts[j+1];
+                            float at=i<2?cuts[runStart]:cuts[end];
                             for(int k=0;k<3;k++)clipped[i][k]=mix(p[left][k],p[right][k],at);
                             for(int k=0;k<2;k++)mapped[i][k]=mix(uv[left][k],uv[right][k],at);
                         }
                         sides.add(new Side(clipped,mapped,q.lightFace(),source,
-                            cuts[j]*side.textureWidth,side.textureWidth));
+                            cuts[runStart]*side.textureWidth,side.textureWidth));
+                        runStart=-1;
                     }
                 }
                 break;
@@ -127,7 +146,9 @@ public final class SnowOverlayModel extends WrapperBlockStateModel {
             return true;
         });
         try { wrapped.emitQuads(e,level,pos,state,random,cull); } finally { e.popTransform(); }
-        for(var side:sides) emit(e,side,overlay,leaves,level,pos,state);
+        boolean movingLeaves=state.is(net.minecraft.tags.BlockTags.LEAVES)
+            && naturality.client.weather.WindRendering.windExposed(level,pos);
+        for(var side:sides) emit(e,side,overlay,leaves,movingLeaves,pos,state);
     }
     private static float mix(float a,float b,float t){return a+(b-a)*t;}
     /** Reuse the same translated blockers for all texel strips in a column. Mesh-local only. */
@@ -172,11 +193,11 @@ public final class SnowOverlayModel extends WrapperBlockStateModel {
         }
     }
     private static void emit(QuadEmitter e,Side s,TextureAtlasSprite overlay,boolean leaves,
-            BlockAndTintGetter level,BlockPos pos,BlockState state) {
+            boolean movingLeaves,BlockPos pos,BlockState state) {
         var p=s.p;float width=(float)Math.hypot(p[3][0]-p[0][0],p[3][2]-p[0][2]);
         float height=p[0][1]-p[1][1];if(width<1e-5 || height<1e-5)return;
         var modelOffset=state.getOffset(pos);
-        boolean leafBlock=state.is(net.minecraft.tags.BlockTags.LEAVES);
+        var material=new Material.Baked(overlay,false);
         int density=Math.max(overlay.contents().width(),overlay.contents().height());
         var sourceSprite = s.sprite;
         if(leaves && sourceSprite!=null)density=Math.max(density,Math.max(sourceSprite.contents().width(),sourceSprite.contents().height()));
@@ -210,18 +231,18 @@ public final class SnowOverlayModel extends WrapperBlockStateModel {
             while(!leaves && x<sourceX.length-1 && topOffsets[x]==topOffset && Math.floor(s.textureOffset+sourceX[x])==Math.floor(s.textureOffset+sourceX[start])
                     && visible(s,overlay,leaves,(sourceX[x]+sourceX[x+1])/2,(t+b)/2,width,height,topOffset))x++;
             float l=sourceX[start],r=sourceX[x];
-            float[] along={l,l,r,r},down={t,b,b,t};
             for(int i=0;i<4;i++) {
-                float f=along[i]/width;
+                float along=i<2?l:r,down=i==0||i==3?t:b;
+                float f=along/width;
                 // The decal sits slightly in front of the support to avoid z-fighting.
                 // Overlap only its top edge with the snow skirt so oblique views
                 // cannot reveal a rasterization crack between the two planes.
-                float joinOverlap=!leaves && down[i]==0 ? 1F/512 : 0;
-                float vertexX=mix(p[0][0],p[3][0],f),vertexY=p[0][1]-down[i]+joinOverlap,
+                float joinOverlap=!leaves && down==0 ? 1F/512 : 0;
+                float vertexX=mix(p[0][0],p[3][0],f),vertexY=p[0][1]-down+joinOverlap,
                     vertexZ=mix(p[0][2],p[3][2],f);
                 int alpha=255;
-                if(leafBlock) {
-                    int leafTag=naturality.client.weather.WindRendering.vertexTag(level,pos,state,
+                if(movingLeaves) {
+                    int leafTag=naturality.client.weather.WindRendering.leafTag(
                         vertexX+(float)modelOffset.x,vertexY+(float)modelOffset.y,vertexZ+(float)modelOffset.z);
                     if(leafTag>=160 && leafTag<=191) {
                         int faceAxis=s.face.getAxis()==Direction.Axis.Z ? 1 : 0;
@@ -233,9 +254,9 @@ public final class SnowOverlayModel extends WrapperBlockStateModel {
                 // One sampled overlay color per foliage texel: no independent
                 // world-space texture grid or partial-pixel color boundaries.
                 if(leaves)e.uv(i,(s.textureOffset+(l+r)/2)/s.textureWidth,((t+b)/2-topOffset)/height);
-                else e.uv(i,s.textureOffset+along[i]-(float)Math.floor(s.textureOffset+l),down[i]-topOffset);
+                else e.uv(i,s.textureOffset+along-(float)Math.floor(s.textureOffset+l),down-topOffset);
             }
-            e.materialBake(new Material.Baked(overlay,false),MutableQuadView.BAKE_NORMALIZED);
+            e.materialBake(material,MutableQuadView.BAKE_NORMALIZED);
             e.tintIndex(-1).cullFace(null).shadeDirectionOverride(s.face).emit();
         }
     }

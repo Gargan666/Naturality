@@ -10,7 +10,7 @@ import net.minecraft.world.phys.Vec3;
 
 /** Establishes a reversible crossing on the exit-facing surface of the destination portal. */
 public final class PortalArrival {
-    public static TeleportTransition prepare(TeleportTransition transition, PortalCrossing source) {
+    public static TeleportTransition prepare(TeleportTransition transition, PortalCrossing source, Entity entity) {
         BlockPos target = BlockPos.containing(transition.position());
         BlockPos anchor = null;
         double best = Double.POSITIVE_INFINITY;
@@ -24,13 +24,17 @@ public final class PortalArrival {
         // Vanilla rotates travel by +90 degrees when changing portal axes.
         int side=source.axis==axis ? -source.side : source.axis==Direction.Axis.X ? source.side : -source.side;
         double center=(axis==Direction.Axis.X?anchor.getZ():anchor.getX())+0.5;
-        double normal=center+side*(0.125+0.0625);
+        var bounds=entity.getBoundingBox();
+        double half=(axis==Direction.Axis.X?bounds.getZsize():bounds.getXsize())/2;
+        // The exit-facing side is visible; start with the entire body behind it.
+        // The far-face travel threshold leaves a slab-width gap before return travel.
+        double normal=center+side*(0.125-half-PortalCrossing.HIDDEN_CLEARANCE);
         Vec3 original=transition.position();
         Vec3 position=axis==Direction.Axis.X?new Vec3(original.x,original.y,normal):new Vec3(normal,original.y,original.z);
         BlockPos entry=anchor;
         return new TeleportTransition(transition.newLevel(),position,transition.deltaMovement(),transition.yRot(),transition.xRot(),
             transition.missingRespawnBlock(),transition.asPassenger(),transition.relatives(),
-            transition.postTeleportTransition().then(entity -> arrive(entity,entry,axis,side)));
+            transition.postTeleportTransition().then(arriving -> arrive(arriving,entry,axis,side)));
     }
 
     private static void arrive(Entity entity,BlockPos anchor,Direction.Axis axis,int side) {

@@ -17,7 +17,8 @@ public abstract class SnowSectionCompilerMixin {
             RenderSectionRegion region, VertexSorting sorting, SectionBufferBuilderPack builders,
             Operation<SectionCompiler.Results> original) {
         SnowSectionVisibility.begin(section);
+        naturality.snow.SnowGeometryCache.begin();
         try { return original.call(section, region, sorting, builders); }
-        finally { SnowSectionVisibility.finish(); }
+        finally { naturality.snow.SnowGeometryCache.end(); SnowSectionVisibility.finish(); }
     }
 }

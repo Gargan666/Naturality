@@ -32,7 +32,15 @@ public final class SurfaceSnowModel extends WrapperBlockStateModel {
     }
     @Override public void emitQuads(QuadEmitter e, BlockAndTintGetter level, BlockPos pos, BlockState state,
             RandomSource random, Predicate<@org.jspecify.annotations.Nullable Direction> cull) {
-        if (!naturality.config.GameplaySettings.clientSnowWrapping() || SnowGeometry.usesVanillaGeometry(level,pos)) { wrapped.emitQuads(e,level,pos,state,random,cull); return; }
+        if (!naturality.config.GameplaySettings.clientSnowWrapping() || SnowGeometry.usesVanillaGeometry(level,pos)) {
+            wrapped.emitQuads(e,level,pos,state,random,cull); return;
+        }
+        naturality.snow.SnowGeometryCache.begin();
+        try { emitCached(e,level,pos,state,random,cull); }
+        finally { naturality.snow.SnowGeometryCache.end(); }
+    }
+    private void emitCached(QuadEmitter e,BlockAndTintGetter level,BlockPos pos,BlockState state,
+            RandomSource random,Predicate<@org.jspecify.annotations.Nullable Direction> cull) {
         var material = wrapped.particleMaterial(level, pos, state);
         int leafDepth=0;
         for(int d=1;d<=7;d++) {
@@ -51,23 +59,32 @@ public final class SurfaceSnowModel extends WrapperBlockStateModel {
             SnowSectionVisibility.record(pos,p.minY);
             float x=(float)p.minX, X=(float)p.maxX, z=(float)p.minZ, Z=(float)p.maxZ, y=(float)p.minY, Y=(float)p.maxY;
             // Moving leaf caps retain all faces: a static neighbor can reveal a face as they sway.
-            if (exposedLeaves || visibility.visible(p,Direction.UP)) face(e, material, leafDepth, exposedLeaves, (int)Math.floor(y+1e-5), Direction.UP, new float[][]{{x,Y,z},{x,Y,Z},{X,Y,Z},{X,Y,z}});
-            if (exposedLeaves || visibility.visible(p,Direction.DOWN)) face(e, material, leafDepth, exposedLeaves, (int)Math.floor(y+1e-5), Direction.DOWN, new float[][]{{x,y,Z},{x,y,z},{X,y,z},{X,y,Z}});
-            if (exposedLeaves || visibility.visible(p,Direction.NORTH)) face(e, material, leafDepth, exposedLeaves, (int)Math.floor(y+1e-5), Direction.NORTH, new float[][]{{X,Y,z},{X,y,z},{x,y,z},{x,Y,z}});
-            if (exposedLeaves || visibility.visible(p,Direction.SOUTH)) face(e, material, leafDepth, exposedLeaves, (int)Math.floor(y+1e-5), Direction.SOUTH, new float[][]{{x,Y,Z},{x,y,Z},{X,y,Z},{X,Y,Z}});
-            if (exposedLeaves || visibility.visible(p,Direction.WEST)) face(e, material, leafDepth, exposedLeaves, (int)Math.floor(y+1e-5), Direction.WEST, new float[][]{{x,Y,z},{x,y,z},{x,y,Z},{x,Y,Z}});
-            if (exposedLeaves || visibility.visible(p,Direction.EAST)) face(e, material, leafDepth, exposedLeaves, (int)Math.floor(y+1e-5), Direction.EAST, new float[][]{{X,Y,Z},{X,y,Z},{X,y,z},{X,Y,z}});
+            if (exposedLeaves || visibility.visible(p,Direction.UP)) face(e, material, leafDepth, exposedLeaves, (int)Math.floor(y+1e-5), Direction.UP, x,y,z,X,Y,Z);
+            if (exposedLeaves || visibility.visible(p,Direction.DOWN)) face(e, material, leafDepth, exposedLeaves, (int)Math.floor(y+1e-5), Direction.DOWN, x,y,z,X,Y,Z);
+            if (exposedLeaves || visibility.visible(p,Direction.NORTH)) face(e, material, leafDepth, exposedLeaves, (int)Math.floor(y+1e-5), Direction.NORTH, x,y,z,X,Y,Z);
+            if (exposedLeaves || visibility.visible(p,Direction.SOUTH)) face(e, material, leafDepth, exposedLeaves, (int)Math.floor(y+1e-5), Direction.SOUTH, x,y,z,X,Y,Z);
+            if (exposedLeaves || visibility.visible(p,Direction.WEST)) face(e, material, leafDepth, exposedLeaves, (int)Math.floor(y+1e-5), Direction.WEST, x,y,z,X,Y,Z);
+            if (exposedLeaves || visibility.visible(p,Direction.EAST)) face(e, material, leafDepth, exposedLeaves, (int)Math.floor(y+1e-5), Direction.EAST, x,y,z,X,Y,Z);
         }
     }
-    private static void face(QuadEmitter e, Material.Baked material, int leafDepth, boolean exposedLeaves, int lightShift, Direction normal, float[][] points) {
+    private static void face(QuadEmitter e, Material.Baked material, int leafDepth, boolean exposedLeaves, int lightShift, Direction normal, float x, float y, float z, float X, float Y, float Z) {
         for (int i=0;i<4;i++) {
-            var p=points[i];
-            int alpha=leafDepth==0 || !exposedLeaves ? 192 : naturality.client.weather.WindRendering.leafTag(p[0],p[1]+leafDepth,p[2])-32;
-            e.pos(i,p[0],p[1],p[2]).color(i,(alpha<<24)|0xFFFFFF);
-            float u=normal.getAxis()==Direction.Axis.X ? p[2] : p[0];
-            float v=normal.getAxis()==Direction.Axis.Y ? p[2] : p[1];
+            float px,py,pz;
+            switch(normal) {
+                case UP -> { px=i<2?x:X;py=Y;pz=i==0||i==3?z:Z; }
+                case DOWN -> { px=i<2?x:X;py=y;pz=i==0||i==3?Z:z; }
+                case NORTH -> { px=i<2?X:x;py=i==0||i==3?Y:y;pz=z; }
+                case SOUTH -> { px=i<2?x:X;py=i==0||i==3?Y:y;pz=Z; }
+                case WEST -> { px=x;py=i==0||i==3?Y:y;pz=i<2?z:Z; }
+                case EAST -> { px=X;py=i==0||i==3?Y:y;pz=i<2?Z:z; }
+                default -> throw new IllegalStateException();
+            }
+            int alpha=leafDepth==0 || !exposedLeaves ? 192 : naturality.client.weather.WindRendering.leafTag(px,py+leafDepth,pz)-32;
+            e.pos(i,px,py,pz).color(i,(alpha<<24)|0xFFFFFF);
+            float u=normal.getAxis()==Direction.Axis.X ? pz : px;
+            float v=normal.getAxis()==Direction.Axis.Y ? pz : py;
             // Crop in block units; never stretch the vanilla snow grain to a narrow patch.
-            e.uv(i, Math.clamp(u,0,1), normal.getAxis()==Direction.Axis.Y ? Math.clamp(v,0,1) : 1-Math.clamp(v-(float)Math.floor(points[1][1]),0,1));
+            e.uv(i, Math.clamp(u,0,1), normal.getAxis()==Direction.Axis.Y ? Math.clamp(v,0,1) : 1-Math.clamp(v-(float)Math.floor(y),0,1));
         }
         e.materialBake(material,MutableQuadView.BAKE_NORMALIZED);
         e.tag(0x534E0000 | ((lightShift+64)&255));

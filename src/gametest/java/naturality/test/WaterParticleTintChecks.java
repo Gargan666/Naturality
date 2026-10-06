@@ -11,6 +11,8 @@ import net.minecraft.core.particles.ParticleTypes;
 
 final class WaterParticleTintChecks {
     static void check(Minecraft client) {
+        // Provider assertions are independent of the scene's already-consumed spray quota.
+        client.particleEngine.clearParticles();
         var types=new net.minecraft.core.particles.SimpleParticleType[]{
             ParticleTypes.DRIPPING_WATER,ParticleTypes.FALLING_WATER,ParticleTypes.DRIPPING_DRIPSTONE_WATER,
             ParticleTypes.FALLING_DRIPSTONE_WATER,ParticleTypes.RAIN,ParticleTypes.SPLASH,ParticleTypes.FISHING,

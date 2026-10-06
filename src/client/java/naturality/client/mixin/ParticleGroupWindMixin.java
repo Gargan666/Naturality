@@ -10,14 +10,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ParticleGroup.class)
 public abstract class ParticleGroupWindMixin {
-    @Inject(method="tickParticle",at=@At("HEAD"),cancellable=true)
-    private void naturality$removeHidden(Particle particle,CallbackInfo ci) {
-        if(particle.isAlive() && ((naturality.client.particle.ParticleVisibility.Access)particle).naturality$hidden(false)) {
-            particle.remove();
-            naturality.client.particle.ParticleVisibility.removed();
-            ci.cancel();
-        }
-    }
     @Inject(method = "tickParticle", at = @At(value = "INVOKE",
         target = "Lnet/minecraft/client/particle/Particle;tick()V", shift = At.Shift.AFTER))
     private void naturality$applyWind(Particle particle, CallbackInfo ci) {

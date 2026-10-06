@@ -106,7 +106,10 @@ public abstract class SnowPlacementMixin {
         // Snow must never replace a plant. Resolve the occupied partial cell to
         // the saved snow above it before vanilla rejects/replaces the target.
         for (int step=0; step<naturality.snow.SnowGeometry.MAX_DEPTH-1; step++) {
-            if (state.getBlock() instanceof LiquidBlock || Block.isShapeFullBlock(state.getShape(level,target)))
+            // Double plants use a full-cell selection outline even though they
+            // are foliage. Keep scanning through both halves to the snow owner.
+            if (state.getBlock() instanceof LiquidBlock || !naturality.snow.SnowGeometry.isFoliage(state)
+                    && Block.isShapeFullBlock(state.getShape(level,target)))
                 return InteractionResult.FAIL;
             if (step>=2 && !naturality.snow.SnowGeometry.exposesGround(level,target)) return InteractionResult.FAIL;
             target = target.above();

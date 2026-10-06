@@ -94,7 +94,7 @@ public final class VillagerBread {
             return;
         }
         if (recipient != null) {
-            if (!recipient.isAlive() || recipient.isSleeping() || time - heldSince > 400
+            if (VillagerSnowShelter.snowing(level, body) || !recipient.isAlive() || recipient.isSleeping() || time - heldSince > 400
                     || body.getInventory().countItem(Items.BREAD) <= (eatenDay == day ? 0 : 1)) {
                 clear(body); nextShare = time + 100; return;
             }
@@ -120,7 +120,7 @@ public final class VillagerBread {
             return;
         }
         if (!body.getMainHandItem().isEmpty()) return;
-        if (isFarmer && time >= nextShare && hour < 12000) {
+        if (isFarmer && time >= nextShare && hour < 12000 && !VillagerSnowShelter.snowing(level, body)) {
             sharedUntil.entrySet().removeIf(entry -> entry.getValue() <= time);
             var home = body.getBrain().getMemory(MemoryModuleType.JOB_SITE)
                 .filter(site -> site.dimension().equals(level.dimension())).map(site -> site.pos()).orElse(body.blockPosition());

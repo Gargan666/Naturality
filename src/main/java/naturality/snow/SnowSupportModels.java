@@ -9,9 +9,27 @@ import net.minecraft.world.phys.AABB;
 
 /** Vanilla model solids whose upper faces differ from their selection outline. */
 public final class SnowSupportModels {
+    private static final java.util.concurrent.ConcurrentHashMap<net.minecraft.world.level.block.state.BlockState,List<AABB>> MODEL_BOXES = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final ThreadLocal<java.util.IdentityHashMap<net.minecraft.world.phys.shapes.VoxelShape,List<AABB>>> SHAPE_BOXES =
+        ThreadLocal.withInitial(java.util.IdentityHashMap::new);
     private SnowSupportModels() { }
     public static List<AABB> boxes(BlockGetter level,BlockPos pos) {
         var state=level.getBlockState(pos);
+        var block=state.getBlock();
+        if(block instanceof EndRodBlock || block instanceof LightningRodBlock || block instanceof LanternBlock
+                || block instanceof HopperBlock || block instanceof FenceBlock || block instanceof FenceGateBlock) {
+            return MODEL_BOXES.computeIfAbsent(state,key -> List.copyOf(modelBoxes(level,pos,key)));
+        }
+        var shape=naturality.weather.WindShapes.raw(() -> state.getShape(level,pos));
+        var cache=SHAPE_BOXES.get();
+        var cached=cache.get(shape);
+        if(cached!=null)return cached;
+        var boxes=List.copyOf(shape.toAabbs());
+        if(cache.size()>=2048)cache.clear();
+        cache.put(shape,boxes);
+        return boxes;
+    }
+    private static List<AABB> modelBoxes(BlockGetter level,BlockPos pos,net.minecraft.world.level.block.state.BlockState state) {
         if(state.getBlock() instanceof EndRodBlock || state.getBlock() instanceof LightningRodBlock) {
             boolean end=state.getBlock() instanceof EndRodBlock;
             var facing=state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.FACING);
@@ -31,7 +49,7 @@ public final class SnowSupportModels {
         }
         if(state.getBlock() instanceof FenceBlock || state.getBlock() instanceof FenceGateBlock)
             return naturality.fire.FireGeometry.supportBoxes(level,pos);
-        return naturality.weather.WindShapes.raw(() -> state.getShape(level,pos).toAabbs());
+        throw new IllegalArgumentException("Unsupported state-only snow model: " + state);
     }
     private static AABB box(double x,double y,double z,double xx,double yy,double zz) {
         return new AABB(x/16,y/16,z/16,xx/16,yy/16,zz/16);

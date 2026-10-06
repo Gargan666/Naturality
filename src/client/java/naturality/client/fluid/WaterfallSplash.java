@@ -103,13 +103,12 @@ public final class WaterfallSplash {
             int column=SCAN_ORDER[cursor];
             cursor=(cursor+1)%SCAN_ORDER.length;
             int x=center.getX()-SEARCH_RANGE+column%WIDTH,z=center.getZ()-SEARCH_RANGE+column/WIDTH;
-            if(!naturality.client.particle.ParticleVisibility.outsideView(x-2,center.getY()-SEARCH_RANGE-2,z-2,x+3,center.getY()+SEARCH_RANGE+3,z+3))refreshColumn(x,z);
+            refreshColumn(x,z);
         }
         FallImpactDroplets.along(client,false,FALLS.values());
         var nearby=new ArrayList<Border>();
         for(var borders:COLUMNS.values())for(var border:borders)
-            if(Vec3.atCenterOf(border.pool).distanceToSqr(eye)<RANGE*RANGE && !naturality.client.particle.ParticleVisibility.outsideView(border.pool.getX()-2,border.pool.getY()-2,border.pool.getZ()-2,
-                border.pool.getX()+3,border.pool.getY()+3,border.pool.getZ()+3) && validBorder(world,border))nearby.add(border);
+            if(Vec3.atCenterOf(border.pool).distanceToSqr(eye)<RANGE*RANGE && validBorder(world,border))nearby.add(border);
         nearby.sort(Comparator.comparingDouble(b->Vec3.atCenterOf(b.pool).distanceToSqr(eye)));
         int budget=144;
         int warmBudget=96;

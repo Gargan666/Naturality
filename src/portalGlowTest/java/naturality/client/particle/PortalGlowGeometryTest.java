@@ -8,6 +8,9 @@ import org.joml.Vector3f;
 /** Runs without launching Minecraft; failures stop Gradle's check/build task. */
 public final class PortalGlowGeometryTest {
     public static void main(String[] args) {
+        PortalClippingTest.run();
+        naturality.client.villager.RopeSimulationTest.run();
+        WeatherParticleMathTest.run();
         EndPortalViewTest.run();
         naturality.portal.PortalOpeningTimingTest.run();
         PortalGlowOcclusionTest.run();

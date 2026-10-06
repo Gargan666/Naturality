@@ -68,6 +68,7 @@ public final class BreakingTexturesGameTest implements FabricClientGameTest {
             server.runCommand("setblock 3 100 8 chest[facing=north]");
             world.getConnection().waitForClientboundPackets();
             context.waitTicks(30);
+            context.runOnClient(SandParticleChecks::run);
             for (boolean mode : new boolean[]{false, true}) {
                 context.runOnClient(client -> client.options.improvedTransparency().set(mode));
                 for (int stage : new int[]{0, 4, 9}) {
@@ -97,6 +98,7 @@ public final class BreakingTexturesGameTest implements FabricClientGameTest {
             reload.get().join();
             context.waitTicks(10);
             context.takeScreenshot("breaking-reloaded");
+            context.runOnClient(SandParticleChecks::run);
             context.runOnClient(client -> {
                 for (int x = -3; x <= 3; x++)
                     client.level.destroyBlockProgress(200 + x, new BlockPos(x, 100, 8), -1);

@@ -30,7 +30,7 @@ public abstract class WeatherLevelMixin {
     private void naturality$storm(CallbackInfoReturnable<Boolean> cir) {
         Level level = (Level)(Object)this;
         var s = WeatherSystem.state(level);
-        if (s != null) cir.setReturnValue(level.canHaveWeather() && s.rain() >= 50);
+        if (s != null) cir.setReturnValue(level.canHaveWeather() && s.rain() > 70);
     }
     @Redirect(method = "precipitationAt", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/biome/Biome;getPrecipitationAt(Lnet/minecraft/core/BlockPos;I)Lnet/minecraft/world/level/biome/Biome$Precipitation;"))
     private Biome.Precipitation naturality$climate(Biome biome, BlockPos pos, int seaLevel) {

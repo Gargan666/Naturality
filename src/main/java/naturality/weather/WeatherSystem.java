@@ -86,7 +86,9 @@ public final class WeatherSystem {
                 ? Biome.Precipitation.SNOW : normal;
     }
     public static void initialize() {
+        EndWeatherSystem.initialize();
         PayloadTypeRegistry.clientboundPlay().register(WeatherPayload.TYPE, WeatherPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(DistantLightningPayload.TYPE,DistantLightningPayload.CODEC);
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             SERVER_SESSIONS.put(server, UUID.randomUUID().getLeastSignificantBits());
             for(var level:server.getAllLevels())restore(level);
@@ -107,6 +109,7 @@ public final class WeatherSystem {
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             for (var level : server.getAllLevels()) {
                 advance(level);
+                DistantLightning.tick(level);
                 snapshot(level);
                 if (server.getTickCount() % 10 == 0)
                     for (var player : server.getPlayerList().getPlayers()) send(player, level);

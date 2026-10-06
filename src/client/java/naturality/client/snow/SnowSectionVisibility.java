@@ -32,6 +32,6 @@ public final class SnowSectionVisibility {
         else BELOW.put(capture.section, capture.drop);
     }
 
-    public static int below(long sectionNode) { return BELOW.getOrDefault(sectionNode, 0); }
+    public static int below(long sectionNode) { return BELOW.isEmpty() ? 0 : BELOW.getOrDefault(sectionNode, 0); }
     public static void clear() { BELOW.clear(); CURRENT.remove(); }
 }

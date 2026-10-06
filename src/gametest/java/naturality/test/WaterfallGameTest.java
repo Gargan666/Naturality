@@ -68,6 +68,8 @@ public final class WaterfallGameTest implements FabricClientGameTest {
                 check(!WaterfallSplash.validBorder(c.level,new WaterfallSplash.Border(new BlockPos(0,100,0),Direction.EAST)),"No spray inside adjacent falling columns");
                 check(!WaterfallSplash.impactColumn(c.level,new BlockPos(5,100,5)),"Resting water alone must not splash");
                 check(!WaterfallSplash.impactColumn(c.level,new BlockPos(0,104,0)),"No spray halfway down a waterfall");
+                // Provider checks must not compete with naturally spawned spray for its shared quota.
+                c.particleEngine.clearParticles();
                 var small=c.particleEngine.createParticle(NaturalityParticles.WATERFALL,0,101,0,0.02,0,0);
                 var big=c.particleEngine.createParticle(NaturalityParticles.WATERFALL_BIG,0,101,0,0.02,0,0);
                 check(small instanceof WaterfallParticle && big instanceof WaterfallParticle,"Both providers registered");

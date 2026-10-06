@@ -9,6 +9,12 @@ public class NaturalityClient implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
         net.minecraft.client.renderer.entity.EntityRenderers.register(
+            net.minecraft.world.entity.EntityTypes.FIREBALL,
+            context -> new naturality.client.entity.FireballModelRenderer<>(context, 2.0F));
+        net.minecraft.client.renderer.entity.EntityRenderers.register(
+            net.minecraft.world.entity.EntityTypes.SMALL_FIREBALL,
+            context -> new naturality.client.entity.FireballModelRenderer<>(context, 0.625F));
+        net.minecraft.client.renderer.entity.EntityRenderers.register(
             naturality.villager.VillagerBobbers.TYPE, naturality.client.villager.VillagerBobberRenderer::new);
         net.minecraft.client.renderer.entity.EntityRenderers.register(
             naturality.villager.VillagerBobbers.PLAYER_RETURN, naturality.client.villager.PlayerFishingReturnRenderer::new);
@@ -16,11 +22,16 @@ public class NaturalityClient implements ClientModInitializer {
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents.CLIENT_STOPPING.register(_ -> naturality.client.shadow.BlockGridShadow.reset());
         naturality.client.config.GameplaySettingsClient.initialize();
         naturality.client.weather.WeatherClient.initialize();
+        naturality.client.sound.EndAmbience.initialize();
         naturality.client.sky.SkyEventsClient.initialize();
         naturality.client.sky.MeteorShower.initialize();
         naturality.client.sky.RainbowRenderer.initialize();
         naturality.client.sky.AuroraRenderer.initialize();
         naturality.client.weather.ParticleWeather.initialize();
+        naturality.client.particle.StarTrailParticle.initialize();
+        naturality.client.weather.RiseWeather.initialize();
+        net.minecraft.client.renderer.entity.EntityRenderers.register(naturality.starfall.StarfallEntities.STAR,naturality.client.entity.FallingStarRenderer::new);
+        net.minecraft.client.renderer.entity.EntityRenderers.register(naturality.starfall.StarfallEntities.FIZZLE,naturality.client.entity.FallingStarRenderer::new);
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents.CLIENT_STOPPING.register(_ -> naturality.client.weather.WindRendering.close());
         naturality.client.fire.SurfaceFireModel.initialize();
         naturality.client.snow.SurfaceSnowModel.initialize();

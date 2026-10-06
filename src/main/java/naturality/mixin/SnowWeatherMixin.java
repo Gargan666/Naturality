@@ -30,16 +30,19 @@ public abstract class SnowWeatherMixin {
                 && !(level.getBlockState(surface).getBlock() instanceof BaseFireBlock))return;
         int max=Math.min(8,naturality.weather.WeatherSnow.accumulationLimit(level,
             level.getGameRules().get(GameRules.MAX_SNOW_ACCUMULATION_HEIGHT)));
-        max=Math.min(max,naturality.snow.SnowGeometry.maxLayers(level,surface));
         if(max<=0 || naturality.weather.WeatherSystem.precipitation(level,
                 level.getBiome(surface).value(),surface)
                 !=net.minecraft.world.level.biome.Biome.Precipitation.SNOW
                 || level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK,surface)>=10)return;
         var old=level.getBlockState(surface);
-        if(naturality.snow.NoSnowBlocks.contains(old)
-                || !Blocks.SNOW.defaultBlockState().canSurvive(level,surface))return;
         int layers=old.is(Blocks.SNOW)?old.getValue(SnowLayerBlock.LAYERS):0;
         if(layers>=max)return;
+        // Fitted geometry always allows at least seven layers. Lower weather
+        // limits do not need a separate surface search to resolve the eighth.
+        if(max==8)max=naturality.snow.SnowGeometry.maxLayers(level,surface);
+        if(layers>=max)return;
+        if(naturality.snow.NoSnowBlocks.contains(old)
+                || !Blocks.SNOW.defaultBlockState().canSurvive(level,surface))return;
         var snow=Blocks.SNOW.defaultBlockState().setValue(SnowLayerBlock.LAYERS,layers+1);
         Block.pushEntitiesUp(old,snow,level,surface);
         level.setBlockAndUpdate(surface,snow);

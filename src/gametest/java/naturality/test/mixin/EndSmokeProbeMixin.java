@@ -15,5 +15,6 @@ public class EndSmokeProbeMixin {
     private void naturality$countSmoke(ParticleOptions type, double x, double y, double z,
             double vx, double vy, double vz, CallbackInfo ci) {
         if (type == ParticleTypes.SMOKE) EndEyeGlowGameTest.smokeCount++;
+        if (type == ParticleTypes.LARGE_SMOKE) naturality.test.FireballModelGameTest.largeSmokeCount++;
     }
 }

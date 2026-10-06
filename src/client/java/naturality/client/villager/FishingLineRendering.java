@@ -21,6 +21,13 @@ public final class FishingLineRendering {
             .withVertexShader(Identifier.fromNamespaceAndPath("naturality", "core/fishing_line"))
             .withFragmentShader(Identifier.fromNamespaceAndPath("naturality", "core/fishing_line"))
             .withColorTargetState(ColorTargetState.DEFAULT).build())).createRenderSetup());
+    private static final RenderType LIT_LINE = RenderType.create("naturality_lead",
+        RenderSetup.builder(RenderPipelines.register(RenderPipeline.builder(RenderPipelines.LINES_SNIPPET)
+            .withLocation(Identifier.fromNamespaceAndPath("naturality", "pipeline/lead"))
+            .withVertexShader(Identifier.fromNamespaceAndPath("naturality", "core/fishing_line"))
+            .withFragmentShader(Identifier.fromNamespaceAndPath("naturality", "core/lead"))
+            .withBindGroupLayout(net.minecraft.client.renderer.BindGroupLayouts.SAMPLER2)
+            .withColorTargetState(ColorTargetState.DEFAULT).build())).useLightmap().createRenderSetup());
     public static final float ANCHOR_Y = .07F + 4.0F / 16.0F * 1.3F;
     public static final float VANILLA_ANCHOR_Y = .25F;
 
@@ -33,35 +40,69 @@ public final class FishingLineRendering {
         float pixelSize = frame.optionsRenderState.cameraType.isFirstPerson()
             && FirstPersonRodTip.worldTip != null ? FirstPersonRodTip.pixelSize : 1.0F / 32;
         submitRope(poseStack, collector, key, origin, () -> origin.add(endpoint.get()),
-            new Vec3(0, ANCHOR_Y, 0), pixelSize, ignored -> -16777216);
+            new Vec3(0, ANCHOR_Y, 0), pixelSize, _ -> -16777216);
     }
 
     /** Shared camera-facing geometry and chain simulation for fishing and leads. */
     public static void submitRope(PoseStack poseStack, SubmitNodeCollector collector, Object key,
             Vec3 origin, java.util.function.Supplier<Vec3> end, Vec3 localOrigin,
             float thickness, java.util.function.IntUnaryOperator color) {
+        submitRope(poseStack, collector, key, origin, end, localOrigin, thickness, color, LINE);
+    }
+
+    /** Lead colors carry packed block/sky light in alpha; the shader restores opacity. */
+    public static void submitLitRope(PoseStack poseStack, SubmitNodeCollector collector, Object key,
+            Vec3 origin, java.util.function.Supplier<Vec3> end, Vec3 localOrigin,
+            float thickness, java.util.function.IntUnaryOperator color) {
+        submitRope(poseStack, collector, key, origin, end, localOrigin, thickness, color, LIT_LINE);
+    }
+
+    private static void submitRope(PoseStack poseStack, SubmitNodeCollector collector, Object key,
+            Vec3 origin, java.util.function.Supplier<Vec3> end, Vec3 localOrigin,
+            float thickness, java.util.function.IntUnaryOperator color, RenderType renderType) {
         var client = Minecraft.getInstance();
         float projectionPixels = client.getWindow().getHeight() * Math.abs(client.gameRenderer
             .gameRenderState().levelRenderState.cameraRenderState.projectionMatrix.m11()) * .5F;
-        collector.submitCustomGeometry(poseStack, LINE, (pose, buffer) -> {
-            Vec3[] chain = RopeChain.sample(key, origin, end.get());
-            for (int i = 0; i < chain.length - 1; i++) {
-                vertex(buffer, pose, chain, i, origin, localOrigin, thickness * projectionPixels, color.applyAsInt(i));
-                vertex(buffer, pose, chain, i + 1, origin, localOrigin, thickness * projectionPixels, color.applyAsInt(i + 1));
+        collector.submitCustomGeometry(poseStack, renderType, (pose, buffer) -> {
+            RopeSimulation chain = RopeChain.sampleChain(key, origin, end.get()).simulation;
+            Vertex first = VERTICES.get()[0], second = VERTICES.get()[1];
+            first.prepare(pose, chain, 0, origin, localOrigin, thickness * projectionPixels);
+            // Both ends of a band retain the same color/lightmap value.
+            for (int i = 0; i < RopeSimulation.SEGMENTS; i++) {
+                second.prepare(pose, chain, i + 1, origin, localOrigin, thickness * projectionPixels);
+                int bandColor = color.applyAsInt(i);
+                first.emit(buffer, pose, bandColor);
+                second.emit(buffer, pose, bandColor);
+                Vertex swap = first; first = second; second = swap;
             }
         });
     }
 
-    private static void vertex(VertexConsumer buffer, PoseStack.Pose pose, Vec3[] chain,
-            int index, Vec3 origin, Vec3 localOrigin, float projectedPixelSize, int color) {
-        Vec3 point = chain[index].subtract(origin).add(localOrigin);
-        Vec3 tangent = chain[Math.min(chain.length - 1, index + 1)]
-            .subtract(chain[Math.max(0, index - 1)]).normalize();
-        if (tangent.lengthSqr() < 1.0e-8) tangent = new Vec3(0, 1, 0);
-        float distance = new org.joml.Vector3f((float)point.x, (float)point.y, (float)point.z)
-            .mulPosition(pose.pose()).length();
-        float width = Mth.clamp(projectedPixelSize / Math.max(.25F, distance), .25F, 32.0F);
-        buffer.addVertex(pose, (float)point.x, (float)point.y, (float)point.z).setColor(color)
-            .setNormal(pose, (float)tangent.x, (float)tangent.y, (float)tangent.z).setLineWidth(width);
+    private static final ThreadLocal<Vertex[]> VERTICES = ThreadLocal.withInitial(
+        () -> new Vertex[] {new Vertex(), new Vertex()});
+
+    private static final class Vertex {
+        private final org.joml.Vector3f transformed = new org.joml.Vector3f();
+        private float x, y, z, nx, ny, nz, width;
+
+        void prepare(PoseStack.Pose pose, RopeSimulation chain, int i,
+                Vec3 origin, Vec3 localOrigin, float projectedPixelSize) {
+            x = (float)(chain.x[i] - origin.x + localOrigin.x);
+            y = (float)(chain.y[i] - origin.y + localOrigin.y);
+            z = (float)(chain.z[i] - origin.z + localOrigin.z);
+            int next = Math.min(RopeSimulation.SEGMENTS, i + 1), previous = Math.max(0, i - 1);
+            double dx = chain.x[next] - chain.x[previous], dy = chain.y[next] - chain.y[previous];
+            double dz = chain.z[next] - chain.z[previous];
+            double length = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            if (length < 1.0e-5) { nx = 0; ny = 1; nz = 0; }
+            else { nx = (float)(dx / length); ny = (float)(dy / length); nz = (float)(dz / length); }
+            float distance = transformed.set(x, y, z).mulPosition(pose.pose()).length();
+            width = Mth.clamp(projectedPixelSize / Math.max(.25F, distance), .25F, 32.0F);
+        }
+
+        void emit(VertexConsumer buffer, PoseStack.Pose pose, int color) {
+            buffer.addVertex(pose, x, y, z).setColor(color)
+                .setNormal(pose, nx, ny, nz).setLineWidth(width);
+        }
     }
 }

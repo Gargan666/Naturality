@@ -58,6 +58,7 @@ public final class ParticleWeather {
         };
         int target = Math.round(Math.min(MAX_CLUSTERS, 80 * state.precipitationDensity() * radius * radius / 256F) * quality);
         while (ACTIVE.size() > target) ACTIVE.removeLast().remove();
+        if(ACTIVE.size()>=target)return;
         var eye = client.gameRenderer.mainCamera().position();
         double cloudTop = highestActiveCloudTop(client);
         int births = 0;
@@ -97,6 +98,10 @@ public final class ParticleWeather {
     }
     /** Conservative whole-card clearance: no chunk loads and no cards straddling a roof. */
     public static double clearance(ClientLevel level, double x, double y, double z, double extent) {
+        if(extent==0) {
+            int height=WeatherParticleContext.floor(level,(int)Math.floor(x),(int)Math.floor(z));
+            return height==Integer.MIN_VALUE?-1:y-Math.max(level.getMinY(),height);
+        }
         double floor = level.getMinY();
         for (int bx = (int)Math.floor(x-extent); bx <= (int)Math.floor(x+extent); bx++)
             for (int bz = (int)Math.floor(z-extent); bz <= (int)Math.floor(z+extent); bz++) {

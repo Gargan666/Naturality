@@ -49,6 +49,7 @@ public final class GameplaySettings {
     public static boolean snowWrapping(BlockGetter level) {
         // Static block-state caches must retain vanilla shapes for live OFF transitions.
         if (level == net.minecraft.world.level.EmptyBlockGetter.INSTANCE) return false;
+        if (level instanceof net.minecraft.world.level.WorldGenLevel) return NaturalityServerConfig.get().snowWrapping;
         if (level instanceof Level world && !world.isClientSide()) return NaturalityServerConfig.get().snowWrapping;
         return clientSnowWrapping();
     }

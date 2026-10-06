@@ -135,9 +135,14 @@ public final class EndPortalBorderState {
             double z = edge.pos.getZ() + 0.5 + out.getStepZ() * (0.5 - 1.0 / 512);
             if ((eye.x - x) * -out.getStepX() + (eye.z - z) * -out.getStepZ() <= 0) continue;
             int tx = out.getStepZ(), tz = -out.getStepX();
+            Direction end = tx > 0 ? Direction.EAST : tx < 0 ? Direction.WEST : tz > 0 ? Direction.SOUTH : Direction.NORTH;
+            // Meet the perpendicular inset plane at the corner instead of
+            // letting both translucent strips continue through one another.
+            float lower = edges.contains(new Edge(edge.pos, end.getOpposite())) ? -0.5f + 1f / 512 : -0.5f;
+            float upper = edges.contains(new Edge(edge.pos, end)) ? 0.5f - 1f / 512 : 0.5f;
             float start = (float) ((x * tx + z * tz - 0.5) % 1.5);
             for (int i = 0; i < 4; i++) {
-                float along = (i == 0 || i == 1) ? -0.5f : 0.5f;
+                float along = (i == 0 || i == 1) ? lower : upper;
                 float height = (i == 1 || i == 2) ? 1.75f : 0;
                 buffer.addVertex((float) (x + tx * along - eye.x),
                     (float) ((cell.getY() - eye.y) + height), (float) (z + tz * along - eye.z))

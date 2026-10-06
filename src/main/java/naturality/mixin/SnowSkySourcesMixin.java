@@ -21,7 +21,9 @@ public abstract class SnowSkySourcesMixin {
     @WrapOperation(method="findLowestSourceY", at=@At(value="INVOKE", target="Lnet/minecraft/world/level/chunk/LevelChunkSection;getBlockState(III)Lnet/minecraft/world/level/block/state/BlockState;"))
     private BlockState naturality$initialSnow(LevelChunkSection section, int x, int y, int z, Operation<BlockState> original,
             @Local(argsOnly=true) ChunkAccess chunk, @Local(ordinal=1) BlockPos.MutableBlockPos bottomPos) {
+        var state=original.call(section,x,y,z);
+        if(!state.is(net.minecraft.world.level.block.Blocks.SNOW))return state;
         var pos=new BlockPos(chunk.getPos().getMinBlockX()+x,bottomPos.getY(),chunk.getPos().getMinBlockZ()+z);
-        return naturality.snow.SnowLighting.state(chunk,pos,original.call(section,x,y,z));
+        return naturality.snow.SnowLighting.state(chunk,pos,state);
     }
 }

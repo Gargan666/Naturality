@@ -15,6 +15,7 @@ import net.minecraft.world.phys.Vec3;
 
 /** Runs the renderer's model submissions into a geometry-only consumer; nothing is drawn. */
 public final class PortalModelCapture implements VertexConsumer {
+    public static boolean capturing;
     private final @org.jspecify.annotations.Nullable PortalModelSection section;
     private final Vec3 origin;
     private final Vec3[] quad=new Vec3[4];
@@ -72,7 +73,10 @@ public final class PortalModelCapture implements VertexConsumer {
         var state=dispatcher.extractEntity(entity,partialTick);
         var cameraState=new CameraRenderState();cameraState.pos=camera.position();cameraState.orientation.set(camera.rotation());
         Vec3 position=entity.getPosition(partialTick).subtract(capture.origin);
-        dispatcher.submit(state,cameraState,position.x,position.y,position.z,new PoseStack(),collector);
+        boolean previous=capturing;
+        capturing=true;
+        try {dispatcher.submit(state,cameraState,position.x,position.y,position.z,new PoseStack(),collector);}
+        finally {capturing=previous;}
     }
     @SuppressWarnings({"rawtypes","unchecked"})
     private void model(Model model,Object state,PoseStack pose,Object renderType,int light,int overlay,int color) {

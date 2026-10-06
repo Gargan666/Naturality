@@ -24,6 +24,10 @@ public final class ParticleWeatherGameTest implements FabricClientGameTest {
         }
     }
     @Override public void runTest(ClientGameTestContext context) {
+        check(new naturality.weather.WeatherState(100,80,0,0).snowFallMultiplier()==1,"Snow retains calm speed through wind 80");
+        check(new naturality.weather.WeatherState(100,90,0,0).snowFallMultiplier()==2.5F,"Snow eases through the severe-wind midpoint");
+        check(new naturality.weather.WeatherState(100,100,0,0).snowFallMultiplier()==4,"Wind 100 quadruples snow fall speed");
+        check(new naturality.weather.WeatherState(80,100,0,0).heavyRainParticleChance(15)==0,"Strong wind alone cannot spawn heavy precipitation");
         var profile = new WeatherProfile(true);
         profile.overrideRain = profile.overrideWind = profile.overrideTemperature = true;
         profile.rain = 100; profile.wind = 100; profile.temperature = 50;
@@ -49,11 +53,17 @@ public final class ParticleWeatherGameTest implements FabricClientGameTest {
                 check(ParticleWeather.activeCount()>320 && ParticleWeather.activeCount()<=ParticleWeather.MAX_CLUSTERS, "Downpour is substantially denser but bounded");
                 check(ParticleWeather.snowCount()==0, "Warm plains use rain cards");
                 checkSharedQueries(c);
+                ParticleWeatherPerformance.measure(c,false);
                 for (boolean snowKind : new boolean[]{false,true}) {
                     var layouts = new java.util.HashSet<String>();
                     boolean flipped=false, unflipped=false;
                     for (int i=0;i<96;i++) {
                         var card=(WeatherClusterParticle)c.particleEngine.createParticle(snowKind ? NaturalityParticles.SNOW_CLUSTER : NaturalityParticles.RAIN_CLUSTER,0,118,0,0,0,0);
+                        var flow=WeatherParticleContext.state(c.level);
+                        var initial=card.velocity();
+                        double residual=Math.hypot(initial.x-(snowKind?flow.snowWindX():flow.rainWindX()),
+                            initial.z-(snowKind?flow.snowWindZ():flow.rainWindZ()));
+                        check(residual<(snowKind?.036:1e-8),"New cards already have full wind velocity before their first tick");
                         var probe = new CardProbe();
                         card.extract(probe,c.gameRenderer.mainCamera(),1);
                         var axis = probe.rotation.transform(new Vector3f(0,1,0));
@@ -65,7 +75,7 @@ public final class ParticleWeatherGameTest implements FabricClientGameTest {
                         layouts.add(Math.min(probe.left,probe.right)+":"+probe.top);
                         card.remove();
                     }
-                    check(layouts.size()==(snowKind ? 3 : 6) && flipped && unflipped,
+                    check(layouts.size()==6 && flipped && unflipped,
                         "All snow or regular/heavy rain textures and both sprite flip states are used: " + layouts.size());
                 }
                 try(var renderer=new WeatherEffectRenderer()) {
@@ -76,10 +86,13 @@ public final class ParticleWeatherGameTest implements FabricClientGameTest {
                 }
                 var rain=(WeatherClusterParticle)c.particleEngine.createParticle(NaturalityParticles.RAIN_CLUSTER,0,118,0,0,0,0);
                 var snow=(WeatherClusterParticle)c.particleEngine.createParticle(NaturalityParticles.SNOW_CLUSTER,0,118,0,0,0,0);
-                check(Math.abs(snow.velocity().y) < Math.abs(rain.velocity().y)*.2, "Snow falls much slower than rain");
+                check(Math.abs(snow.velocity().y)>=.055*4*.88 && Math.abs(snow.velocity().y)<=.09*4*1.12, "New snow cards include wind acceleration and their flutter phase");
+                check(Math.abs(snow.velocity().y) < Math.abs(rain.velocity().y), "Even severe-wind snow falls slower than rain");
                 snow.remove();
                 double y=rain.getBoundingBox().minY;
+                var initialRain=rain.velocity();
                 for(int i=0;i<4;i++)rain.tick();
+                check(rain.velocity().distanceTo(initialRain)<1e-8,"Rain does not turn or accelerate into unchanged wind after spawning");
                 check(rain.isAlive() && rain.getBoundingBox().minY<y, "Rain moves down in world coordinates");
                 var v=rain.velocity();
                 check(v.x*v.x+v.z*v.z>0, "Wind changes rain trajectory");
@@ -117,9 +130,12 @@ public final class ParticleWeatherGameTest implements FabricClientGameTest {
             context.waitTicks(220);
             context.runOnClient(c->{
                 check(ParticleWeather.snowCount()>0 && ParticleWeather.snowCount()==ParticleWeather.activeCount(), "Cold plains use only snow cards");
+                ParticleWeatherPerformance.measure(c,true);
                 var snow=(WeatherClusterParticle)c.particleEngine.createParticle(NaturalityParticles.SNOW_CLUSTER,0,118,0,0,0,0);
                 double y=snow.getBoundingBox().minY;
+                var initialSnow=snow.velocity();
                 snow.tick(); var first=snow.velocity();
+                check(first.distanceTo(initialSnow)<.005,"Snow begins in its flow and flutter phase without a spawn-time snap");
                 for(int i=0;i<5;i++)snow.tick();
                 check(snow.isAlive() && snow.getBoundingBox().minY<y && !first.equals(snow.velocity()), "Snow falls and changes sway velocity");
                 snow.remove();
@@ -159,6 +175,7 @@ public final class ParticleWeatherGameTest implements FabricClientGameTest {
         var first = WeatherParticleContext.state(level);
         try {
             check(first == WeatherParticleContext.state(level), "Cards share one snapshot during a pass");
+            check(WeatherParticleContext.wind(level)==WeatherParticleContext.wind(level),"Other particles share a wind snapshot");
             var weather = naturality.weather.WeatherSystem.state(level);
             check(weather != null && first.rainWindX() == weather.windX() * .34
                 && first.snowWindZ() == weather.windZ() * .10, "Shared wind keeps the original scaling");
@@ -173,6 +190,12 @@ public final class ParticleWeatherGameTest implements FabricClientGameTest {
                     check(WeatherParticleContext.floor(level,x,0)
                         == level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING,x,0),
                         "Cached floor matches the heightmap across positive and negative columns");
+                    check(WeatherParticleContext.light(level,pos)==net.minecraft.util.LightCoordsUtil.getLightCoords(level,pos),
+                        "Render-pass light cache preserves vanilla and dynamic light");
+                    check(WeatherParticleContext.canSeeSky(level,pos)==level.canSeeSky(pos),"Shared sky queries match the world");
+                    var eye=first.eye();
+                    check(Math.abs(first.heavyParticleChance(x,y,0)-weather.heavyRainParticleChance(new Vec3(x,y,0).distanceTo(eye)))<1E-7,
+                        "Shared heavy sprite probability matches distance and weather");
                 }
             }
             int distant = 20_000_000;

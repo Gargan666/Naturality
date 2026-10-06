@@ -15,11 +15,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(VillagerModel.class)
 public abstract class VillagerArmSwingMixin {
     @Shadow @Final private ModelPart arms;
+    @Shadow @Final private ModelPart head;
 
     @Inject(method = "setupAnim", at = @At("TAIL"))
     private void naturality$workSwing(VillagerRenderState state, CallbackInfo ci) {
         var owner = ((VillagerVisualState)state).naturality$owner();
         if (owner == null) return;
+        float nod = state.ageInTicks - naturality.villager.Reputation.state(owner).nodStart;
+        if (nod >= 0 && nod < 20) head.xRot += Mth.sin(nod * (float)Math.PI / 5) * .3F * (1 - nod / 20);
         float swing = owner.getSwingAnimation(Mth.clamp(state.ageInTicks - owner.tickCount, 0, 1));
         if (swing > 0) {
             float forward = Mth.sin(swing * (float)Math.PI);

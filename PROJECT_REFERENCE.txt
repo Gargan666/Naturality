@@ -1,3 +1,774 @@
+F5 BLACK SCREEN / MISSING SHADER RESOURCES (2026-10-06)
+----------------------------------------------------
+The 02:15:58 missing-shader errors were caused by stale Fabric launch metadata,
+not missing shader files. .gradle/loom-cache/launch.cfg still grouped outputs
+under build/starfall-validation, while VS Code launched the normal build outputs.
+Fabric's debug log skipped those missing group entries and did not expose the
+normal client shader directory as part of Naturality's resource pack.
+
+The existing Fabric: prepare debug resources task now invokes prepareDebugLaunch.
+That task builds main/client/test outputs, runs configureClientLaunch (including
+DLI metadata generation), and verifies that the current main/client output paths
+belong to the same Fabric mod group. generateDLIConfig always refreshes when launch
+setup requests it: launch.cfg is shared across alternate build-directory runs.
+The generated VS Code configurations retain the same preLaunchTask label.
+
+Validation: prepareDebugLaunch passed, then repaired a restored copy of the actual
+broken launch.cfg with Gradle configuration caching enabled. Logs:
+build/launch-shader-preflight.log and build/launch-shader-recovery.log.
+The client-startup suite verifies all twelve shader names from the pasted error
+list through both Fabric's mod roots and Minecraft's resource manager, captures
+the rendered title screen and loads a test world. That suite and offline assemble
+passed with no missing-shader or shader-compilation errors in
+build/launch-shader-startup-test.log. Title screenshot was visually checked at
+build/run/clientGameTest/screenshots/0000_client-startup-title-screen.png.
+
+FOLDED ELYTRA CAPE MOTION (2026-10-05)
+-----------------------------------
+ElytraCapeMotionMixin applies the player's existing interpolated capeLean,
+capeFlap and capeLean2 to the ElytraModel root when not fall flying.
+Both folded wings share cape movement lag, walking bob and lateral sway,
+preserving their native resting angles and crouching offsets. A cape skin
+is not required. Non-player wings retain their native animation. Model pose
+reset clears the added root rotation each frame, including entering flight;
+normal and inverted flight animations remain intact.
+Validation: offline assemble and end-flight passed, including idle pose,
+backward/sideways cape sway and clearing the shared model on flight entry.
+Log: build/elytra-cape-final-test.log.
+
+MODELED FIREBALLS (2026-10-05)
+----------------------------
+FireballModelRenderer replaces the item renderers for fireball and small_fireball
+with the supplied resources/entity models/fireball.java Blockbench geometry.
+The 8-pixel core and 10-pixel shell share a centered pivot; scales are 2.0 and
+0.625 respectively. Both layers rotate continuously, pitching forward at
+9 degrees/tick and turning left at 6 degrees/tick relative to flight heading.
+Age and partial ticks drive the motion, including normal pause behavior.
+The core uses resources/textures/entity/fireball.png, copied from the authored
+atlas. fireball_fire.png copies the separately supplied 44x21 texture from
+resources/entity models/fireball_fire.png. The shell uses an emissive entity
+cutout pipeline with NO_CARDINAL_LIGHTING and NO_OVERLAY, bypassing lightmap
+and face-direction shading. Texture colors retain full brightness on every face
+without additive blending or translucent brightness. Validation: assemble and
+fireball-model client suite passed; build/fireball-emissive-test.log.
+FireballShell uses the authored cube UV net, translated from (0,44) to (0,0).
+All six faces retain square 10x10 texel grids and the native model orientation.
+The earlier shared projection sheared four faces and has been removed. The offset
+advances one source texel every two ticks and repeats every 1848 ticks (the common period of both texture dimensions).
+FireballBurnMixin disables automatic self-ignition for Fireball subclasses;
+their renderer also suppresses the generic entity-fire animation. Projectile
+movement, hits, target ignition and explosions retain vanilla logic. Trails now
+emit four LARGE_SMOKE puffs per client tick, distributed across the last movement
+segment with a small width-relative spread. The existing large smoke provider
+uses 2.5 times the ordinary smoke size and retains its normal rise and animation.
+Dragon fireballs retain their existing renderer and behavior.
+Validation: offline assemble and fireball-model client suite passed. Both types
+use the renderer and no longer self-ignite; UV stepping/wrapping and dense large
+smoke emission are checked. All six faces are tested for axis-aligned UV edges
+and square pixel scale across all 924 scroll phases. Correction validation log:
+build/fireball-aligned-test.log.
+Two screenshots were inspected for the model, size difference and changed poses.
+Logs: build/fireball-build.log and build/fireball-test.log.
+
+ELYTRA MOMENTUM AND SPEED FOV (2026-10-05)
+---------------------------------------
+ElytraMomentumMixin retains momentum during dives (gravity-local vertical
+speed below -0.25), using horizontal drag 0.997 and vanilla vertical drag.
+Outside dives, vanilla drag returns and 6% of speed above 32 blocks/second
+is spent each tick, shedding roughly 90% of excess momentum in two seconds.
+Total glide speed is capped at 90 blocks/second, including boosted flight.
+Vanilla lift, steering, equipment and collision damage still apply.
+The shared LivingEntity calculation runs on client/server and composes with
+the End's gravity-local inverted glide calculation.
+ElytraFovMixin adds 0.5*speed/(speed+60) to the FOV multiplier while gliding,
+using total world-space speed in blocks/second and the FOV Effects slider.
+The target is capped at 1.5x; vanilla camera easing/interpolation smoothly
+widen and recover on landing. Scoping retains its native FOV.
+Validation: initial FOV/flight coverage passed in build/elytra-final-test.log.
+Burst retuning coverage checks dive buildup, capped speed and three-second
+burst decay alongside FOV and inverted-flight/activation checks.
+Offline assemble and end-flight passed: build/elytra-burst-test.log.
+
+RANDOM END AMBIENCE (2026-10-05)
+-------------------------------
+EndAmbience schedules per-listener ambient sounds in minecraft:the_end without
+requiring darkness, caves or a sky event. Individual naturality:end_ambience_1
+through end_ambience_5 events map to resources/sounds/end/weird_1.ogg through
+weird_5.ogg. Each selection picks equally from the four clips other than the
+previous selection, preventing consecutive repeats even across dimension/world
+changes within the same client session. The first selection uses all five clips.
+The pooled end_ambience event remains available for resource compatibility. Playback uses
+the Ambient/Environment category, full volume and original pitch, with no distance
+attenuation. Subtitle: "Strange noise echoes". The first clip waits 40-1200
+unpaused ticks (2-60 seconds); the same random quiet interval follows each
+completed clip, preventing overlap. Pausing freezes the scheduler. Leaving the
+End, disconnecting or changing worlds stops playback and resets the interval.
+Validation: gradlew assemble --offline passed; sound/subtitle JSON parsed and
+all five clips verified in packaged resources. In-game listening not performed.
+
+EMBEDDED MOB ARROWS (2026-10-05)
+-------------------------------
+LivingEntityRenderer now includes a mob arrow layer using the existing synced
+LivingEntity arrow count and vanilla arrow model, texture, placement direction
+and removal timing. Players retain their vanilla layer without duplicate arrows.
+Placement is seeded by entity ID and follows full animated model-part ancestry,
+including baby scaling, body rotation and death poses. Hidden model parts and
+invisible mobs are skipped. No damage or projectile behavior changes.
+The mob-arrows client suite verifies real projectile hits and render-state counts
+on a pig and zombie; two opposing screenshots were inspected. Assemble, gameplay
+and mob-arrows passed. Logs: build/mob-arrows-test.log and build/mob-arrows-final.log.
+
+PURPLE END ATMOSPHERE (2026-10-05)
+---------------------------------
+The scrolling end_stars plane has been removed. EndSkyRenderer now draws a
+muted purple atmosphere with a faint horizon glow and darker zenith/void.
+The vanilla End sky texture supplies a nearest-texel noise pattern,
+using the original cube UVs scaled to four repeats per face for readable
+pixels; no moving plane remains.
+End stars reuse the actual Overworld star buffer and pulse/size vertex shader,
+tinted #8952e1, visible uniformly across the full sphere without a lower-sky fade.
+They rotate about world Y once
+per 72000 game ticks (one hour), respect pause and HardcoreDarkness, and draw
+after the purple atmosphere before End flashes. No second star mesh is allocated.
+Validation: assemble, sky-state and end-flashes passed; purple-star zenith
+capture inspected. Log: build/end-purple-stars-test.log.
+Sky RGB at the horizon is (0.115, 0.065, 0.175); zenith (0.055, 0.030, 0.090).
+The sky respects HardcoreDarkness. End fog clear color matches the horizon,
+including dragon-boss sky suppression. Existing End flash rendering remains.
+With atmospheric fog enabled, material shading blends distant terrain to a
+uniform saturated purple RGB (0.035, 0.008, 0.075), losing all lighting and
+texture variation between 25% and 65% of the render-distance fog end.
+The normal-color-to-silhouette transition uses the distance fog's surface-local
+pixel grid, ordered density pattern and configured pixel size/steps. The fully
+solid purple stage remains uniform; geometry alpha and silhouette edges stay intact.
+The large-pixel End distance-panel capture verifies the patterned transition
+beside fully solid purple panels. Validation log: build/end-silhouette-dither-test.log.
+Existing sky-capture compositing then fades these dark silhouettes into the actual
+purple atmosphere at the render boundary, retaining pixel fog and OIT paths.
+The artist's end_stars texture remains available but is no longer loaded here.
+Validation: assemble and sky-state, fog (End/Overworld, disabled fog and resource
+reloads), and end-flashes suites passed. End distance-panel screenshots were
+inspected for dark silhouettes fading into the purple atmosphere.
+Logs: build/end-purple-atmosphere-test.log and build/end-purple-sky-final-test.log.
+Uniform-purple silhouettes and vanilla noise validation: assemble, sky-state
+and fog passed; final enlarged-noise sky capture inspected. Logs:
+build/end-purple-noise-test.log and build/end-purple-noise-final-test.log.
+
+PORTAL GEOMETRY CLIPPING AND HIDDEN COLLISIONS (2026-10-05)
+--------------------------------------------------------
+Crossing entity models now clip their submitted quads at the entry/exit-facing
+surface instead of relying only on opaque portal terrain and camera-side hiding.
+This prevents large rotated models from protruding around the frame from the
+hidden side. Deferred model submissions retain their original rendering path,
+including armor, texture mappings and outlines. Item submissions (held items,
+equipment and glint) and custom quad geometry carry the same camera-relative
+clip plane. Clipped boundary vertices interpolate texture, color, light and
+normal attributes. Only active physical crossings receive this processing.
+Model-outline capture bypasses clipping so it can still intersect the full mesh.
+Players use the same crossing/rendering/collision path as all other entities;
+first-person portal overlay and dimension travel remain active.
+
+Block collision scans remove the hidden volume extruded through the opening,
+while retaining visible-side obstacles and the frame outside its aperture.
+Entity collision shapes use the same visible region; entity pushing across the
+hidden side is suppressed. These rules run on both client and server and stop
+when the crossing ends or its portal becomes invalid. Stable physical hitboxes
+continue to determine travel timing; animated models do not control teleportation.
+
+Validation: assemble, checkPortalGlow and the portal client suite passed.
+Tests cover clipping large quads on both axes/sides, interpolated UVs, fully
+hidden geometry, actual hidden/visible block collision scans for pigs and
+creative players, preserved frame collision, arrival and return travel.
+The rotated-boat oblique screenshot was inspected. Log: build/portal-clipping-test.log.
+
+HIDDEN NETHER PORTAL TRAVEL (2026-10-05)
+-------------------------------------
+Physical travel waits for the trailing hitbox edge to clear the far face of
+the quarter-block portal slab, plus 1/16 block of clearance. Visual immersion
+still uses the entry-facing plane, preserving glow and overlay timing.
+Destination arrivals start with their entire hitbox 1/16 block behind the
+exit-facing plane. The slab separates this position from the return threshold,
+so stationary arrivals stay put, outward movement reveals the entity, and
+reversing across the far face returns normally. Vanilla destination selection,
+axis rotation and movement are retained. Validation: assemble and the portal
+client suite passed; build/portal-hidden-travel-test.log. Animated model bounds remain client
+visual geometry; server travel continues to use stable physical hitbox bounds.
+
+END LOGIN SKY-COLOR CRASH FIX (2026-10-05)
+---------------------------------------
+The 01:41:15 client crash occurred while rendering minecraft:the_end:
+RainbowRenderer.skyBlend dereferenced a null SkyRenderState.skyColor. Vanilla
+only populates that field for Overworld skyboxes. Prior Overworld frames can
+leave a stale color behind and mask the bug, while directly loading a save in
+the End leaves it null. SkyEventsMixin now resets rainbow blending each frame
+and prepares Overworld sky effects only for an OVERWORLD skybox. End-flash
+frame initialization and darkness handling still execute normally. skyBlend
+also explicitly accepts a missing color and returns zero rather than crashing.
+
+The new sky-state client suite reproduced the exact original exception in
+build/end-sky-crash-repro.log. Regression coverage renders the End with its
+sky color cleared, crosses Overworld/Nether/End, and actually closes/reopens a
+world saved in the End with no inherited Overworld color. The rainbow suite
+also verifies missing-color blending. Validation log for sky-state, rainbow,
+end-flashes and assemble: build/end-sky-crash-fix.log. Java audit reports 88
+warnings, including existing nullable-field declarations in RainbowRenderer;
+see build/end-sky-crash-audit.log.
+
+PORTAL GLOW CORNER TRIMMING (2026-10-05)
+--------------------------------------
+Correction: trimmed Nether frame rays start exactly at the portal slab,
+without the entity-silhouette halo clearance. Reusing that clearance had
+left a thin missing-glow line along the portal surface. Entity rays retain
+their halo separation. Validation log: build/glow-root-fix-test.log.
+
+End portal border strips stop at perpendicular inset strips instead of
+crossing them. Straight neighboring strips keep their full joined ends.
+Nether portal corner strips use the existing clipped-frame mesh path, with
+their endpoints shortened by the physical surface inset; entity occlusion
+still clips the already-trimmed intervals. Eye insertion strips trim both
+ends and reverse their winding and camera-side test to show only inward
+faces. Palette, fading, wave spacing and glow reach are preserved.
+Validation: build (including checkPortalGlow), end-portal and portal client
+suites passed. Logs: build/glow-corners-test.log and
+build/glow-corners-nether-test.log.
+
+END AURORA (2026-10-05)
+----------------------
+The End pool includes End Aurora, command ID end_aurora. It shares the
+Overworld's world-space aurora geometry, motion, pulse, visibility patches,
+strength easing and configured plane density, but samples the supplied
+resources/textures/sky/aurora_end.png palette. Overworld Aurora Borealis
+retains its original palette and climate-dependent chance.
+Occupied End regions roll every 600 ticks with chance 1-sqrt(0.9), giving
+10% over two attempts (one quiet minute). Temperature does not modify this
+chance. The End scheduler ignores the disabled weather timer and rendering
+does not dim for rain. Existing aurora episode duration, post-event cooldown,
+region persistence and world-change cleanup are shared.
+Use /skyevent minecraft:the_end end_aurora <0-20|auto> and
+/skyevent minecraft:the_end status to inspect the fixed chance and activity.
+Validation: assemble and aurora client suite passed for both dimensions,
+including palette selection, End weather-independent ticking, command sync,
+curtain draws and zero-strength fadeout. Log: build/end-aurora-test.log.
+
+END FLASH COMPLETION (2026-10-05)
+--------------------------------
+Each pulse captures its stream eligibility, strength multiplier, speed, size
+and peak brightness at onset. Later event-strength changes only affect new
+pulses. Existing flashes retain their full visual and lighting curves, and
+their delayed/playing sounds finish even if strength becomes zero. A stream
+that was disabled at onset cannot appear halfway through its pulse when the
+strength rises. Leaving the world still invalidates its sounds and state.
+Validation: assemble and end-flashes client suite passed. Pulse comparisons
+verify identical completion after dropping strength/stream weight to zero;
+the live test enables clock progression and waits for all existing flashes
+and lighting to finish. Log: build/end-flash-completion-test.log.
+
+END FLASH STRENGTH VARIATION (2026-10-05)
+---------------------------------------
+Strength 10 retains exact vanilla pulse timing, size and brightness. From
+10 to 20, pulse speed rises from 1x to 4x, shortening both sine fade halves.
+Pulse start times stay on the original seeded schedule; only active duration
+is compressed. Sound delay scales from 30 ticks to 8 ticks at maximum speed.
+Each pulse captures its variation once at onset, keeping size/speed/peak fixed
+through its lifetime. Size range widens from 1x to 0.4x-2.2x at strength 20;
+a cubed uniform roll makes larger flashes rarer. Peak variation widens to
+0.8x-1.2x, multiplying the existing event brightness. Rendering changes the
+vanilla quad scale without changing its distance. Lightmap contribution is
+each flash's intensity multiplied by its size; the strongest contribution
+drives the shared world light state. Strength 0 prevents new pulses; already
+started pulses finish with their captured contributions.
+Validation: assemble and end-flashes client suite passed, including 100-cycle
+duration/size/peak distributions, exact strength-10 parity, actual lightmap
+extraction and sky draws. Log: build/end-flash-variation-test.log.
+
+END FLASHES SKY EVENT (2026-10-05)
+---------------------------------
+The End now contains the end_flashes Sky Event. Quiet ticks roll with a
+per-tick probability giving 20% chance to start over 1200 ticks (one minute).
+Natural episodes last 1200-2400 ticks and ease between random 1-20 strengths.
+The End's event clock runs independently of its disabled weather timer. Its
+cycle, random sequence and overrides are saved per world like other sky events.
+
+Use /skyevent minecraft:the_end end_flashes <0-20|auto>, and inspect its chance
+and activity with /skyevent minecraft:the_end status. Strength 0 suppresses
+new flashes; existing flashes and their light/sound play out. Strength 10
+is the exact vanilla baseline: one original EndFlashState pulse driven by the
+unaltered default clock. Below 10 its intensity decreases proportionally;
+above 10 five extra streams progressively appear (all five at 20), with peak
+brightness rising to 1.6 times baseline. Extra streams use widely separated
+600-tick seeds as well as phase offsets, avoiding repeated positions/sounds
+from the same seeded flash. All draws reuse SkyRenderer.renderEndFlash and
+its original sprite, transform and celestial blend.
+
+EndFlashes.State replaces ClientLevel's actual endFlashState at construction.
+Its strongest visible pulse drives getIntensity(), which vanilla's
+LightmapRenderStateExtractor already consumes. It schedules one directional
+sound per pulse; flashStartedThisTick() suppresses the duplicate ClientLevel
+sound path. Each state belongs to its ClientLevel, with no cross-world static
+pulse state. Pending sounds are invalidated when the world changes.
+Vanilla dragon boss fog and Hide Sky Flashes accessibility behavior remain.
+
+VANILLA SOURCE RESEARCH / END FLASH CORRECTION (2026-10-05)
+Inspected the project's 26.3 client sources: EndFlashState, ClientLevel.tick,
+SkyRenderer.extractRenderState/renderEndFlash and LightmapRenderStateExtractor.
+EndFlashState seeds each cycle with defaultClockTime / 600. It picks an offset
+of 0-200 ticks, a duration of 100-min(380,600-offset) ticks, pitch -60..10 degrees
+and yaw -180..180 degrees. Intensity is sin((time-offset)*PI/duration), with
+partial-tick interpolation. Position stays fixed for that single pulse; the
+next cycle picks a new position. A rising edge schedules WEATHER_END_FLASH
+after 30 ticks. SkyRenderer uses height 100, scale 60 and the end_flash sprite.
+The lightmap adds pulse intensity to skyFactor (one third under boss fog).
+Hide Sky Flashes skips that lightmap contribution but retains sprite/sound,
+also documented at https://www.minecraft.net/en-us/article/minecraft-snapshot-25w34a.
+The prior implementation kept vanilla's state alive, added visual streams at
+strength 10, and never supplied those streams to the lightmap. Its closely
+offset clocks reused the same seeds, causing repeated pulses at one position.
+
+Correction validation: assemble and end-flashes client suite passed. Tests
+compare six full strength-10 cycles against vanilla for exact intensity,
+partial-tick interpolation, angles and one scheduled sound per pulse. They
+also exercise the actual lightmap extractor with Hide Sky Flashes on/off,
+distinct extra-flash positions, and zero-strength sky/light suppression.
+Log: build/end-flash-fix-test.log.
+
+Validation: assemble and the sky-events, end-flashes and environment-persistence
+client suites passed. Captures verify vanilla flash draws at strength 20 and
+no draws at strength 0. Persistence checks cover an active End episode across
+a real save/reopen. Logs: build/end-flashes-test.log and
+build/end-flashes-persistence-test.log.
+
+WATER-FACING RANDOM CASTS (2026-10-04)
+Fishermen randomize horizontal casts within 35 degrees of the water-facing
+heading. Up to 16 candidate directions are checked for nearby resting water
+along the ray (2-6 blocks); a direction crossing at least two water samples
+is preferred, falling back to the central water-facing heading. Pitch and speed
+remain randomized and physical flight still determines where the bobber lands.
+Validation: villagers client suite and assemble passed, including launch-vector
+water-facing cone assertions. Log: build/water-facing-casts.log.
+
+FISHERMAN STUCK-AT-SHORE RECOVERY (2026-10-04)
+A reachable bank could be cached even when the selected casting water was hidden
+behind terrain. The controller waited forever at that bank before equipping its
+rod, and continued reusing the same failed spot after work restarts. Selection
+now checks sight from the planned bank to the open water surface; it no longer
+requires sight to the submerged center of the water block. A fisherman that
+arrives but cannot see the water gets 40 ticks to finish positioning, then drops
+the cached spot and excludes that bank for the existing 600-tick retry cooldown.
+Navigation timeouts likewise forget banks the fisherman never reached.
+An unsuccessful/unavailable barrel visit now schedules a 100-tick retry instead
+of leaving the station immediately due and canceling every subsequent cast.
+The shared survey cache, scan budget and individual pathfinding limits remain.
+
+Validation: FishermanCastingChecks reproduced the old blocked-bank failure in
+build/fisherman-cast-repro.log. After the fix, blocked-bank recovery and actual
+rod equipping/casting with all barrel approaches obstructed pass. The full
+villagers suite (normal fishing, bites, retrieval, trades, farming and client
+rendering) and assemble pass in build/fisherman-cast-fix.log. Java audit remains
+at the same 78 existing warnings; build/fisherman-cast-audit.log.
+
+ROPE ALLOCATION AND SHARED FISHING SURVEYS (2026-10-04)
+Both physics chains (leads and player/villager fishing lines) already execute
+exclusively on the client. RopeSimulation now uses reusable scalar position and
+previous-position arrays instead of immutable Vec3 arithmetic. It preserves all
+24 segments, 16 constraint passes, 40-Hz fixed stepping, gravity, damping, pinned
+ends, pause handling, teleport resets and world resets. Rendering consumes the
+solver directly, computes each of 25 vertices once instead of 48 times, reuses
+vertex scratch storage and computes each band's lighting/color once. Lead keys
+use entity IDs rather than constructing UUID strings every render extraction.
+Existing collision-free rope behavior, lead lightmap shading and rod anchors stay.
+The reference-solver regression compares 400 moving-endpoint steps and coincident
+ends. The allocation probe measured 0 bytes for 1,000 new solver steps versus
+63,399,040 bytes in the old Vec3 solver; this is not an FPS/TPS measurement.
+
+FishingSpots shares completed, empty and in-progress shoreline surveys among job
+sites within four blocks horizontally at the same elevation. Surveys are anchored
+to the first job site and scan only +/-16 X/Z and -4/+3 Y (8,712 cells); recipients
+can therefore see water at most 20 blocks away along either horizontal axis. They
+do not flood-fill oceans outside this box. A shared per-dimension limit of 512
+cells per tick spreads an uncontended initial scan over 18 ticks; other groups
+share the budget round-robin. Shore analysis runs once after the scan, deduplicates
+bank checks and restricts cast scoring to ten blocks rather than each whole pool.
+Successful spots survive station visits, trades and behavior restarts. Villagers
+still validate their chosen water/bank and pathfind individually; fisherman path
+searches try at most two new candidates per batch, with existing failed-path
+cooldowns. Farmer path limits remain unchanged.
+
+The shared cache is bounded to 64 surveys per dimension, evicts the least recently
+requested when full, and clears on server stop. No absent chunks are loaded.
+Water/shore edits and watched chunk load/unload invalidate affected surveys;
+unrelated farmland edits do not. Raw water positions are retained so uncovering
+previously unusable water also triggers refresh. Invalidated idle surveys only
+rescan when requested. No periodic rescan is needed while surroundings stay valid.
+Gameplay fishing/catching, bobber synchronization and vanilla leash mechanics
+remain on the server; visual rope simulation remains on the client.
+Validation: checkPortalGlow numerical/allocation checks, shared scan budget/reuse,
+shore invalidation and unloaded-chunk checks, full villagers client suite and
+assemble. Logs: build/chains-fishing-final.log, build/chains-fishing-regression.log.
+Java audit: 78 pre-existing warnings remain; new classes have no diagnostics.
+Audit log: build/chains-fishing-audit-final.log.
+
+REPUTATION GIFT BALANCE AND RANDOM FISHERMAN CASTS (2026-10-04)
+Completed trades now grant no reputation. Emerald gifts grant floor(accepted
+count / 20) reputation per pickup: 1 or 4 gives none, 20 gives one, 40 gives two.
+Remainders do not accumulate between pickups. Crop and rod gift rewards remain.
+Fisherman bobbers now launch with randomized horizontal direction around the
+water-facing heading, upward pitch (15-50 degrees) and speed. They no longer solve
+trajectories to or snap onto a chosen landing point. Actual water contact starts
+bobbing at the landing coordinates; dry/colliding casts are discarded and retried.
+Bite particles and sounds follow the actual bobber rather than the shore target.
+Validation: reputation suite passed updated real gift and trade checks in
+build/gifts-random-casts-final.log. Villagers suite and assemble passed after
+pond-speed tuning in build/random-casts-final.log, including random launch-vector
+checks and real fishing/bite/retrieval. Farmer off-shift test allows existing
+bread sharing while requiring work tools to be cleared.
+
+LEAD WORLD LIGHTING (2026-10-04)
+Physics leads now use the actual Minecraft lightmap instead of treating raw
+sky-light levels as daytime brightness. The dedicated lead shader decodes
+packed block/sky light from the otherwise unused vertex alpha, restores opaque
+alpha and multiplies each band by the current lightmap color. Endpoint light
+levels blend along the rope. This follows nighttime, weather, local block
+lighting and lightmap effects while preserving camera-facing bands and physics.
+Fishing lines retain their existing black shader. Validation: villagers client
+suite and assemble passed; night and torch lead screenshots visually confirmed
+darkening and illumination. Log: build/lead-lighting-final.log.
+
+RAID VICTORY REPUTATION (2026-10-04)
+Winning a raid grants +20 shared reputation to each player in the raid's vanilla
+heroes-of-the-village set, capped at 100. The reward applies once on the transition
+to victory; celebration ticks and reloading an already completed raid do not
+repeat it. Stopped/lost raids give no victory reward. Uses normal reputation
+credit, including offline credit and the existing maximum-score Hero rule;
+vanilla raid victory rewards remain intact.
+Validation: reputation client suite checks +20, the cap, celebration/reload
+idempotence and stopped raids. Assemble passed. Log: build/reputation-raid.log.
+
+REPUTATION COMMAND, UPSET REACTIONS AND SLEEP DEBT (2026-10-04)
+Operator commands: /reputation shows your score; /reputation <0-100> sets your
+score; /reputation set <players> <0-100> sets selected online players' scores.
+Manual edits do not grant Hero or trigger penalty reactions. Gameplay penalties
+broadcast angry particles and upset villager sounds within 16 blocks, centered
+on the affected villager/golem for attacks, kills and forced waking; chest theft
+uses the player's location. Killing a villager also triggers nearby reactions.
+Villagers track the last time they slept persistently. After 24,000 ticks awake
+they refuse trades; after 48,000 they stop jobs and prioritize searching for an
+unoccupied reachable bed, roaming if none is found. Recovery sleep can begin
+during the day and lasts until the next morning, overriding the normal schedule.
+Danger, including zero-reputation player fear, still takes precedence. Existing
+villagers without sleep data receive an initial grace period. Sleep timestamps
+and recovery deadlines persist across saves and villager conversions.
+Validation: reputation, villagers, villager-bread and animal-care suites plus
+assemble passed (build/reputation-sleep.log). Added command, upset reaction,
+sleep debt, daytime recovery, deadline persistence and morning wake tests passed
+with final assemble (build/reputation-sleep-final.log).
+
+REPUTATION FEAR PRIORITY / REPEATED VILLAGER KILLS (2026-10-04)
+Zero-reputation players trigger villager panic before and after normal AI.
+Fleeing interrupts work, wakes sleeping villagers and closes trading. When
+no threat remains, only the reputation-assigned panic memories are cleared.
+Killing a villager at reputation 20 or below now sets the score to 0; killing
+at a score above 20 sets it to 20. This supersedes the unconditional reset
+below. Lethal hits do not add a separate hit penalty or grant Hero of the Village.
+Validation: reputation and villagers client suites plus assemble passed,
+including work/sleep interruption and kills from 0, 10, 20, 50 and 100.
+Log: build/reputation-flee-priority.log.
+
+VILLAGER KILL REPUTATION SET TO 20 (2026-10-04)
+A player killing a villager now sets their shared reputation to exactly 20,
+regardless of the previous score (including scores below 20). This replaces
+the earlier -40 penalty. The lethal hit does not also apply a hit penalty,
+and setting the score never grants Hero of the Village. Golem kills remain -10.
+Validation: reputation suite tests kills from 0, 10, 20, 50 and 100; assemble
+passed. Log: build/villager-kill-reputation.log.
+
+EMERALD GIFT REPUTATION (2026-10-04)
+Emerald gifts now award one reputation per emerald actually accepted into the
+villager inventory: one emerald = +1, a stack of four = +4. Partial acceptance
+credits only the accepted count; the normal 0-100 clamp remains. Crop and rod
+gifts retain their +3 reward. This supersedes earlier emerald +2 per gift notes.
+Validation: reputation suite single/stacked gift checks and assemble passed.
+Log: build/emerald-reputation.log.
+
+VILLAGER REPUTATION (2026-10-04)
+ReputationData is world-wide SavedData: each player UUID starts at 50, clamped
+0-100, shared between all villages/dimensions and retained after death/relogin.
+Prices use a linear special-price adjustment of -(base cost * (score-50)/100),
+rounded to whole items: neutral at 50, up to 50% lower at 100, higher below 50.
+Vanilla demand and hero discounts remain, while gossip price modifiers are
+replaced. Open trade prices refresh when reputation or hero status changes.
+A positive action taken while already at 100 gives Hero of the Village for
+1200 ticks. At <=10 villagers refuse trades (including closing an existing
+menu), and raiders/illager allies including vexes no longer select or retaliate
+against the player. Above 10 their normal targeting resumes. At zero, nearby
+awake villagers panic/flee using reachable escape paths; naturally created
+(non-player-built) iron golems target the player. Reputation-assigned golem
+hostility clears after recovery above zero; ordinary retaliation is preserved.
+
+Rewards: completed trade +1; accepted farmer crop/seed gift +3; accepted strictly
+better enchanted fisherman rod +3; accepted emerald gift to any profession +2;
+first cure of a villager lineage +10. Gifts are dropped items, not interactions.
+Credit is given once per accepted stack/pickup event, irrespective of stack size,
+only when something is actually accepted. Donor UUIDs persist on item entities,
+different donors' gifts cannot merge, and offline donors still receive credit.
+Hero earned by an offline donor is queued for their next login. Farmer crop
+stacks enter real inventory; emeralds do likewise. Fishermen keep a saved work
+rod and equip it when fishing; rod quality is total non-curse enchantment levels,
+strictly above the saved rod. Equal/weaker rods give no reward. Cure identity is
+copied before conversion callbacks across villager/zombie-villager transitions;
+the global lineage reward marker prevents repeats even after world reload.
+
+Penalties: successful non-lethal villager hit -2, or -5 with a weapon/tool held;
+villager death by player -40; iron golem death by player -10; forcefully waking
+a sleeping villager at night -1; village chest loot withdrawal -3. A lethal hit
+uses the death penalty without also charging a hit penalty. Bed interaction
+and damage that wakes a villager both enforce a saved refusal to trade with
+any player until morning. Night is the 12000-24000 portion of the daily clock.
+Chest provenance comes from chests/village loot tables and is saved after loot
+unpacking. Opening or depositing is free; normal clicks, shift-clicks, swaps,
+and breaking a stocked village chest incur theft penalties. Double chests track
+which half a slot belongs to, and player-placed/unmarked chests are excluded.
+Already-opened legacy chests lacking both loot-table and provenance metadata
+cannot be reliably distinguished from player-placed chests retroactively.
+
+Nitwits show the actionbar text "Reputation: N". At <=50 they shake their heads
+and make the negative villager sound; above 50 they clear shaking, play the
+positive sound and send a short nod animation to clients instead of trading.
+Validation: reputation suite tests real gift pickup/attribution, rod upgrades,
+prices, actual trading, all penalties, hero duration, cure conversions/reload,
+bed/damage waking, chest clicks/breaking, faction thresholds, reachable fleeing,
+golem targeting/recovery, offline gifts and persistence. Reputation, villagers,
+villager-bread and animal-care passed together in build/reputation.log; final
+edge checks and assemble passed in build/reputation-final.log.
+
+ARMORER GOLEM REPAIRS (2026-10-04)
+Armorers now use AnimalCareWork and participate in the same nearest reachable
+worker selection and exclusive repair claims as toolsmiths and weaponsmiths.
+Their iron ingot display, approach, repair sound, 25-health applications and
+repeat-to-full-health behavior are identical. Validation: animal-care covers
+live armorer walking/equipment/full repair plus the existing shepherd and both
+other smith professions. Assemble passed. Log: build/armorer-repair.log.
+
+ROPE COLLISIONS REMOVED / STABLE LEAD BANDS (2026-10-04)
+Shared RopeChain no longer queries or resolves block collisions for leads or
+player/villager fishing lines. Pinned endpoints, Verlet gravity/inertia and
+length constraints remain. Ropes can pass through terrain rather than snagging.
+The lead's alternating color bands now assign the same color to both ends of
+each segment. With flat shading on expanded line triangles, assigning different
+endpoint colors produced diagonal bands that appeared to flip as the view moved.
+This preserves the single camera-facing ribbon, hard edges and existing width.
+Obsolete collision assertions were removed; moving endpoint/gravity/finite-chain
+checks and lead/fishing rendering scenarios remain in the villagers suite.
+Validation: villagers suite and assemble passed. Log: build/rope-no-collisions.log.
+
+SHEPHERD AND SMITH WORK (2026-10-04)
+AnimalCareWork supplies the SHEPHERD, TOOLSMITH and WEAPONSMITH work packages.
+During adult work activity, shepherds find the closest reachable adult sheep
+with wool within 24 blocks of their loom, equip shears, approach and invoke the
+normal sheep shearing method, sound, loot table and game event. Shearing has a
+100-tick cooldown, including while collecting wool. Actual shearing drops are
+tracked, approached and transferred into the villager inventory with pickup
+animation; item entities disappear when fully collected. Shepherds also accept
+nearby wool through ordinary pickup, respecting inventory space and wool color.
+No baby or already-sheared sheep is selected. Inaccessible drops time out.
+Toolsmiths and weaponsmiths share golem repair assignments. The nearest reachable
+available working smith is elected for a damaged golem near the workstation;
+claims prevent two smiths repairing the same golem. Assigned smiths approach,
+display an iron ingot, swing and heal 25 health with the vanilla repair sound.
+A fresh job-supplied ingot is displayed for each application at one-second
+intervals until full health. These visual supplies do not require a stocked
+inventory. Claims are renewed while travelling and released on completion,
+death, trading, activity changes or timeout. Work interruption restores the
+previous hand item and navigation. Weak worker references avoid retaining mobs.
+Validation: animal-care tests live nearest sheep selection, five-second cooldown,
+shears display and wool pickup; competing smith election, both professions,
+25-health increments, full repair, hand cleanup, interruption and live walking.
+Animal-care, villager-bread regressions and assemble passed: build/animal-care.log.
+
+SNOW LAYER GEOMETRY, OVERLAY AND QUERY OPTIMIZATION (2026-10-04)
+Reviewed fitted support surfaces, side/foliage overlays, lighting/AO, section
+bounds, collision, picking, item placement, grass updates, footstep/compaction,
+precipitation and the default/Sodium render paths. Shared geometry improvements
+also benefit the placement, lighting and interaction code that queries it.
+
+SnowOverlayModel still tests every original visibility interval, but adjacent
+visible intervals are emitted as one continuous side. This lets the existing
+texel-row merging work across a whole face instead of separate 1/16 strips.
+Texture coordinates, cutout masks, seam overlap and partial overhang clipping
+are retained. Leaf texels retain their subdivision and constant UV samples to
+preserve cutouts and wind interpolation. Leaf wind exposure is evaluated once
+per model emission. Atlas sprite lookup uses immutable spatial buckets rebuilt
+on resource reload instead of searching every sprite for each leaf face.
+Early exits skip excluded/non-snowy overlays; arrays, materials and stream work
+were removed from hot loops. SurfaceSnowModel emits scalar coordinates instead
+of constructing five arrays for each fitted face.
+
+SnowGeometryCache shares support classification, surfaces and outline/collision
+volumes within one mesh build (8192 position limit). Both SectionCompiler and
+Sodium ChunkBuilderMeshingTask enter/leave the cache with finally cleanup; model
+emissions also work independently. Caches cannot cross build/snapshot lifetimes
+or different block views. Fire recursion fallback is excluded from memoization.
+World-independent immutable shape footprints and box lists use bounded caches
+(2048 entries per thread); resolved patch layouts share layer volumes (512
+layouts). Hand-authored rod/lantern/hopper/fence/gate boxes are shared by block
+state. No live-world position cache or background world reads were introduced.
+Ordinary snow reuses its nine layer shapes. Single-layer collision immediately
+returns empty. Full solid collision cells skip snow-owner searches because
+clipped snow cannot add collision volume; ordinary snow above another cell
+also needs no displaced collision work. Single support boxes bypass envelope
+partitioning. Recursion guards keep only a tiny per-thread counter array.
+Non-snow skylight scans no longer allocate positions for snow handling.
+Precipitation rejects unsuitable/capped columns before geometry queries and
+resolves the seven/eight-layer limit only when eight layers are possible.
+Compaction reuses its scan position and compares box coordinates without
+allocating translated boxes. Placement, layer limits, sounds and save data stay.
+
+Fog culling now includes snow extending below its owner section: exact recorded
+bounds with the default renderer, conservative maximum displacement with Sodium.
+This fixes nearby fitted snow being lost when its higher owner is behind fog.
+
+Fixed-input SnowPerformanceGameTest results (default renderer, base block included):
+                        Before quads    After quads    Before/after bytes per overlay emission
+stone                      270              38              300848 / 48841
+bottom stone slab          270              38              238976 / 47934
+oak stairs                 341              59              347811 / 96976
+oak fence                   66              26              164896 / 60757
+oak leaves                 198             198              283947 / 61672
+Measured total mesh surface area is unchanged for all five default-renderer
+samples. Overlay allocations fell about 63-84%; fixed support-shape queries
+also allocate substantially less. Probes include snapshot-query/sink overhead,
+exclude GPU submission, and are not FPS measurements. JIT timing varies.
+Baseline: build/snow-perf-before.log. Final: build/snow-opt-final.log.
+Run the reproducible probes with -PclientTests=snow-performance.
+
+Validation passed: assemble; snow-performance,snow,snow-compat,chunks;
+wind-shapes and fire regressions; Sodium snow-performance/snow-compat; focused
+snow-weather accumulation at rain 50 and 100; fog-culling with displaced bounds.
+New checks cover cache nesting, reused snapshot changes, live-world queries,
+distinct collision/outline volumes, and fire recursion fallback isolation.
+Screenshots of leaves, accumulation, rods and clipped stairs were inspected.
+Logs: build/snow-opt-validation.log, build/snow-opt-final.log,
+build/snow-opt-sodium.log, build/snow-opt-sodium-final.log, build/snow-opt-fog.log.
+Java audit retains 59 pre-existing warnings, with none added by these changes
+(build/snow-opt-audit.log). Final artifact: build/libs/naturality-1.0.0.jar.
+
+FOG RENDER CULLING (2026-10-04)
+FogCulling captures the final FogData after all setupFog modifiers, including
+heavy rain and eased indoor exposure. Bounds are tested against the nearest
+point using spherical environmental fog and cylindrical render-distance fog
+(max(horizontal distance, vertical distance)). Squared distances avoid roots.
+A 0.25-block rounding guard and conservative geometry margins keep boundary
+objects visible. Malformed ranges/bounds fail open; disabled fog bypasses work.
+Default terrain drawing filters into a reused list without modifying the main
+visible-section list. Sodium filters section slice masks when draw commands are
+built, covering opaque/translucent passes and disabled block-face culling.
+Entire 16-block sections are skipped only when their padded bounds are beyond
+full fog opacity. Existing meshes remain resident and immediately reappear.
+Entity rendering uses interpolated renderer bounds; leashes include holder
+bounds. Ordinary block entities skip extraction when their padded cells are
+hidden. Glowing outlines, renderers exempt from ordinary culling, global block
+entity beams, and the custom End sky/depth composite remain conservatively
+unculled: their visible effects cannot be proven hidden from ordinary bounds
+and native fog endpoints. Custom depth-dependent underwater extinction is not
+approximated as a uniform fog cutoff. No chunks/entities are unloaded/deleted,
+no simulation or sound is suspended, and particle FOV/occlusion restrictions
+remain rolled back.
+Validation: assemble, fog-culling, existing fog regressions, and water-rain passed.
+Fog-culling and water-rain also passed with Sodium. Checks cover spherical versus
+cylindrical bounds, partial visibility, malformed bounds, live heavy-rain capture,
+entity suppression/restoration, disabled fog, and rain-to-clear transitions.
+Water screenshots cover both transparency modes. Logs: build/fog-cull-test.log,
+build/fog-cull-final.log, build/fog-cull-sodium.log. Screenshots were inspected.
+Java audit: 59 pre-existing warnings elsewhere, none in these new files
+(build/fog-cull-audit.log). GPU/FPS gains depend on the scene; no FPS claim made.
+
+WEATHER PARTICLE CPU AND ALLOCATION OPTIMIZATION (2026-10-04)
+Rain/snow cards reuse orientation matrices, quaternions and mutable query positions.
+Scalar geometry preserves the velocity-locked Y axis and camera-facing normal,
+including zero-velocity and head-on fallbacks. Interpolated positions are calculated
+once per extraction. Snow's three oscillators advance by fixed-angle rotations;
+10,000 orientation comparisons and full 240-tick sway comparisons preserve the
+previous formulas (sway error below 1e-12). Heavy snow assets and wind acceleration
+from the preceding work are preserved.
+Non-colliding weather cards materialize immutable bounding boxes only on demand.
+Native position-based rendering and external bounding-box queries retain their
+behavior, as do tint, motion, density, lifetime, quality and roof rules. Squared
+distance checks avoid square roots outside fade boundaries. Rain skips snow-only
+math. Full populations skip spawn-only cloud calculations. Heightmap reads use
+the already-loaded chunk directly, with a one-column fast path during falling.
+WeatherParticleContext shares exact-position light and tint for each render pass;
+all bounded caches are cleared in finally blocks. Wind strength/camera/settings
+are shared per update pass and exact sky queries reuse results. No chunk loads
+are introduced. Water tint uses typed expression hooks instead of boxing every
+quad's arguments. Wind immunity uses a particle flag instead of a synchronized
+weak map. Unused particle visibility/occlusion classes and mixins were removed;
+FallParticleBudgetMixin retains only the existing water/lava spawning budgets.
+No FOV/occlusion spawn blocking or deletion was restored.
+ParticleWeatherPerformance records repeatable CPU/allocation probes using 128
+cards, with resetting positions included in tick measurements and a render-state
+sink excluding GPU submission. Initial baseline: rain/snow tick allocations
+176.5/152.5 bytes per card; extraction 376 bytes per card. Optimized: tick 0.5 bytes
+per card (amortized shared snapshot), extraction 0.0. This is transient allocation,
+not total memory or an FPS measurement; per-card reusable storage increases.
+Timings vary with JIT and system activity: do not interpret the probe as a game
+FPS prediction. Logs: build/weather-perf-before.log, build/weather-opt-verified.log,
+build/weather-opt-sodium.log. The particle-weather, waterfall and particle-visibility suites passed with both
+the default renderer and Sodium. Tests cover resource reload, rain/snow transitions,
+card alignment, sway, tint, lighting cache, water providers and retained quotas.
+Smoke/particle wind checks also passed (build/weather-opt-wind.log), including
+ordinary motion, submerged particles and immunity tags. assemble and
+checkPortalGlow passed; the latter includes the new weather math checks.
+The broader weather suite reaches an unrelated server-weather assertion that
+requires nonzero automatic wind during a calm period (WeatherGameTest line 213).
+Production weather generation was not changed. Java audit reports 59 warnings
+elsewhere and none in the modified particle/weather files: build/weather-opt-audit.log.
+
+VILLAGER SNOW SHELTER (2026-10-04)
+Off-duty villagers (IDLE, MEET and PLAY, including unemployed villagers and
+children) seek a reachable covered spot during actual local snowfall. They
+prefer shelter near their HOME within 48 blocks, otherwise search loaded
+positions within 16 blocks. Searches are throttled to five seconds, with
+bounded path attempts; absent chunks are never loaded. Indoor social movement
+remains available, while outdoor wandering targets are cancelled. Clear weather
+releases shelter targets. Work, panic, trading and sleep retain their behavior;
+vanilla REST continues taking villagers home. Both natural cold-biome snow and
+Naturality's temperature-driven snow are recognized, without treating warm rain
+as snow. Farmers pause evening bread delivery during snowfall; meals remain
+available. Shelter state is transient and recalculated after reload.
+Validation: villager-shelter checks real walking into shelter, indoor movement,
+blocked outdoor wandering, panic, clear weather and warm rain. villager-bread
+regressions and assemble passed. Log: build/villager-shelter.log.
+
+VILLAGER FENCE GATES (2026-10-04)
+Villager walking paths classify fence gates like wooden doors, including their
+taller collision extending into the air above. Other mobs retain vanilla gate
+pathfinding. A core behavior opens gates at the previous/next path nodes and
+remembers them in the same DOORS_TO_CLOSE memory used by InteractWithDoor.
+Gate opening follows the normal facing flip and wood-specific sounds/game events.
+Closing uses vanilla's three-block range and same-species follower/path checks,
+but waits until the villager's bounding box has physically cleared the opening.
+The door closing helper preserves gates still in use instead of discarding them
+as non-door blocks. Redstone-powered gates remain open. Normal door behavior is
+preserved. villager-gates tests real passage/closing for oak, crimson and cherry,
+ordinary door passage, livestock exclusion, follower handoff and powered gates.
+Log: build/villager-gates.log.
+
+PARTICLE VISIBILITY BLOCKING REVERTED (2026-10-04)
+Visibility/FOV/terrain/water checks no longer reject particle creation or
+engine insertion. Fall emitters scan and spawn irrespective of camera facing
+or occlusion. Existing particles continue normally. The shared spray limits
+(64 per tick, 768 live/queued) and 64 impact-droplet attempts per tick remain.
+Native renderer frustum culling is unchanged. The visibility access and terrain
+invalidation mixins are no longer registered. Earlier visibility optimization
+entries below are historical and superseded by this entry.
+Validation: assemble and particle-visibility client regression suite, checking
+hidden, embedded, behind-camera and water-obscured spawning, plus retained caps.
+Log: build/particle-visibility-undo.log.
+
+PARTICLE VISIBILITY IS SPAWN-ONLY (2026-10-04)
+Removed the visibility-based ParticleGroup tick cancellation and deletion.
+Existing particles survive terrain occlusion and leaving the camera FOV; new
+hidden/off-screen particles remain rejected. Spawn and population caps remain.
+
 VILLAGER EVENING BREAD (2026-10-04)
 Farmers record working during the scheduled 2000-9000 work period. After that
 shift ends, they use their existing bread or craft it from inventory wheat at
@@ -234,8 +1005,7 @@ accounting. Warm-started spray uses the same limits. Impact droplets have a
 separate shared allowance of 64 spawn attempts per tick. Particle engine clears
 and world changes release both budgets. Overloaded scenes intentionally reduce
 effect density; animation, movement, tint and collision behavior remain intact.
-Supported sprite particles outside the camera cull frustum are rejected and
-removed before simulation. Native rendering continues to use frustum culling.
+Supported sprite particles outside the camera cull frustum are rejected at spawn. Existing particles continue normally. Native rendering still uses frustum culling.
 Full particle bounds are checked, preserving visible edges; panorama mode skips
 the extra view rejection. Falls skip off-screen column scans and border surface
 checks, and stop emission work when the shared tick allowance is exhausted.
@@ -255,9 +1025,7 @@ PARTICLE OCCLUSION AND SPAWN REJECTION (2026-10-03)
 ParticleVisibility shares conservative visibility decisions between nearby
 sprite particles. Waterfall/lavafall spray and rain/snow have known maximum
 spawn bounds and can be rejected before construction. Other ordinary quad
-particles are checked before engine insertion. Existing hidden particles are
-removed before their next scheduled simulation check; particle-group cleanup
-still releases engine limits normally. Custom extractors without known bounds,
+particles are checked before engine insertion. Existing hidden particles continue their normal simulation and lifetime. Custom extractors without known bounds,
 including the portal glow/mote renderers, are left alone.
 ParticleOcclusion walks toward a group's enclosing volume and projects all
 eight corners onto opaque block planes. Every cell in the projected rectangle
@@ -269,7 +1037,7 @@ Visual bounds include sprite rotation radius and previous/current positions.
 New border spray bounds allow its later size enlargement.
 Caches expire on world/time/camera changes and engine clear/reload. Terrain
 notifications invalidate cached block and region decisions within the same tick.
-Existing groups are staggered across four tick phases. Each camera/tick snapshot
+Visibility checks apply only before engine insertion. Each camera/tick snapshot
 allows at most 256 region tests and 16384 uncached block queries; rays take at
 most 160 steps. Unknown visibility, exhausted budgets and missing chunks fail
 open. This removes confirmed hidden work without promising exhaustive occlusion
@@ -1238,7 +2006,7 @@ PORTAL AUDIO CONTROLS: Portal changes now includes openingVolume, ambientVolume 
 PHYSICAL PORTAL CROSSING AND OVERLAY
 - Nether portal travel now follows hitbox immersion for players and other entities,
   replacing the vanilla standing-in-portal timer. First contact does not teleport.
-  The trailing hitbox edge crossing the entry-facing surface enables teleportation
+  The trailing hitbox edge clearing the far surface plus 1/16 block enables teleportation
   immediately; standing halfway through can linger indefinitely. Normal movement
   controls entry; there is no automatic pull. Backing away cancels the crossing.
 - Opening portals still block travel. Portal destruction, retreat, cooldown and
@@ -1312,8 +2080,8 @@ CAMERA COVERAGE AND RETURN TRAVEL
   safety margin, preventing clipping from revealing the far side. The existing
   brightness-dependent pixel easing and retreat fade remain in use.
 - PortalArrival attaches a reversible crossing to the destination portal after
-  vanilla chooses the exit. Arrival sits just outside its exit-facing surface,
-  with the hitbox still intersecting it. Managed travel clears vanilla cooldown;
+  vanilla chooses the exit. Arrival starts fully behind its exit-facing surface,
+  with 1/16-block clearance for the entire hitbox. Managed travel clears vanilla cooldown;
   stationary arrivals remain stable, walking outward leaves the crossing, and
   reversing fully through the surface immediately returns to the other dimension.
 - Destination crossing state is synchronized to the arriving player and observers.
@@ -3477,8 +4245,8 @@ SKY EVENTS / OVERWORLD METEOR SHOWER (2026-09-30)
 ------------------------------------------------
 Sky Events has explicit per-dimension event pools; Rainbow additionally requires
 a moderate rain value.
-The Overworld contains Meteor Shower, Aurora Borealis and Rainbow; the End has an empty pool ready for later
-events. The Nether has none. The server evolves and synchronizes each event's
+The Overworld contains Meteor Shower, Aurora Borealis and Rainbow; the End
+contains End Flashes. The Nether has none. The server evolves and synchronizes each event's
 0-20 strength to compatible clients on join and every ten ticks. Both server
 and client need Naturality for automatic events; unmodded servers send no events.
 Individual meteor positions are client-local cosmetic randomness.
@@ -4195,3 +4963,1100 @@ The environment-persistence suite reopens an actual save after visiting another
 world, verifies independent dimension weather and active sky-event state, and
 checks random continuation after cycle snapshot restoration.
 Validation: assemble and environment-persistence, sky-events, aurora, rainbow, weather-commands passed. Logs: build/environment-persistence.log and build/environment-regression.log.
+
+HEAVY SNOW AND SEVERE-WIND FALL SPEED (2026-10-04)
+Snow fall speed uses a smoothstep multiplier from 1x at wind 80 to 4x at 100
+(2.5x at 90). Existing cards ease toward changed multipliers each tick, keeping
+their individual fall speed and flutter. Rain fall speed is unchanged.
+Snow's particle sprite list now includes the three existing heavy_snow_cluster
+textures. Their selection uses the same intensity/distance probability as heavy
+rain, so heavy variants cannot spawn below that precipitation threshold; strong
+wind alone does not enable them. Regular/heavy sprites retain random flipping.
+Particle-weather tests cover the multiplier endpoints/midpoint, six textures
+for each precipitation type, high-wind snow speed and normal render regressions.
+Validation: assemble and particle-weather passed; build/heavy-snow-test.log.
+
+WEATHER PARTICLE INITIAL VELOCITY (2026-10-04)
+Rain/snow cards initialize through the same velocity calculation used by their
+updates, applying full current wind immediately at spawn. Snow also starts with
+its randomized flutter phase and severe-wind fall multiplier already applied.
+Later updates retain the existing easing toward changing weather. The first
+render therefore aligns sprite Y with the intended motion rather than showing
+a newly spawned vertical card gradually turning into the wind.
+Particle-weather checks initial wind components, stable rain velocity under
+unchanged conditions and snow's small continuous first-tick flutter change.
+Validation: assemble and particle-weather passed; build/weather-spawn-velocity-test.log.
+
+WORLDGEN SNOW OVER FOLIAGE (2026-10-04)
+SnowWorldgenMixin runs after vanilla's SnowAndFreezeFeature snow/ice pass.
+Where the motion-blocking heightmap position contains foliage, SnowWorldgen
+scans the foliage column and places one snow layer in air above it, preserving
+all plant blocks. Existing fitted geometry carries that snow to exposed ground
+and foliage overlays. Ground with the SNOWY property is marked appropriately.
+Biome precipitation, block light, build bounds and fitted support remain checked
+through Biome.shouldSnow. Roofed foliage is excluded by the heightmap, waterlogged
+plants are skipped, and wrapping-disabled generation retains vanilla behavior.
+WorldGenLevel snow wrapping queries read server settings, including generation
+regions. This affects newly generated terrain; existing chunks are not rewritten.
+snow-worldgen exercises the actual feature with grass, tall grass, fern, flowers,
+leaf canopies, roofs, warm biomes and disabled wrapping. snow-compat also passed.
+Validation: assemble, snow-worldgen and snow-compat passed; build/snow-worldgen-test.log and build/snow-worldgen-final.log.
+
+LIGHTNING VISIBILITY AND DISTANT STORM STRIKES (2026-10-05)
+Natural lightning requires rain strictly above 70. Rain 50 keeps its previous
+thunder lighting/darkening but no longer enables natural strike spawning.
+DistantLightning sends lightweight visual strike packets for storms, with an
+average attempt once per 600 ticks per player. Strikes range from two chunks
+beyond server view distance to 2048 blocks (or farther for unusually large view
+distances). No terrain is read/generated by this distant spawn path.
+Clients keep a bounded set of temporary visual LightningBolt instances, ticking
+and extracting them independently of chunk entity tracking. Beyond client render
+distance or unloaded terrain, their base is sea level plus one; loaded nearby
+positions use the surface height. They expire normally and clear on world change.
+Lightning entity extraction bypasses distance/section culling. Lightning shader
+fog attenuation is removed in standard and OIT rendering; reversed-depth far
+plane clipping is clamped to keep distant bolts drawable, retaining terrain
+occlusion. lightning tests check the rain boundary, distant extraction, fixed
+height, no chunk loading, both transparency modes and normal expiry.
+Dedicated lightning shaders keep other vanilla effects unchanged. Distant bolt width scales beyond 256 blocks to remain visible. Entity interpolation is initialized at spawn, and commonTick runs before each visual tick. Both 1500-block fog screenshots were inspected successfully; assemble and lightning passed (build/lightning-final-test.log). The weather regression fixture now explicitly pauses activation and checks the previously requested zero-until-activation behavior.
+Final validation: assemble and focused lightning suite passed, with visible 1500-block bolts in both fog screenshots (build/lightning-final-test.log). Broader weather regression was interrupted by NoClassDefFoundError for LightSourcePlacement while the shared build output changed; the source and compiled class were present afterward. Log: build/lightning-weather-regression.log.
+
+RAIN FOG FADE-OUT (2026-10-05)
+Heavy-rain fog now blends both environmental boundaries back toward the normal
+frame's fog as rain declines through 80-100. Previously its near boundary stayed
+at 12 and its far boundary approached only 100 before the override disappeared,
+causing a visible cutoff. Effectively infinite baseline ranges are capped beyond
+render-distance fog for useful, visually continuous interpolation. Full rain
+retains the 12-15 outdoor band and sheltered far boundary.
+Validation: assemble and water-rain client suite passed, including a descending
+rain sweep through the cutoff and normal fog restoration. Both standard and
+improved-transparency water scenes passed. Log: build/rain-fog-fade-test.log.
+
+DIRECTIONAL RAIN FOG SKY BLEND (2026-10-05)
+Heavy rain's environmental haze now blends terrain and water toward the captured
+Overworld atmosphere, including its directional sunset gradient. Previously only
+render-distance fog sampled this sky, leaving a flat color at the near rain fog
+boundary. The replacement fades with the render-interpolated rain fog strength,
+preserves ordinary environmental/cave fog, and respects premultiplied OIT alpha.
+It operates on material draws, preserving lightning's independent fog-free draw.
+Validation: assemble and water-rain client suite passed. Sunset screenshots with
+a stone wall beyond the rain boundary were inspected in standard and improved
+transparency; the wall fades into the sunset gradient without a flat-color seam.
+Log: build/rain-fog-sunset-test.log.
+
+UNDERGROUND WIND AND DISTANCE THUNDER (2026-10-05)
+Wind loops are silent in deep underground shelter (more than eight blocks below
+motion-blocking surface height) unless a clear sky opening is reachable within
+2, 4 or 8 blocks horizontally. Houses retain their existing quiet indoor wind;
+open overhangs/exits remain audible. This surface-access check runs for each
+listener independently, including multiplayer.
+Natural chunk lightning stops when all dimension players are underground; the
+surface-player decision is cached once per server tick during thunderstorms.
+Distant visual storms no longer originate around underground players. Surface
+players can still produce storms in multiplayer. Client lightning sky flashes
+are suppressed for underground viewers; commanded/channeling strikes remain
+physical vanilla events.
+Both ordinary and distant bolt sounds are queued locally at 343 blocks/second
+(20 ticks of delay per 343 blocks). Pitch scales by 1/(1+distance/1024), subject
+to the sound engine's normal pitch limits. Shelter is checked when scheduled,
+when the sound arrives, and during playback; entering underground mutes ongoing
+thunder. Queues clear on world changes and do not advance while paused.
+Validation: assemble and lightning client suite passed. Checks cover server and
+client underground classification, silent wind, per-listener thunder rejection,
+restoration through an immediate unobstructed exit, surface-player storm gating,
+delay/pitch distance relations, distant visual extraction and both transparency
+modes. Logs: build/thunder-shelter-final-test.log and thunder-shelter-assemble.log.
+
+SAND INTERACTION PARTICLES (2026-10-05)
+Sand and red sand terrain particles now use vanilla falling-dust sprites,
+animated frames, rotation, size and each block's dust color. The terrain
+particle's existing motion remains intact: breaking/mining and walking retain
+their normal velocities, and mace DUST_PILLAR retains its provider velocity
+and lifetime. Other block fragments keep their existing texel rendering.
+FallingDustSpritesMixin captures the resource-reload-aware vanilla sprite set;
+TerrainParticlePixelMixin changes only sand's visual fields and animation.
+Successful BlockItem sand placement broadcasts particle-only level event 2014
+from the server, reusing the exact breaking burst without a breaking sound or
+client prediction duplicates. Nearby multiplayer clients receive the effect.
+Validation: assemble and breaking client suite passed, including both colors,
+full sprite UV ranges, animated frame progression, identical terrain motion,
+walking/mace providers and resource reload. Log: build/sand-particles-test.log.
+
+SAND PLACEMENT OUTSIDE-FACE SPAWNS (2026-10-05)
+Placement uses SandPlacementBurst via SandPlacementEventMixin. Each of the
+64 original burst samples moves beyond a block face with 0.25-block clearance,
+large enough for the rotating sprite. Original burst velocity inputs remain
+unchanged. Previous/interpolated positions also start outside, and the terrain
+particle lighting position samples the exterior cell. Breaking, walking and
+mace effects retain their existing spawn positions.
+Validation: assemble and breaking client suite passed. Checks cover all 64
+outside positions, all six faces, exterior lighting positions and first-frame
+interpolation for both sand colors, before and after resource reload.
+Log: build/sand-placement-outside-test.log.
+
+END WEATHER: GRAVITY AND DISTORTION (2026-10-05)
+The End now has its own active weather pool, separate from the reserved Nether
+pool and Overworld precipitation/wind state. Dimension-first command completions
+in the End list gravity, distortion and starfall. Use:
+  /weather minecraft:the_end gravity <0-100|auto>
+  /weather minecraft:the_end distortion <on|off|0|1|auto>
+  /weather minecraft:the_end starfall <0-100|auto>
+  /weather minecraft:the_end <status|auto>
+Starfall is a saved, reserved channel only; projectiles, damage, explosions and
+placeholder graphics are intentionally deferred to its later implementation.
+Old rain/wind/temperature commands are rejected for the End. Nether commands
+retain their previous reserved behavior; Overworld commands retain their sliders.
+
+New worlds begin at gravity 0 with distortion off and starfall 0. Gravity 100
+leaves 10% of ordinary gravity (a 0.1 multiplier). Independent automatic
+gravity/distortion events
+have an initial 6000-tick quiet period while the End is occupied. After that,
+gravity rolls 1/12000 and distortion 1/24000 per eligible tick. Events last
+2400-5999 ticks; gravity retargets gradually during an event. The weather gamerule
+pauses automatic activity. Overrides can still be changed while paused.
+
+Distortion flips the entire End together, with randomized 320-720 tick intervals
+between reversals and an 80-tick smooth rotation. The same eased inversion drives
+signed gravity, the camera roll and living-entity model rotation. Any distortion
+end, including a manual off partway through a flip, eases back to upright. Gravity
+strengths, event timers, override values, rotation progress and random sequence
+are saved in EnvironmentWorldData and restored across sessions. Network updates
+arrive every two ticks; camera/model visuals interpolate between them. Client
+state resets on connections, and other dimensions retain ordinary gravity.
+
+Players and mobs receive signed gravity, ceiling grounding/support, inverted
+jumping, eye-height positioning and upward fall tracking. Player look/strafe
+controls account for inversion. Creative/spectator flight, riding and explicitly
+gravity-free entities keep their native behavior. Native particle gravity scales
+and reverses with End weather; collision-stopped particles release when gravity
+changes direction. Living models rotate about their center, while physical boxes
+remain axis aligned during the visual transition.
+
+END GRAVITY ESCAPE BEHAVIOR (2026-10-05)
+Endermen seek a safe loaded island underside when a flip turns gravity upward,
+and retry if airborne. Their normal teleport attempts also target undersides
+while inverted. Searches require sturdy support, a clear body volume, no liquid,
+and valid teleport support. They do not request absent chunks. The move retains
+teleport sounds/particles, resets velocity/fall distance and stops the old path.
+When gravity returns downward, they attempt to teleport back onto the island top.
+
+Upward-falling players enter a 48-block damping zone beneath a soft limit located
+16 blocks below the End's build ceiling. Their upward displacement tapers smoothly
+and approaches the limit without overshoot. This only applies to gravity-driven
+upward motion; downward falls and ordinary flight remain unchanged. Damping runs
+on the movement-authoritative side so multiplayer position packets are not
+processed through the spring a second time.
+Validation: assemble, end-weather and weather-commands passed in
+build/end-weather-verified.log. Tests cover the 60% gravity reduction, shared
+inversion, ceiling contact and jumping for players/mobs, actual player movement,
+camera upright/inverted endpoints, upward particle acceleration, interrupted
+flip recovery, Enderman underside/top escapes, the upward spring and unchanged
+downward motion. Actual world switching/reopening verifies independent defaults
+and retained End state. Saved random-cycle continuation is compared across 3000
+ticks. Dimension-specific suggestions, invalid values and existing Overworld/
+Nether command behavior are also checked.
+
+END GRAVITY RANGE RETUNE (2026-10-05)
+Gravity now scales linearly from 1.0 at slider 0 to 0.1 at slider 100,
+a 90% reduction. The shared multiplier applies to entities and particles
+in both upright and inverted gravity. Updated endpoint and mob-gravity
+checks pass with the existing movement, inversion and persistence coverage.
+Validation: assemble and end-weather passed; build/end-gravity-tenth-test.log.
+
+END CEILING POSES, EARLY TELEPORTS AND SPAWN RULES (2026-10-05)
+Inverted player pose-fit checks now grow downward from the current upper
+hitbox face. Dimension refresh keeps that face anchored when crouching,
+standing or crawling, on both client and server. Releasing crouch no longer
+leaves the player stuck in a short pose against the supporting ceiling;
+standing still requires actual collision clearance.
+
+Endermen react to the shared inversion target on the next entity tick,
+instead of waiting for the middle of the four-second rotation. They seek a
+safe loaded underside immediately and briefly brace at that validated spot
+until gravity points upward. The brace releases if its support disappears,
+the space becomes obstructed or another teleport moves the mob away. Failed
+searches retry promptly. Cancelling an early flip returns braced Endermen
+to the island top, as does the normal return to upright gravity.
+
+SpawnPlacements checks reject normal mob spawning (including the natural,
+world-generation and spawner checks) in the End while inversion exceeds 0.5.
+Spawning resumes when gravity returns downward; other dimensions are unchanged.
+This does not remove existing mobs or intercept loading, commands or travel.
+The empty entity-type tag naturality:no_end_gravity is the future exemption:
+  data/naturality/tags/entity_type/no_end_gravity.json
+Tagged types retain ordinary gravity strength/direction, do not rotate with
+distortion, and keep their normal spawn eligibility. The test-only resource
+pack tags pigs to exercise this path; the distributed tag contains no entries.
+
+Validation: the original ceiling pose failure was reproduced by a real crouch
+key press/release (build/end-ceiling-crawl-repro.log). Assemble and end-weather
+then passed (build/end-ceiling-spawn-test.log), covering client/server standing
+recovery, anchored crouching with collision clearance, recovery from crawling,
+Enderman escape within five ticks and bracing through the early turn, spawning
+suppression/resumption, the immunity tag, movement and world persistence.
+
+INVERTED ELYTRA AND THIRD-PERSON LOOK (2026-10-05)
+EndGravityLivingMixin runs vanilla elytra aerodynamics in the gravity-local
+vertical frame while inverted: incoming velocity, look pitch/vector and gravity
+are reflected before the calculation, and resulting velocity returns to world
+space afterward. Upward falling therefore converts into forward glide, and
+pitch-controlled lift/dive behavior mirrors ordinary flight. Vanilla equipment,
+activation, durability and landing rules remain responsible for flight state.
+
+EndGravityRendererMixin projects the world look direction into the rolled body
+frame before model animation, so relative head yaw and pitch still track the
+camera throughout a flip. EndGravityAvatarMixin also reverses flight banking
+smoothly with inversion. EndGravityWingsMixin interprets wing descent in the
+same gravity-relative frame. These changes do not replace vanilla body-yaw
+following or change the player's actual world look direction.
+
+EndGravityCameraMixin now transforms the interpolated camera eye height itself,
+instead of adding a correction based on the new pose's raw eye height. Opening
+elytra or crouching below a ceiling no longer makes the camera jump through the
+supporting block during the eye-height transition.
+
+The end-flight suite compares actual vanilla glide results mirrored across Y
+at multiple pitches/vertical speeds, compares rendered head vectors with both
+third-person camera modes, checks the camera on the first elytra-pose frame,
+and activates elytra with real jump-key presses on client and server. It also
+checks sustained upward-fall gliding, mirrored wing animation and removal of
+the glider. Front/back standing and flying screenshots were inspected.
+Validation: assemble, end-flight and end-weather passed in
+build/end-flight-final-test.log, including the existing ceiling-pose, spawn,
+Enderman escape, movement, soft-limit and persistence regression coverage.
+
+
+
+DRAGON FIGHT DISTORTION SUPPRESSION (2026-10-05)
+EndWeatherSystem derives distortion suppression from the End's authoritative
+EnderDragonFight state: the dragon has not been killed, or its respawn sequence
+is active. This covers the initial and repeated fights without relying on a
+client boss bar or the dragon entity being loaded near a particular player.
+EndDragonFightAccess exposes those two fields for the shared server check.
+
+While suppressed, automatic distortion timers pause and no new distortion
+roll occurs. Overrides remain saved but cannot activate distortion during the
+fight. An existing inversion eases upright through the usual 80-tick transition,
+even with automatic weather paused. Normal distortion scheduling/overrides can
+resume after the fight ends; the gravity-strength slider keeps operating.
+Weather command feedback and status explain the temporary suppression.
+
+EndDragonFightGameTest (part of end-weather) checks initial-fight suppression,
+retained manual overrides, paused automatic events, a smooth return during
+resummoning, repeated fights and restoration after victory. Existing movement
+and flight fixtures explicitly disable their fight controller to test weather
+outside combat.
+Validation: assemble and the expanded end-weather suite completed successfully
+in build/end-dragon-distortion-test.log. That combined run later failed the
+existing server elytra-activation assertion in end-flight. The unchanged
+end-flight and weather-commands suites passed on a separate rerun in
+build/end-dragon-flight-command-check.log.
+
+INVERTED WALKING PARTICLES (2026-10-05)
+EndGravityEntityMixin mirrors sprint/walking block-particle spawn height about
+its entity's collision-box center while inverted, and reverses the initial
+vertical burst velocity. Particles originate just beneath the ceiling-facing
+feet and launch away from the support, instead of appearing near the face.
+Vanilla supporting-block texture selection, horizontal spread and kickback stay
+intact. The hook applies to all affected entities; upright and gravity-exempt
+entities keep their ordinary particle placement.
+
+The end-weather suite records actual ClientLevel particle emissions for an
+inverted player, inverted cow, gravity-exempt pig and restored upright player.
+Checks cover spawn height, launch direction, horizontal velocity and texture.
+The original failure reproduced at Y=103.3 instead of Y=104.9 in
+build/end-footstep-repro.log. Assemble and the expanded end-weather suite passed:
+build/end-footstep-fixed.log.
+
+CEILING MOVEMENT AND JUMP CORRECTIONS (2026-10-05)
+EndGravityEntityMixin now adapts vanilla stepping to inverted gravity. Step
+collision sweeps go downward, candidate heights are measured from the upper
+hitbox face, and upward landings count as grounded step contacts. The ordinary
+step-height limit and vanilla shape collision resolver remain in use, so half
+steps can be traversed without allowing passage through full-height obstacles.
+Ceiling support detection now changes only vanilla's support probe, preserving
+its previous-position fallback and contact state when crossing block edges.
+
+EndGravityPlayerMixin runs the crouching edge check with gravity-relative
+vertical movement and mirrors its support-volume query above the feet. Players
+can crouch along a ceiling, stop at its edges, and jump away without having
+horizontal jump motion incorrectly clamped by the edge guard.
+
+EndGravityServerMovementMixin changes the authoritative position handler's
+moving-upwards flag to mean away from support. Downward packets now trigger
+inverted jump recognition; upward falling preserves fall distance and ceiling
+landings reset it normally. This replaces the old after-packet fall-distance
+workaround and retains vanilla movement validation.
+
+The end-movement suite compares real collision results for mirrored floor and
+ceiling half/full steps, exercises ceiling crouching and edge-jump behavior,
+checks actual server position handling for jump/fall/landing packets, and uses
+real forward/jump keys for a moving ceiling jump and collision-free landing.
+Baseline failures: build/end-movement-repro.log. Assemble and end-movement
+passed: build/end-movement-fixed.log.
+Existing end-weather and end-flight regression suites also passed, including
+ceiling poses, walking particles, gravity persistence and inverted elytra:
+build/end-movement-regression.log.
+
+CUSTOM CHORUS FLOWER MODEL (2026-10-05)
+--------------------------------------
+Vanilla chorus_flower and chorus_flower_dead block models now inherit
+naturality:block/chorus_flower_bloom for every age, including the item model's
+existing vanilla parent chain. Runtime JSON is under src/main/resources/assets;
+geometry and UVs come from resources/block models/chorus_flower_bloom.json.
+The four textures remain in resources/textures/block and use the naturality
+namespace. The particle sprite uses chorus_meat. Unassigned #missing export
+faces (hidden internal faces or degenerate plane edges) are omitted. Authored
+single-axis and XYZ rotations are supported natively by Minecraft 26.3.
+Validation: offline assemble passed (build/chorus-flower-build.log); all seven
+runtime model/texture assets and face texture references verified. In-game
+appearance has not been visually checked.
+
+AUTOMATIC CHORUS MODEL IMPORT (2026-10-05)
+----------------------------------------
+generateChorusFlowerModel now treats resources/block models/chorus_flower_bloom.json
+as the authoritative input. processResources includes its generated runtime
+model, replacing the earlier manual source-resource copy. Gradle tracks input
+changes, including with configuration cache reuse. Build, runClient and VS Code
+prepare debug resources automatically regenerate it. Raw block models exports
+are excluded from the generic assets/naturality resource copy.
+Texture namespace/particle repairs and removal of unassigned export faces
+happen during generation; the artist file retains its original contents.
+Validation: offline assemble passed; a temporary credit edit reached the JAR
+on a cached rebuild, then the exact original source was restored and rebuilt.
+Logs: build/chorus-flower-regeneration.log and build/chorus-flower-build.log.
+
+WEIGHTED CHORUS FLOWER VARIANTS (2026-10-05)
+------------------------------------------
+The vanilla chorus_flower blockstate now chooses naturality:block/chorus_flower
+with weight 9 or naturality:block/chorus_flower_bloom with weight 1 for every
+age. Vanilla position-seeded model selection keeps each flower's appearance
+stable rather than rerolling each frame. Inventory uses the normal model.
+generateChorusFlowerModel imports both authoritative exports from resources/block
+models automatically; texture fixes apply to both. Validation: offline assemble
+passed; both packaged models' face texture references and 9:1 blockstate weights
+verified. Log: build/chorus-flower-variants.log. In-game visual check not performed.
+
+INVERTED GROUND-MOB AI (2026-10-05)
+Ground-walking mobs temporarily use CeilingPathNavigation while affected by
+inverted End gravity. EndGravityMobNavigationMixin switches before server AI
+runs, clears obsolete steering/path memory, and restores the original navigator
+instance when gravity returns, the mob becomes exempt or it leaves the End.
+Existing attack, wandering and other movement goals remain active. Navigators
+that are not ground navigators are left in place.
+
+CeilingNodeEvaluator uses vanilla's bounded A* search with collision-checked
+underside footing. Waypoints retain world coordinates and exact fractional
+ceiling heights. Full body clearance, loaded chunks, liquid/hazard costs and
+swept movement are checked before accepting neighbors. Routes can step/jump
+down to lower undersides or fall a bounded distance upward onto higher ones;
+unsupported void and obstructed body volumes are rejected. Cardinal routes
+avoid corner cutting. CeilingPathNavigation steers toward the actual body base
+beneath each surface rather than the top of a floor block. MoveControl's jump
+height comparison is gravity-relative. Random walking destinations are projected
+to nearby safe ceiling surfaces, retaining the original horizontal direction
+selection and goal weights.
+
+EndGravityTeleport now subtracts mob height in double precision. The former
+integer-minus-float calculation could put an Enderman's box a few millionths of
+a block into a ceiling, reject it as occupied, and choose a lower island instead.
+The two-platform AI fixture reproduced this at Y=150 versus Y=130.
+
+The end-mob-ai suite verifies a real Enderman melee goal reaching a target via
+a detour around a hanging wall, a cow's one-block ceiling step/jump, ordinary
+WaterAvoidingRandomStrollGoal movement, rejection of unsupported destinations,
+collision-free ceiling footing, gravity-exempt navigation, and restoration of
+the original navigators and usable floor paths after distortion ends. The target
+is attackable with increased health so vanilla targeting remains meaningful.
+Validation: assemble and end-mob-ai passed; build/end-mob-ai-test.log.
+The end-mob-ai-ceiling screenshot was inspected for the mob on the lower ledge.
+Path starts also consider reachable cells beneath the mob's full footprint when
+it partially overhangs a ceiling edge. Destination sets are projected and
+deduplicated before A* builds its target map. Both cases have regression checks.
+Final validation: assemble and expanded end-mob-ai passed (build/end-mob-ai-final.log).
+Existing end-weather and end-movement suites passed (build/end-mob-ai-regression.log).
+
+DIRECTIONAL CHORUS FLOWERS AND SHORT NORMAL HITBOX (2026-10-05)
+-------------------------------------------------------------
+Chorus flowers now carry facing (all six directions) and bloom block-state
+properties. Placement follows the clicked face on chorus plant or a block in
+SUPPORTS_CHORUS_FLOWER (vanilla End stone). New placements and natural/worldgen
+flowers roll bloom with probability 1/10 once; the saved, synced state chooses
+both model and hitbox. The former render-only weighted blockstate is replaced
+by twelve facing/bloom combinations, independent of age. Model source imports
+still run automatically for both artist exports.
+Normal collision, selection and support shapes are a centered 12-pixel-wide,
+7-pixel-tall solid body, rotated about the block center with facing. Decorative
+leaf/hair planes do not collide. Bloom retains a full-block solid-body shape.
+Growth uses the flower's facing as its forward axis and the four perpendicular
+directions for branching, retaining vanilla age limits, branch odds, death
+sounds/events and clearance checks in that local frame. Hanging/sideways flowers
+continue growing away from their support. Worldgen tree tips may flower on free
+side/down faces; tree stems retain vanilla authored generation. Dead flowers
+retain their orientation and variant. Structures rotate/mirror facing normally.
+Chorus plants gain a bounded, non-loading root-connectivity fallback when the
+vanilla ground-oriented survival rule fails, supporting new directional stems.
+Removing roots retains the ordinary scheduled-break path. Older saved flowers
+default to up/normal; vanilla's old lateral-support fallback remains available.
+Implementation: ChorusFlowers, ChorusFlowerMixin, ChorusPlantMixin and the
+minecraft chorus_flower blockstate. Inventory keeps the normal upright model.
+Validation: offline assemble and chorus-flowers client integration suite passed.
+Checks cover real item placement on six faces, normal/bloom rotated shapes,
+forward growth in every direction, natural branching in all six directions,
+generated End trees, root removal and scheduled destruction, unchanged facing/
+bloom on death, 10% bloom distribution and synced client block-state properties.
+The normal/bloom six-orientation screenshot was visually inspected. Logs:
+build/chorus-orientation-build.log and build/chorus-orientation-final.log.
+Screenshot: build/run/clientGameTest/screenshots/0000_chorus-six-orientations-normal-and-bloom.png.
+
+CHORUS VARIANT INHERITANCE AND SHARED PLANT TEXTURE (2026-10-05)
+--------------------------------------------------------------
+Growing tips and all branches now inherit the source flower's bloom property
+instead of rolling a new variant. The 10% roll applies only to new independent
+placements/worldgen flowers. Death already preserves the variant. Legacy lateral
+flowers adopt their supporting stem's outward direction before using the same
+growth path, retaining their existing variant.
+processResources also maps resources/textures/block/chorus_plant.png and optional
+chorus_plant.png.mcmeta to assets/minecraft/textures/block. The normal naturality
+resource copy remains, so vanilla stems and both custom flower models share the
+same editable source texture. Rebuild/relaunch after editing that file.
+Validation: assemble and expanded chorus-flowers client suite passed, including
+both variants over repeated growth in every direction, branch inheritance and
+legacy lateral bloom growth. Packaged vanilla/naturality texture SHA256 hashes
+both equal the artist source. Log: build/chorus-variant-inheritance.log.
+
+MATURE CHORUS TIP FLOWER CROWNS (2026-10-05)
+-----------------------------------------
+Each eligible completed end now rolls once with probability 1/5 for a flower
+crown on its final CHORUS_PLANT block. This applies when a naturally growing
+flower becomes dead and to terminal flowers in newly generated End trees.
+Eligible final stems have exactly one stem neighbor, at least four connected
+stem blocks in the plant, and an empty exposed face. The four-block threshold
+is the definition of a large/developed plant; young shoots do not crown.
+A successful roll places age-5 flowers facing outward on every in-bounds empty
+face, preserving existing blocks and the original terminal flower. Extra flowers
+inherit the terminal normal/bloom variant and cannot grow further. Stem
+connections refresh after placement. There is no reroll on later dead-flower
+ticks, reload or player placement, and existing completed tips are not retrofitted.
+The size check reads only available collision chunks, searches at most four
+connected stem blocks, and never loads/generates missing chunks.
+Validation: production assemble passed. Full test compilation was blocked by
+pre-existing EndWeatherGameTest/EndDragonFightGameTest API mismatches. A temporary
+build-only Gradle init script excluded those two suites and used a generated
+selector without end-weather; the chorus integration suite passed. It covers
+1000 eligibility rolls (20% tolerance), all free lateral faces, age-5 immobility,
+variant inheritance, occupied-face preservation, small-plant rejection and the
+actual age-4-to-dead growth transition, plus existing placement/growth/worldgen
+checks. Logs: build/chorus-crowns-test.log and build/chorus-crowns-final-test.log.
+
+CLIENT SETTINGS AS MOD DEFAULTS (2026-10-05)
+------------------------------------------
+NaturalityConfig defaults now match the saved development client settings in
+run/config/naturality.json. Base clouds use thickness 16 and fadePixels 16.
+Upper clouds default disabled, with width 40, thickness 20, heightOffset 94,
+fadePixels 8, offsets 96/48 and speedPercent 200. Other adopted preferences:
+portal ambientVolume 0.5485651214128036, waterDarkDepth 12, waterPixelSize 16,
+dynamic-light updateTicks 1 and zero emitted light for Endermen/spiders/cave
+spiders. Existing saved config files retain their values; new or missing settings
+use these defaults. Validation: gradlew assemble --offline passed.
+
+DISTORTION STATUS EFFECT (2026-10-05)
+------------------------------------
+Distortion is now the registered harmful MobEffect naturality:distortion, named
+Distortion in English, with color 0x9565CD. No brewing recipe, potion item variant
+or custom effect sprite is added yet. The future icon belongs at
+assets/naturality/textures/mob_effect/distortion.png.
+Use /effect give <targets> naturality:distortion <seconds|infinite> 0 [hideParticles]
+and /effect clear <targets> naturality:distortion. Amplifiers do not change gravity.
+The effect eases each affected living entity upside down over 80 ticks, holds it
+there while active, and eases upright over 80 ticks after expiry/removal. There
+are no random flips. A partial turn can reverse smoothly if the effect changes.
+A LivingEntity synchronized float carries the individual turn progress to both
+local and remote clients; rendering interpolates updates and uses smoothstep.
+Rotation progress is saved on the entity as naturality:distortion_rotation along
+with vanilla's effect serialization. Tracking a new entity initializes from its
+current rotation instead of playing an unrelated fresh flip.
+The existing ceiling movement, collision, eye/camera/model rotation, upside-down
+jumping, fall damage, elytra, ceiling mob navigation and Enderman footing behavior
+now read this per-entity state. They work in all dimensions. Existing no-gravity,
+passenger, gravity-exempt tag and spectator/flying-player exclusions still apply.
+End gravity strength remains dimension weather and composes with the effect.
+Distortion is removed from the End weather pool, command/status/completions,
+automatic clocks, persistence and weather payload. Old saved distortion fields
+are ignored; gravity/starfall saved weather values remain. End weather no longer
+suppresses spawns or reverses unowned particles. Dragon fight weather suppression
+is obsolete; an explicitly applied effect remains an individual effect.
+Tests now activate Distortion using /effect instead of the removed weather slider.
+DistortionGameTest checks selective targeting, Overworld/Nether use, live easing,
+expiry, camera restoration, and partial rotation plus effect save/load.
+Validation: assemble and end-weather/end-movement/end-flight/end-mob-ai/
+weather-commands integration suites passed: build/distortion-effect-regression.log.
+The new distortion suite completed successfully in build/distortion-effect-final.log
+before a later legacy End spawning expectation failed; that expectation was
+corrected to compare vanilla spawn eligibility and passed in the regression run.
+The ceiling screenshots from the gravity, movement, flight and AI suites remain
+available in build/run/clientGameTest/screenshots.
+
+INITIAL WORLDGEN CROWN VERIFICATION (2026-10-05)
+-----------------------------------------------
+Confirmed ChorusPlantFeature invokes ChorusFlowerBlock.generatePlant; the
+existing growTreeRecursive hook already applies mature crowns in that initial
+worldgen path. Expanded the chorus suite to explicitly find flower crowns on
+freshly generated trees, verify all attached flowers start at age 5, and verify
+selected crown stems have no remaining exposed empty faces. No production
+change was needed. Assemble and the isolated chorus client suite passed:
+build/chorus-worldgen-crowns-test.log. New chunks receive this generation behavior;
+previously generated chunks are not retroactively changed.
+
+CHORUS STEM CONNECTION REPAIR AND BASE-ONLY ATTACHMENT (2026-10-05)
+----------------------------------------------------------------
+ChorusPlantMixin now permits a stem-to-flower arm only if that flower's facing
+points from the stem toward the flower (the neighbor presents its base).
+The static connection constructor and live neighbor-update path use this rule.
+Neighbor updates recompute all six arms, including removal of obsolete arms
+when a flower is removed even while the stem is awaiting a support-break tick.
+ChorusFlowerMixin refreshes the completed connected tree after generatePlant,
+repairing stale stem-to-stem and stem-to-flower arms left by suppressed worldgen
+updates and relocated terminal flowers. The traversal reads available collision
+chunks only, is bounded to 1024 stem blocks and uses flags 18 for state repairs.
+No block geometry, growth rates, variant inheritance or crown odds changed.
+Validation: assemble and the isolated chorus client suite passed. Tests check
+base acceptance, wrong-facing rejection and removal in all six directions,
+and compare every generated stem's six arms to its actual neighbors across
+16 generated trees, including mature crowns. Log:
+build/chorus-base-connections-verified.log. Unrelated broken End-weather suites
+remain excluded by the temporary build-only init script described above.
+
+SMOOTH ENDSTONE BLOCK (2026-10-05)
+--------------------------------
+Registered naturality:smooth_endstone with a BlockItem and English display name
+Smooth Endstone. NaturalityBlocks copies End Stone's complete block properties,
+including hardness 3, explosion resistance 9, sound, map color and tool rules.
+The cube-all model uses resources/textures/block/smooth_endstone.png, automatically
+packaged in the naturality namespace. Edit that single texture and rebuild.
+The item appears immediately after End Stone in the Building Blocks creative tab;
+/give @s naturality:smooth_endstone also obtains it. No recipe was added.
+Self-drop loot mirrors End Stone's explosion condition. All six direct vanilla
+End Stone block tags are extended: mineable/pickaxe, dragon_immune,
+sculk_replaceable, blocks_motion_no_leaves, supports_chorus_flower and
+supports_chorus_plant. Main initialization registers the block/item on both sides.
+Validation: assemble and isolated smooth-endstone client suite passed. Checks
+cover setblock/give registration, copied hardness/resistance/sound, pickaxe and
+dragon tags, block-item association, actual self-drop loot, chorus support and
+localized item name. Model, texture, item definition and loot verified in JAR.
+Log: build/smooth-endstone-test.log. The existing temporary init script excludes
+unrelated broken End-weather test sources; production code builds normally.
+
+SMOOTH END STONE NAME AND STONE TEXTURE RULES (2026-10-05)
+-------------------------------------------------------
+Display name is now Smooth End Stone. Existing registry ID and texture filename
+remain naturality:smooth_endstone and resources/textures/block/smooth_endstone.png.
+The blockstate matches vanilla Stone: four equally weighted variants, normal and
+cube_mirrored_all, each at Y rotations 0/180. The mirrored model uses the same
+artist texture. Block properties and inventory model remain as previously set.
+Validation: offline assemble passed; packaged four variants/rotations, mirrored
+parent and localized name verified. Log: build/smooth-endstone-texture-rules.log.
+
+END ISLAND TWO-LAYER END STONE SURFACE (2026-10-05)
+-------------------------------------------------
+New vanilla End noise terrain keeps two regular End Stone blocks at the top of
+each uninterrupted stone column and replaces deeper End Stone with
+naturality:smooth_endstone. EndStoneTerrainMixin runs after the surface pass and
+only for the End noise-settings preset; it does not change island density,
+shape, height or the Overworld/Nether. Air gaps start a fresh surface depth for
+separate islands/terrain segments. Thin one/two-block edges stay regular stone.
+SmallEndIslandLayersMixin applies the same cap to newly placed outer-island
+features, scanning their bounded footprint. Existing saved terrain is unchanged.
+EndStoneLayers writes directly to the generation chunk for noise terrain and
+uses the feature's WorldGenLevel for small islands; no whole-world scan runs.
+Smooth End Stone's loot table now drops minecraft:end_stone with the existing
+pickaxe/tool and explosion rules, including with Silk Touch (no alternate branch).
+Creative/give still supplies the Smooth End Stone block itself.
+Validation: assemble and isolated smooth-endstone client suite passed. The suite
+generates a real initial End terrain chunk and checks every stone column for
+exactly two regular top blocks and a majority smooth interior. It also places
+the actual small-island feature, checks its cap/lower layers and verifies loot
+returns regular End Stone, alongside registration/property/tag/name checks.
+Log: build/end-stone-layers-test.log. Existing unrelated End-weather test compile
+errors remain excluded through the temporary build-only init script.
+
+LIRESTONE BLOCK (2026-10-05)
+--------------------------
+Registered naturality:lirestone and its BlockItem with End Stone's copied
+properties, with hardness 2.5 (End Stone: 3), blast resistance 9, sounds, map color and
+correct-tool requirement. Building Blocks lists it after Smooth End Stone.
+/give @s naturality:lirestone obtains it. The cube_all model uses
+resources/textures/block/lirestone.png on all six faces (updated 2026-10-06).
+The authoritative editable textures remain packaged by
+the existing resource workflow. English name: Lirestone. No worldgen/recipe added.
+Self-drop loot follows End Stone's explosion condition. The same six End Stone
+block tags as Smooth End Stone include Lirestone, preserving chorus support,
+pickaxe mining, dragon immunity and other tagged behavior.
+Validation: assemble and isolated block client suite passed for registration,
+name, hardness/resistance/sound, tool/dragon tags, block-item mapping and loot.
+Texture assets and the three face bindings verified in the JAR. Existing End
+island layer/drop checks also passed. Log: build/lirestone-test.log.
+
+SMOOTH END STONE SILK TOUCH AND SMELTING (2026-10-05)
+--------------------------------------------------
+Smooth End Stone loot now follows vanilla Stone's alternatives pattern:
+Minecraft's tool/can_silk_touch predicate drops naturality:smooth_endstone;
+otherwise the explosion-safe branch drops minecraft:end_stone. Correct-tool
+requirements remain unchanged. This supersedes the earlier always-regular drop.
+The smooth_endstone furnace recipe smelts one End Stone into one Smooth End Stone
+in 200 ticks, awarding 0.1 XP, matching vanilla smooth-stone smelting timings.
+An inventory-based recipe advancement unlocks it when the player obtains End Stone.
+Validation: assemble and isolated block suite passed, including actual loot for
+ordinary and Silk Touch iron pickaxes and 205 ticks of an actual fueled furnace
+producing the new block. Existing block/property/terrain checks also passed.
+Log: build/smooth-endstone-silk-smelting-test.log.
+
+BLENDED OUTER END TERRAIN STYLES (2026-10-05)
+-------------------------------------------
+New outer-End terrain blends three world-seeded density styles continuously:
+1. Vanilla-derived islands with local hills, wider protruding edges and repeated
+   vertical ledges. The original island footprint/density supplies the base.
+2. Warped/winding terrain with tapered, swaying towers and continuous double
+   spiral ramps. Tower anchors use the seed-only vanilla island mask, independent
+   of chunk sampling order, local structure context or terrain query context.
+3. Flatter terrain from compressed versions of the first footprint, with lower
+   and upper shelf layers separated vertically around a shared local elevation.
+Three broad simplex selector fields (850-block scale) produce smooth softmax
+weights rather than a discrete chunk/biome style switch. Shared multi-scale
+height noise (1300/470/190-block scales) raises/lowers all three styles throughout
+the outer dimension. Heights are bounded away from the build floor/ceiling.
+The original density is sampled exactly within radius 1024 of world origin,
+protecting the central island and its void ring. A quintic fade over radii
+1024-1280 introduces the new terrain smoothly. The End noise-settings resource
+copies the installed 26.3 preset with generation height expanded 128 -> 256;
+other density/material/preset settings remain unchanged. Inner density retains
+vanilla behavior; existing Smooth End Stone material layering still applies.
+Small outer-island features follow the same broad elevation field while retaining
+their vanilla footprint and two-block regular End Stone cap.
+EndTerrainDensityMixin supplies the same density wrapper to both actual terrain
+filling and base-column/structure-height queries. Overworld/Nether presets are
+unchanged. Geometry changes affect newly generated chunks only.
+Implementation: EndTerrainDensity, EndTerrainDensityMixin, EndIslandMaskCache,
+EndIslandMaskCacheMixin, SmallEndIslandLayersMixin and the End noise-settings JSON.
+Outer density profiles reuse the vanilla 8x8 horizontal / 4-block vertical grid
+through bounded per-thread caches. Protected-region volume samples take vanilla's
+native bulk path. Profile/point caches retain only weak context references; the
+island mask cache is bounded, thread-local and specific to its seeded sampler.
+This replaces the initial expensive repeated scalar sampling implementation.
+Validation: assemble and isolated end-terrain + smooth-endstone suites passed in
+build/end-terrain-camera-final.log. Checks include bit-exact protected-region
+samples, seed reproducibility/different seed selectors, smooth adjacent style/
+height weights, all three dominant styles, substantial void/island distribution,
+height variation, point/volume agreement and actual generated terrain/base-column
+agreement (excluding chorus/structure feature blocks). Existing material cap,
+small-island, block-property, loot, Silk Touch and furnace checks also passed.
+The sampled 4096x4096 outer area spans Y=8..224. The three in-game style captures
+were inspected for hills/ledges, connected spiral ramps and flat terraces:
+build/run/clientGameTest/screenshots/0000_end-terrain-style-0.png
+build/run/clientGameTest/screenshots/0001_end-terrain-style-1.png
+build/run/clientGameTest/screenshots/0002_end-terrain-style-2.png
+The height/style diagnostic is end-terrain-height-and-style.png beside them.
+Preview options/fog are restored after capture. Unrelated legacy End-weather test
+compile failures remain excluded via the existing temporary build-only init script.
+
+RUGGED END ARCHIPELAGOS AND RELATED ISLAND HEIGHTS (2026-10-05)
+------------------------------------------------------------
+Supersedes the outer-terrain geometry in BLENDED OUTER END TERRAIN STYLES.
+EndTerrainDensity now builds separate, world-seeded island groups instead of
+stretching the vanilla density profile. That old profile could extend past its
+source range and form a wide, flat underside against the common floor limit.
+Every island now closes into its own eroded, tapered underside. Low islands
+receive a shallower keel before density generation, rather than being sliced
+against the world bottom. High outcrops shorten before being shaped as well.
+
+Each island samples a shared regional height field at its own anchor, then adds
+an individual offset of up to 12 blocks. The regional field uses 2600/1100-block
+scales around Y=128. Thus neighboring islands have related, distinct elevations;
+the regional gradient does not bend an entire island into a large continuous hill.
+Local hills, ledges and terraces still vary within each island. The existing small
+End-island features follow the same regional height field through their original
+height hook. Existing chunks and the protected radius <=1024 remain unchanged;
+the previous quintic 1024-1280 transition and 256-block generation range remain.
+
+Jittered anchors, warped shorelines and eroded edges produce smaller irregular
+islands. A warped empty band between groups prevents the connected continents of
+the previous implementation. Typical full island radii are 76-110 blocks, with
+elliptical stretching and noise; a broad sparse-region field reduces these radii
+by up to 57%, creating much wider void gaps. Both broad explorable plateaus and
+small isolated islands occur. All styles share three-dimensional erosion and
+irregular ledges. The flatter style uses lower hills and local terraces instead
+of repeated, perfectly flat stacked copies of the same island footprint.
+
+Winding regions blend toward curving trunks with two branching routes and less
+solid infill. Branching and sparse subtypes are independent broad, seeded fields.
+Style weights use continuous 1400-block selector fields sampled at island anchors.
+Chunky spiral outcrops use overlapping, turning rock lobes and rounded upper ends;
+they start at 27-53 blocks tall with an occasional extra 12, then shorten in the
+branching-path subtype and at high elevations. The previous tall thin double
+helix blades are gone. Density fast-path bounds include the full outcrop and
+its footprint taper, avoiding artificial cuts at the optimization boundaries.
+
+Geometry uses bounded per-thread island/column caches without retaining chunk
+contexts. The central region still uses native vanilla bulk sampling. Actual
+chunk filling and base-column/structure-height queries share the same sampler.
+The two-block regular End Stone surface and Smooth End Stone interior remain.
+Validation: offline assemble and isolated end-terrain + smooth-endstone suites
+passed in build/end-archipelago-verified.log. Checks cover seed reproducibility,
+bit-exact central protection, smooth regional selectors/heights, point/bulk
+agreement, generated-block/base-column agreement, small/broad island coverage,
+connected-component bounds, neighboring elevation correlation, sparse/branching
+infill, and floor/ceiling clearance across two seeds and negative coordinates.
+Material layers, block properties, Silk Touch loot and furnace checks also pass.
+In the sampled 4096-square area, surface heights span Y=64..212, the lowest solid
+block is Y=60, and land occupies about 25% of columns. Sparse regions have about
+10% land coverage versus 34% in fuller regions. Branching regions have about 20%
+coverage versus 37% in the comparison plateau regions. Mean elevation difference
+is about 10.2 blocks between nearest islands versus 29.4 between distant islands.
+The widest measured connected footprint stays below the 512-block span limit.
+All five style/subtype screenshots and the underside view were inspected:
+build/run/clientGameTest/screenshots/0000_end-terrain-style-0.png through
+0004_end-terrain-style-4.png, and 0005_end-terrain-undersides.png.
+The height/style/subtype map and diagnostic counts are in that same directory.
+Preview HUD, fog and view distance are restored after the test. The existing
+build-only isolation script still excludes unrelated legacy End-weather tests.
+
+END CHUNK GENERATION PERFORMANCE (2026-10-06)
+-------------------------------------------
+Profiled both initial central chunks and the 1024-1280-radius transition used
+near outer gateway destinations. The main regression was EndTerrainDensity's
+transition path: it called the entire vanilla density graph separately for each
+voxel. Those scalar calls repeatedly sampled intermediate volumes, including
+EndIslandFunction's 625-neighbor search. A 64-chunk gateway-region workload took
+33.3 seconds before the fix; the same seeded workload now takes 0.59-0.61 seconds.
+This is a measured test workload, not a universal loading-speed guarantee.
+
+EndTerrainDensity.sampleVolume now samples vanilla once for any volume touching
+the protected/transition region and blends the custom density over that buffer
+in place. Fully outer volumes never invoke vanilla. The rectangle's closest
+point determines whether vanilla is needed, including wide volumes whose four
+corners are outside but whose center lies inside the protected region. Protected
+columns retain their original native values. Fully empty outer columns use a
+bulk fill. Per-column shelf noise and center distance are computed once, and
+island/point caches use bounded primitive-key maps to avoid boxed-key churn.
+
+EndIslandMaskCache now serves bulk requests as well as individual points. Its
+keys match vanilla's actual blockX/8, blockZ/8 grid, including Java truncation
+for negative coordinates. The Y-independent value is computed once per grid
+cell and copied down the column. The primitive float cache remains thread-local,
+seed-specific and bounded to 4096 entries. No shared chunk contexts are retained.
+
+Measured density-only gateway workload (16 chunks): 29.2-32.2 seconds before,
+56-71 milliseconds after. A central 64-chunk workload improved from 1.07 seconds
+to 0.79-0.81 seconds. The outer winding density workload (64 chunks) improved
+from roughly 511-524 ms to 441-467 ms. Full-chunk timings include the generator's
+surrounding dependency chunks; comparisons use the same seed, requests and order.
+Baseline/after evidence: build/end-chunks-baseline.txt and .jfr;
+build/end-chunks-optimized.txt and .jfr. The repeatable end-chunk-performance
+client suite writes profiling/end-chunks.txt and .jfr beneath the test run dir.
+
+EndTerrainSamplingChecks verifies one vanilla bulk evaluation and zero scalar
+re-entry for mixed inner/transition volumes, positive and negative coordinates,
+and a wide volume crossing the center. It verifies coarse island-grid reuse,
+negative truncation and identical values on all sampled Y levels. The profiling
+suite also checks a pre-optimization SHA-256 of 655,360 solid/air decisions across
+10 fixed chunks (central, transition, outer styles, negative coordinates).
+The solid fingerprint remains identical. Intermediate floating density bits can
+differ where native bulk math replaces native scalar math; no sampled blocks
+change. Intentional future terrain redesigns should update that golden fixture.
+Validation: assemble and the isolated end-chunk-performance, end-terrain and
+smooth-endstone suites passed in build/end-chunks-regression.log. The repeated
+full gateway workload took 586 ms, central chunks 789 ms, with the same solid
+fingerprint. Central protection, island sizes/heights, subtype distribution,
+floor/ceiling clearance, chunk/base-column agreement, material layering, Silk
+Touch and smelting all passed. Production JAR rebuilt; running clients must be
+restarted to load the fix. The existing test isolation excludes unrelated legacy
+End-weather test compile failures. No terrain reset or world regeneration is
+needed to use the optimization.
+
+CONNECTED END LEDGES AND DEEP ROCKS (2026-10-06)
+----------------------------------------------
+Replaces the earlier radial-island/mandatory-gap layout with irregular groups
+of rock shelves. Each seeded group has a bent spine, an offset fork, distinct
+landing elevations, narrow approaches and an upper ledge crossing lower terrain.
+The field unions nearby formations instead of cutting every nearest-anchor
+boundary apart. Some groups merge; broad voids still separate larger complexes.
+Warped, beveled rock ribs create concave outlines before erosion is applied.
+There is no circular or elliptical island footprint in the new outer field.
+
+Main shelf cores now extend roughly 64-94 blocks downward where altitude permits;
+paths and upper ledges have their own substantial support. Tall shoulders taper
+into keels, and edge noise fades toward their tips. Lower formations shorten
+before shaping to close above Y=28 rather than clipping against the world floor.
+Three paired, offset rock outcrops accompany each group, with stepped tops and
+64-88-block nominal depths. SmallEndIslandLayersMixin suppresses the vanilla
+flat EndIslandFeature outside radius 1024: these density-generated rocks replace
+it and participate in normal base-height queries and material layering.
+
+Sloping paths cut approaches into their destination shelves, preventing a
+vertical wall at the ramp/landing intersection. Neighboring groups still share
+the slow regional height field. Rough, winding and broader layered styles blend
+through the existing selectors; branching regions narrow their landings, while
+sparse regions reduce widths and omit some links. Central terrain is unchanged
+through radius 1024, with the existing eased 1024-1280 transition. End-stone caps,
+smooth interiors, chorus behavior and other dimensions retain their existing
+rules. These shapes appear only in newly generated chunks.
+
+The bulk vanilla sampling and bounded per-thread caches from the performance
+fix remain. Horizontal rib geometry, height limits and approaches are evaluated
+once per column; vertical shaping reuses those slices and culls empty ranges.
+The repeated seeded profile gives 0.48-0.49 seconds for 64 gateway chunks and
+0.80-0.83 seconds for 64 central chunks. Outer density sampling takes 42-45 ms
+for the fixed 64-chunk workload; its new geometry differs from the older workload,
+so this is not a like-for-like shape benchmark. Evidence: build/end-ledges-profile.txt
+and .jfr, plus the final run's profiling/end-chunks.txt and .jfr.
+
+EndTerrainGameTest now checks interconnected, concave footprints instead of
+requiring every island to remain disconnected. The 4096-square seed-1 survey
+contains 23,468 occupied columns (35.8%), with 17,357 at least 40 blocks thick
+and 1,753 containing multiple solid runs separated by air. Sampled surface heights
+span Y=56..224 and the lowest sampled block is Y=32. Of 127 broad components,
+123 occupy under 60% of their bounding rectangle; 53 components span at least
+320 blocks. Nearby mean elevation differences remain lower than distant ones.
+EndTerrainRouteChecks floods actual block-height surfaces through one-block
+steps: the three style probes contain walkable areas of 10,755-16,129 columns
+with 31-37 blocks of elevation change. Other checks cover two seeds, negative
+coordinates, protected central geometry, smooth selectors, point/bulk agreement,
+actual chunks versus base columns, and suppression of the vanilla disc feature.
+The performance fixture now records the intentional new geometry across 655,360
+solid/air decisions: 1d82078f5e6df8307e5e34388eeec385170047f46e12e1e615a139e7a55aacdc.
+Validation: offline assemble and the isolated end-chunk-performance, end-terrain
+and smooth-endstone suites passed in build/end-ledges-final.log (2m47s).
+The new geometry fingerprint repeats exactly. All five style/subtype screenshots
+and the underside view were inspected in build/run/clientGameTest/screenshots.
+The screenshot camera uses render distance 24 so its requested preview chunks
+are within Minecraft's circular view range; original client settings are restored.
+The existing build-only isolation still excludes unrelated legacy End-weather
+and dragon-fight tests with compilation errors. Production JAR rebuilt at
+build/libs/naturality-1.0.0.jar; restart Minecraft to load it and explore fresh
+chunks (or a new test world) to see the terrain changes.
+
+END STARFALL WEATHER (2026-10-06)
+--------------------------------
+Starfall is implemented as an End weather slider, controlled with
+/weather minecraft:the_end starfall <0-100|auto>. Values ease by 0.5 per tick.
+Automatic showers have their own activation, duration and retarget clocks,
+with a new-world quiet period. Strength, target, overrides, timers and random
+sequence are saved with End weather. Legacy reserved starfall integer values
+migrate into the new versioned saved state. The End status lists starfall's mode.
+StarfallWeather spawns in loaded columns around non-spectator End players.
+Streams start at Y=144 and Y=-24 and aim through the general island band at Y=64,
+with slight horizontal inclination and speed 1.4-2.2 blocks/tick. Intensity
+increases shower density; nearby players share their local shower. At most 64
+stars/fizzles occupy a local 112-block-radius volume, including below-island
+space. No absent chunk is loaded/generated for a spawn or a projectile step.
+Two transient projectile entity types are registered: naturality:falling_star
+and naturality:fizzle. Their swept ray checks hit terrain and entities without
+skipping fast impacts. Real stars apply 24 direct-hit damage plus a power-2.5
+explosion with ExplosionInteraction.NONE (no terrain destruction or ignition).
+Fizzles burst into temporary END_ROD/POOF placeholders after 8-27 ticks or before
+any imminent collision; they never damage entities or explode. Stars expire
+after 180 ticks or when moving into unavailable chunks. They ignore gravity.
+Both use the supplied resources/entity models/star.java geometry and
+resources/textures/entity/star.png, centered on the star. The two model cubes
+rotate forward at 9 degrees/tick and left at 6 degrees/tick. UVs are static;
+there is no scrolling fireball shell pass.
+The registered naturality:star_trail particle uses the supplied replaceable
+resources/textures/particle/star_trail.png. One particle remains attached to the
+rendered star's center. Its local Y axis follows opposite velocity so the trail
+extends behind travel; roll alone adjusts toward camera position. Its anchor is
+76% down the 6-block card, below the image center. The trail interpolates the
+same entity position as the model, stays independent of model spinning, is
+full-bright and wind immune, and vanishes when the tracked star vanishes.
+Validation: offline assemble plus starfall, weather-commands and end-weather
+client integration suites passed (build/starfall-final.log). Checks include
+upward/downward block impacts, unchanged island terrain, direct damage,
+harmless timed/collision fizzles, inactive weather, bounded bidirectional
+showers, both renderer registrations, attached wind-immune trails and saved
+weather sequence. Screenshot inspected:
+build/run/clientGameTest/screenshots/0000_starfall-models-and-trails.png.
+
+LIRESTONE MINING AND CRAFTING (2026-10-06)
+-----------------------------------------
+Lirestone hardness is 2.5, slightly easier to mine than End Stone (3).
+Wooden pickaxes can harvest it; the pickaxe requirement remains.
+Its item joins minecraft:stone_crafting_materials and stone_tool_materials,
+allowing vanilla stone material crafting and stone tools. Blast resistance stays 9.
+Validation: assemble and isolated smooth-endstone client suite passed, including hardness, wooden-pickaxe harvesting and both stone material tags. Log: build/lirestone-crafting-test.log. Production JAR rebuilt.
+
+LIRESTONE PATCHES AND BOULDERS (2026-10-06)
+----------------------------------------
+LirestonePatches adds a continuous, seed-derived 3D deposit field to the existing
+EndStoneLayers surface pass. It replaces both the regular End Stone cap and
+Smooth End Stone interior, without filling air or replacing unrelated blocks.
+Lirestone counts as part of the same rock layer, so patches do not reset the
+two-block End Stone cap. Broad noise uses 28-block horizontal / 21-block vertical
+scales; finer boundary detail uses 9/8-block scales. Fine noise is skipped away
+from deposit edges. RandomState's named positional random factory supplies the
+seed through the supported API. World coordinates keep patches continuous across
+chunk borders; the pass reads and writes only its own chunk.
+
+LirestoneBoulderFeature is registered through Fabric's biome modification API
+in End biomes at LOCAL_MODIFICATIONS, before vegetation. The placed feature is
+src/main/resources/data/naturality/worldgen/placed_feature/lirestone_boulder.json:
+rarity 1/10 attempts per chunk, in-square placement, WORLD_SURFACE_WG heightmap,
+and biome filter. Void, steep or obstructed sites reject the attempt. Two offset
+lobes make small, partly buried boulders with radii 2-3 and nominal exposed
+heights 2-4 blocks. Every occupied column requires rock immediately beneath its
+lowest block. The entire footprint is validated before any writes, and only air,
+End Stone, Smooth End Stone or Lirestone can be replaced. Boulders may cross
+chunk borders normally as a worldgen feature. Added geometry is restricted to
+the End beyond radius 1280; material deposits also occur on the central island.
+Existing Lirestone chorus-support tags, mining properties and crafting remain.
+
+Validation: offline assemble and lirestone-worldgen, smooth-endstone and
+end-chunk-performance passed without the old test-isolation script:
+build/lirestone-worldgen-checks.log. Tests cover seed reproducibility/variation,
+coherent deposits, replacement of both source layers, preservation of unrelated
+blocks/air, actual initial generation, sparse boulders, supported cross-chunk
+placement and atomic rejection of obstructed/unsupported attempts. The fresh
+256-chunk survey has 161,250 Lirestone blocks out of 1,406,374 natural rock blocks
+(11.5%), 2,944 patch-covered surface columns, and 93 exposed boulder columns out
+of 27,578 land columns (0.34%); ten chunks contain boulder tops. Both screenshots
+were inspected: 0000_lirestone-patches.png and 0001_lirestone-boulder.png under
+build/run/clientGameTest/screenshots. The terrain density/solid fingerprints are
+unchanged. The 64-chunk gateway workload remains about 490 ms; the three outer
+64-chunk workloads take 491-662 ms. Profile retained as build/lirestone-worldgen-profile.txt
+and .jfr. Production JAR rebuilt at build/libs/naturality-1.0.0.jar.
+Restart Minecraft and generate fresh chunks to see these features; existing
+terrain is not rewritten.
+
+HIGH, ANGLED STARFALL AND ARRIVAL FADE (2026-10-06)
+-------------------------------------------------
+Upper stars and fizzles now spawn at Y=240-264 rather than Y=144; the lower
+stream starts at Y=-48. Both aim through the island band with randomized
+horizontal/vertical velocity ratios 0.35-0.65 (about 19-33 degrees from vertical),
+varied headings and start radii 48-76 blocks. Fizzles still burn after 8-27 ticks,
+so upper bursts occur above roughly Y=180 and lower bursts below Y=16, well away
+from the island band. A collision guard remains as a harmless fallback.
+The model and attached star trail share a smoothstep fade over their first
+10 client ticks, interpolated with render partial ticks. The model uses a
+translucent render type with vertex opacity so both parts fade together.
+Real stars now live up to 300 ticks, giving the higher angled stream enough time
+to reach low islands. The population cap includes the deeper lower spawn volume.
+The focused suite checks angled velocities, zero initial opacity, remote-air
+fizzle expiry and a long descending star actually hitting the terrain surface.
+Validation: isolated offline assemble and starfall integration suite passed; build/starfall-high-fade-final.log. Isolated outputs avoid concurrent-build class deletion.
+
+REGIONAL LIRESTONE AND REDUCED CLIFF PATCHES (2026-10-06)
+------------------------------------------------------
+LirestonePatches now samples a separate seed-derived regional field at a
+1600-block scale. Quintic easing creates broad areas with exactly zero patch
+abundance and gradual transitions toward richer areas. Its value is calculated
+once per column. Zero-abundance columns skip deposit noise entirely; other
+columns raise the deposit threshold as abundance falls, so patches fade naturally.
+
+Deposits favor the upper three blocks of each contiguous rock run. Their threshold
+increases smoothly over depths 4-15, retaining only occasional deep deposits.
+This greatly reduces patches exposed along cliffs and undersides without reading
+neighboring chunks or trimming existing terrain. Patches still replace both End
+Stone and Smooth End Stone. Lirestone boulder frequency and placement are unchanged.
+
+Validation: offline assemble plus lirestone-worldgen, smooth-endstone and
+end-chunk-performance passed in build/lirestone-regions-first.log (1m23s).
+The regional check samples a 16,384-square area with positive/negative coordinates,
+two seeds and twelve heights: 24,341 of 65,536 columns (37.1%) have exactly zero
+abundance. A 512-square empty region is checked throughout its vertical range.
+Near-surface deposit decisions occupy 31,131 of 786,432 probes (4.0%) versus
+3,283 deep probes (0.42%). The integration test also finds a populated natural
+End island chunk with no Lirestone and captures that region.
+
+Even in the deliberately selected rich 256-chunk region, deep exposed cliff
+patches occupy 735 of 53,557 side blocks (1.37%), versus 2,667 of 25,654 island-top
+columns (10.4%). Total natural Lirestone coverage is 2.66%. Actual block layering,
+seed reproducibility, gradual boundaries, boulders and protected objects pass.
+All three screenshots were inspected under build/run/clientGameTest/screenshots:
+0000_lirestone-patches.png, 0001_lirestone-boulder.png and
+0002_lirestone-free-region.png. Terrain density and solid fingerprints are unchanged.
+The 64-chunk gateway benchmark remains about 553 ms; the outer workloads take
+477-714 ms. Profile: build/lirestone-regions-profile.txt and .jfr.
+Production JAR rebuilt at build/libs/naturality-1.0.0.jar. Restart Minecraft and
+explore fresh chunks to see the revised distribution; existing patches are not
+removed from previously generated terrain.
+
+RISE WEATHER AND DISABLED NATURAL STARFALL (2026-10-06)
+----------------------------------------------------
+Automatic starfall activation is temporarily disabled. Existing natural event
+clocks are cleared, and restoring an automatic starfall state starts calm.
+Manual starfall overrides still work; starfall auto eases back to zero even when
+advance_weather is paused. No shared config setting is introduced.
+Rise is an End weather slider: /weather minecraft:the_end rise <0-100|auto>.
+It has automatic activation, duration and retarget clocks after the new-world
+quiet period. Overrides and strength ease at 0.5/tick. Rise values and clocks are
+saved with per-world End weather and transmitted in EndWeatherPayload; command
+status/completions and the all-auto command include rise.
+RiseWeather generates a bounded client particle volume around the player in the
+End. Cards start at Y=-8 to -16, rise at 0.35-0.75 blocks/tick with a small lateral
+velocity, fade at arrival/expiry, and stop at collidable terrain. Spawn columns
+must already be loaded. Population is capped at 600; strength controls spawn
+rate. Weather motion is wind immune and clears its population on world changes.
+Each card is a plain, uniformly colored square with its transverse axis squashed
+to 1/(1+verticalSpeed*5) of its length. The long axis is locked to velocity using
+the same PortalMoteGeometry orientation as Nether portal particles. Roll alone
+adjusts the plane toward camera position. RiseRenderLayer handles both ordinary
+translucency and OIT, preserving terrain depth/fog occlusion.
+The shader samples textures/sky/aurora_end.png directly, without fabricated
+colors or a separate texture copy. A looping phase cycles through all palette
+columns over 200 ticks with smoothstep blending (including last-to-first).
+An independently phased sine pulse moves through all brightness rows, also
+interpolating adjacent rows. A 15-bit brightness coordinate avoids coarse
+8-bit pulse stepping. Render partial ticks interpolate both color and brightness.
+RiseGameTest checks natural starfall stays off across 150000 ticks, manual
+starfall remains available, rise commands/network state, saved clock replay,
+upward motion, velocity alignment, width, palette-coordinate motion, terrain
+contact and bounded population. The visual fixture clears an observation space
+so the test camera is not inside End stone; screenshot inspected:
+build/run/clientGameTest/screenshots/0000_rise-aurora-colored-rectangles.png.
+Validation: assemble and isolated Rise/End-weather/starfall integration suites passed (build/rise-complete.log). Weather-command checks passed in build/rise-final.log before the unrelated shared-build class deletion. Shader and color-rectangle screenshot visually inspected.
+
+LIRESTONE LEDGE RIMS AND COMPLETE SMALL ISLANDS (2026-10-06)
+----------------------------------------------------------
+Ordinary Lirestone patches now favor the rims of flat ledges. EndTerrainDensity
+exposes material information from its cached horizontal slices: near-surface
+ribs with gentle slopes supply an edge affinity, fading between 6 and 18 blocks
+inside the outline. Overlapping slices at the same elevation account for the
+union of nearby landings, avoiding artificial rims between joined pieces.
+EndStoneLayers uses that affinity once per exposed rock run and raises the patch
+threshold toward flat interiors. The existing regional absence and depth-based
+cliff reduction still apply. Boulders are five times more likely to proceed near
+a terrain drop within eight blocks than on an interior flat surface; their full
+foundation and collision checks still prevent hanging or destructive placement.
+
+The generator's small satellite outcrops have an independent 1/20 material
+selection chance. Only genuinely detached outcrops are eligible: conservative
+capsules around their finite rock spines include erosion and block-adjacency
+clearance and must not intersect any neighboring formation. These checks use
+seeded geometry, never loading neighbor chunks to identify the island. Entire
+conversion also requires positive regional abundance throughout the outcrop's
+full bounding rectangle, preserving patch-free regions. The whole outcrop's
+regular cap and smooth body become Lirestone, consistently across chunk borders.
+The protected central/transition region is excluded. Selection uses a separate
+random stream so geometry does not change. Bounded per-thread metadata caches
+retain no chunk contexts; comparisons use grid coordinates rather than cached
+object identity to remain independent of cache eviction and generation order.
+
+Validation: offline assemble plus lirestone-worldgen, smooth-endstone and
+end-chunk-performance passed in build/lirestone-rims-islands.log (1m16s).
+A focused repeat using independently measured physical terrain drops passed in
+build/lirestone-rims-final.log (58s). The rich 256-chunk survey has 1,102 ordinary
+patch-covered rim columns out of 12,453 (8.85%), versus 123 of 7,518 flat-interior
+columns (1.64%): a 5.4x preference. Ordinary deep cliff patches remain at 497 of
+53,557 side blocks (0.93%). Rare whole-island conversions are excluded from that
+ordinary-patch comparison.
+
+LirestoneIslandChecks found a complete 84,150-block island with a 58-by-45-block
+footprint spanning 15 chunks, requested in reverse order. Every generated terrain
+block belonging to its body is Lirestone, and its six-neighbor density boundary
+is disconnected from other natural terrain. Complete conversion, both original
+materials, patch-free regions, protected objects, boulder support and cross-chunk
+placement all pass. Terrain density/solid fingerprints remain identical. The
+64-chunk gateway workload takes about 427 ms; the three outer workloads take
+417-563 ms. Profile retained as build/lirestone-rims-profile.txt and .jfr.
+All four Lirestone screenshots were inspected in build/run/clientGameTest/screenshots,
+including 0003_lirestone-entire-island.png. Production JAR rebuilt at
+build/libs/naturality-1.0.0.jar. Restart Minecraft and use fresh chunks or a new
+world to see the new distribution; previously generated terrain is not rewritten.

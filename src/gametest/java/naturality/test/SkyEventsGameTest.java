@@ -47,7 +47,7 @@ public final class SkyEventsGameTest implements FabricClientGameTest {
             server.runCommand("skyevent minecraft:the_end status");
             server.runOnServer(s -> {
                 check(SkyEvents.strength(s.overworld(), SkyEventType.METEOR_SHOWER) == 20, "Server override");
-                check(SkyEvents.strength(s.getLevel(Level.END), SkyEventType.METEOR_SHOWER) == 0, "Empty End pool");
+                check(SkyEvents.strength(s.getLevel(Level.END), SkyEventType.METEOR_SHOWER) == 0, "Meteor showers remain Overworld-only");
                 check(SkyEvents.strength(s.getLevel(Level.NETHER), SkyEventType.METEOR_SHOWER) == 0, "No Nether event");
             });
             context.runOnClient(client -> {

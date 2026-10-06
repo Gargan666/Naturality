@@ -13,4 +13,9 @@ public abstract class EntityPortalCrossingMixin implements PortalCrossingAccess 
     public void naturality$setCrossing(@org.jspecify.annotations.Nullable PortalCrossing crossing){naturality$crossing=crossing;}
     @Inject(method="baseTick",at=@At("HEAD"))
     private void naturality$crossingTick(CallbackInfo ci){PortalCrossing.tick((Entity)(Object)this);}
+    @Inject(method="push(Lnet/minecraft/world/entity/Entity;)V",at=@At("HEAD"),cancellable=true)
+    private void naturality$hiddenPush(Entity other,CallbackInfo ci) {
+        Entity self=(Entity)(Object)this;
+        if(PortalCrossing.separated(self,other) || PortalCrossing.separated(other,self)) ci.cancel();
+    }
 }

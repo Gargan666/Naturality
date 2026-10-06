@@ -32,6 +32,7 @@ public final class RainbowGameTest implements FabricClientGameTest {
             && RainbowRenderer.altitudeFade(208, 200) == 0
             && RainbowRenderer.altitudeFade(208, Double.POSITIVE_INFINITY) == 1,
             "Rainbow fades across the final 16 blocks beneath the rain ceiling");
+        check(RainbowRenderer.skyBlend(null) == 0, "Missing sky color suppresses rainbow blending" );
         check(RainbowRenderer.skyBlend(new Vector3f(0.8F)) == 1
             && RainbowRenderer.skyBlend(new Vector3f(0.25F)) < .15F
             && RainbowRenderer.skyBlend(new Vector3f(0.1F)) < RainbowRenderer.skyBlend(new Vector3f(0.25F)),

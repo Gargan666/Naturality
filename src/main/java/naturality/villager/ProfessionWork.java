@@ -5,10 +5,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
-import java.util.ArrayDeque;
 import net.minecraft.core.component.DataComponents;
 import naturality.util.LoadedChunks;
 import net.minecraft.core.BlockPos;
@@ -59,7 +56,11 @@ public final class ProfessionWork extends Behavior<Villager> {
     private final Map<BlockPos, Long> replantAfter = new HashMap<>();
     private final Map<BlockPos, Integer> fertilizedThisRound = new HashMap<>();
     private Target target;
+    private Target fishingSpot;
+    private BlockPos fishingJob;
+    private ServerLevel fishingLevel;
     private long nextSearch, nextAction, nextStation, nextCastReady, targetSince;
+    private int blockedFishingTicks;
     private ItemStack previousHand = ItemStack.EMPTY;
     private ItemStack tool = ItemStack.EMPTY;
     private VillagerBobber bobber;
@@ -112,6 +113,7 @@ public final class ProfessionWork extends Behavior<Villager> {
             body.getNavigation().stop();
         }
         target = null;
+        blockedFishingTicks = 0;
         ((VillagerWorkVisuals)body).naturality$setCastTarget(null);
     }
 
@@ -128,6 +130,8 @@ public final class ProfessionWork extends Behavior<Villager> {
             if (servingButcher) { servingButcher = false; equip(body, ItemStack.EMPTY); nextSearch = time; }
         }
         if (target != null && (!LoadedChunks.has(level, target.pos) || time - targetSince > 1000)) {
+            if (target.task == Task.FISH && !target.stand.closerToCenterThan(body.position(), 1.2))
+                forgetFishingSpot(time);
             clearTarget(body);
             equip(body, ItemStack.EMPTY);
             nextSearch = time + 100;
@@ -138,7 +142,11 @@ public final class ProfessionWork extends Behavior<Villager> {
             if (!body.onGround()) return;
             nextSearch = time + 100;
             var job = body.getBrain().getMemory(MemoryModuleType.JOB_SITE).orElseThrow().pos();
-            if (time >= nextStation && LoadedChunks.has(level, job)) target = findStation(level, body, job);
+            if (time >= nextStation) {
+                if (LoadedChunks.has(level, job)) target = findStation(level, body, job);
+                // A failed station visit must not cancel every subsequent fishing cast.
+                if (!farmer && target == null) nextStation = time + 100;
+            }
             if (target == null) target = farmer ? findFarm(level, body, time) : findFishing(level, body);
             if (target == null) return;
             targetSince = time;
@@ -168,9 +176,22 @@ public final class ProfessionWork extends Behavior<Villager> {
             body.getLookControl().setLookAt(point.x, point.y, point.z);
         }
         double reach = target.task == Task.FISH || target.task == Task.STATION || target.task == Task.HARVEST ? 1.2 : 2.3;
-        if (!target.stand.closerToCenterThan(body.position(), reach)
+        boolean atStand = target.stand.closerToCenterThan(body.position(), reach);
+        boolean canSee = !atStand || (target.task == Task.FISH
+            ? visibleWater(level, body, body.getEyePosition(), target.pos) : visible(level, body, target.pos));
+        if (target.task == Task.FISH && atStand && !canSee) {
+            // Allow navigation to finish centering on the bank, then try another bank.
+            if (++blockedFishingTicks >= 40) {
+                forgetFishingSpot(time);
+                clearTarget(body);
+                equip(body, ItemStack.EMPTY);
+                nextSearch = time + 20;
+                return;
+            }
+        } else blockedFishingTicks = 0;
+        if (!atStand
                 || target.task == Task.STATION && !target.pos.closerToCenterThan(body.position(), 1.73)
-                || !visible(level, body, target.pos)
+                || !canSee
                 || target.task == Task.FISH && body.isInWater()) {
             if (time % 20 == 0 || time == targetSince)
                 body.getBrain().setMemory(MemoryModuleType.WALK_TARGET,
@@ -185,8 +206,11 @@ public final class ProfessionWork extends Behavior<Villager> {
             return;
         }
         if (target.task == Task.FISH) {
-            if (tool.isEmpty()) equip(body, new ItemStack(Items.FISHING_ROD));
+            var giftedRod = Reputation.state(body).rod;
+            if (tool.isEmpty() || !giftedRod.isEmpty() && !ItemStack.isSameItemSameComponents(tool, giftedRod))
+                equip(body, giftedRod.isEmpty() ? new ItemStack(Items.FISHING_ROD) : giftedRod.copy());
             if (bobber != null && bobber.isRemoved()) {
+                if (bobber.phase() == VillagerBobber.FLYING) nextCastReady = time + 20;
                 bobber = null;
                 ((VillagerWorkVisuals)body).naturality$setCastTarget(null);
             }
@@ -211,17 +235,17 @@ public final class ProfessionWork extends Behavior<Villager> {
                 if (remaining > 0 && remaining <= 40 && time % 3 == 0) {
                     double angle = body.getRandom().nextDouble() * Math.PI * 2;
                     double distance = remaining * .065;
-                    double x = target.pos.getX() + .5 + Math.cos(angle) * distance;
-                    double z = target.pos.getZ() + .5 + Math.sin(angle) * distance;
-                    level.sendParticles(ParticleTypes.FISHING, x, target.pos.getY() + .95, z, 1, 0, 0, 0, 0);
-                    level.sendParticles(ParticleTypes.BUBBLE, x, target.pos.getY() + .82, z, 1, 0, 0, 0, 0);
+                    double x = bobber.getX() + Math.cos(angle) * distance;
+                    double z = bobber.getZ() + Math.sin(angle) * distance;
+                    level.sendParticles(ParticleTypes.FISHING, x, bobber.getY() + .08, z, 1, 0, 0, 0, 0);
+                    level.sendParticles(ParticleTypes.BUBBLE, x, bobber.getY() - .05, z, 1, 0, 0, 0, 0);
                 }
             }
             if (bobber.phase() == VillagerBobber.BOBBING && time >= nextAction) {
                 bobber.bite(catchFromVanillaLoot(level, body, bobber));
-                level.sendParticles(ParticleTypes.SPLASH, target.pos.getX() + .5, target.pos.getY() + .9, target.pos.getZ() + .5, 8, .2, .1, .2, .03);
-                level.sendParticles(ParticleTypes.BUBBLE, target.pos.getX() + .5, target.pos.getY() + .8, target.pos.getZ() + .5, 8, .2, .05, .2, .03);
-                level.playSound(null, target.pos, SoundEvents.FISHING_BOBBER_SPLASH, SoundSource.NEUTRAL, .5F, 1);
+                level.sendParticles(ParticleTypes.SPLASH, bobber.getX(), bobber.getY(), bobber.getZ(), 8, .2, .1, .2, .03);
+                level.sendParticles(ParticleTypes.BUBBLE, bobber.getX(), bobber.getY() - .1, bobber.getZ(), 8, .2, .05, .2, .03);
+                level.playSound(null, bobber.blockPosition(), SoundEvents.FISHING_BOBBER_SPLASH, SoundSource.NEUTRAL, .5F, 1);
                 nextAction = time + 20;
             } else if (bobber.phase() == VillagerBobber.BITING && time >= nextAction) {
                 body.swing(InteractionHand.MAIN_HAND, net.minecraft.world.item.component.SwingAnimation.DEFAULT);
@@ -339,57 +363,26 @@ public final class ProfessionWork extends Behavior<Villager> {
     }
 
     private Target findFishing(ServerLevel level, Villager body) {
+        var job = body.getBrain().getMemory(MemoryModuleType.JOB_SITE).orElseThrow().pos();
+        if (fishingLevel != level || !job.equals(fishingJob)) {
+            fishingSpot = null;
+            fishingLevel = level;
+            fishingJob = job;
+        }
+        // Keep a successful spot through station visits, trades and work restarts.
+        if (fishingSpot != null && FishingSpots.usable(level, new FishingSpots.Spot(fishingSpot.pos, fishingSpot.stand))
+                && canCastFromBank(level, body, fishingSpot)) {
+            if (fishingSpot.stand.closerToCenterThan(body.position(), 1.2) && !body.isInWater()) return fishingSpot;
+            Target reachable = firstReachable(body, List.of(fishingSpot));
+            if (reachable != null) return reachable;
+        }
+        fishingSpot = null;
         List<Target> candidates = new ArrayList<>();
-        var origin = body.blockPosition();
-        Set<BlockPos> water = new HashSet<>();
-        for (var p : BlockPos.betweenClosed(origin.offset(-16, -4, -16), origin.offset(16, 3, 16))) {
-            if (restingWater(level, p)) water.add(p.immutable());
-        }
-        Set<BlockPos> unseen = new HashSet<>(water);
-        while (!unseen.isEmpty()) {
-            List<BlockPos> pool = new ArrayList<>();
-            ArrayDeque<BlockPos> queue = new ArrayDeque<>();
-            BlockPos seed = unseen.iterator().next();
-            unseen.remove(seed);
-            queue.add(seed);
-            while (!queue.isEmpty()) {
-                BlockPos current = queue.removeFirst();
-                pool.add(current);
-                for (Direction dir : Direction.Plane.HORIZONTAL) {
-                    BlockPos next = current.relative(dir);
-                    if (unseen.remove(next)) queue.addLast(next);
-                }
-            }
-            double centerX = pool.stream().mapToDouble(BlockPos::getX).average().orElse(0);
-            double centerZ = pool.stream().mapToDouble(BlockPos::getZ).average().orElse(0);
-            Map<BlockPos, Integer> interior = new HashMap<>();
-            for (BlockPos p : pool) {
-                int count = 0;
-                for (int dx = -2; dx <= 2; dx++)
-                    for (int dz = -2; dz <= 2; dz++)
-                        if (water.contains(p.offset(dx, 0, dz))) count++;
-                interior.put(p, count);
-            }
-            Set<BlockPos> stands = new HashSet<>();
-            for (BlockPos p : pool) for (Direction dir : Direction.Plane.HORIZONTAL) {
-                for (int dy = 0; dy <= 1; dy++) {
-                    BlockPos stand = p.relative(dir).above(dy);
-                    if (LoadedChunks.has(level, stand) && level.getBlockState(stand.below()).isFaceSturdy(level, stand.below(), Direction.UP)
-                        && level.getBlockState(stand).isAir() && level.getBlockState(stand.above()).isAir()) stands.add(stand.immutable());
-                }
-            }
-            for (BlockPos stand : stands) {
-                BlockPos cast = pool.stream()
-                    .filter(p -> p.distSqr(stand) <= 100)
-                    .max(Comparator.comparingDouble(p -> interior.get(p) * 4.0
-                        - ((p.getX() - centerX) * (p.getX() - centerX) + (p.getZ() - centerZ) * (p.getZ() - centerZ)) * .15
-                        - p.distSqr(stand) * .08))
-                    .orElse(null);
-                if (cast != null) candidates.add(new Target(cast, stand, Task.FISH));
-            }
-        }
-        candidates.sort(Comparator.comparingDouble(t -> t.stand.distSqr(origin)));
-        return firstReachable(body, candidates);
+        for (var spot : FishingSpots.nearby(level, job))
+            candidates.add(new Target(spot.water(), spot.stand(), Task.FISH));
+        candidates.sort(Comparator.comparingDouble(t -> t.stand.distSqr(body.blockPosition())));
+        fishingSpot = firstReachable(body, candidates);
+        return fishingSpot;
     }
 
     private Target findStation(ServerLevel level, Villager body, BlockPos job) {
@@ -406,15 +399,18 @@ public final class ProfessionWork extends Behavior<Villager> {
     }
 
     public static boolean restingWater(ServerLevel level, BlockPos pos) {
-        if (!LoadedChunks.has(level, pos) || !level.getBlockState(pos).is(Blocks.WATER)
-            || !level.getFluidState(pos).isSource() || !level.getBlockState(pos.above()).isAir()) return false;
+        if (!LoadedChunks.has(level, pos)) return false;
+        var state = level.getBlockState(pos);
+        var fluid = state.getFluidState();
+        if (!state.is(Blocks.WATER) || !fluid.isSource() || !level.getBlockState(pos.above()).isAir()) return false;
         int neighbors = 0;
         for (Direction dir : Direction.Plane.HORIZONTAL) {
             var p = pos.relative(dir);
             if (!LoadedChunks.has(level, p)) return false;
-            if (level.getBlockState(p).is(Blocks.WATER) && level.getFluidState(p).isSource()) neighbors++;
+            var neighbor = level.getBlockState(p);
+            if (neighbor.is(Blocks.WATER) && neighbor.getFluidState().isSource()) neighbors++;
         }
-        return neighbors >= 2 && level.getFluidState(pos).getFlow(level, pos).lengthSqr() < 1.0e-6;
+        return neighbors >= 2 && fluid.getFlow(level, pos).lengthSqr() < 1.0e-6;
     }
 
     private Target firstReachable(Villager body, List<Target> candidates) {
@@ -424,7 +420,9 @@ public final class ProfessionWork extends Behavior<Villager> {
         int attempts = 0;
         for (var candidate : candidates) {
             if (unreachableUntil.containsKey(candidate.stand)) continue;
-            if (++attempts > 24) break;
+            if (candidate.task == Task.FISH
+                    && !FishingSpots.usable((ServerLevel)body.level(), new FishingSpots.Spot(candidate.pos, candidate.stand))) continue;
+            if (++attempts > (farmer ? 24 : 2)) break;
             var found = reachable(body, candidate);
             if (found != null) return found;
             if (unreachableUntil.size() >= 512) unreachableUntil.clear();
@@ -434,8 +432,29 @@ public final class ProfessionWork extends Behavior<Villager> {
     }
 
     private static Target reachable(Villager body, Target target) {
+        if (target.task == Task.FISH && !canCastFromBank((ServerLevel)body.level(), body, target)) return null;
         var path = body.getNavigation().createPath(target.stand, target.task == Task.FISH ? 0 : 1);
         return path != null && path.canReach() ? target : null;
+    }
+
+    private void forgetFishingSpot(long time) {
+        if (target != null) {
+            if (unreachableUntil.size() >= 512) unreachableUntil.clear();
+            unreachableUntil.put(target.stand, time + 600);
+        }
+        fishingSpot = null;
+    }
+
+    private static boolean canCastFromBank(ServerLevel level, Villager body, Target target) {
+        Vec3 eye = Vec3.atBottomCenterOf(target.stand).add(0, body.getEyeHeight(), 0);
+        return visibleWater(level, body, eye, target.pos);
+    }
+
+    private static boolean visibleWater(ServerLevel level, Villager body, Vec3 eye, BlockPos water) {
+        // Aim at the open surface: a ray to the submerged block center can hit the bank.
+        Vec3 surface = new Vec3(water.getX() + .5, water.getY() + 1.0, water.getZ() + .5);
+        var hit = level.clip(new ClipContext(eye, surface, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, body));
+        return hit.getType() == HitResult.Type.MISS;
     }
 
     private static boolean visible(ServerLevel level, Villager body, BlockPos pos) {

@@ -55,3 +55,42 @@ Replace textures/particle/rain_cluster{,_1,_2}.png and snow_cluster{,_1,_2}.png 
 square cluster artwork. Each image represents many droplets/flakes on one particle.
 See textures/particle/README.txt and the project's PARTICLE_WEATHER.txt for details.
 
+
+CHORUS FLOWER MODEL
+Edit block models/chorus_flower_bloom.json in this folder. Each build and
+Gradle development launch generates assets/naturality/models/block/chorus_flower_bloom.json
+from that export. VS Code's prepare debug resources task does this too.
+The build remaps resources: texture references to naturality:, repairs the
+export's unresolved particle alias and omits unassigned #missing faces.
+Both vanilla living/dead flower model overrides inherit the generated model.
+After editing, rebuild/relaunch; F3+T alone does not run the build conversion.
+Both chorus_flower.json and chorus_flower_bloom.json exports are now imported
+automatically. Placed flowers choose normal/bloom at weights 9:1 across all ages;
+the inventory item uses the normal model. Edit either export and rebuild/relaunch.
+Chorus flowers now store facing and bloom in their game block state. New flowers
+roll bloom once at 10%; that saved choice controls both the model and hitbox.
+The earlier render-only 9:1 weighted blockstate has been replaced. All six model
+orientations are mapped automatically through blockstate rotation; model export
+edits still require rebuild/relaunch. Normal collision is 7/16 block along facing;
+decorative leaf/hair planes do not collide.
+Edit textures/block/chorus_plant.png to change the plant texture across vanilla
+stems and custom flower models. The build maps this single source to both
+minecraft and naturality texture namespaces, including optional PNG animation
+metadata. Rebuild/relaunch after editing. Growing flowers and branches now
+inherit their parent's normal/bloom variant; growth does not reroll it.
+SMOOTH ENDSTONE
+textures/block/smooth_endstone.png supplies all six faces of the registered
+naturality:smooth_endstone block and its inventory item. Edit and rebuild/relaunch
+as usual. Find Smooth Endstone beside End Stone in the Building Blocks creative tab.
+LIRESTONE
+textures/block/lirestone.png supplies the four sides of naturality:lirestone.
+textures/block/lirestone_top.png supplies both top and bottom. Edit either and
+rebuild/relaunch. Lirestone appears beside Smooth End Stone in Building Blocks.
+
+Starfall assets:
+textures/entity/star.png supplies the static two-cube star model; the current
+geometry follows entity models/star.java. Both stars and fizzles share it.
+textures/particle/star_trail.png supplies the attached velocity-aligned trail.
+Replace these PNGs in place to change visuals. The trail is anchored 76% down
+the image; artwork should extend mainly above that anchor, behind travel.
+Fizzle burst particles currently use vanilla END_ROD and POOF placeholders.

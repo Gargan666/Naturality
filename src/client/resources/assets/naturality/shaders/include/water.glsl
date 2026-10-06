@@ -7,7 +7,7 @@ layout(std140) uniform NaturalityWater {
     ivec4 WaterSwitches; // depth, distortion, shimmer, night vision
     vec4 WaterTime; // seconds, immersed, camera water depth, local illumination
     vec4 WaterTint; // biome-blended current water color, camera turbidity
-    ivec4 WaterEnvironment; // ordinary Overworld atmosphere, camera in falling water, reserved
+    ivec4 WaterEnvironment; // Overworld atmosphere, falling water, float bits of rain fog strength, reserved
 };
 uniform sampler2D NaturalityWaterColumns;
 

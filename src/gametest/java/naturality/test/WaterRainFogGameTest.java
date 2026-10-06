@@ -7,6 +7,18 @@ import naturality.weather.WeatherSystem;
 /** Water and a dry island must disappear into the same heavy-rain haze. */
 public final class WaterRainFogGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
+        float previousEnd = 15;
+        for (float rain = 100; rain >= 80; rain -= .25F) {
+            var fog = new net.minecraft.client.renderer.fog.FogData();
+            fog.environmentalStart = 128;
+            fog.environmentalEnd = 192;
+            naturality.client.weather.HeavyRainFog.apply(fog,
+                new naturality.weather.WeatherState(rain, 0, 50, 0), 1, 8);
+            if (fog.environmentalEnd < previousEnd || fog.environmentalEnd - previousEnd > 5)
+                throw new AssertionError("Rain fog must fade out continuously through its cutoff");
+            previousEnd = fog.environmentalEnd;
+        }
+        if (previousEnd != 192) throw new AssertionError("Clear weather restores normal fog");
         int[] distance = new int[1];
         boolean[] oit = new boolean[1];
         context.runOnClient(client -> {
@@ -36,6 +48,16 @@ public final class WaterRainFogGameTest implements FabricClientGameTest {
                 context.runOnClient(client -> client.options.improvedTransparency().set(mode));
                 context.waitTicks(8);
                 context.takeScreenshot("water-heavy-rain-" + mode);
+            }
+            server.runCommand("gamerule minecraft:advance_time false");
+            server.runCommand("time set 13000");
+            server.runCommand("tp @a 0 105 0 90 0");
+            server.runCommand("fill -25 96 -20 -25 110 20 stone");
+            world.getConnection().waitForClientboundPackets();
+            for (boolean mode : new boolean[]{false, true}) {
+                context.runOnClient(client -> client.options.improvedTransparency().set(mode));
+                context.waitTicks(20);
+                context.takeScreenshot("rain-fog-sunset-" + mode);
             }
         } finally {
             context.runOnClient(client -> {

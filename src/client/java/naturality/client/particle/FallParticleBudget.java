@@ -2,6 +2,8 @@ package naturality.client.particle;
 
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.particles.ParticleLimit;
+import net.minecraft.core.particles.ParticleOptions;
+import naturality.NaturalityParticles;
 
 /** Water and lava share a population limit, including queued particles and warm starts. */
 public final class FallParticleBudget {
@@ -11,6 +13,11 @@ public final class FallParticleBudget {
     private static long tick=Long.MIN_VALUE;
     private static int spawned,droplets;
     private FallParticleBudget() { }
+    public static boolean includes(ParticleOptions options) {
+        var type=options.getType();
+        return type==NaturalityParticles.WATERFALL || type==NaturalityParticles.WATERFALL_BIG
+            || type==NaturalityParticles.LAVAFALL || type==NaturalityParticles.LAVAFALL_BIG;
+    }
     public static boolean exhausted(ClientLevel level) {
         if(world!=level || tick!=level.getGameTime()) {world=level;tick=level.getGameTime();spawned=droplets=0;}
         return spawned>=64;

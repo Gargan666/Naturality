@@ -59,21 +59,29 @@ public final class WeatherCommandsGameTest implements FabricClientGameTest {
                     reject(commands, source, bad);
                 check(overworld.rain == 10 && overworld.wind == 75 && overworld.temperature == 20, "Invalid commands cannot mutate settings");
                 execute(commands, source, "weather minecraft:the_nether wind 90");
-                execute(commands, source, "weather minecraft:the_end temperature 5");
+                execute(commands, source, "weather minecraft:the_end gravity 5");
+                var endCycle = naturality.weather.EndWeatherSystem.cycle(s.getLevel(Level.END));
+                reject(commands, source, "weather minecraft:the_end rain 50");
+                reject(commands, source, "weather minecraft:overworld gravity 50");
+                reject(commands, source, "weather minecraft:the_end distortion 100");
+                reject(commands, source, "weather minecraft:the_end distortion on");
+                reject(commands, source, "weather minecraft:the_end distortion off");
                 execute(commands, source.withLevel(s.getLevel(Level.NETHER)), "weather minecraft:the_nether rain 45");
-                check(nether.rain == 45 && nether.wind == 90 && end.temperature == 5, "Explicit dimension routing");
+                check(nether.rain == 45 && nether.wind == 90 && endCycle.override("gravity") == 5, "Explicit dimension routing");
                 check(!nether.enabled && !end.enabled && overworld.rain == 10, "Reserved pools stay disabled and independent");
                 execute(commands, source, "weather minecraft:overworld rain auto");
                 check(!overworld.overrideRain && overworld.overrideWind && overworld.overrideTemperature, "Individual auto releases only one slider");
                 execute(commands, source, "weather minecraft:the_nether auto");
-                check(!nether.overrideRain && !nether.overrideWind && end.overrideTemperature && overworld.overrideWind, "All-auto affects only target dimension");
+                check(!nether.overrideRain && !nether.overrideWind && endCycle.override("gravity")==5 && overworld.overrideWind, "All-auto affects only target dimension");
                 var suggestions = commands.getCompletionSuggestions(commands.parse("weather ", source)).join();
                 check(suggestions.getList().stream().anyMatch(v -> v.getText().equals("minecraft:the_nether")), "Dimension completions");
                 check(suggestions.getList().stream().noneMatch(v -> v.getText().equals("rain")), "No sliders before a dimension is selected");
                 for (String dimension : new String[]{"minecraft:overworld", "minecraft:the_nether", "minecraft:the_end"}) {
                     var sliders = commands.getCompletionSuggestions(commands.parse("weather " + dimension + " ", source)).join()
                         .getList().stream().map(v -> v.getText()).toList();
-                    check(sliders.containsAll(java.util.List.of("rain", "wind", "temperature")), "Selected pool suggests its sliders: " + dimension);
+                    check(sliders.containsAll(dimension.equals("minecraft:the_end") ? java.util.List.of("gravity","starfall","rise")
+                        : java.util.List.of("rain", "wind", "temperature")), "Selected pool suggests its sliders: " + dimension);
+                    if(dimension.equals("minecraft:the_end"))check(!sliders.contains("rain"),"End completions exclude Overworld sliders");
                     execute(commands, source, "weather " + dimension);
                 }
                 execute(commands, source, "weather minecraft:overworld");
@@ -83,7 +91,7 @@ public final class WeatherCommandsGameTest implements FabricClientGameTest {
                 execute(commands, source, "weather minecraft:overworld temperature 0");
                 check(weatherData.profile("minecraft:overworld").wind == 100
                     && weatherData.profile("minecraft:overworld").overrideWind
-                    && weatherData.profile("minecraft:the_end").temperature == 5
+                    && endCycle.override("gravity") == 5
                     && !weatherData.profile("minecraft:the_end").enabled, "Commands persist per-world targets and disabled status");
                 try (var reader = java.nio.file.Files.newBufferedReader(net.fabricmc.loader.api.FabricLoader.getInstance()
                         .getConfigDir().resolve("naturality-server.json"))) {

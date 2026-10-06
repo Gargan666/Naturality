@@ -50,18 +50,19 @@ public final class SnowCompaction {
     /** Find the snow owner for the actual fitted collision surface beneath the feet. */
     public static @org.jspecify.annotations.Nullable BlockPos contact(ServerLevel level, AABB feet) {
         int base = (int)Math.floor(feet.minY)-1;
+        var pos = new BlockPos.MutableBlockPos();
         for (int x=(int)Math.floor(feet.minX); x<=Math.floor(feet.maxX); x++)
             for (int z=(int)Math.floor(feet.minZ); z<=Math.floor(feet.maxZ); z++)
                 for (int offset=0; offset<=SnowGeometry.MAX_DEPTH+1; offset++) {
-                    var pos = new BlockPos(x,base+offset,z);
+                    pos.set(x,base+offset,z);
                     if (!naturality.util.LoadedChunks.has(level, pos)) break;
                     var state = level.getBlockState(pos);
                     if (state.is(Blocks.SNOW)) {
                         int layers=state.getValue(SnowLayerBlock.LAYERS);
                         if (layers>1) for (var box : state.getCollisionShape(level,pos).toAabbs()) {
-                            var world=box.move(pos);
-                            if (Math.abs(world.maxY-feet.minY)<.08 && world.maxX>feet.minX && world.minX<feet.maxX
-                                    && world.maxZ>feet.minZ && world.minZ<feet.maxZ) return pos;
+                            if (Math.abs(pos.getY()+box.maxY-feet.minY)<.08
+                                    && x+box.maxX>feet.minX && x+box.minX<feet.maxX
+                                    && z+box.maxZ>feet.minZ && z+box.minZ<feet.maxZ) return pos.immutable();
                         }
                         break;
                     }

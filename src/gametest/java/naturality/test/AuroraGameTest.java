@@ -9,6 +9,8 @@ import net.minecraft.client.CloudStatus;
 public final class AuroraGameTest implements FabricClientGameTest {
     private static void check(boolean value, String message) { if (!value) throw new AssertionError(message); }
     @Override public void runTest(ClientGameTestContext context) {
+        check(Math.abs(1 - Math.pow(1 - AuroraCycle.END_START_CHANCE, 2) - .1) < .000001,
+            "Two End aurora attempts give a 10% chance per quiet minute");
         float mild = AuroraCycle.startChance(.8F, false, 50);
         float coldBiome = AuroraCycle.startChance(0, true, 50);
         float coldWeather = AuroraCycle.startChance(.8F, false, 0);
@@ -118,6 +120,38 @@ public final class AuroraGameTest implements FabricClientGameTest {
             server.runCommand("skyevent minecraft:overworld aurora_borealis auto");
             server.runOnServer(s -> check(!SkyEventWorldData.get(s).settings(s.overworld(), SkyEventType.AURORA_BOREALIS).override,
                 "Auto releases override"));
+            server.runCommand("execute in minecraft:the_end run tp @a 3000 100 -160 0 -35");
+            server.runCommand("skyevent minecraft:the_end end_flashes 0");
+            server.runCommand("skyevent minecraft:the_end end_aurora 20");
+            context.waitTicks(110);
+            server.runOnServer(s -> {
+                var end = s.getLevel(net.minecraft.world.level.Level.END);
+                var player = s.getPlayerList().getPlayers().getFirst();
+                check(!end.getGameRules().get(net.minecraft.world.level.gamerules.GameRules.ADVANCE_WEATHER),
+                    "End test uses the default disabled weather clock");
+                var status = AuroraEvents.status(end, player.blockPosition());
+                check(status != null && status.chance() == AuroraCycle.END_START_CHANCE && status.nextAttempt() < 490,
+                    "End aurora runs independently of weather with a fixed local chance");
+            });
+            server.runCommand("skyevent minecraft:the_end status");
+            context.runOnClient(client -> {
+                check(SkyEventsClient.strength(client.level, SkyEventType.END_AURORA) == 20,
+                    "End Aurora command synchronizes its separate channel");
+                check(AuroraRenderer.strength() == 20 && AuroraRenderer.drawnPanels() > 0,
+                    "World-space aurora curtains render in the End");
+                check(AuroraRenderer.palette(client.level).toString().equals("naturality:textures/sky/aurora_end.png")
+                    && client.getResourceManager().getResource(AuroraRenderer.palette(client.level)).isPresent(),
+                    "End renderer selects the supplied End palette");
+            });
+            context.takeScreenshot("end-aurora-strength-20");
+            server.runCommand("skyevent minecraft:the_end end_aurora 0");
+            context.waitTicks(100);
+            context.runOnClient(client -> check(AuroraRenderer.drawnPanels() == 0,
+                "End Aurora override zero fades out its curtains"));
+            server.runCommand("skyevent minecraft:the_end end_aurora auto");
+            server.runOnServer(s -> check(!SkyEventWorldData.get(s)
+                .settings(s.getLevel(net.minecraft.world.level.Level.END), SkyEventType.END_AURORA).override,
+                "End Aurora returns to automatic scheduling"));
         } finally {
             naturality.config.NaturalityConfig.get().fog.enabled = oldFog;
             naturality.config.NaturalityConfig.get().effects.auroraSegments = oldSegments;

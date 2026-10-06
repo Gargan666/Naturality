@@ -5,6 +5,14 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.sounds.SoundEvent;
 
 public final class NaturalitySounds {
+    public static final java.util.List<SoundEvent> END_AMBIENCE_CLIPS = java.util.stream.IntStream.rangeClosed(1, 5)
+        .mapToObj(index -> {
+            var id = Naturality.id("end_ambience_" + index);
+            return Registry.register(BuiltInRegistries.SOUND_EVENT, id, SoundEvent.createVariableRangeEvent(id));
+        }).toList();
+    public static final SoundEvent END_AMBIENCE = Registry.register(
+        BuiltInRegistries.SOUND_EVENT, Naturality.id("end_ambience"),
+        SoundEvent.createVariableRangeEvent(Naturality.id("end_ambience")));
     public static final SoundEvent WIND_WEAK = Registry.register(BuiltInRegistries.SOUND_EVENT,
         Naturality.id("wind_weak"), SoundEvent.createVariableRangeEvent(Naturality.id("wind_weak")));
     public static final SoundEvent WIND_STRONG = Registry.register(BuiltInRegistries.SOUND_EVENT,

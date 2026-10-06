@@ -9,6 +9,7 @@ import net.minecraft.util.Mth;
 
 /** Leads use the same persistent physics and camera-facing geometry as fishing. */
 public final class PhysicsLeadRendering {
+    public record Key(int entity, int holder, int index) { }
     private static final Map<EntityRenderState.LeashState, Object> KEYS = new WeakHashMap<>();
 
     public static void identify(EntityRenderState.LeashState state, Object key) { KEYS.put(state, key); }
@@ -21,11 +22,12 @@ public final class PhysicsLeadRendering {
         Object key = KEYS.getOrDefault(state, state);
         int blockStart = state.startBlockLight, blockEnd = state.endBlockLight;
         int skyStart = state.startSkyLight, skyEnd = state.endSkyLight;
-        FishingLineRendering.submitRope(pose, collector, key, start, () -> end, offset, .075F, index -> {
+        FishingLineRendering.submitLitRope(pose, collector, key, start, () -> end, offset, .075F, index -> {
             float t = index / 24.0F;
-            float light = Math.max(Mth.lerp(t, blockStart, blockEnd), Mth.lerp(t, skyStart, skyEnd));
-            float shade = (.25F + .75F * light / 15) * (index % 2 == 0 ? .7F : 1);
-            return 0xff000000 | ((int)(128 * shade) << 16) | ((int)(102 * shade) << 8) | (int)(77 * shade);
+            int block = Mth.clamp(Math.round(Mth.lerp(t, blockStart, blockEnd)), 0, 15);
+            int sky = Mth.clamp(Math.round(Mth.lerp(t, skyStart, skyEnd)), 0, 15);
+            float shade = index % 2 == 0 ? .7F : 1;
+            return ((block | sky << 4) << 24) | ((int)(128 * shade) << 16) | ((int)(102 * shade) << 8) | (int)(77 * shade);
         });
     }
     private PhysicsLeadRendering() { }

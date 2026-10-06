@@ -102,7 +102,7 @@ public final class NaturalityConfig {
     public static final class DynamicLighting {
         public boolean enabled = true;
         public boolean subBlockPrecision = true;
-        public int updateTicks = 2;
+        public int updateTicks = 1;
         public int brightnessPercent = 100;
         public int sourceRange = 48;
         public int maxSources = 64;
@@ -123,9 +123,9 @@ public final class NaturalityConfig {
             levels.put("minecraft:allay", 7);
             levels.put("minecraft:vex", 7);
             levels.put("minecraft:warden", 6);
-            levels.put("minecraft:enderman", 3);
-            levels.put("minecraft:spider", 2);
-            levels.put("minecraft:cave_spider", 2);
+            levels.put("minecraft:enderman", 0);
+            levels.put("minecraft:spider", 0);
+            levels.put("minecraft:cave_spider", 0);
             levels.put("minecraft:drowned", 3);
             levels.put("minecraft:phantom", 2);
             levels.put("minecraft:breeze", 3);
@@ -154,10 +154,14 @@ public final class NaturalityConfig {
         public CloudLayer upper = upperDefaults();
         public static CloudLayer upperDefaults() {
             var layer = new CloudLayer();
-            layer.heightOffset = 40;
+            layer.enabled = false;
+            layer.width = 40;
+            layer.thickness = 20;
+            layer.heightOffset = 94;
+            layer.fadePixels = 8;
             layer.offsetX = 96;
             layer.offsetZ = 48;
-            layer.speedPercent = 75;
+            layer.speedPercent = 200;
             return layer;
         }
         @SuppressWarnings({"null", "unused"}) // Gson can populate explicit JSON nulls.
@@ -175,9 +179,9 @@ public final class NaturalityConfig {
         public int style = 0;
         public boolean fadingSides = true;
         public int width = 12;
-        public int thickness = 4;
+        public int thickness = 16;
         public int heightOffset = 0;
-        public int fadePixels = 8;
+        public int fadePixels = 16;
         public int opacityPercent = 100;
         public int offsetX = 0;
         public int offsetZ = 0;
@@ -219,8 +223,8 @@ public final class NaturalityConfig {
         public boolean waterDepth = true;
         public boolean waterDistortion = true;
         public boolean waterShimmer = true;
-        public int waterDarkDepth = 32;
-        public int waterPixelSize = 4;
+        public int waterDarkDepth = 12;
+        public int waterPixelSize = 16;
 
         public void sanitize() {
             waterDarkDepth = Math.clamp(waterDarkDepth, 12, 96);
@@ -280,7 +284,7 @@ public final class NaturalityConfig {
         public volatile boolean portalParticleChanges = true;
         public volatile boolean glowEffect = true;
         public volatile double openingVolume = 1.0;
-        public volatile double ambientVolume = 1.0;
+        public volatile double ambientVolume = 0.5485651214128036;
         public volatile double travelVolume = 1.0;
     }
 

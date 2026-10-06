@@ -96,9 +96,9 @@ public final class EndEyeGlow {
                 double z = face == Direction.NORTH ? bounds.minZ : face == Direction.SOUTH ? bounds.maxZ : cz;
                 x += pos.getX() + face.getStepX() / 512.0;
                 z += pos.getZ() + face.getStepZ() / 512.0;
-                if ((eye.x - x) * face.getStepX() + (eye.z - z) * face.getStepZ() <= 0) continue;
+                if ((eye.x - x) * face.getStepX() + (eye.z - z) * face.getStepZ() >= 0) continue;
                 double width = face.getAxis() == Direction.Axis.X ? bounds.getZsize() : bounds.getXsize();
-                int tx = face.getStepZ(), tz = -face.getStepX();
+                int tx = -face.getStepZ(), tz = face.getStepX();
                 float u = (float) ((x * tx + z * tz - width * 0.5) % 1.5);
                 state.strips.add(new Strip(x - eye.x, pos.getY() - eye.y + bounds.minY + 1.0 / 1024,
                     z - eye.z, tx, tz, (float) width, u, life));
@@ -152,7 +152,7 @@ public final class EndEyeGlow {
         @Override public void buildLayer(SingleQuadParticle.Layer layer, VertexConsumer buffer) {
             if (layer != EndEyeGlowLayer.LAYER) return;
             for (Strip s : strips) for (int i = 0; i < 4; i++) {
-                float along = (i == 0 || i == 1) ? -s.width / 2 : s.width / 2;
+                float along = (i == 0 || i == 1) ? -s.width / 2 + 1f / 512 : s.width / 2 - 1f / 512;
                 float height = (i == 1 || i == 2) ? 0.75f * s.life : 0;
                 buffer.addVertex((float) (s.x + s.tx * along), (float) (s.y + height), (float) (s.z + s.tz * along))
                     .setUv(s.u + along + s.width / 2, height)

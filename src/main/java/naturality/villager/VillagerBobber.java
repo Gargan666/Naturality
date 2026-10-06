@@ -35,16 +35,32 @@ public final class VillagerBobber extends Entity {
         this.target = target.immutable();
         this.start = owner.getEyePosition().add(owner.getLookAngle().scale(0.35)).add(0, -0.4, 0);
         setPos(start.x, start.y, start.z);
-        Vec3 end = Vec3.atCenterOf(target).add(0, 0.37, 0);
-        double drag = 0.92;
-        int flightTicks = 12;
-        double travel = (1 - Math.pow(drag, flightTicks)) / (1 - drag);
-        double gravityLoss = 0.03 / (1 - drag) * (flightTicks - travel);
-        Vec3 distance = end.subtract(start);
-        setDeltaMovement(distance.x / travel, (distance.y + gravityLoss) / travel, distance.z / travel);
+        // Choose a launch direction and pitch, never solve a trajectory to a destination.
+        Vec3 waterDirection = Vec3.atCenterOf(target).subtract(start);
+        double yaw = waterFacingYaw(level, owner, target, waterDirection);
+        double pitch = Math.toRadians(15 + owner.getRandom().nextDouble() * 35);
+        double speed = .45 + owner.getRandom().nextDouble() * .2;
+        setDeltaMovement(Math.cos(yaw) * Math.cos(pitch) * speed,
+            Math.sin(pitch) * speed, Math.sin(yaw) * Math.cos(pitch) * speed);
         getEntityData().set(OWNER, owner.getId());
     }
 
+    private double waterFacingYaw(ServerLevel level, Villager owner, BlockPos water, Vec3 direction) {
+        double heading = Math.atan2(direction.z, direction.x);
+        // Randomize within a forward cone and prefer directions crossing water.
+        // This checks the direction only: flight still determines the landing point.
+        for (int attempt = 0; attempt < 16; attempt++) {
+            double yaw = heading + (owner.getRandom().nextDouble() - .5) * Math.toRadians(70);
+            int wetSamples = 0;
+            for (int distance = 2; distance <= 6; distance++) {
+                var sample = BlockPos.containing(start.x + Math.cos(yaw) * distance,
+                    water.getY(), start.z + Math.sin(yaw) * distance);
+                if (naturality.util.LoadedChunks.has(level, sample) && ProfessionWork.restingWater(level, sample)) wetSamples++;
+            }
+            if (wetSamples >= 2) return yaw;
+        }
+        return heading;
+    }
     @Override protected void defineSynchedData(SynchedEntityData.Builder builder) {
         builder.define(OWNER, 0);
         builder.define(PHASE, FLYING);
@@ -83,11 +99,14 @@ public final class VillagerBobber extends Entity {
         if (phase == FLYING) {
             move(MoverType.SELF, getDeltaMovement());
             setDeltaMovement(getDeltaMovement().scale(0.92).add(0, -0.03, 0));
-            if (phaseTicks >= 12 || horizontalCollision) {
-                setPos(target.getX() + .5, target.getY() + .87, target.getZ() + .5);
+            var water = blockPosition();
+            if (level().getFluidState(water).is(net.minecraft.tags.FluidTags.WATER)) {
+                target = water.immutable();
                 setDeltaMovement(Vec3.ZERO);
                 getEntityData().set(PHASE, BOBBING);
                 phaseTicks = 0;
+            } else if (phaseTicks >= 80 || horizontalCollision || onGround()) {
+                discard();
             }
         } else if (phase == BOBBING || phase == BITING) {
             double surface = target.getY() + .87;
@@ -96,7 +115,7 @@ public final class VillagerBobber extends Entity {
             if (Math.abs(force) < .01) force += Math.copySign(.1, force == 0 ? 1 : force);
             double vertical = velocity.y - force * random.nextFloat() * .2;
             setDeltaMovement(0, vertical * .9, 0);
-            setPos(target.getX() + .5, getY() + vertical, target.getZ() + .5);
+            setPos(getX(), getY() + vertical, getZ());
         } else if (phase == RETRIEVING) {
             float t = Mth.clamp(phaseTicks / 5.0F, 0, 1);
             Vec3 destination = owner.getEyePosition().add(0, -0.4, 0);
