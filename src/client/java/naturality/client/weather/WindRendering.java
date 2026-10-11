@@ -7,8 +7,6 @@ import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
 import com.mojang.renderpearl.api.pipeline.UniformType;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.HashMap;
-import java.util.Map;
 import naturality.weather.WeatherSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
@@ -100,16 +98,16 @@ public final class WindRendering {
             cache.values.clear();
         }
         long key = pos.asLong();
-        var cached = cache.values.get(key);
-        if (cached != null) return cached;
+        byte cached = cache.values.get(key);
+        if (cached != 0) return cached == 1;
         boolean result = naturality.weather.WindShapes.raw(() -> naturality.weather.WindShelter.hasOpenSkyPath(level, pos, p -> level.getBrightness(LightLayer.SKY,p)));
         if (cache.values.size() >= 4096) cache.values.clear();
-        cache.values.put(key, result);
+        cache.values.put(key, result ? (byte)1 : (byte)2);
         return result;
     }
     private static final class ExposureCache {
         private @org.jspecify.annotations.Nullable BlockAndTintGetter view;
-        private final Map<Long, Boolean> values = new HashMap<>();
+        private final it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap values = new it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap();
     }
     public static int vineSupportMask(BlockState state) {
         if (!(state.getBlock() instanceof VineBlock)) return 0;
@@ -163,19 +161,33 @@ public final class WindRendering {
                 == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER) y += 1;
         return 201 + Math.clamp(Math.round(y * 19), 0, 38);
     }
+    private static boolean framePrepared;
+    private static final ByteBuffer frameData = ByteBuffer.allocateDirect(16).order(ByteOrder.nativeOrder());
+    public static void beginFrame() { framePrepared = false; }
     public static void bind(RenderPass pass) {
+        if (!framePrepared || uniform == null) prepareFrame();
+        pass.setUniform("NaturalityWind", java.util.Objects.requireNonNull(uniform));
+    }
+    private static void prepareFrame() {
         var client = Minecraft.getInstance();
         var level = client.level;
         var s = !naturality.config.NaturalityConfig.get().effects.foliageWind || level == null ? null : WeatherSystem.state(level);
         float windScale = s == null ? 0 : 1;
         float time = level == null ? 0 : (level.getGameTime() % 24000
             + client.getDeltaTracker().getGameTimeDeltaPartialTick(false)) / 20F;
-        var data = ByteBuffer.allocateDirect(16).order(ByteOrder.nativeOrder());
-        data.putFloat(s == null ? 0 : s.windX() * windScale).putFloat(s == null ? 0 : s.windZ() * windScale)
-            .putFloat(time).putFloat(s == null ? 0 : s.wind() / 100 * windScale).flip();
+        float x = s == null ? 0 : s.windX() * windScale;
+        float z = s == null ? 0 : s.windZ() * windScale;
+        float strength = s == null ? 0 : s.wind() / 100 * windScale;
+        if (uniform != null && frameData.getFloat(0) == x && frameData.getFloat(4) == z
+                && frameData.getFloat(8) == time && frameData.getFloat(12) == strength) {
+            framePrepared = true;
+            return; // Paused frames can retain the exact same GPU data too.
+        }
+        var data = frameData.clear();
+        data.putFloat(x).putFloat(z).putFloat(time).putFloat(strength).flip();
         if (uniform != null) uniform.close();
         uniform = RenderSystem.getDevice().createBuffer(() -> "Naturality wind", 128, data);
-        pass.setUniform("NaturalityWind", uniform);
+        framePrepared = true;
     }
     public static void close() { if (uniform != null) { uniform.close(); uniform = null; } }
 }

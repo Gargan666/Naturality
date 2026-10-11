@@ -11,6 +11,61 @@ uvec2 naturality_fluid_hash(ivec2 cell) {
     return h ^ (h.yx >> 13u);
 }
 
+// Shared sampling math; callers compute derivatives before divergent eligibility tests.
+vec4 naturality_fluid_palette(int kind, vec2 p, ivec2 base, mat2 mapping, vec2 tx, vec2 ty) {
+    vec2 pixel = (floor(p * 16.0 + 0.0001) + 0.5) / 16.0;
+    // Lava's spatial assembly is one 16x16 block wide, not a two-block cloud.
+    float patchSize = kind >= 2 ? 1.0 : 2.0;
+    vec2 grid = pixel / patchSize;
+    ivec2 cell = ivec2(floor(grid));
+    vec2 fraction = fract(grid);
+    vec2 weight = fraction * fraction * (3.0 - 2.0 * fraction);
+    float heat = 0.0;
+    // A shared lattice and smooth weights join across block/section boundaries.
+    // Blend heat before the nonlinear palette, preserving the classic color curve.
+    for (int y = 0; y <= 1; y++) for (int x = 0; x <= 1; x++) {
+        ivec2 corner = cell + ivec2(x, y);
+        uvec2 hash = naturality_fluid_hash(base / int(patchSize) + corner);
+        // Diagonal flow can cancel U/V terms exactly onto a texel boundary.
+        // Derivative roundoff then picked different neighbors inside ONE surface
+        // pixel, producing depth-fighting-like speckles. Resolve the virtual texel
+        // once, with a small numerical tolerance, and sample its center.
+        vec2 texel = floor(mapping * (pixel - vec2(corner) * patchSize) * 64.0 + 0.01);
+        vec2 sampleUV = (texel + vec2(hash & uvec2(63u)) + 0.5) / 64.0;
+        float w = (x == 0 ? 1.0 - weight.x : weight.x) * (y == 0 ? 1.0 - weight.y : weight.y);
+        heat += textureGrad(NaturalityFluidHeat, sampleUV, tx, ty)[kind] * w;
+    }
+    heat = clamp(heat, 0.0, 1.0);
+    float squared = heat * heat;
+    if (kind >= 2) {
+        // The source palette contains all animation pixels, including a handful
+        // of exceptionally bright outliers. A bounded smoothstep saturated to
+        // that rare maximum over whole hot patches. Logistic tails retain local
+        // contrast while approaching those rare colors gradually, without a
+        // finite heat threshold that turns an entire highlight into the maximum.
+        float paletteHeat = 1.0 / (1.0 + exp(-24.0 * (heat - 0.46)));
+        int count = kind == 2 ? NaturalityFluidInfo.x : NaturalityFluidInfo.y;
+        int index = int(round(paletteHeat * float(count - 1)));
+        return vec4(texelFetch(NaturalityLavaPalette,
+            ivec2(index % 256, index / 256 + (kind - 2) * NaturalityFluidInfo.z), 0).rgb, 1.0);
+    }
+    // The historical fixed blue is supplied by modern biome tint instead.
+    return vec4(vec3((50.0 + 64.0 * squared) / 114.0), (146.0 + 50.0 * squared) / 255.0);
+}
+
+// Only called for eligible horizontal submerged floors. Explicit gradients keep
+// the original texel selection stable at shoreline and geometry boundaries.
+float naturality_still_water_pattern(vec3 position, ivec3 origin, vec2 dx, vec2 dy) {
+    vec2 tx = dx * 16.0 / 64.0, ty = dy * 16.0 / 64.0;
+    float determinant = dx.x * dy.y - dx.y * dy.x;
+    mat2 mapping = mat2(0.25, 0.0, 0.0, 0.25);
+    if (abs(determinant) > 1e-12) {
+        mapping = mat2((tx * dy.y - ty * dx.y) / determinant,
+                       (ty * dx.x - tx * dy.x) / determinant);
+    }
+    return naturality_fluid_palette(0, position.xz, origin.xz, mapping, tx, ty).r;
+}
+
 vec4 naturality_fluid_color(int kind, vec3 position, ivec3 origin, vec2 localUV, vec3 cornerFlow) {
     vec3 normal = abs(cross(dFdx(position), dFdy(position)));
     bool topSurface = normal.y >= max(normal.x, normal.z);
@@ -55,41 +110,5 @@ vec4 naturality_fluid_color(int kind, vec3 position, ivec3 origin, vec2 localUV,
             mapping = mat2(flow.y, flow.x, -flow.x, flow.y) * 0.25;
         }
     }
-    // Lava's spatial assembly is one 16x16 block wide, not a two-block cloud.
-    float patchSize = kind >= 2 ? 1.0 : 2.0;
-    vec2 grid = pixel / patchSize;
-    ivec2 cell = ivec2(floor(grid));
-    vec2 fraction = fract(grid);
-    vec2 weight = fraction * fraction * (3.0 - 2.0 * fraction);
-    float heat = 0.0;
-    // A shared lattice and smooth weights join across block/section boundaries.
-    // Blend heat before the nonlinear palette, preserving the classic color curve.
-    for (int y = 0; y <= 1; y++) for (int x = 0; x <= 1; x++) {
-        ivec2 corner = cell + ivec2(x, y);
-        uvec2 hash = naturality_fluid_hash(base / int(patchSize) + corner);
-        // Diagonal flow can cancel U/V terms exactly onto a texel boundary.
-        // Derivative roundoff then picked different neighbors inside ONE surface
-        // pixel, producing depth-fighting-like speckles. Resolve the virtual texel
-        // once, with a small numerical tolerance, and sample its center.
-        vec2 texel = floor(mapping * (pixel - vec2(corner) * patchSize) * 64.0 + 0.01);
-        vec2 sampleUV = (texel + vec2(hash & uvec2(63u)) + 0.5) / 64.0;
-        float w = (x == 0 ? 1.0 - weight.x : weight.x) * (y == 0 ? 1.0 - weight.y : weight.y);
-        heat += textureGrad(NaturalityFluidHeat, sampleUV, tx, ty)[kind] * w;
-    }
-    heat = clamp(heat, 0.0, 1.0);
-    float squared = heat * heat;
-    if (kind >= 2) {
-        // The source palette contains all animation pixels, including a handful
-        // of exceptionally bright outliers. A bounded smoothstep saturated to
-        // that rare maximum over whole hot patches. Logistic tails retain local
-        // contrast while approaching those rare colors gradually, without a
-        // finite heat threshold that turns an entire highlight into the maximum.
-        float paletteHeat = 1.0 / (1.0 + exp(-24.0 * (heat - 0.46)));
-        int count = kind == 2 ? NaturalityFluidInfo.x : NaturalityFluidInfo.y;
-        int index = int(round(paletteHeat * float(count - 1)));
-        return vec4(texelFetch(NaturalityLavaPalette,
-            ivec2(index % 256, index / 256 + (kind - 2) * NaturalityFluidInfo.z), 0).rgb, 1.0);
-    }
-    // The historical fixed blue is supplied by modern biome tint instead.
-    return vec4(vec3((50.0 + 64.0 * squared) / 114.0), (146.0 + 50.0 * squared) / 255.0);
+    return naturality_fluid_palette(kind, p, base, mapping, tx, ty);
 }

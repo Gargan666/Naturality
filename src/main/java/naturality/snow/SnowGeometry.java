@@ -22,9 +22,6 @@ public final class SnowGeometry {
     private static final List<FireSurface.Patch> FLAT = List.of(new FireSurface.Patch(0,0,0,1,0,0,1));
     private static final VoxelShape[] LAYERS = java.util.stream.IntStream.rangeClosed(0,8)
         .mapToObj(i -> i == 0 ? Shapes.empty() : Shapes.box(0,0,0,1,i/8.0,1)).toArray(VoxelShape[]::new);
-    // Keys are immutable shape objects, not block states or world positions.
-    private static final ThreadLocal<java.util.IdentityHashMap<VoxelShape,Boolean>> FOOTPRINTS =
-        ThreadLocal.withInitial(java.util.IdentityHashMap::new);
     private static final ThreadLocal<java.util.Map<List<FireSurface.Patch>,VoxelShape[]>> VOLUMES =
         ThreadLocal.withInitial(java.util.HashMap::new);
     public static boolean isFoliage(net.minecraft.world.level.block.state.BlockState state) {
@@ -69,7 +66,7 @@ public final class SnowGeometry {
             if(support.isAir() || SnowSupportOnly.contains(support)
                     || support.getBlock() instanceof net.minecraft.world.level.block.BaseFireBlock
                     || support.is(net.minecraft.tags.BlockTags.LEAVES) || isFoliage(support))return false;
-            return net.minecraft.world.level.block.Block.isShapeFullBlock(support.getShape(level,below));
+            return SnowBlockModels.fullTop(support);
         }
         return false;
     }
@@ -147,19 +144,7 @@ public final class SnowGeometry {
         if(state.getFluidState().is(FluidTags.WATER))return false;
         if(state.getBlock() instanceof net.minecraft.world.level.block.BaseFireBlock)return false;
         if(isFoliage(state) || SnowSupportOnly.contains(state))return true;
-        var outline = state.getShape(level,pos);
-        if (outline.isEmpty()) return false;
-        var cache = FOOTPRINTS.get();
-        var cached = cache.get(outline);
-        if (cached != null) return cached;
-        VoxelShape footprint=Shapes.empty();
-        for(var box:outline.toAabbs())
-            footprint=Shapes.or(footprint,Shapes.box(box.minX,0,box.minZ,box.maxX,1,box.maxZ));
-        boolean result = !footprint.isEmpty() && Shapes.joinIsNotEmpty(Shapes.block(),footprint,
-            net.minecraft.world.phys.shapes.BooleanOp.ONLY_FIRST);
-        if (cache.size() >= 2048) cache.clear();
-        cache.put(outline,result);
-        return result;
+        return SnowBlockModels.exposesGround(state);
     }
 
     /** Raised small patches gain one physical layer for every two inventory layers. */

@@ -8,6 +8,7 @@ import naturality.client.lighting.HardcoreDarkness;
 import naturality.client.sky.EndFlashes;
 import naturality.client.sky.MeteorShower;
 import naturality.client.sky.RainbowRenderer;
+import naturality.client.sky.ProximityRenderer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.SkyRenderer;
 import net.minecraft.world.level.MoonPhase;
@@ -29,12 +30,14 @@ public abstract class SkyEventsMixin {
 
     @Inject(method = "renderEndSky", at = @At("HEAD"), cancellable = true)
     private void naturality$endSkyPlane(RenderPass pass, CallbackInfo ci) {
+        if (!naturality.config.Feature.END_SKY.enabled()) return;
         naturality.client.sky.EndSkyRenderer.render(pass, endSkyBuffer, endSkyTexture);
         naturality.client.sky.EndSkyRenderer.renderStars(pass, starBuffer, starIndexCount);
         ci.cancel();
     }
     @Unique private @org.jspecify.annotations.Nullable MeteorShower naturality$meteors;
     @Unique private @org.jspecify.annotations.Nullable RainbowRenderer naturality$rainbow;
+    @Unique private @org.jspecify.annotations.Nullable ProximityRenderer naturality$proximity;
     @Unique private float naturality$rainbowSkyBlend;
     @Unique private float naturality$endDarkness = 1.0F;
     @Unique private boolean naturality$endEvent;
@@ -47,7 +50,7 @@ public abstract class SkyEventsMixin {
             net.minecraft.client.renderer.state.level.SkyRenderState state, CallbackInfo ci) {
         EndFlashes.beginFrame();
         var client = Minecraft.getInstance();
-        naturality$endEvent = state.skybox == DimensionType.Skybox.END && client.level != null
+        naturality$endEvent = naturality.config.Feature.END_FLASHES.enabled() && state.skybox == DimensionType.Skybox.END && client.level != null
             && client.level.dimension().equals(net.minecraft.world.level.Level.END);
         if (naturality$endEvent) {
             float partial = client.getDeltaTracker().getGameTimeDeltaPartialTick(false);
@@ -57,6 +60,8 @@ public abstract class SkyEventsMixin {
         // Only Overworld sky extraction supplies skyColor; fresh End frames leave it null.
         naturality$rainbowSkyBlend = 0;
         if (state.skybox != DimensionType.Skybox.OVERWORLD) return;
+        if (naturality$proximity == null) naturality$proximity = new naturality.client.sky.ProximityRenderer();
+        naturality$proximity.prepare();
         var effect = naturality$meteors;
         if (effect == null) { effect = new MeteorShower(); naturality$meteors = effect; }
         effect.prepare();
@@ -89,9 +94,11 @@ public abstract class SkyEventsMixin {
         if (effect == null) { effect = new MeteorShower(); naturality$meteors = effect; }
         effect.render(pass, rainBrightness);
         if (naturality$rainbow != null) naturality$rainbow.render(pass, sunAngle, naturality$rainbowSkyBlend);
+        if (naturality$proximity != null) naturality$proximity.render(pass, rainBrightness, starBrightness);
     }
     @Inject(method = "close", at = @At("HEAD"))
     private void naturality$close(CallbackInfo ci) {
+        if (naturality$proximity != null) { naturality$proximity.close(); naturality$proximity = null; }
         if (naturality$meteors != null) { naturality$meteors.close(); naturality$meteors = null; }
         if (naturality$rainbow != null) { naturality$rainbow.close(); naturality$rainbow = null; }
     }

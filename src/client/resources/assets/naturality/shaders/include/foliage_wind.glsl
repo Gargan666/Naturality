@@ -2,6 +2,7 @@
 #define NATURALITY_FOLIAGE_WIND
 layout(std140) uniform NaturalityWind { vec4 NaturalityWindValue; };
 vec2 naturality_leaf_wind_at(vec2 worldXZ) {
+    if (all(equal(NaturalityWindValue.xy, vec2(0.0)))) return vec2(0.0);
     float phase = dot(worldXZ, vec2(111.0, 85.0)) * (6.28318530718 / 4096.0);
     float wave = sin(NaturalityWindValue.z * 1.256637 + phase) * 0.7
         + sin(NaturalityWindValue.z * 3.141593 + phase * 2.0) * 0.3;
@@ -16,19 +17,22 @@ vec2 naturality_leaf_wind_at(vec2 worldXZ) {
         float downwind = dot(offset, windDirection);
         if (downwind < 0.0) offset -= windDirection * downwind;
     }
-    float shakePhase = NaturalityWindValue.z * 16.755161 + phase * 2.3;
-    float finePhase = NaturalityWindValue.z * 23.876104 + phase * 3.7
-        + dot(worldXZ, vec2(-0.23, 0.31));
-    float detailPhase = NaturalityWindValue.z * 29.530971 + phase * 1.3
-        + dot(worldXZ, vec2(0.37, 0.19));
-    float shakeForward = sin(shakePhase) * 0.09 + sin(finePhase) * 0.05 + sin(detailPhase) * 0.025;
-    float shakeSide = sin(finePhase * 0.73 + shakePhase * 0.19) * 0.03
-        + sin(detailPhase * 0.61 + shakePhase * 0.37) * 0.015;
-    vec2 crosswind = vec2(-windDirection.y, windDirection.x);
-    offset += (windDirection * shakeForward + crosswind * shakeSide) * shake * (weight / 0.22);
+    if (shake > 0.0) {
+        float shakePhase = NaturalityWindValue.z * 16.755161 + phase * 2.3;
+        float finePhase = NaturalityWindValue.z * 23.876104 + phase * 3.7
+            + dot(worldXZ, vec2(-0.23, 0.31));
+        float detailPhase = NaturalityWindValue.z * 29.530971 + phase * 1.3
+            + dot(worldXZ, vec2(0.37, 0.19));
+        float shakeForward = sin(shakePhase) * 0.09 + sin(finePhase) * 0.05 + sin(detailPhase) * 0.025;
+        float shakeSide = sin(finePhase * 0.73 + shakePhase * 0.19) * 0.03
+            + sin(detailPhase * 0.61 + shakePhase * 0.37) * 0.015;
+        vec2 crosswind = vec2(-windDirection.y, windDirection.x);
+        offset += (windDirection * shakeForward + crosswind * shakeSide) * shake * (weight / 0.22);
+    }
     return sign(offset) * floor(abs(offset) * 16.0 + 0.5) / 16.0;
 }
 vec2 naturality_wind_offset(vec3 Position, ivec3 ChunkPosition, int foliageTag) {
+    if (all(equal(NaturalityWindValue.xy, vec2(0.0)))) return vec2(0.0);
     // Vine planes sit 1/16 inside their cell; the attachment belongs to the
     // adjacent leaf's exact block-edge vertex, not that inset plane.
     if (foliageTag == 232) return naturality_leaf_wind_at(round(Position.xz)
@@ -116,18 +120,20 @@ vec2 naturality_wind_offset(vec3 Position, ivec3 ChunkPosition, int foliageTag) 
             float downwind = dot(offset, windDirection);
             if (downwind < 0.0) offset -= windDirection * downwind;
         }
-        float shakePhase = NaturalityWindValue.z * 16.755161 + phase * 2.3;
-        float finePhase = NaturalityWindValue.z * 23.876104 + phase * 3.7
-            + dot(worldPos.xz, vec2(-0.23, 0.31));
-        float detailPhase = NaturalityWindValue.z * 29.530971 + phase * 1.3
-            + dot(worldPos.xz, vec2(0.37, 0.19));
-        float shakeForward = sin(shakePhase) * 0.09
-            + sin(finePhase) * 0.05 + sin(detailPhase) * 0.025;
-        float shakeSide = sin(finePhase * 0.73 + shakePhase * 0.19) * 0.03
-            + sin(detailPhase * 0.61 + shakePhase * 0.37) * 0.015;
-        vec2 crosswind = vec2(-windDirection.y, windDirection.x);
-        offset += (windDirection * shakeForward + crosswind * shakeSide)
-            * shake * (weight / 0.22);
+        if (shake > 0.0) {
+            float shakePhase = NaturalityWindValue.z * 16.755161 + phase * 2.3;
+            float finePhase = NaturalityWindValue.z * 23.876104 + phase * 3.7
+                + dot(worldPos.xz, vec2(-0.23, 0.31));
+            float detailPhase = NaturalityWindValue.z * 29.530971 + phase * 1.3
+                + dot(worldPos.xz, vec2(0.37, 0.19));
+            float shakeForward = sin(shakePhase) * 0.09
+                + sin(finePhase) * 0.05 + sin(detailPhase) * 0.025;
+            float shakeSide = sin(finePhase * 0.73 + shakePhase * 0.19) * 0.03
+                + sin(detailPhase * 0.61 + shakePhase * 0.37) * 0.015;
+            vec2 crosswind = vec2(-windDirection.y, windDirection.x);
+            offset += (windDirection * shakeForward + crosswind * shakeSide)
+                * shake * (weight / 0.22);
+        }
         // Whole texture-pixel steps along world X/Z, never screen-space pixels.
         // Quantize displacement only, preserving model offsets and anchored roots.
         offset = sign(offset) * floor(abs(offset) * 16.0 + 0.5) / 16.0;

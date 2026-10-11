@@ -16,6 +16,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class FluidAtlasMixin {
     @SuppressWarnings("null") @Shadow private Map<Identifier, TextureAtlasSprite> texturesByName;
 
+    @Inject(method = "upload", at = @At("HEAD"))
+    private void naturality$retireSnowSprites(SpriteLoader.Preparations preparations, CallbackInfo ci) {
+        naturality.client.snow.SnowTextureAtlas.retire((TextureAtlas)(Object)this);
+    }
+
     @Inject(method = "upload", at = @At("TAIL"))
     private void naturality$fluidBounds(SpriteLoader.Preparations preparations, CallbackInfo ci) {
         if (((TextureAtlas) (Object) this).location().equals(naturality.client.AtlasLocations.BLOCKS)) {
@@ -23,6 +28,7 @@ public abstract class FluidAtlasMixin {
             naturality.client.shadow.BlockGridShadow.reset();
             naturality.client.portal.FlatModelAlpha.clear();
             naturality.client.snow.SnowOverlayModel.atlasLoaded(texturesByName);
+            naturality.client.snow.SnowTextureAtlas.loaded((TextureAtlas)(Object)this,texturesByName);
             ProceduralFluids.atlasLoaded(texturesByName);
             naturality.client.fire.ProceduralFire.atlasLoaded(texturesByName);
         }

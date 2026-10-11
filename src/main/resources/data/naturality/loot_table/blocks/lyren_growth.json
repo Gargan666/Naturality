@@ -1,0 +1,1 @@
+{ "type": "minecraft:block", "pools": [{ "rolls": 1, "entries": [{ "type": "minecraft:item", "name": "naturality:lyren_growth", "condition": "minecraft:tool/can_shear" }] }], "random_sequence": "naturality:blocks/lyren_growth" }

@@ -24,8 +24,9 @@ public abstract class WeatherAudioChannelMixin implements WeatherAudioFilter {
     @Override public void naturality$setEnvironmentAmounts(float indoor, float underwater) {
         naturality$indoor = Math.clamp(indoor, 0, 1);
         naturality$underwater = Math.clamp(underwater, 0, 1);
+        float sleep = naturality.client.sleep.SleepAudio.amount();
         if (!ALC.getCapabilities().ALC_EXT_EFX) return;
-        if (naturality$indoor <= .001F && naturality$underwater <= .001F) {
+        if (naturality$indoor <= .001F && naturality$underwater <= .001F && sleep <= .001F) {
             if (naturality$weatherFilter != 0)
                 AL10.alSourcei(source, EXTEfx.AL_DIRECT_FILTER, EXTEfx.AL_FILTER_NULL);
             return;
@@ -35,9 +36,9 @@ public abstract class WeatherAudioChannelMixin implements WeatherAudioFilter {
             EXTEfx.alFilteri(naturality$weatherFilter, EXTEfx.AL_FILTER_TYPE, EXTEfx.AL_FILTER_LOWPASS);
         }
         EXTEfx.alFilterf(naturality$weatherFilter, EXTEfx.AL_LOWPASS_GAIN,
-            1 - .25F * naturality$indoor);
+            (1 - .25F * naturality$indoor) * naturality.client.sleep.SleepAudio.gain(sleep));
         EXTEfx.alFilterf(naturality$weatherFilter, EXTEfx.AL_LOWPASS_GAINHF,
-            (1 - .82F * naturality$indoor) * (float) Math.pow(.015, naturality$underwater));
+            (1 - .82F * naturality$indoor) * (float) Math.pow(.015, naturality$underwater) * naturality.client.sleep.SleepAudio.highFrequencyGain(sleep));
         AL10.alSourcei(source, EXTEfx.AL_DIRECT_FILTER, naturality$weatherFilter);
     }
 

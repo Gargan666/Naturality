@@ -28,6 +28,7 @@ public final class PortalMoteParticle extends SingleQuadParticle {
     private final Vec3 control;
     private final double initialDistance;
     private Vec3 velocity;
+    private double movementTicks;
 
     public PortalMoteParticle(ClientLevel level, BlockPos portal, Direction.Axis axis,
                               double x, double y, double z, double vx, double vy, double vz,
@@ -81,7 +82,9 @@ public final class PortalMoteParticle extends SingleQuadParticle {
         xo = x;
         yo = y;
         zo = z;
-        double t = ++age / (double) lifetime;
+        age++;
+        movementTicks += naturality.client.sleep.SleepVisuals.speed();
+        double t = Math.min(1, movementTicks / lifetime);
         Vec3 next = start.scale((1 - t) * (1 - t))
             .add(control.scale(2 * (1 - t) * t)).add(target.scale(t * t));
         velocity = next.subtract(new Vec3(x, y, z));

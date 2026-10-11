@@ -124,7 +124,8 @@ public final class WeatherClusterParticle extends SingleQuadParticle {
         var kind = WeatherParticleContext.precipitation(level, queryPos.set(x,y,z));
         if (kind != (snow ? Biome.Precipitation.SNOW : Biome.Precipitation.RAIN)) { remove(); return; }
         updateVelocity(weather,false);
-        double nx=x+xd, ny=y+yd, nz=z+zd;
+        double speed = naturality.client.sleep.SleepVisuals.speed();
+        double nx=x+xd*speed, ny=y+yd*speed, nz=z+zd*speed;
         // The weather card may visually overlap the ground while its center is
         // still falling. Remove it only once the center reaches the surface.
         double clearance = ParticleWeather.clearance(level,nx,ny,nz,0);

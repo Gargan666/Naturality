@@ -19,7 +19,32 @@ Visual design is by Gargan; implementation was developed with AI assistance.
 
 This project is for **Minecraft 26.3**, **Fabric Loader 0.19.5 or newer**, **Fabric API**, and **Java 25**. Exact development dependency versions are in [`gradle.properties`](gradle.properties).
 
-Place the built `naturality-1.0.0.jar` and a compatible Fabric API JAR in the Fabric instance's `mods` folder. The `-sources.jar` is for developers. [Mod Menu](https://modrinth.com/mod/modmenu) is optional and provides access to the configuration screen; without it, edit `config/naturality.json` while the game is closed.
+Place the built `naturality-1.0.0.jar` and a compatible Fabric API JAR in the Fabric instance's `mods` folder. The `-sources.jar` is for developers. [Mod Menu](https://modrinth.com/mod/modmenu) is optional and provides access to the configuration screen.
+
+## Configuration
+
+Open **Mods > Naturality > Configure > Config Presets** from the title screen:
+
+- **Default** restores all shipped settings, including numeric defaults and features that normally start disabled.
+- **Clientside Only** keeps client visuals while disabling added content and server gameplay changes, including modified Nether portal travel, ghast physics, and impact-event broadcasts. Use this before joining a server without Naturality.
+- **No Visual Overhaul** keeps content and gameplay with optional visual and audio changes disabled, including heat waves, lens flare, and mob-death effects. It also disables server changes coupled to those visuals, such as portal entry animation, fire/snow wrapping, ghast physics, and impact-event broadcasts.
+
+Presets apply ordinary settings once. Every setting remains independently editable; no persistent mode overrides later choices. The menu is organized into:
+
+- **Visuals:** lighting/shadows, sky/atmosphere, water/lava, portals, fire/heat, snow, particles, entity animation, and glint.
+- **Content and World Generation:** added content, End terrain/biomes, chorus plants, status effects, and Starfall.
+- **Gameplay:** villagers/reputation, mobs/fishing, weather/sky rules, movement/portal travel, and block/snow rules.
+- **Audio:** ambience, muffling, wind, splashes, and portal sound volumes.
+
+Startup switches sit beside related live controls and are marked as requiring a restart. Global search works from every page and shows the setting's category path. Existing JSON keys and saved choices are preserved by the menu reorganization.
+
+Search by estimated FPS impact with `#Low`, `#Medium`, `#High`, or `#ExtraHigh` (`#Extra High` also works). Tags ignore capitalization and combine with setting names, such as `#High heat`. Multiple tags match either tier, such as `#Low #Medium`. Only rated settings appear when filtering by impact, whether currently enabled or disabled.
+
+Fifteen selected visual toggles now include a colored **Estimated FPS impact** in their tooltip: **Low**, **Medium**, **High**, or **Extra High**. These are rough relative estimates at default settings while the effect is active, not measured average FPS losses or fixed percentages. Each rated option explains what increases its cost; unrated options have no implied rating. For example, moving dynamic lights are rated Extra High, while ghast animation is rated Low.
+
+Restart Minecraft after changing startup features or applying a preset that changes them. Content and server feature switches are editable from the title screen. Client and server must agree on added content, chorus block states, and entity-data changes. Turning off content does not convert blocks or items already saved in a world.
+
+For manual editing while the game is closed, client settings are in `config/naturality.json`, existing server settings in `config/naturality-server.json`, and startup feature switches in `config/naturality-features.json`.
 
 ## Setup
 

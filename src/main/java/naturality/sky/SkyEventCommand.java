@@ -32,8 +32,14 @@ public final class SkyEventCommand {
                 var level = DimensionArgument.getDimension(context, "dimension");
                 var type = find(level, StringArgumentType.getString(context, "event"));
                 int strength = IntegerArgumentType.getInteger(context, "strength");
+                if (strength > type.maxStrength()) throw new SimpleCommandExceptionType(
+                    Component.literal(type.label + " strength must be between 0 and " + type.maxStrength())).create();
                 SkyEventWorldData.get(level.getServer()).override(level, type, true, strength);
                 String visibility = "";
+                if (type == SkyEventType.PROXIMITY && strength > 0) {
+                    visibility = " Planet: " + ProximityCycle.PLANETS[strength - 1] + "."
+                        + (!SkyEvents.isNight(level) ? " Currently hidden during daytime." : "");
+                }
                 if (type == SkyEventType.RAINBOW && strength > 0) {
                     float rain = SkyEvents.rainfall(level);
                     if (!RainbowCycle.validRain(rain))
@@ -82,7 +88,21 @@ public final class SkyEventCommand {
             float value = SkyEvents.strength(level, type);
             boolean active;
             String detail;
-            if (type == SkyEventType.END_FLASHES) {
+            if (type == SkyEventType.PROXIMITY) {
+                var cycle = SkyEvents.proximityCycle(level);
+                int planet = Math.clamp((int)value, 0, 7);
+                active = planet > 0;
+                if (active && SkyEvents.isNight(level)) happening.add("Proximity (" + ProximityCycle.PLANETS[planet - 1] + ")");
+                lines.append('\n').append("Proximity: ").append(active ? ProximityCycle.PLANETS[planet - 1] : "quiet")
+                    .append(" (strength ").append(planet).append("/7)")
+                    .append(!SkyEvents.isNight(level) ? "; hidden during daytime" : "")
+                    .append(settings.override ? "; override" : cycle == null ? "; initializing"
+                        : "; " + cycle.remaining() + " ticks remaining; fixed planet for this episode");
+                double roll = ProximityCycle.START_CHANCE;
+                lines.append(". Start chance while quiet at night: tick ").append(percent(roll))
+                    .append(", second ").append(percent(1 - Math.pow(1 - roll, 20)))
+                    .append(", minute ").append(percent(1 - Math.pow(1 - roll, 1200))).append('.');
+            } else if (type == SkyEventType.END_FLASHES) {
                 var cycle = SkyEvents.cycle(level, type);
                 active = settings.override ? settings.strength > 0 : cycle != null && cycle.active();
                 if (active || value > .01F) happening.add(type.label);

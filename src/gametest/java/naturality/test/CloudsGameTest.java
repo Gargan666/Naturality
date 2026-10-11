@@ -50,6 +50,12 @@ public final class CloudsGameTest implements FabricClientGameTest {
                 world.getConnection().waitForClientboundPackets();
                 context.waitTicks(8);
                 context.takeScreenshot("clouds-pixels-" + oit);
+                context.runOnClient(client -> {
+                    var origin = new net.minecraft.world.phys.Vec3(edge[0], 180, edge[1] + 8);
+                    float transmission = naturality.client.cloud.CloudSunOcclusion.transmission(origin, origin.add(0, 200, 0));
+                    if (transmission >= 0.7F)
+                        throw new AssertionError("Rendered cloud occupancy must reach the sun-flare overlay: " + transmission);
+                });
                 boolean fogEnabled = NaturalityConfig.get().fog.enabled;
                 context.runOnClient(client -> {
                     var c = NaturalityConfig.get().clouds;
@@ -137,6 +143,31 @@ public final class CloudsGameTest implements FabricClientGameTest {
                     c.upper.speedPercent = 0;
                 });
             }
+            // Look at the moon through a known occupied texture cell: full-opacity
+            // caps must block the sky, while reduced opacity deliberately reveals it.
+            server.runCommand("tp @a " + edge[0] + " 176 " + (edge[1] + 11) + " 0 -90");
+            world.getConnection().waitForClientboundPackets();
+            java.nio.file.Path opaqueMoon = null;
+            for (int time : new int[]{18000, 114000}) {
+                server.runCommand("time set " + time);
+                context.waitTicks(10);
+                var capture = context.takeScreenshot("clouds-moon-opaque-" + time);
+                if (time == 18000) opaqueMoon = capture;
+            }
+            server.runCommand("time set 18000");
+            context.runOnClient(client -> NaturalityConfig.get().clouds.base.opacityPercent = 50);
+            context.waitTicks(10);
+            var halfMoon = context.takeScreenshot("clouds-moon-half-opacity");
+            if (centerVariation(java.util.Objects.requireNonNull(opaqueMoon)) > 2 || centerVariation(halfMoon) < 10)
+                throw new AssertionError("100% cloud base must block the moon/stars; 50% must reveal them");
+            context.runOnClient(client -> NaturalityConfig.get().clouds.base.opacityPercent = 100);
+            for (int time : new int[]{15000, 21000}) {
+                server.runCommand("time set " + time);
+                server.runCommand("tp @a 0.5 164 0.5 " + (time == 15000 ? -90 : 90) + " -30");
+                world.getConnection().waitForClientboundPackets();
+                context.waitTicks(10);
+                context.takeScreenshot("clouds-moon-moving-" + time);
+            }
             // A shallow ocean reaches into edge fog while nearby clouds stay above that fade.
             server.runOnServer(s -> {
                 for (int x = -4; x <= 4; x++) for (int z = -1; z <= 7; z++) s.overworld().getChunk(x, z);
@@ -188,7 +219,24 @@ public final class CloudsGameTest implements FabricClientGameTest {
         }
     }
 
+    private static int centerVariation(java.nio.file.Path file) {
+        try {
+            var image = javax.imageio.ImageIO.read(file.toFile());
+            int min = 255, max = 0;
+            for (int y = image.getHeight() / 2 - 35; y <= image.getHeight() / 2 + 35; y++)
+                for (int x = image.getWidth() / 2 - 35; x <= image.getWidth() / 2 + 35; x++) {
+                    int red = (image.getRGB(x, y) >> 16) & 255;
+                    min = Math.min(min, red);
+                    max = Math.max(max, red);
+                }
+            return max - min;
+        } catch (java.io.IOException exception) { throw new AssertionError(exception); }
+    }
+
     private static void checkGeometry() {
+        if (Math.abs(naturality.client.cloud.CloudMoonLighting.phaseStrength(0) - 1) > 0.0001
+                || Math.abs(naturality.client.cloud.CloudMoonLighting.phaseStrength(4) - 0.1) > 0.0001)
+            throw new AssertionError("Cloud moonlight must range from 100% at full moon to 10% at new moon");
         try (var renderer = new naturality.client.cloud.CloudLayerRenderer()) {
             var settings = new NaturalityConfig.CloudLayer();
             settings.fadingSides = false;
@@ -200,8 +248,8 @@ public final class CloudsGameTest implements FabricClientGameTest {
             encode.setAccessible(true);
             var buffer = java.nio.ByteBuffer.allocate(32);
             for (var direction : net.minecraft.core.Direction.values()) encode.invoke(renderer, buffer, -17, 23, direction, 0);
-            if (buffer.position() != 15) throw new AssertionError("Open clouds must contain five faces, no top");
-            for (int i = 0; i < buffer.position(); i += 3) {
+            if (buffer.position() != 20) throw new AssertionError("Open clouds must contain five faces, no top");
+            for (int i = 0; i < buffer.position(); i += 4) {
                 int flags = buffer.get(i + 2) & 255;
                 if ((flags & 7) == net.minecraft.core.Direction.UP.get3DDataValue()) throw new AssertionError("Top face survived");
                 if ((buffer.get(i) << 1 | (flags >> 7 & 1)) != -17
@@ -210,12 +258,14 @@ public final class CloudsGameTest implements FabricClientGameTest {
             settings.style = 1;
             buffer.clear();
             for (var direction : net.minecraft.core.Direction.values()) encode.invoke(renderer, buffer, 0, 0, direction, 0);
-            if (buffer.position() != 18) throw new AssertionError("Solid style must retain the top");
+            if (buffer.position() != 24) throw new AssertionError("Solid style must retain the top");
             var clouds = new NaturalityConfig.Clouds();
             clouds.base.width = 0;
             clouds.upper = null;
             clouds.sanitize();
-            if (clouds.base.width != 4 || clouds.upper.heightOffset != 40) throw new AssertionError("Cloud config validation failed");
+            if (clouds.base.width != 4 || clouds.upper.heightOffset != new NaturalityConfig.Clouds().upper.heightOffset) {
+                throw new AssertionError("Cloud config validation failed");
+            }
         } catch (ReflectiveOperationException exception) { throw new AssertionError(exception); }
     }
 }

@@ -11,14 +11,27 @@ public final class SelectedClientGameTests implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
         var suites = new LinkedHashMap<String, FabricClientGameTest>();
         suites.put("client-startup", new ClientStartupGameTest());
+        suites.put("sleep", new SleepAccelerationGameTest());
+        suites.put("feature-startup", new FeatureStartupGameTest());
         suites.put("end-terrain", new EndTerrainGameTest());
         suites.put("end-chunk-performance", new EndChunkPerformanceGameTest());
+        suites.put("end-save", new EndSaveGameTest());
         suites.put("smooth-endstone", new SmoothEndstoneGameTest());
         suites.put("lirestone-worldgen", new LirestoneWorldgenGameTest());
+        suites.put("lirestone-crags", new LirestoneCragsGameTest());
+        suites.put("end-wilds", new EndWildsGameTest());
         suites.put("chorus-flowers", new ChorusFlowersGameTest());
+        suites.put("chorus-sprouts", new ChorusSproutsGameTest());
         suites.put("fireball-model", new FireballModelGameTest());
+        suites.put("confusion", new ConfusionGameTest());
+        suites.put("floating-mob-tilt", new FloatingMobTiltGameTest());
+        suites.put("ghast-squash", new GhastSquashGameTest());
+        suites.put("ghast-crash", new GhastCrashGameTest());
         suites.put("mob-arrows", new MobArrowsGameTest());
+        suites.put("epilepsy-mode", new EpilepsyModeGameTest());
         suites.put("lightning", new LightningGameTest());
+        suites.put("distortion-interactions", new DistortionInteractionGameTest());
+        suites.put("distortion-creative", new DistortionCreativeFlightGameTest());
         suites.put("distortion", new DistortionGameTest());
         suites.put("rise", new RiseGameTest());
         suites.put("starfall", new StarfallGameTest());
@@ -41,12 +54,15 @@ public final class SelectedClientGameTests implements FabricClientGameTest {
         suites.put("breaking", new BreakingTexturesGameTest());
         suites.put("chunks", new ChunkSafetyGameTest());
         suites.put("snow-weather", new SnowAccumulationGameTest());
+        suites.put("snow-storm", new SnowStormGameTest());
         suites.put("snow-performance", new SnowPerformanceGameTest());
         suites.put("snow-compat", new SnowRendererCompatibilityGameTest());
         suites.put("wind-compat", new WindRendererGameTest());
         suites.put("wind-shapes", new WindShapesGameTest());
         suites.put("sky-events", new SkyEventsGameTest());
+        suites.put("proximity", new ProximityGameTest());
         suites.put("end-flashes", new EndFlashesGameTest());
+        suites.put("cave-ambience", new CaveAmbienceGameTest());
         suites.put("sunset", new SunsetGameTest());
         suites.put("aurora", new AuroraGameTest());
         suites.put("rainbow", new RainbowGameTest());
@@ -60,11 +76,17 @@ public final class SelectedClientGameTests implements FabricClientGameTest {
         suites.put("gameplay", new GameplaySettingsGameTest());
         suites.put("fluids", new FluidsGameTest());
         suites.put("fluid-tail", new FluidTailGameTest());
+        suites.put("liquid-projectiles", new LiquidProjectileSplashGameTest());
         suites.put("water", new WaterVisualsGameTest());
         suites.put("fog-culling", new FogCullingGameTest());
+        suites.put("terrain-culling", new TerrainCullingGameTest());
         suites.put("water-rain", new WaterRainFogGameTest());
         suites.put("waterfall", new WaterfallGameTest());
         suites.put("lava-effects", new LavaEffectsGameTest());
+        suites.put("heat-waves", new HeatWavesGameTest());
+        suites.put("bell-lighting", new BellLightingGameTest());
+        suites.put("snow-surface-lighting", new SnowSurfaceLightingGameTest());
+        suites.put("overlay-edge", new OverlayEdgeGameTest());
         suites.put("water-ripples", new WaterRipplesGameTest());
         suites.put("water-occlusion", new WaterFogOcclusionGameTest());
         suites.put("short-distance", new ShortDistanceGameTest());
@@ -82,6 +104,10 @@ public final class SelectedClientGameTests implements FabricClientGameTest {
             new PixelAmbientOcclusionGameTest().runTest(context1);
             new HardcoreDarknessGameTest().runTest(context1);
         });
+        suites.put("render-redundancy", new RenderRedundancyGameTest());
+        suites.put("forest-performance", new ForestPerformanceGameTest());
+        suites.put("overworld-loading", new OverworldLoadingGameTest());
+        suites.put("water-light-performance", new WaterLightPerformanceGameTest());
         suites.put("dynamic-lighting", new DynamicLightingGameTest());
         suites.put("portal", new PortalOpeningGameTest());
         suites.put("end-portal", context1 -> {
@@ -104,7 +130,5 @@ public final class SelectedClientGameTests implements FabricClientGameTest {
         }
     }
 }
-
-
 
 

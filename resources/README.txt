@@ -83,8 +83,7 @@ textures/block/smooth_endstone.png supplies all six faces of the registered
 naturality:smooth_endstone block and its inventory item. Edit and rebuild/relaunch
 as usual. Find Smooth Endstone beside End Stone in the Building Blocks creative tab.
 LIRESTONE
-textures/block/lirestone.png supplies the four sides of naturality:lirestone.
-textures/block/lirestone_top.png supplies both top and bottom. Edit either and
+textures/block/lirestone.png supplies all six faces of naturality:lirestone. Edit and
 rebuild/relaunch. Lirestone appears beside Smooth End Stone in Building Blocks.
 
 Starfall assets:
@@ -94,3 +93,32 @@ textures/particle/star_trail.png supplies the attached velocity-aligned trail.
 Replace these PNGs in place to change visuals. The trail is anchored 76% down
 the image; artwork should extend mainly above that anchor, behind travel.
 Fizzle burst particles currently use vanilla END_ROD and POOF placeholders.
+
+CHORUS SPROUT
+textures/block/chorus_sprout.png supplies the untinted crossed-plane foliage
+and inventory sprite for naturality:chorus_sprout. Edit and rebuild/relaunch.
+Find Chorus Sprout beside Short Grass in the Natural Blocks creative tab.
+Naturally generated chorus plants now scatter up to four Chorus Sprouts within
+two blocks of their bases, on nearby End Stone or Lirestone. This affects fresh
+chunk generation after restarting with the rebuilt mod.
+
+LIRESTONE SOUNDS
+sounds/blocks/lirestone/break1.ogg through break4.ogg supply break/mining sounds;
+place1.ogg through place4.ogg supply placement; step1.ogg through step6.ogg supply
+footsteps/landing. resources/sounds.json pools the variants. Edit and rebuild/relaunch.
+Lirestone OGG clips are mono (one channel, 44100 Hz); preserve mono when exporting replacements for positional block audio.
+
+SMOOTH LIRESTONE
+textures/block/smooth_lirestone.png supplies all six block faces and the block
+item for naturality:smooth_lirestone. Uses Lirestone's custom sounds. Edit and
+rebuild/relaunch. Find it immediately after Lirestone in Building Blocks.
+
+ECHO CORAL
+textures/block/echo_coral.png supplies every face and inventory item of Echo Coral.
+sounds/blocks/echo_coral supplies break1-3, place1-4 and step1-4 mono OGG variants.
+Mining hits reuse break, landing reuses step. Edit and rebuild/relaunch as usual.
+Find Echo Coral after Brown Mushroom Block in Natural Blocks.
+
+LYREN HEATH
+textures/block/lyren_heath.png supplies the sides and lyren_heath_top.png the top.
+Bottom uses vanilla End Stone. Uses standard stone sounds. Edit and rebuild/relaunch.

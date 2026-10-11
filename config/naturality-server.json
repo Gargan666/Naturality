@@ -1,0 +1,13 @@
+{
+  "sleepAcceleration": true,
+  "sleepMaxSpeed": 200,
+  "sleepRampSeconds": 30,
+  "sleepWakeAtMorning": true,
+  "portalIntroAnimation": true,
+  "fireWrapping": true,
+  "snowWrapping": true,
+  "snowCompaction": true,
+  "weatherThaw": true,
+  "weatherSnowAccumulation": true,
+  "vanillaPortalEntry": false
+}

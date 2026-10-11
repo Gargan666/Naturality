@@ -1,7 +1,7 @@
 {
   "replace": false,
   "values": [
-    "naturality:smooth_endstone",
-    "naturality:lirestone"
+    "naturality:smooth_endstone", "naturality:lyren_heath",
+    "naturality:lirestone", "naturality:smooth_lirestone"
   ]
 }

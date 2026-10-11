@@ -12,7 +12,14 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ServerGamePacketListenerImpl.class)
-public abstract class EndGravityServerMovementMixin {
+public abstract class EndGravityServerMovementMixin implements naturality.weather.GravityMovementAccess {
+    @Shadow private double firstGoodY;
+    @Shadow private double lastGoodY;
+    public void naturality$poseShift(double shift) {firstGoodY+=shift;lastGoodY+=shift;}
+    @Inject(method={"handlePlayerInput","handlePlayerCommand"},at=@At("TAIL"))
+    private void naturality$poseBeforeMovement(CallbackInfo ci) {
+        if(EndGravity.inverted(player))((naturality.weather.GravityPoseAccess)player).naturality$updateGravityPose();
+    }
     @Shadow public ServerPlayer player;
     @Shadow private boolean clientIsFloating;
     @Inject(method="tick",at=@At("HEAD"))

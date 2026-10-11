@@ -74,6 +74,23 @@ public final class PixelFogGameTest implements FabricClientGameTest {
                     throw new AssertionError("Fog screenshot must remain in the End");
             });
             context.takeScreenshot("pixel-fog-end-transparent");
+            // Boss environmental fog culls at 96 blocks even when the configured
+            // render distance is much farther away (Sodium uses that nearer limit).
+            context.runOnClient(client -> client.options.renderDistance().set(7));
+            context.waitTicks(20);
+            context.runOnClient(client -> {
+                if (!client.gui.hud.getBossOverlay().shouldCreateWorldFog())
+                    throw new AssertionError("Regression fixture must have active dragon boss fog");
+                var fog = client.gameRenderer.gameRenderState().levelRenderState.cameraRenderState.fogData;
+                if (!(fog.renderDistanceStart < fog.renderDistanceEnd
+                        && fog.renderDistanceEnd < fog.environmentalEnd
+                        && fog.renderDistanceEnd <= 80.0F))
+                    throw new AssertionError("End fade must finish before the 96-block boss/chunk cutoff: "
+                        + fog.renderDistanceStart + ".." + fog.renderDistanceEnd + ", environmental=" + fog.environmentalEnd);
+            });
+            context.takeScreenshot("pixel-fog-end-boss-chunk-boundary");
+            context.runOnClient(client -> client.options.renderDistance().set(5));
+            context.waitTicks(10);
             var fogConfig = naturality.config.NaturalityConfig.get().fog;
             boolean originalEnabled = fogConfig.enabled;
             int originalPixelSize = fogConfig.pixelSize;

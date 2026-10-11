@@ -1,0 +1,18 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "naturality:block/lyren_heath"
+      },
+      {
+        "model": "naturality:block/lyren_heath_top_90"
+      },
+      {
+        "model": "naturality:block/lyren_heath_top_180"
+      },
+      {
+        "model": "naturality:block/lyren_heath_top_270"
+      }
+    ]
+  }
+}

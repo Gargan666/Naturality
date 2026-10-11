@@ -24,10 +24,12 @@ public abstract class CloudRendererMixin {
     @Unique private final CloudLayerRenderer naturality$upper = new CloudLayerRenderer();
     @Unique private boolean naturality$active;
     @Unique private boolean naturality$upperFirst;
+    @Unique private CloudRenderer.@org.jspecify.annotations.Nullable TextureData naturality$coverageTexture;
 
     @Inject(method = "apply(Ljava/util/Optional;Lnet/minecraft/server/packs/resources/ResourceManager;Lnet/minecraft/util/profiling/ProfilerFiller;)V", at = @At("TAIL"))
     private void naturality$texture(Optional<CloudRenderer.TextureData> data, ResourceManager manager, ProfilerFiller profiler, CallbackInfo ci) {
         naturality$base.setTexture(data.orElse(null));
+        naturality$coverageTexture = data.orElse(null);
         naturality$upper.setTexture(data.orElse(null));
     }
 
@@ -35,6 +37,19 @@ public abstract class CloudRendererMixin {
     private void naturality$prepare(int color, CloudStatus status, float height, int range, Vec3 camera, long time, float partial, CallbackInfo ci) {
         var config = NaturalityConfig.get().clouds;
         naturality$active = config.enabled;
+        var texture = naturality$coverageTexture;
+        if (texture != null && status != CloudStatus.OFF) {
+            if (naturality$active) {
+                naturality.client.cloud.CloudSunOcclusion.add(texture, config.base, height, range, time, partial);
+                naturality.client.cloud.CloudSunOcclusion.add(texture, config.upper, height, range, time, partial);
+            } else {
+                var vanilla = new NaturalityConfig.CloudLayer();
+                vanilla.width = 12; vanilla.thickness = 4; vanilla.heightOffset = 0;
+                vanilla.offsetX = 0; vanilla.offsetZ = 0; vanilla.speedPercent = 100;
+                vanilla.opacityPercent = 80; vanilla.style = status == CloudStatus.FAST ? 2 : 1;
+                naturality.client.cloud.CloudSunOcclusion.add(texture, vanilla, height, range, time, partial);
+            }
+        }
         if (!naturality$active) return;
         naturality$base.prepare(color, status, height, range, camera, time, partial, config.base);
         naturality$upper.prepare(color, status, height, range, camera, time, partial, config.upper);

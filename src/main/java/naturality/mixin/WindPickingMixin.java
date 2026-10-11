@@ -27,6 +27,8 @@ public interface WindPickingMixin {
         if(best!=null && WindShapes.eligible(state) && !cell.contains(best.getLocation()))best=null;
         double distance=best==null?Double.POSITIVE_INFINITY:from.distanceToSqr(best.getLocation());
         BlockGetter level=(BlockGetter)this;
+        if(!naturality.util.RaycastShapePresence.mayContain(level,naturality.util.RaycastShapePresence.WIND,
+                pos.getX()-1,pos.getY(),pos.getZ()-1,pos.getX()+1,pos.getY(),pos.getZ()+1))return best;
         for(int dx=-1;dx<=1;dx++)for(int dz=-1;dz<=1;dz++) {
             if(dx==0 && dz==0)continue;
             var owner=pos.offset(dx,0,dz);var candidate=level.getBlockState(owner);

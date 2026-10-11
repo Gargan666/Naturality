@@ -13,7 +13,13 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(ChorusPlantBlock.class)
-public abstract class ChorusPlantMixin {
+public abstract class ChorusPlantMixin extends net.minecraft.world.level.block.Block {
+    protected ChorusPlantMixin(net.minecraft.world.level.block.state.BlockBehaviour.Properties properties) { super(properties); }
+
+    @Override
+    protected net.minecraft.world.level.block.SoundType getSoundType(BlockState state) {
+        return net.minecraft.world.level.block.SoundType.STEM;
+    }
     @Inject(method = "getStateWithConnections", at = @At("RETURN"), cancellable = true)
     private static void naturality$flowerBases(BlockGetter level, BlockPos pos, BlockState defaultState,
             CallbackInfoReturnable<BlockState> cir) {

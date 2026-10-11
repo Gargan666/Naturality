@@ -14,9 +14,10 @@ public final class GameplaySettings {
 
     public static GameplaySettingsPayload serverSettings() {
         var config = NaturalityServerConfig.get();
-        return new GameplaySettingsPayload(config.fireWrapping, config.vanillaPortalEntry, config.snowWrapping, config.snowCompaction, config.weatherThaw, config.weatherSnowAccumulation);
+        return new GameplaySettingsPayload(config.fireWrapping, config.vanillaPortalEntry, config.snowWrapping, config.snowCompaction, config.weatherThaw, config.weatherSnowAccumulation, config.sleepAcceleration, config.sleepMaxSpeed, config.sleepRampSeconds);
     }
 
+    public static GameplaySettingsPayload displayedSettings() { return clientSettings == null ? serverSettings() : clientSettings; }
     public static void setClientSettings(@org.jspecify.annotations.Nullable GameplaySettingsPayload settings) { clientSettings = settings; }
     public static boolean clientFireWrapping() {
         var settings = clientSettings;

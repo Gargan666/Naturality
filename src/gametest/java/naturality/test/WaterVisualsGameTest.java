@@ -14,7 +14,7 @@ public final class WaterVisualsGameTest implements FabricClientGameTest {
         sanitized.sanitize();
         if (sanitized.waterDarkDepth != 12 || sanitized.waterPixelSize != 16) throw new AssertionError("Water limits");
         var defaults = new com.google.gson.Gson().fromJson("{}", NaturalityConfig.Liquids.class);
-        if (!defaults.waterDepth || !defaults.waterShimmer || !defaults.waterDistortion || defaults.waterDarkDepth != 32)
+        if (!defaults.waterDepth || !defaults.waterShimmer || !defaults.waterDistortion || defaults.waterDarkDepth != new NaturalityConfig.Liquids().waterDarkDepth)
             throw new AssertionError("Old liquid configs must acquire water defaults");
         var previous = NaturalityConfig.get().liquids;
         boolean[] saved = new boolean[2];

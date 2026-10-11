@@ -34,6 +34,8 @@ public interface FirePickingMixin {
         if (!naturality.config.GameplaySettings.fireWrapping(level)) return;
         var context = FireGeometry.PICK_CONTEXT.get();
         if (context == null) return;
+        if (!naturality.util.RaycastShapePresence.mayContain(level,naturality.util.RaycastShapePresence.FIRE,
+                pos.getX()-1,pos.getY()-1,pos.getZ()-1,pos.getX()+1,pos.getY()+1,pos.getZ()+1)) return;
         BlockHitResult closest = cir.getReturnValue();
         double distance = closest == null ? Double.POSITIVE_INFINITY : closest.getLocation().distanceToSqr(from);
         for (BlockPos candidate : BlockPos.betweenClosed(pos.offset(-1, -1, -1), pos.offset(1, 1, 1))) {

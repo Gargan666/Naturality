@@ -26,16 +26,38 @@ public abstract class ReputationVillagerMixin {
     private void naturality$sleepDebt(ServerLevel level, CallbackInfo ci) {
         if (VillagerSleep.tick(level, (Villager)(Object)this)) ci.cancel();
     }
+    @com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation(method = "gossip", at = @At(value = "INVOKE",
+        target = "Lnet/minecraft/world/entity/ai/gossip/GossipContainer;transferFrom(Lnet/minecraft/world/entity/ai/gossip/GossipContainer;Lnet/minecraft/util/RandomSource;I)I"))
+    private int naturality$conversation(net.minecraft.world.entity.ai.gossip.GossipContainer listenerGossip,
+            net.minecraft.world.entity.ai.gossip.GossipContainer speakerGossip, net.minecraft.util.RandomSource random,
+            int count, com.llamalad7.mixinextras.injector.wrapoperation.Operation<Integer> original,
+            ServerLevel level, Villager speaker, long timestamp) {
+        var before = GossipReactions.snapshot(listenerGossip);
+        int result = original.call(listenerGossip, speakerGossip, random, count);
+        GossipReactions.transferred(level, (Villager)(Object)this, speaker, before);
+        return result;
+    }
+    @Inject(method = "tick", at = @At("TAIL"))
+    private void naturality$gossipSounds(CallbackInfo ci) {
+        var body = (Villager)(Object)this;
+        if (body.level() instanceof ServerLevel level) GossipReactions.tick(level, body);
+    }
+    @ModifyConstant(method = "gossip", constant = @Constant(longValue = 1200L), require = 2)
+    private long naturality$moreGossip(long original) {
+        return naturality.config.Feature.REPUTATION.enabled() ? 800L : original;
+    }
     @Shadow private void updateSpecialPrices(Player player) { throw new AssertionError(); }
     @Unique private int naturality$priceSignature = -1;
-    @Unique private static int naturality$signature(Player player) {
+    @Unique private static int naturality$signature(Villager body, Player player) {
         var hero = player.getEffect(MobEffects.HERO_OF_THE_VILLAGE);
-        return Reputation.score(player) + (hero == null ? 0 : 1000 + 100 * hero.getAmplifier());
+        return java.util.Objects.hash(player.getUUID(), Reputation.score(player),
+            body.getGossips().getReputation(player.getUUID(), type -> true), hero == null ? -1 : hero.getAmplifier());
     }
     @Inject(method = "customServerAiStep", at = @At("TAIL"))
     private void naturality$refreshPrices(ServerLevel level, CallbackInfo ci) {
+        GossipReactions.focus(level, (Villager)(Object)this);
         var trader = ((Villager)(Object)this).getTradingPlayer();
-        if (trader != null && naturality$signature(trader) != naturality$priceSignature) updateSpecialPrices(trader);
+        if (trader != null && naturality$signature((Villager)(Object)this, trader) != naturality$priceSignature) updateSpecialPrices(trader);
     }
     @Inject(method = "mobInteract", at = @At("HEAD"), cancellable = true)
     private void naturality$interact(Player player, InteractionHand hand, CallbackInfoReturnable<InteractionResult> cir) {
@@ -53,10 +75,13 @@ public abstract class ReputationVillagerMixin {
         var body = (Villager)(Object)this;
         var hero = player.getEffect(MobEffects.HERO_OF_THE_VILLAGE);
         double discount = hero == null ? 0 : .3F + .0625F * hero.getAmplifier();
+        int gossip = body.getGossips().getReputation(player.getUUID(), type -> true);
+        naturality$priceSignature = naturality$signature(body, player);
         var offers = body.getOffers();
         for (var offer : offers) {
             offer.resetSpecialPriceDiff();
             offer.addToSpecialPriceDiff(Reputation.priceDiff(offer.getBaseCostA().getCount(), Reputation.score(player)));
+            offer.addToSpecialPriceDiff(-net.minecraft.util.Mth.floor(gossip * offer.getPriceMultiplier()));
             if (discount > 0) offer.addToSpecialPriceDiff(-Math.max(1, (int)Math.floor(discount * offer.getBaseCostA().getCount())));
         }
         var trader = body.getTradingPlayer();
@@ -70,10 +95,7 @@ public abstract class ReputationVillagerMixin {
     @Inject(method = "rewardTradeXp", at = @At("TAIL"))
     private void naturality$trade(MerchantOffer offer, CallbackInfo ci) {
         var body = (Villager)(Object)this;
-        if (body.getTradingPlayer() != null) {
-
-            if (body.getTradingPlayer() != null) updateSpecialPrices(body.getTradingPlayer());
-        }
+        if (body.getTradingPlayer() != null) updateSpecialPrices(body.getTradingPlayer());
     }
     @Inject(method = "onReputationEventFrom", at = @At("HEAD"))
     private void naturality$cure(ReputationEventType type, Entity source, CallbackInfo ci) {
@@ -84,7 +106,7 @@ public abstract class ReputationVillagerMixin {
     }
     @Inject(method = "getPlayerReputation", at = @At("HEAD"), cancellable = true)
     private void naturality$gossipReplaced(Player player, CallbackInfoReturnable<Integer> cir) {
-        // Vanilla village defenders must not attack at the trade-refusal threshold.
+        // Prices read native gossip directly; defender checks retain the custom zero-score threshold.
         cir.setReturnValue(Reputation.score(player) == 0 ? -100 : 0);
     }
     @Inject(method = "wantsToPickUp", at = @At("HEAD"), cancellable = true)
@@ -99,6 +121,12 @@ public abstract class ReputationVillagerMixin {
     }
     @Inject(method = "handleEntityEvent", at = @At("HEAD"), cancellable = true)
     private void naturality$nod(byte event, CallbackInfo ci) {
+        if (event >= GossipReactions.LISTEN_POSITIVE && event <= GossipReactions.CONVERSE) {
+            var state = Reputation.state((Villager)(Object)this);
+            state.gossipStart = ((Villager)(Object)this).tickCount;
+            state.gossipReaction = event;
+            ci.cancel();
+        }
         if (event == Reputation.NOD_EVENT) {
             var body = (Villager)(Object)this;
             Reputation.state(body).nodStart = body.tickCount; ci.cancel();

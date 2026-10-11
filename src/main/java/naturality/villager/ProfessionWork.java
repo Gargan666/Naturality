@@ -206,7 +206,7 @@ public final class ProfessionWork extends Behavior<Villager> {
             return;
         }
         if (target.task == Task.FISH) {
-            var giftedRod = Reputation.state(body).rod;
+            var giftedRod = naturality.config.Feature.REPUTATION.enabled() ? Reputation.state(body).rod : ItemStack.EMPTY;
             if (tool.isEmpty() || !giftedRod.isEmpty() && !ItemStack.isSameItemSameComponents(tool, giftedRod))
                 equip(body, giftedRod.isEmpty() ? new ItemStack(Items.FISHING_ROD) : giftedRod.copy());
             if (bobber != null && bobber.isRemoved()) {

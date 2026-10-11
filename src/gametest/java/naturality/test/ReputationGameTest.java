@@ -86,6 +86,71 @@ public final class ReputationGameTest implements FabricClientGameTest {
                     check(offer.getCostA().getCount() == 20 + Reputation.priceDiff(20, reputation), "Price follows shared reputation");
                     player.closeContainer();
                 }
+                var gossipType = net.minecraft.world.entity.ai.gossip.GossipType.MINOR_NEGATIVE;
+                body.getGossips().add(player.getUUID(), gossipType, 25);
+                score(player, 50); body.mobInteract(player, InteractionHand.MAIN_HAND);
+                check(offer.getCostA().getCount() == 22, "Vanilla negative gossip raises prices alongside shared score");
+                player.closeContainer();
+                body.getGossips().decay();
+                body.mobInteract(player, InteractionHand.MAIN_HAND);
+                check(offer.getCostA().getCount() == 21, "Vanilla daily gossip decay reduces local penalty");
+                player.closeContainer();
+                body.getGossips().remove(player.getUUID(), gossipType);
+                body.getGossips().add(player.getUUID(), net.minecraft.world.entity.ai.gossip.GossipType.MAJOR_POSITIVE, 20);
+                body.getGossips().add(player.getUUID(), net.minecraft.world.entity.ai.gossip.GossipType.MINOR_POSITIVE, 25);
+                body.mobInteract(player, InteractionHand.MAIN_HAND);
+                check(offer.getCostA().getCount() == 14, "Vanilla cure gossip discounts are restored");
+                player.closeContainer();
+                var listener = villager(level, VillagerProfession.LIBRARIAN, 3.5);
+                listener.getRandom().setSeed(0);
+                listener.gossip(level, body, level.getGameTime() + 1200);
+                check(Reputation.state(listener).gossipReaction == GossipReactions.LISTEN_POSITIVE
+                    && Reputation.state(body).gossipReaction == GossipReactions.TELL_POSITIVE,
+                    "Positive gossip triggers separate listener nod and speaker upward bob reactions");
+                check(listener.getGossips().getReputation(player.getUUID(), type -> true) == 20,
+                    "Minor cure goodwill spreads with vanilla transfer decay; permanent cure goodwill stays personal");
+                listener.discard();
+                var negativeSpeaker = villager(level, VillagerProfession.LIBRARIAN, 4.5);
+                var negativeListener = villager(level, VillagerProfession.LIBRARIAN, 5.5);
+                negativeSpeaker.getGossips().add(player.getUUID(), net.minecraft.world.entity.ai.gossip.GossipType.MAJOR_NEGATIVE, 25);
+                negativeListener.gossip(level, negativeSpeaker, level.getGameTime() + 2400);
+                check(Reputation.state(negativeListener).gossipReaction == GossipReactions.LISTEN_NEGATIVE
+                    && Reputation.state(negativeSpeaker).gossipReaction == GossipReactions.TELL_NEGATIVE,
+                    "Negative gossip triggers listener disapproval and speaker downward bob reactions");
+                negativeSpeaker.tickCount += 120;
+                negativeSpeaker.getBrain().setMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.LOOK_TARGET,
+                    new net.minecraft.world.entity.ai.behavior.BlockPosTracker(player.blockPosition()));
+                GossipReactions.focus(level, negativeSpeaker);
+                check(negativeSpeaker.getBrain().getMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.LOOK_TARGET)
+                    .orElseThrow().currentBlockPosition().equals(negativeListener.blockPosition()),
+                    "Gossip remains focused on its partner after six seconds despite player look target");
+                negativeSpeaker.setTradingPlayer(player);
+                GossipReactions.focus(level, negativeSpeaker);
+                check(Reputation.state(negativeSpeaker).conversationPartner == null, "Trading can interrupt conversation focus");
+                negativeSpeaker.setTradingPlayer(null);
+                negativeSpeaker.discard(); negativeListener.discard();
+                var emptySpeaker = villager(level, VillagerProfession.LIBRARIAN, 4.5);
+                var emptyListener = villager(level, VillagerProfession.LIBRARIAN, 5.5);
+                emptyListener.gossip(level, emptySpeaker, level.getGameTime() + 2400);
+                check(Reputation.state(emptyListener).gossipReaction == 0 && Reputation.state(emptySpeaker).gossipReaction == 0,
+                    "Empty gossip exchanges do not invent emotional reactions");
+                emptySpeaker.getBrain().setMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.INTERACTION_TARGET, emptyListener);
+                emptySpeaker.playAmbientSound();
+                check(Reputation.state(emptySpeaker).gossipReaction == GossipReactions.CONVERSE,
+                    "Normal nearby villager conversation gives the speaking villager a gentle bob");
+                emptySpeaker.tickCount += 80;
+                GossipReactions.focus(level, emptySpeaker);
+                check(Reputation.state(emptySpeaker).conversationPartner != null,
+                    "Ordinary conversation remains active after four seconds");
+                emptySpeaker.tickCount += 20;
+                GossipReactions.focus(level, emptySpeaker);
+                check(Reputation.state(emptySpeaker).conversationPartner == null, "Ordinary conversation focus expires after five seconds");
+                emptySpeaker.discard(); emptyListener.discard();
+                for (int day = 0; day < 30; day++) body.getGossips().decay();
+                check(body.getGossips().getReputation(player.getUUID(), type -> true) == 100,
+                    "Permanent cure goodwill survives daily decay");
+                body.getGossips().remove(player.getUUID(), net.minecraft.world.entity.ai.gossip.GossipType.MAJOR_POSITIVE);
+                check(Reputation.score(player) == 50, "Gossip transfer and decay do not duplicate shared-score rewards or penalties");
                 score(player, 10); body.mobInteract(player, InteractionHand.MAIN_HAND);
                 check(body.getTradingPlayer() == null, "Trading refused at ten");
                 score(player, 50); body.mobInteract(player, InteractionHand.MAIN_HAND);
@@ -93,6 +158,18 @@ public final class ReputationGameTest implements FabricClientGameTest {
                 menu.getSlot(0).set(new ItemStack(Items.EMERALD, 20));
                 menu.clicked(2, 0, ContainerInput.PICKUP, player);
                 check(Reputation.score(player) == 50, "Completed trade earns no reputation"); player.closeContainer();
+                body.mobInteract(player, InteractionHand.MAIN_HAND);
+                for (int trade = 0; trade < 20; trade++) body.onReputationEventFrom(ReputationEventType.TRADE, player);
+                check(Reputation.score(player) == 50 && offer.getCostA().getCount() == 19,
+                    "Vanilla trading goodwill refreshes open prices without granting shared score");
+                player.closeContainer();
+                var gossipSave = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, level.registryAccess());
+                body.saveWithoutId(gossipSave);
+                var gossipReload = new Villager(EntityTypes.VILLAGER, level);
+                gossipReload.load(TagValueInput.create(ProblemReporter.DISCARDING, level.registryAccess(), gossipSave.buildResult()));
+                check(gossipReload.getGossips().getReputation(player.getUUID(), type -> true) == 25,
+                    "Native local gossip persists alongside custom villager state");
+                body.getGossips().remove(player.getUUID(), net.minecraft.world.entity.ai.gossip.GossipType.TRADING);
                 score(player, 100); Reputation.change(player, 1);
                 check(player.hasEffect(MobEffects.HERO_OF_THE_VILLAGE) && player.getEffect(MobEffects.HERO_OF_THE_VILLAGE).getDuration() == 1200,
                     "Gain at existing maximum gives one minute of hero");
@@ -154,10 +231,27 @@ public final class ReputationGameTest implements FabricClientGameTest {
                 level.setBlockAndUpdate(bed, Blocks.BED.pick(DyeColor.RED).defaultBlockState()
                     .setValue(net.minecraft.world.level.block.AbstractBedBlock.PART, net.minecraft.world.level.block.state.properties.BedPart.HEAD));
                 level.setBlockAndUpdate(bed.south(), Blocks.BED.pick(DyeColor.RED).defaultBlockState());
+                var wakeWitness = villager(level, VillagerProfession.LIBRARIAN, 3.5);
+                wakeWitness.setUnhappyCounter(0);
                 sleeper.startSleeping(bed);
                 level.getBlockState(bed).useWithoutItem(level, player,
                     new net.minecraft.world.phys.BlockHitResult(net.minecraft.world.phys.Vec3.atCenterOf(bed), Direction.UP, bed, false));
                 check(!sleeper.isSleeping() && Reputation.score(player) == 49, "Actually waking a sleeper costs one");
+                check(wakeWitness.getUnhappyCounter() == 0 && wakeWitness.getGossips().getReputation(player.getUUID(), type -> true) == 0,
+                    "Night waking initially upsets only the sleeper, not nearby villagers");
+                check(sleeper.getGossips().getReputation(player.getUUID(), type -> true) == -25,
+                    "Sleeper remembers the disturbance as negative gossip");
+                long gossipTime = level.getGameTime() + 1200;
+                wakeWitness.gossip(level, sleeper, gossipTime);
+                check(wakeWitness.getGossips().getReputation(player.getUUID(), type -> true) < 0 && Reputation.score(player) == 49,
+                    "Wake-up complaint spreads later through gossip without another score penalty");
+                var newSubject = UUID.randomUUID();
+                sleeper.getGossips().add(newSubject, net.minecraft.world.entity.ai.gossip.GossipType.MINOR_NEGATIVE, 25);
+                wakeWitness.gossip(level, sleeper, gossipTime + 799);
+                check(wakeWitness.getGossips().getReputation(newSubject, type -> true) == 0, "Gossip interval still prevents premature transfers");
+                wakeWitness.gossip(level, sleeper, gossipTime + 800);
+                check(wakeWitness.getGossips().getReputation(newSubject, type -> true) < 0, "Gossip repeats after 800 ticks instead of 1200");
+                wakeWitness.discard();
                 check(Reputation.tradeBlocked(sleeper, player), "Force-woken villager refuses until morning");
                 var output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, level.registryAccess()); sleeper.saveWithoutId(output);
                 var restored = new Villager(EntityTypes.VILLAGER, level);

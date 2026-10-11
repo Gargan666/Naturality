@@ -25,7 +25,8 @@ public abstract class SunBeamsMixin {
 
     @Inject(method = "renderSun", at = @At("HEAD"))
     private void naturality$beams(RenderPass pass, float rainBrightness, PoseStack pose, CallbackInfo ci) {
-        if (!naturality.config.NaturalityConfig.get().effects.sunBeams) return;
+        var settings = naturality.config.NaturalityConfig.get().effects;
+        if (!settings.sunBeams && !settings.cameraFlare) return;
         var effect = naturality$beams;
         if (effect == null) { effect = new SunBeams(); naturality$beams = effect; }
         effect.render(pass, pose, naturality$sunAngle, rainBrightness,

@@ -15,7 +15,9 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(Player.class)
-public abstract class EndGravityPlayerMixin {
+public abstract class EndGravityPlayerMixin implements naturality.weather.GravityPoseAccess {
+    @org.spongepowered.asm.mixin.gen.Invoker("updatePlayerPose")
+    public abstract void naturality$updateGravityPose();
     @WrapMethod(method="maybeBackOffFromEdge")
     private Vec3 naturality$ceilingEdge(Vec3 delta,
             MoverType type,

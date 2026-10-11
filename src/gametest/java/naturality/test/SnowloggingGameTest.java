@@ -158,7 +158,7 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                     level.setBlock(modelSupport,rod.defaultBlockState().setValue(
                         net.minecraft.world.level.block.state.properties.BlockStateProperties.FACING,facing),18);
                     var boxes=naturality.snow.SnowSupportModels.boxes(level,modelSupport);
-                    check(boxes.size()==2,"Rod snow uses separate model head and shaft");
+                    check(!boxes.isEmpty(),"Rod snow uses the upward faces actually present in its model");
                     var surfaces=SnowGeometry.surfaces(level,modelSupport.above());
                     check(!surfaces.isEmpty(),"All rod orientations can hold snow");
                     if(facing.getAxis()!=Direction.Axis.Y) {
@@ -171,6 +171,20 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                 level.setBlock(modelSupport,Blocks.LANTERN.defaultBlockState(),18);
                 near(SnowGeometry.surfaces(level,modelSupport.above()).stream().mapToDouble(p->p.y()).max().orElseThrow(),
                     -7.0/16,"Lantern snow rests on metal cap, not handle hitbox");
+                level.removeBlock(modelSupport,false);
+                level.setBlock(modelSupport,Blocks.BREWING_STAND.defaultBlockState(),18);
+                var brewing=naturality.snow.SnowSupportModels.boxes(level,modelSupport);
+                check(brewing.stream().anyMatch(b->Math.abs(b.maxY-14.0/16)<1e-5
+                    && Math.abs(b.maxX-b.minX-2.0/16)<1e-5),
+                    "Brewing stand snow follows the model's narrow pole");
+                check(brewing.stream().filter(b->Math.abs(b.maxY-2.0/16)<1e-5).count()==3,
+                    "Brewing stand snow follows its three modeled feet rather than the broad selection base");
+                level.setBlock(modelSupport,Blocks.COBBLESTONE_WALL.defaultBlockState(),18);
+                near(naturality.snow.SnowSupportModels.boxes(level,modelSupport).stream().mapToDouble(b->b.maxY).max().orElseThrow(),
+                    1,"Wall snow uses the one-block model height instead of its tall collision post");
+                level.setBlock(modelSupport,Blocks.CHEST.defaultBlockState(),18);
+                near(naturality.snow.SnowSupportModels.boxes(level,modelSupport).getFirst().maxY,14.0/16,
+                    "Block-entity snow uses the chest lid model height");
                 level.removeBlock(modelSupport,false);
                 var removal = new BlockPos(11,100,7);
                 for(var support:new net.minecraft.world.level.block.state.BlockState[]{
@@ -303,13 +317,13 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                 near(cactusPatches.stream().mapToDouble(p->p.y()).max().orElseThrow(),0,
                     "Cactus cap sits on its top face");
                 check(cactusPatches.stream().anyMatch(p->Math.abs(p.y())<1e-5
-                    && Math.abs(p.x()-.0625F)<1e-5 && Math.abs(p.z()-.0625F)<1e-5
-                    && Math.abs(p.ux()-.875F)<1e-5 && Math.abs(p.vz()-.875F)<1e-5),
-                    "Cactus cap matches its inset outline");
+                    && Math.abs(p.x())<1e-5 && Math.abs(p.z())<1e-5
+                    && Math.abs(p.ux()-1)<1e-5 && Math.abs(p.vz()-1)<1e-5),
+                    "Cactus cap matches its full rendered top rather than the inset hitbox");
                 near(cactusPatches.stream().mapToDouble(p->p.y()).min().orElseThrow(),-3,
                     "Cactus snow still reaches sand at its base");
                 check(SnowGeometry.shape(level,caneSnow,1).toAabbs().stream()
-                    .anyMatch(b->Math.abs(b.minX-.0625)<1e-5 && Math.abs(b.maxX-.9375)<1e-5
+                    .anyMatch(b->Math.abs(b.minX)<1e-5 && Math.abs(b.maxX-1)<1e-5
                         && Math.abs(b.minY)<1e-5),"Cactus snow cap has fitted selection geometry");
                 check(level.getBlockState(caneBase.above(3)).is(Blocks.CACTUS),"Snow preserves cactus");
                 var fenceColumn=new BlockPos(9,100,6);
@@ -602,8 +616,7 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                     final int index=segment;
                     client.getModelManager().getBlockStateModelSet().get(state).emitQuads(
                         net.fabricmc.fabric.api.client.renderer.v1.Renderer.get().quadEmitter(q->{
-                            if(q.u(0)>=overlaySprite.getU0() && q.u(0)<overlaySprite.getU1()
-                                && q.v(0)>=overlaySprite.getV0() && q.v(0)<overlaySprite.getV1())fenceOverlays[index]++;
+                            if(naturality.client.snow.SnowTextureAtlas.isCompositeUv(q.u(0),q.v(0)))fenceOverlays[index]++;
                         }),client.level,pos,state,net.minecraft.util.RandomSource.create(0),d->false);
                 }
                 check(fenceOverlays[0]==0 && fenceOverlays[1]==0 && fenceOverlays[2]>0,
@@ -617,8 +630,7 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                     final int index=half;
                     client.getModelManager().getBlockStateModelSet().get(state).emitQuads(
                         net.fabricmc.fabric.api.client.renderer.v1.Renderer.get().quadEmitter(q->{
-                            if(q.u(0)>=overlaySprite.getU0() && q.u(0)<overlaySprite.getU1()
-                                && q.v(0)>=overlaySprite.getV0() && q.v(0)<overlaySprite.getV1())grassOverlays[index]++;
+                            if(naturality.client.snow.SnowTextureAtlas.isCompositeUv(q.u(0),q.v(0)))grassOverlays[index]++;
                         }),client.level,pos,state,net.minecraft.util.RandomSource.create(0),d->false);
                 }
                 check(grassOverlays[0]==0 && grassOverlays[1]>0,
@@ -656,22 +668,48 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                     net.minecraft.client.renderer.texture.TextureAtlas.LOCATION_BLOCKS,
                     net.minecraft.resources.Identifier.fromNamespaceAndPath("naturality","block/snow_overlay")));
                 int[] count={0};var starts=new java.util.HashSet<Integer>();
+                var source=client.getAtlasManager().get(new net.minecraft.client.resources.model.sprite.SpriteId(
+                    naturality.client.AtlasLocations.BLOCKS,net.minecraft.resources.Identifier.withDefaultNamespace("block/fern")));
+                var original=((naturality.client.snow.SnowSpritePixels)source.contents()).naturality$image();
+                int fernTint=client.getBlockColors().getTintSource(fern,0).colorInWorld(fern,client.level,new BlockPos(10,100,-3));
+                var basePositions=new java.util.ArrayList<java.util.List<Float>>();
+                boolean oldOverlays=naturality.config.NaturalityConfig.get().effects.snowOverlays;
+                naturality.config.NaturalityConfig.get().effects.snowOverlays=false;
+                try {
+                    model.emitQuads(net.fabricmc.fabric.api.client.renderer.v1.Renderer.get().quadEmitter(q->{
+                        var positions=new java.util.ArrayList<Float>();
+                        for(int i=0;i<4;i++){positions.add(q.x(i));positions.add(q.y(i));positions.add(q.z(i));}
+                        basePositions.add(positions);
+                    }),client.level,new BlockPos(10,100,-3),fern,net.minecraft.util.RandomSource.create(0),d->false);
+                } finally { naturality.config.NaturalityConfig.get().effects.snowOverlays=oldOverlays; }
+                var snowPositions=new java.util.ArrayList<java.util.List<Float>>();
                 var sink=net.fabricmc.fabric.api.client.renderer.v1.Renderer.get().quadEmitter(q -> {
-                    if(q.u(0)<sprite.getU0() || q.u(0)>=sprite.getU1() || q.v(0)<sprite.getV0() || q.v(0)>=sprite.getV1())return;
+                    var positions=new java.util.ArrayList<Float>();
+                    for(int i=0;i<4;i++){positions.add(q.x(i));positions.add(q.y(i));positions.add(q.z(i));}
+                    snowPositions.add(positions);
+                    var composite=naturality.client.snow.SnowTextureAtlas.findComposite(q.u(0),q.v(0));
+                    if(composite==null)return;
                     count[0]++;
-                    for(int i=1;i<4;i++) {
-                        near(q.u(i),q.u(0),"Each foliage texel has one overlay U sample");
-                        near(q.v(i),q.v(0),"Each foliage texel has one overlay V sample");
+                    var pixels=((naturality.client.snow.SnowSpritePixels)composite.contents()).naturality$image();
+                    check(pixels.getWidth()==original.getWidth() && pixels.getHeight()==original.getHeight(),
+                        "Composited snow keeps the foliage texture resolution");
+                    for(int y=0;y<original.getHeight();y++)for(int x=0;x<original.getWidth();x++)
+                        check((pixels.getPixel(x,y)>>>24)==(original.getPixel(x,y)>>>24),"Snow preserves every foliage cutout texel");
+                    for(int x=0;x<original.getWidth();x++)for(int y=0;y<original.getHeight();y++)if((original.getPixel(x,y)>>>24)!=0) {
+                        starts.add(y);
+                        int base=original.getPixel(x,y);
+                        int tinted=(((base>>>16)&255)*((fernTint>>>16)&255)/255)<<16
+                            |(((base>>>8)&255)*((fernTint>>>8)&255)/255)<<8|(base&255)*(fernTint&255)/255;
+                        check((pixels.getPixel(x,y)&0xFFFFFF)!=tinted,
+                            "Snow starts at the highest opaque texel of each foliage column");
+                        break;
                     }
-                    near(Math.abs(q.y(0)-q.y(1)),1.0/16,"Overlay raster matches fern pixel height");
-                    near(q.y(0)*16,Math.round(q.y(0)*16),"Overlay vertices align to fern texel rows");
-                    float v=(q.v(0)-sprite.getV0())/(sprite.getV1()-sprite.getV0());
-                    if(v<1F/16)starts.add(Math.round(q.y(0)*16));
                 });
                 model.emitQuads(sink,client.level,new BlockPos(10,100,-3),fern,
                     net.minecraft.util.RandomSource.create(0),d->false);
-                check(count[0]>0,"Fern produces snow overlay texels");
-                check(starts.size()>1,"Overlay columns start at independent foliage heights");
+                check(count[0]>0,"Fern uses a composited snow texture");
+                check(basePositions.equals(snowPositions),"Snow keeps the original foliage faces and exact vertex positions");
+                check(starts.size()>1,"Snow follows independently offset foliage columns");
             });
             server.runCommand("setblock -6 100 6 end_rod[facing=east]");
             server.runCommand("setblock -6 101 6 snow");
@@ -688,6 +726,10 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
             server.runCommand("setblock -7 101 10 snow");
             server.runCommand("setblock -6 101 10 stone_slab[type=bottom]");
             server.runCommand("setblock -7 101 9 stone_slab[type=top]");
+            server.runCommand("setblock -9 100 10 prismarine");
+            server.runCommand("setblock -9 101 10 snow");
+            server.runCommand("setblock -10 100 10 glass");
+            server.runCommand("setblock -10 101 10 snow");
             world.getConnection().waitForClientboundPackets();
             context.runOnClient(client -> {
                 var ordinary=new BlockPos(11,100,6);
@@ -706,23 +748,29 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                     net.minecraft.resources.Identifier.fromNamespaceAndPath("naturality","block/snow_overlay")));
                 client.getModelManager().getBlockStateModelSet().get(buriedState).emitQuads(
                     net.fabricmc.fabric.api.client.renderer.v1.Renderer.get().quadEmitter(q->{
-                        if(q.u(0)>=overlaySprite.getU0() && q.u(0)<overlaySprite.getU1()
-                            && q.v(0)>=overlaySprite.getV0() && q.v(0)<overlaySprite.getV1())buriedOverlay[0]++;
+                        if(naturality.client.snow.SnowTextureAtlas.isCompositeUv(q.u(0),q.v(0)))buriedOverlay[0]++;
                     }),client.level,buried,buriedState,net.minecraft.util.RandomSource.create(0),d->true);
                 check(buriedOverlay[0]==0,"Culled support faces generate no hidden snow overlay quads");
                 var overhangSupport=new BlockPos(-7,100,10);
                 var overhangState=client.level.getBlockState(overhangSupport);
                 int[] edgeOverlays=new int[Direction.values().length];
                 float[] overlayURange={Float.POSITIVE_INFINITY,Float.NEGATIVE_INFINITY};
+                float[] cornerEdges={Float.POSITIVE_INFINITY,Float.POSITIVE_INFINITY};
                 client.getModelManager().getBlockStateModelSet().get(overhangState).emitQuads(
                     net.fabricmc.fabric.api.client.renderer.v1.Renderer.get().quadEmitter(q->{
-                        if(q.u(0)>=overlaySprite.getU0() && q.u(0)<overlaySprite.getU1()
-                            && q.v(0)>=overlaySprite.getV0() && q.v(0)<overlaySprite.getV1())
+                        if(naturality.client.snow.SnowTextureAtlas.isCompositeUv(q.u(0),q.v(0)))
                         {
                             edgeOverlays[q.lightFace().ordinal()]++;
+                            for(int vertex=0;vertex<4;vertex++) {
+                                if(q.lightFace()==Direction.NORTH)cornerEdges[0]=Math.min(cornerEdges[0],q.x(vertex));
+                                if(q.lightFace()==Direction.WEST)cornerEdges[1]=Math.min(cornerEdges[1],q.z(vertex));
+                            }
                             if(q.lightFace()==Direction.WEST)for(int vertex=0;vertex<4;vertex++) {
-                                overlayURange[0]=Math.min(overlayURange[0],q.u(vertex));
-                                overlayURange[1]=Math.max(overlayURange[1],q.u(vertex));
+                                var composite=naturality.client.snow.SnowTextureAtlas.findComposite(q.u(0),q.v(0));
+                                check(composite!=null,"Snowy wall uses a composite sprite");
+                                float u=(q.u(vertex)-composite.getU0())/(composite.getU1()-composite.getU0());
+                                overlayURange[0]=Math.min(overlayURange[0],u);
+                                overlayURange[1]=Math.max(overlayURange[1],u);
                             }
                         }
                     }),client.level,overhangSupport,overhangState,net.minecraft.util.RandomSource.create(0),d->false);
@@ -730,8 +778,37 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                     "Roof slab hiding a snow edge suppresses the overlay on the exposed wall below");
                 check(edgeOverlays[Direction.WEST.ordinal()]>0 && edgeOverlays[Direction.NORTH.ordinal()]>0,
                     "Exposed snow edges retain overlays, including gaps below high overhangs");
-                check((overlayURange[1]-overlayURange[0])/(overlaySprite.getU1()-overlaySprite.getU0())>.9F,
+                check(overlayURange[1]-overlayURange[0]>.9F,
                     "Clipped overlay strips collectively use the full sprite width instead of repeating its first column");
+                near(cornerEdges[0],0,"Snow uses the original north face corner");
+                near(cornerEdges[1],0,"Snow uses the original west face corner");
+                var animatedPos=new BlockPos(-9,100,10);
+                var animatedState=client.level.getBlockState(animatedPos);
+                int[] animatedFaces={0};
+                client.getModelManager().getBlockStateModelSet().get(animatedState).emitQuads(
+                    net.fabricmc.fabric.api.client.renderer.v1.Renderer.get().quadEmitter(q->{
+                        var composite=naturality.client.snow.SnowTextureAtlas.findComposite(q.u(0),q.v(0));
+                        if(composite==null)return;
+                        animatedFaces[0]++;
+                        check(composite.isAnimated(),"Snow preserves the underlying prismarine animation");
+                        var pixels=((naturality.client.snow.SnowSpritePixels)composite.contents()).naturality$image();
+                        check(pixels.getHeight()>composite.contents().height(),"All animated frames are retained in the composite");
+                    }),client.level,animatedPos,animatedState,net.minecraft.util.RandomSource.create(0),d->false);
+                check(animatedFaces[0]>0,"Animated block sides receive composited snow");
+                var glassPos=new BlockPos(-10,100,10);var glassState=client.level.getBlockState(glassPos);
+                var glassSprite=client.getAtlasManager().get(new net.minecraft.client.resources.model.sprite.SpriteId(
+                    naturality.client.AtlasLocations.BLOCKS,net.minecraft.resources.Identifier.withDefaultNamespace("block/glass")));
+                var glassPixels=((naturality.client.snow.SnowSpritePixels)glassSprite.contents()).naturality$image();
+                int[] paintedGlass={0};
+                client.getModelManager().getBlockStateModelSet().get(glassState).emitQuads(
+                    net.fabricmc.fabric.api.client.renderer.v1.Renderer.get().quadEmitter(q->{
+                        var composite=naturality.client.snow.SnowTextureAtlas.findComposite(q.u(0),q.v(0));
+                        if(composite==null)return;
+                        var pixels=((naturality.client.snow.SnowSpritePixels)composite.contents()).naturality$image();
+                        for(int y=0;y<glassPixels.getHeight();y++)for(int x=0;x<glassPixels.getWidth();x++)
+                            if((glassPixels.getPixel(x,y)>>>24)==0 && (pixels.getPixel(x,y)>>>24)>0)paintedGlass[0]++;
+                    }),client.level,glassPos,glassState,net.minecraft.util.RandomSource.create(0),d->false);
+                check(paintedGlass[0]>0,"Ordinary glass receives opaque snow even over clear texture pixels");
                 var state=Blocks.SNOW.defaultBlockState();
                 var wrapped=client.getModelManager().getBlockStateModelSet().get(state);
                 for(boolean smooth:new boolean[]{false,true}) {
@@ -759,6 +836,20 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                     check(java.util.Arrays.equals(lighting[0],lighting[1]),
                         "Displaced snow matches normal snow AO and lightmap at the same physical cell (smooth="+smooth+")");
                 }
+            });
+            var reload=new java.util.concurrent.atomic.AtomicReference<java.util.concurrent.CompletableFuture<Void>>();
+            context.runOnClient(client->reload.set(client.reloadResourcePacks()));
+            context.waitFor(client->reload.get().isDone());
+            reload.get().join();
+            world.getConnection().waitForChunksRender();context.waitTicks(5);
+            context.runOnClient(client->{
+                var pos=new BlockPos(10,100,-3);var state=client.level.getBlockState(pos);
+                int[] composed={0};
+                client.getModelManager().getBlockStateModelSet().get(state).emitQuads(
+                    net.fabricmc.fabric.api.client.renderer.v1.Renderer.get().quadEmitter(q->{
+                        if(naturality.client.snow.SnowTextureAtlas.isCompositeUv(q.u(0),q.v(0)))composed[0]++;
+                    }),client.level,pos,state,net.minecraft.util.RandomSource.create(0),d->false);
+                check(composed[0]>0,"Snowy sprite variants are rebuilt after resource reload");
             });
         }
     }

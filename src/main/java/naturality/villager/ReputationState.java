@@ -15,6 +15,9 @@ public final class ReputationState {
     public net.minecraft.core.BlockPos sleepBed;
     public int bedSearchTick = -1;
     public int nodStart = -100;
+    public int gossipStart = -100;
+    public byte gossipReaction;
+    public UUID conversationPartner;
     public boolean fleeing;
     public UUID fearedPlayer;
     public net.minecraft.world.phys.Vec3 escapeTarget;

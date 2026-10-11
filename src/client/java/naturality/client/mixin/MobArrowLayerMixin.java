@@ -30,5 +30,13 @@ public abstract class MobArrowLayerMixin<T extends LivingEntity, S extends Livin
     private void naturality$extractArrows(T entity, S state, float partialTicks, CallbackInfo ci) {
         ((EmbeddedArrowState)state).naturality$setArrowCount(entity.getArrowCount());
         ((EmbeddedArrowState)state).naturality$setArrowSeed(entity.getId());
+        ((EmbeddedArrowState)state).naturality$setImpacts(naturality.client.entity.MobArrowImpacts.impacts(entity));
+    }
+
+    @Inject(method = "submit", at = @At("HEAD"))
+    private void naturality$origin(S state, com.mojang.blaze3d.vertex.PoseStack stack,
+            net.minecraft.client.renderer.SubmitNodeCollector collector,
+            net.minecraft.client.renderer.state.level.CameraRenderState camera, CallbackInfo ci) {
+        ((EmbeddedArrowState)state).naturality$origin().set(stack.last().pose());
     }
 }

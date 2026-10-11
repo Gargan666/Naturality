@@ -19,6 +19,7 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 public final class FractionalLightField {
     private static final Direction[] DIRECTIONS = Direction.values();
     private final ClientLevel level;
+    private final BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
     private final Long2ObjectOpenHashMap<BlockState> blocks = new Long2ObjectOpenHashMap<>();
     private final LongArrayFIFOQueue[] queues = new LongArrayFIFOQueue[241];
     private final Long2IntOpenHashMap seeds = new Long2IntOpenHashMap();
@@ -56,7 +57,7 @@ public final class FractionalLightField {
     public Long2IntOpenHashMap seeds() { return seeds; }
 
     public Long2IntOpenHashMap propagate() {
-        for (int value = 240; value > 0; value--) {
+        for (int value = 240; value > 16; value--) {
             var queue = queues[value];
             if (queue == null) continue;
             while (!queue.isEmpty()) {
@@ -79,6 +80,8 @@ public final class FractionalLightField {
     private void offer(long position, int value) {
         if (value <= light.get(position)) return;
         light.put(position, value);
+        // These cells remain lit, but cannot pass even one minimum-cost edge.
+        if (value <= 16) return;
         if (queues[value] == null) queues[value] = new LongArrayFIFOQueue();
         queues[value].enqueue(position);
     }
@@ -86,7 +89,7 @@ public final class FractionalLightField {
     private BlockState block(long key) {
         var cached = blocks.get(key);
         if (cached != null) return cached;
-        var pos = BlockPos.of(key);
+        var pos = cursor.set(BlockPos.getX(key), BlockPos.getY(key), BlockPos.getZ(key));
         // Build limits constrain terrain, not entity light. Loaded columns have
         // open air above/below their terrain and can still contain flying entities.
         var result = !naturality.util.LoadedChunks.has(level, pos)

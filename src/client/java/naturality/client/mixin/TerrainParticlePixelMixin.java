@@ -22,6 +22,7 @@ public abstract class TerrainParticlePixelMixin extends SingleQuadParticle imple
     @Unique private int naturality$cropStartY;
     @Unique private int naturality$cropWidth;
     @Unique private int naturality$cropHeight;
+    @Unique private int naturality$initialHoles;
     @Unique private BitSet naturality$removedPixels = new BitSet();
 
     protected TerrainParticlePixelMixin(ClientLevel level, double x, double y, double z,
@@ -54,6 +55,7 @@ public abstract class TerrainParticlePixelMixin extends SingleQuadParticle imple
         naturality$removedPixels = new BitSet();
         int cells = naturality$cropWidth * naturality$cropHeight;
         int holes = random.nextInt(Math.min(4, cells) + 1);
+        naturality$initialHoles = holes;
         while (naturality$removedPixels.cardinality() < holes) {
             naturality$removedPixels.set(random.nextInt(cells));
         }
@@ -103,6 +105,16 @@ public abstract class TerrainParticlePixelMixin extends SingleQuadParticle imple
     @Override @Unique public int naturality$cropWidth() { return naturality$cropWidth; }
     @Override @Unique public int naturality$cropHeight() { return naturality$cropHeight; }
     @Override @Unique public boolean naturality$isPixelRemoved(int x, int y) {
+        // Gradually erode the remaining texels after the first fifth of life,
+        // reaching an empty fragment at 95% of its lifetime.
+        int cells = naturality$cropWidth * naturality$cropHeight;
+        float progress = lifetime - age <= 1 ? 1
+            : Math.clamp((age / (float) Math.max(1, lifetime) - 0.2F) / 0.75F, 0, 1);
+        int holes = naturality$initialHoles
+            + (int) Math.floor((cells - naturality$initialHoles) * progress);
+        while (naturality$removedPixels.cardinality() < holes) {
+            naturality$removedPixels.set(random.nextInt(cells));
+        }
         return naturality$removedPixels.get(y * naturality$cropWidth + x);
     }
 }

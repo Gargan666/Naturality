@@ -30,6 +30,8 @@ public interface SnowPickingMixin {
         if (!naturality.config.GameplaySettings.snowWrapping((BlockGetter)this)) return;
         var context=SnowGeometry.PICK.get(); if(context==null)return;
         BlockGetter level=(BlockGetter)this;
+        if(!naturality.util.RaycastShapePresence.mayContain(level,naturality.util.RaycastShapePresence.SNOW,
+                pos.getX(),pos.getY()+1,pos.getZ(),pos.getX(),pos.getY()+SnowGeometry.MAX_DEPTH,pos.getZ()))return;
         var best=cir.getReturnValue(); double distance=best==null?Double.POSITIVE_INFINITY:best.getLocation().distanceToSqr(from);
         for(int offset=1;offset<=SnowGeometry.MAX_DEPTH;offset++) {
             var owner=pos.above(offset);var snow=level.getBlockState(owner);if(!snow.is(Blocks.SNOW)) { if(offset>=2 && !SnowGeometry.exposesGround(level,owner)) break; continue; }

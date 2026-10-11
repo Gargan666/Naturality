@@ -62,10 +62,13 @@ public final class Reputation {
         change(player, amount, player.position());
     }
     public static void change(Player player, int amount, net.minecraft.world.phys.Vec3 origin) {
+        change(player, amount, origin, true);
+    }
+    private static void change(Player player, int amount, net.minecraft.world.phys.Vec3 origin, boolean notifyNearby) {
         if (!(player.level() instanceof ServerLevel level)) return;
         var data = ReputationData.get(level.getServer());
         int before = data.score(player.getUUID()), after = data.change(player.getUUID(), amount);
-        if (amount < 0) upset(level, origin);
+        if (amount < 0 && notifyNearby) upset(level, origin);
         if (amount > 0 && before == 100) player.addEffect(new MobEffectInstance(MobEffects.HERO_OF_THE_VILLAGE, 1200, 0));
         if (after <= 10 && player instanceof ServerPlayer serverPlayer && player.containerMenu instanceof MerchantMenu) serverPlayer.closeContainer();
     }
@@ -83,7 +86,11 @@ public final class Reputation {
     public static void forceWoken(Villager body, Player player) {
         long time = body.level().getOverworldClockTime();
         if (Math.floorMod(time, 24000) >= 12000) {
-            change(player, -1, body.position());
+            change(player, -1, body.position(), false);
+            body.setUnhappyCounter(40);
+            body.makeSound(SoundEvents.VILLAGER_NO);
+            ((ServerLevel)body.level()).broadcastEntityEvent(body, (byte)13);
+            body.getGossips().add(player.getUUID(), net.minecraft.world.entity.ai.gossip.GossipType.MINOR_NEGATIVE, 25);
             state(body).wakeUntil = (Math.floorDiv(time, 24000) + 1) * 24000;
         }
     }

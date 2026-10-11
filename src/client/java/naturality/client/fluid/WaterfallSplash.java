@@ -27,6 +27,7 @@ public final class WaterfallSplash {
     private static @org.jspecify.annotations.Nullable ClientLevel world;
     private static @org.jspecify.annotations.Nullable BlockPos center;
     private static int cursor;
+    private static final FluidSectionScan SCAN = new FluidSectionScan();
     public static int lastSmallSpawns,lastBigSpawns;
     private WaterfallSplash() {}
     public static boolean impactColumn(ClientLevel level,BlockPos pool) {
@@ -48,11 +49,19 @@ public final class WaterfallSplash {
         COLUMNS.remove(key);FALLS.remove(key);
         var world = WaterfallSplash.world;
         var center = WaterfallSplash.center;
-        if(world == null || center == null || !naturality.util.LoadedChunks.has(world, new BlockPos(x,center.getY(),z)))return;
+        if(world == null || center == null)return;
+        var chunk = world.getChunkSource().getChunk(x >> 4, z >> 4, false);
+        if(chunk == null)return;
         var borders=new ArrayList<Border>();
         var falls=new ArrayList<BlockPos>();
-        for(int y=center.getY()-SEARCH_RANGE;y<=center.getY()+SEARCH_RANGE;y++) {
-            var pool=new BlockPos(x,y,z);
+        var position = new BlockPos.MutableBlockPos();
+        int minY = Math.max(world.getMinY(), center.getY()-SEARCH_RANGE);
+        int maxY = Math.min(world.getMaxY(), center.getY()+SEARCH_RANGE);
+        for(int y=minY;y<=maxY;y++) {
+            if ((y == minY || (y & 15) == 0) && !SCAN.contains(chunk, y >> 4, false)) { y |= 15; continue; }
+            position.set(x,y,z);
+            if (!chunk.getFluidState(position).is(FluidTags.WATER)) continue;
+            var pool=position.immutable();
             if(FallImpactDroplets.falling(world,pool,false))falls.add(pool);
             if(!impactColumn(world,pool))continue;
             for(var side:Direction.Plane.HORIZONTAL)for(int drop=0;drop<=1;drop++) {
@@ -98,6 +107,7 @@ public final class WaterfallSplash {
         }
         var center = java.util.Objects.requireNonNull(WaterfallSplash.center);
         FALLS.keySet().removeIf(key->Math.abs(BlockPos.getX(key)-center.getX())>SEARCH_RANGE || Math.abs(BlockPos.getZ(key)-center.getZ())>SEARCH_RANGE);
+        SCAN.reset(); // No block/packet mutations can interleave this client-thread batch.
         // Keep an eight-block search margin for camera movement; refresh without chunk loads.
         for(int i=0;i<256;i++) {
             int column=SCAN_ORDER[cursor];

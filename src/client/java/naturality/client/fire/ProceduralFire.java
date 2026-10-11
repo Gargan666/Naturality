@@ -15,7 +15,6 @@ import java.nio.ByteOrder;
 
 import java.util.Map;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.resources.Identifier;
@@ -32,6 +31,7 @@ public final class ProceduralFire {
     private static ByteBuffer boundsData;
     private static final String[] SPRITES = {"fire_0", "fire_1", "soul_fire_0", "soul_fire_1"};
     private static long animationTicks;
+    private static double animationRemainder;
     private static final int[] frameTops = new int[128];
     private static @org.jspecify.annotations.Nullable GpuBuffer bounds;
     private static @org.jspecify.annotations.Nullable NativeImage image;
@@ -40,9 +40,12 @@ public final class ProceduralFire {
 
     private ProceduralFire() { }
     public static void initialize() {
-        ClientTickEvents.END_CLIENT_TICK.register(client -> {
+        naturality.client.sleep.SleepVisuals.register(client -> {
             if (heatView == null || client.level == null || client.isPaused()) return;
-            animationTicks++;
+            animationRemainder += naturality.client.sleep.SleepVisuals.speed();
+            long frames = (long)animationRemainder;
+            animationRemainder -= frames;
+            animationTicks += frames;
             upload();
         });
         ClientLifecycleEvents.CLIENT_STOPPING.register(_ -> close());

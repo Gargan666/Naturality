@@ -9,12 +9,16 @@ import net.minecraft.world.level.Level;
 
 public final class EndGravity {
     private EndGravity() {}
+    private static boolean distorted(Entity entity) {
+        return naturality.config.Feature.DISTORTION.enabled() && entity instanceof LivingEntity living
+            && (living.hasEffect(naturality.NaturalityEffects.DISTORTION)
+                || living instanceof DistortionState state && state.naturality$distortion(false)>0);
+    }
     public static boolean affected(Entity entity) {
-        return (entity.level().dimension().equals(Level.END) || entity instanceof LivingEntity living
-                && (living.hasEffect(naturality.NaturalityEffects.DISTORTION) || ((DistortionState)living).naturality$distortion(false)>0))
+        return (naturality.config.Feature.END_WEATHER.enabled() && entity.level().dimension().equals(Level.END) || distorted(entity))
             && !BuiltInRegistries.ENTITY_TYPE.wrapAsHolder(entity.getType()).is(NaturalityTags.NO_END_GRAVITY)
             && !entity.isNoGravity() && !entity.isPassenger()
-            && !(entity instanceof Player p && (p.isSpectator() || p.getAbilities().flying));
+            && !(entity instanceof Player p && (p.isSpectator() || p.getAbilities().flying && !distorted(p)));
     }
     public static float factor(Entity entity) {
         return affected(entity) ? EndWeatherSystem.state(entity.level()).strength()*(float)Math.cos(Math.PI*inversion(entity,false)) : 1;
@@ -30,7 +34,7 @@ public final class EndGravity {
     /** A soft ceiling for upward falls, 16 blocks below the dimension's build limit. */
     public static double upwardLimit(Entity entity) { return entity.level().getMaxY()-16; }
     public static double softenUpwardMotion(Entity entity, double velocity) {
-        if (!(entity instanceof Player) || !inverted(entity) || velocity<=0) return velocity;
+        if (!(entity instanceof Player p) || p.getAbilities().flying || !inverted(entity) || velocity<=0) return velocity;
         double remaining=upwardLimit(entity)-entity.getY();
         if(remaining>=48)return velocity;
         if(remaining<=0)return 0;

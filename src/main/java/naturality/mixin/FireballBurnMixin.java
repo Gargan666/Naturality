@@ -13,12 +13,17 @@ import net.minecraft.core.particles.ParticleTypes;
 public abstract class FireballBurnMixin {
     @Inject(method = "shouldBurn", at = @At("HEAD"), cancellable = true)
     private void naturality$modelFire(CallbackInfoReturnable<Boolean> ci) {
+        var entity = (AbstractHurtingProjectile)(Object)this;
+        if (!(entity.level().isClientSide() ? naturality.config.Feature.FIREBALL_MODELS.enabled()
+                : naturality.config.Feature.FIREBALL_FIRE_SUPPRESSION.enabled())) return;
         if ((Object)this instanceof Fireball) ci.setReturnValue(false);
     }
 
     @Inject(method = "createParticleTrail", at = @At("HEAD"), cancellable = true)
     private void naturality$thickSmoke(CallbackInfo ci) {
-        if (!((Object)this instanceof Fireball ball)) return;
+        if (!naturality.config.Feature.FIREBALL_MODELS.enabled()) return;
+        var ball = (AbstractHurtingProjectile)(Object)this;
+        if (!(ball instanceof Fireball) && !(ball instanceof net.minecraft.world.entity.projectile.hurtingprojectile.DragonFireball)) return;
         ci.cancel();
         if (!ball.level().isClientSide()) return;
         var movement = ball.getDeltaMovement();
@@ -33,4 +38,3 @@ public abstract class FireballBurnMixin {
         }
     }
 }
-

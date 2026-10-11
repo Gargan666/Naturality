@@ -52,7 +52,7 @@ public final class AuroraRenderer {
     private static int tileSegments = -1;
     private AuroraRenderer() {}
     public static void initialize() {
-        ClientTickEvents.END_CLIENT_TICK.register(AuroraRenderer::tick);
+        naturality.client.sleep.SleepVisuals.register(AuroraRenderer::tick);
         ClientPlayConnectionEvents.DISCONNECT.register((_, _) -> close());
         ClientLifecycleEvents.CLIENT_STOPPING.register(_ -> close());
     }

@@ -24,10 +24,12 @@ public final class EndWeatherSystem {
     }
     public static void save(ServerLevel level) { EnvironmentWorldData.get(level.getServer()).write(KEY,cycle(level).snapshot()); }
     public static EndWeatherState state(Level level) {
+        if (!naturality.config.Feature.END_WEATHER.enabled()) return EndWeatherState.CLEAR;
         if (!level.dimension().equals(Level.END)) return EndWeatherState.CLEAR;
         return level instanceof ServerLevel s ? cycle(s).state() : client.target;
     }
     public static EndWeatherState renderState(Level level) {
+        if (!naturality.config.Feature.END_WEATHER.enabled()) return EndWeatherState.CLEAR;
         if (!level.dimension().equals(Level.END) || !level.isClientSide()) return state(level);
         var c = client;
         float t = Math.clamp((System.nanoTime()-c.time)/100_000_000F,0,1);
@@ -47,6 +49,7 @@ public final class EndWeatherSystem {
     }
     public static void initialize() {
         PayloadTypeRegistry.clientboundPlay().register(EndWeatherPayload.TYPE,EndWeatherPayload.CODEC);
+        if (!naturality.config.Feature.END_WEATHER.enabled()) return;
         ServerLifecycleEvents.SERVER_STARTED.register(s -> { session = java.util.UUID.randomUUID().getLeastSignificantBits(); });
         ServerLifecycleEvents.SERVER_STOPPED.register(s -> cycles.clear());
         ServerPlayConnectionEvents.JOIN.register((handler,sender,s) -> { var end=s.getLevel(Level.END); if(end!=null)send(handler.player,end); });
@@ -54,7 +57,7 @@ public final class EndWeatherSystem {
             var end = s.getLevel(Level.END); if (end == null) return;
             var cycle = cycle(end);
             cycle.tick(!end.players().isEmpty() && end.getGameRules().get(GameRules.ADVANCE_WEATHER));
-            naturality.starfall.StarfallWeather.tick(end,cycle.state().starfall());
+            if (naturality.config.Feature.STARFALL.enabled()) naturality.starfall.StarfallWeather.tick(end,cycle.state().starfall());
             save(end);
             if (s.getTickCount()%2 == 0) for (var p:s.getPlayerList().getPlayers()) send(p,end);
         });

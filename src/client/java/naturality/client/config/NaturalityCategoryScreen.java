@@ -1,6 +1,9 @@
 package naturality.client.config;
 import naturality.config.NaturalityConfig;
 import naturality.config.NaturalityServerConfig;
+import naturality.config.Feature;
+import naturality.config.FeatureConfig;
+import naturality.config.ConfigPreset;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.OptionInstance;
@@ -12,15 +15,30 @@ import net.minecraft.network.chat.Component;
 
 public class NaturalityCategoryScreen extends OptionsSubScreen {
     public enum Category {
-        LIGHTING, DYNAMIC_LIGHTING, CAVE_DARKNESS, MOON_DARKNESS, CLOUDS, LIQUIDS,
-        FOG, PORTAL, SKY, PARTICLES, FIRE, GAMEPLAY, ROOT, ATMOSPHERE, EFFECTS, DARKNESS, WEATHER, SNOW, GLINT
+        ROOT(null), PRESETS(ROOT), VISUALS(ROOT),
+        LIGHTING(VISUALS), DYNAMIC_LIGHTING(LIGHTING), DARKNESS(LIGHTING),
+        CAVE_DARKNESS(DARKNESS), MOON_DARKNESS(DARKNESS),
+        ATMOSPHERE(VISUALS), FOG(ATMOSPHERE), CLOUDS(ATMOSPHERE), SKY(ATMOSPHERE), SUN(SKY), WEATHER(ATMOSPHERE),
+        LIQUIDS(VISUALS), WATER(LIQUIDS), LAVA(LIQUIDS), PORTAL(VISUALS), FIRE(VISUALS), SNOW(VISUALS),
+        PARTICLES(VISUALS), ENTITIES(VISUALS), GLINT(VISUALS),
+        CONTENT(ROOT), END_WORLDGEN(CONTENT), CHORUS(CONTENT), CONTENT_EFFECTS(CONTENT),
+        GAMEPLAY(ROOT), VILLAGERS(GAMEPLAY), MOB_GAMEPLAY(GAMEPLAY), WEATHER_RULES(GAMEPLAY),
+        TRAVEL_RULES(GAMEPLAY), BLOCK_RULES(GAMEPLAY), AUDIO(ROOT);
+
+        public final Category parent;
+        Category(Category parent) { this.parent = parent; }
+        public Category[] children() {
+            return java.util.Arrays.stream(values()).filter(child -> child.parent == this).toArray(Category[]::new);
+        }
     }
     private final Category category;
     private Category buildingCategory;
     private String query = "";
+    private ConfigSearch searchQuery = ConfigSearch.parse("");
     private double previousScroll;
     private double savedScroll;
     private boolean searchHeader;
+    private boolean searchLabelsOnly;
     private int matches;
     private String initialFeatures = FeatureShaderSettings.source();
     private boolean initialConnectedFire = NaturalityConfig.get().effects.connectedFire;
@@ -70,6 +88,7 @@ public class NaturalityCategoryScreen extends OptionsSubScreen {
         var search = header.addChild(new net.minecraft.client.gui.components.EditBox(font, 0, 0, 310, 20,
             Component.translatable("naturality.config.search")));
         search.setHint(Component.translatable("naturality.config.search"));
+        search.setTooltip(Tooltip.create(Component.translatable("naturality.config.search.tooltip")));
         search.setMaxLength(128);
         search.setValue(query);
         search.setResponder(value -> {
@@ -88,50 +107,87 @@ public class NaturalityCategoryScreen extends OptionsSubScreen {
         return Component.translatable("naturality.config.category." + category.name().toLowerCase(java.util.Locale.ROOT));
     }
 
+    private static Component categoryPath(Category category) {
+        if (category.parent == null || category.parent == Category.ROOT) return categoryTitle(category);
+        return categoryPath(category.parent).copy().append(" > ").append(categoryTitle(category));
+    }
+
     private void navigation(Category... categories) {
         for (var child : categories) optionsList().addBig(Button.builder(categoryTitle(child), _ -> {
             optionsList().applyUnsavedChanges();
             savedScroll = optionsList().scrollAmount();
             minecraft.gui.setScreen(new NaturalityCategoryScreen(this, child));
-        }).build());
+        }).tooltip(Tooltip.create(categoryPath(child))).build());
     }
 
     private static boolean isPage(Category value) {
-        return value != Category.ROOT && value != Category.ATMOSPHERE
-            && value != Category.EFFECTS && value != Category.DARKNESS;
+        return value != Category.ROOT && value != Category.PRESETS;
     }
 
     @Override
     protected void addOptions() {
         if (!query.isBlank()) {
             matches = 0;
-            for (var page : Category.values()) if (isPage(page)) {
-                buildingCategory = page;
-                searchHeader = false;
-                addCategoryOptions(page);
+            searchQuery = ConfigSearch.parse(query);
+            // Prefer option-name matches for phrases; category words should not make
+            // "End Wilds biome" also match every boulder on an End-biome page.
+            searchLabelsOnly = searchQuery.words().size() > 1;
+            addSearchOptions();
+            if (matches == 0 && searchLabelsOnly) {
+                searchLabelsOnly = false;
+                addSearchOptions();
             }
             if (matches == 0) optionsList().addHeader(Component.translatable("naturality.config.search.empty"));
             return;
         }
         buildingCategory = category;
-        switch (category) {
-            case ROOT -> navigation(Category.ATMOSPHERE, Category.EFFECTS, Category.GAMEPLAY);
-            case ATMOSPHERE -> navigation(Category.FOG, Category.LIGHTING, Category.DYNAMIC_LIGHTING,
-                Category.DARKNESS, Category.CLOUDS, Category.SKY, Category.WEATHER);
-            case EFFECTS -> navigation(Category.PORTAL, Category.LIQUIDS, Category.PARTICLES, Category.FIRE, Category.SNOW, Category.GLINT);
-            case DARKNESS -> navigation(Category.CAVE_DARKNESS, Category.MOON_DARKNESS);
-            default -> addCategoryOptions(category);
+        // Main switches precede their subpages on overview pages.
+        boolean overview = category == Category.VISUALS || category == Category.CONTENT || category == Category.LIQUIDS;
+        if(category==Category.ROOT)toggle("epilepsyMode",NaturalityConfig.get().epilepsyMode,false,v->NaturalityConfig.get().epilepsyMode=v);
+        if (!overview) navigation(category.children());
+        addCategoryOptions(category);
+        if (overview) navigation(category.children());
+    }
+
+    private void addSearchOptions() {
+        buildingCategory=Category.ROOT;toggle("epilepsyMode",NaturalityConfig.get().epilepsyMode,false,v->NaturalityConfig.get().epilepsyMode=v);
+        for (var page : Category.values()) if (isPage(page)) {
+            buildingCategory = page;
+            searchHeader = false;
+            addCategoryOptions(page);
         }
     }
 
     private void addCategoryOptions(Category category) {
+        if (category == Category.PRESETS) {
+            optionsList().addHeader(Component.translatable("naturality.config.presets.description"));
+            for (var preset : ConfigPreset.values()) {
+                String key = "naturality.config.preset." + preset.name().toLowerCase(java.util.Locale.ROOT);
+                var button = Button.builder(Component.translatable(key), _ -> {
+                    optionsList().applyUnsavedChanges();
+                    preset.apply(NaturalityConfig.get(), NaturalityServerConfig.get(), FeatureConfig.get());
+                    NaturalityConfig.get().save();
+                    NaturalityServerConfig.get().save();
+                    FeatureConfig.get().save();
+                    optionsList().replaceEntries(java.util.List.of());
+                    addOptions();
+                }).tooltip(Tooltip.create(Component.translatable(key + ".tooltip"))).build();
+                // Registry/state-table changes require a fresh process. Apply from the title menu.
+                button.active = minecraft.level == null;
+                optionsList().addBig(button);
+            }
+            optionsList().addHeader(Component.translatable(FeatureConfig.get().restartRequired()
+                ? "naturality.config.restart.required" : "naturality.config.presets.editable"));
+            if (minecraft.level != null) optionsList().addHeader(Component.translatable("naturality.config.presets.titleOnly"));
+            return;
+        }
+        addFeatureOptions(category);
         if (category == Category.WEATHER) {
             var c = NaturalityConfig.get().effects;
             toggle("effects.rainSplashFade", c.rainSplashFade, true, v -> c.rainSplashFade = v);
             toggle("effects.weatherParticles", c.weatherParticles, true, v -> c.weatherParticles = v);
             toggle("effects.foliageWind", c.foliageWind, true, v -> c.foliageWind = v);
             toggle("effects.particleWind", c.particleWind, true, v -> c.particleWind = v);
-            toggle("effects.windSounds", c.windSounds, true, v -> c.windSounds = v);
             return;
         }
         if (category == Category.SNOW) {
@@ -150,9 +206,20 @@ public class NaturalityCategoryScreen extends OptionsSubScreen {
         }
         if (category == Category.SKY) {
             var c = NaturalityConfig.get().effects;
-            toggle("effects.sunBeams", c.sunBeams, true, v -> c.sunBeams = v);
             toggle("effects.starPulses", c.starPulses, true, v -> c.starPulses = v);
             number("effects.auroraSegments", c.auroraSegments, 2, 1, 12, v -> c.auroraSegments = v);
+            return;
+        }
+        if (category == Category.SUN) {
+            var c = NaturalityConfig.get().effects;
+            toggle("effects.sunBeams", c.sunBeams, true, v -> c.sunBeams = v);
+            toggle("effects.cameraFlare", c.cameraFlare, true, v -> c.cameraFlare = v);
+            String label = "naturality.config.effects.cameraFlareMaxOpacity";
+            addReset(new OptionInstance<>(label,
+                OptionInstance.cachedConstantTooltip(Component.translatable(label + ".tooltip")),
+                (caption, amount) -> Component.literal(caption.getString() + ": " + amount + "%"),
+                new OptionInstance.IntRange(0, 100), c.cameraFlareMaxOpacity,
+                value -> c.cameraFlareMaxOpacity = value), 14);
             return;
         }
         if (category == Category.PARTICLES) {
@@ -170,28 +237,63 @@ public class NaturalityCategoryScreen extends OptionsSubScreen {
             var c = NaturalityConfig.get().effects;
             toggle("effects.fireAnimation", c.fireAnimation, true, v -> c.fireAnimation = v);
             toggle("effects.connectedFire", c.connectedFire, true, v -> c.connectedFire = v);
+            var liquids = NaturalityConfig.get().liquids;
+            var defaults = new NaturalityConfig.Liquids();
+            section("heat");
+            liquidToggle("heatWaves", liquids.heatWaves, defaults.heatWaves, value -> liquids.heatWaves = value);
+            addReset(new OptionInstance<>("naturality.config.liquids.heatWavePower",
+                OptionInstance.cachedConstantTooltip(Component.translatable("naturality.config.liquids.heatWavePower.tooltip")),
+                (caption, value) -> Component.literal(caption.getString() + ": " + value + "%"),
+                new OptionInstance.IntRange(0, 200), liquids.heatWavePower, value -> liquids.heatWavePower = value), defaults.heatWavePower);
             return;
         }
-        if (category == Category.GAMEPLAY) {
+        if (category == Category.BLOCK_RULES) {
+            section("sleep");
+            var sleep = NaturalityServerConfig.get();
+            serverToggle("sleepAcceleration", sleep.sleepAcceleration, true, v -> sleep.sleepAcceleration = v);
+            serverNumber("sleepMaxSpeed", sleep.sleepMaxSpeed, 200, 1, 1000, v -> sleep.sleepMaxSpeed = v);
+            serverNumber("sleepRampSeconds", sleep.sleepRampSeconds, 30, 1, 120, v -> sleep.sleepRampSeconds = v);
+            section("server_rules");
             serverToggle("snowWrapping", NaturalityServerConfig.get().snowWrapping, true, v -> NaturalityServerConfig.get().snowWrapping = v);
             serverToggle("snowCompaction", NaturalityServerConfig.get().snowCompaction, true, v -> NaturalityServerConfig.get().snowCompaction = v);
+            serverToggle("fireWrapping", NaturalityServerConfig.get().fireWrapping, true, v -> NaturalityServerConfig.get().fireWrapping = v);
+            return;
+        }
+        if (category == Category.WEATHER_RULES) {
+            section("server_rules");
             serverToggle("weatherThaw", NaturalityServerConfig.get().weatherThaw, true, v -> NaturalityServerConfig.get().weatherThaw = v);
             serverToggle("weatherSnowAccumulation", NaturalityServerConfig.get().weatherSnowAccumulation, true, v -> NaturalityServerConfig.get().weatherSnowAccumulation = v);
+            return;
+        }
+        if (category == Category.TRAVEL_RULES) {
+            section("server_rules");
             addIntro();
-            serverToggle("fireWrapping", NaturalityServerConfig.get().fireWrapping, true,
-                v -> NaturalityServerConfig.get().fireWrapping = v);
             serverToggle("vanillaPortalEntry", NaturalityServerConfig.get().vanillaPortalEntry, false,
                 v -> NaturalityServerConfig.get().vanillaPortalEntry = v);
             return;
         }
-        if (category == Category.LIQUIDS) {
+        if (category == Category.AUDIO) {
+            var effects = NaturalityConfig.get().effects;
+            var liquids = NaturalityConfig.get().liquids;
+            var portals = NaturalityConfig.get().portalChanges;
+            var defaults = new NaturalityConfig.PortalChanges();
+            toggle("effects.windSounds", effects.windSounds, true, v -> effects.windSounds = v);
+            liquidToggle("waterSplashSound", liquids.waterSplashSound, true, v -> liquids.waterSplashSound = v);
+            section("portal_audio");
+            addReset(volume("openingVolume", portals.openingVolume, value -> portals.openingVolume = value), defaults.openingVolume);
+            addReset(volume("ambientVolume", portals.ambientVolume, value -> portals.ambientVolume = value), defaults.ambientVolume);
+            addReset(volume("travelVolume", portals.travelVolume, value -> portals.travelVolume = value), defaults.travelVolume);
+            return;
+        }
+        if (category == Category.WATER) {
             var config = NaturalityConfig.get().liquids;
             var defaults = new NaturalityConfig.Liquids();
-            if (query.isBlank()) optionsList().addHeader(Component.translatable("block.minecraft.water"));
+            section("surface");
             liquidToggle("water", config.water, defaults.water, value -> config.water = value);
             liquidToggle("waterDepth", config.waterDepth, defaults.waterDepth, value -> config.waterDepth = value);
             liquidToggle("waterDistortion", config.waterDistortion, defaults.waterDistortion, value -> config.waterDistortion = value);
             liquidToggle("waterShimmer", config.waterShimmer, defaults.waterShimmer, value -> config.waterShimmer = value);
+            section("splashes");
             liquidToggle("waterParticleTint", config.waterParticleTint, defaults.waterParticleTint, value -> config.waterParticleTint = value);
             liquidToggle("waterRim", config.waterRim, defaults.waterRim, value -> config.waterRim = value);
             liquidToggle("waterWake", config.waterWake, defaults.waterWake, value -> config.waterWake = value);
@@ -200,17 +302,23 @@ public class NaturalityCategoryScreen extends OptionsSubScreen {
             liquidToggle("waterfallParticles", config.waterfallParticles, defaults.waterfallParticles, value -> config.waterfallParticles = value);
             liquidToggle("waterFallDroplets", config.waterFallDroplets, defaults.waterFallDroplets, value -> config.waterFallDroplets = value);
             liquidToggle("waterImpactColumns", config.waterImpactColumns, defaults.waterImpactColumns, value -> config.waterImpactColumns = value);
-            liquidToggle("waterSplashSound", config.waterSplashSound, defaults.waterSplashSound, value -> config.waterSplashSound = value);
+            section("detail");
             addReset(new OptionInstance<>("naturality.config.liquids.waterDarkDepth", OptionInstance.noTooltip(),
                 (caption, value) -> Component.literal(caption.getString() + ": " + value + " blocks"),
                 new OptionInstance.IntRange(12, 96), config.waterDarkDepth, value -> config.waterDarkDepth = value), defaults.waterDarkDepth);
             addReset(new OptionInstance<>("naturality.config.liquids.waterPixelSize", OptionInstance.noTooltip(),
                 (caption, value) -> Component.literal(caption.getString() + ": " + value),
                 new OptionInstance.IntRange(1, 16), config.waterPixelSize, value -> config.waterPixelSize = value), defaults.waterPixelSize);
-            if (query.isBlank()) optionsList().addHeader(Component.translatable("block.minecraft.lava"));
+            return;
+        }
+        if (category == Category.LAVA) {
+            var config = NaturalityConfig.get().liquids;
+            var defaults = new NaturalityConfig.Liquids();
+            section("surface");
             liquidToggle("lava", config.lava, defaults.lava, value -> config.lava = value);
             liquidToggle("flowingLava", config.flowingLava, defaults.flowingLava, value -> config.flowingLava = value);
             liquidToggle("emissiveLava", config.emissiveLava, defaults.emissiveLava, value -> config.emissiveLava = value);
+            section("splashes");
             liquidToggle("lavaRim", config.lavaRim, defaults.lavaRim, value -> config.lavaRim = value);
             liquidToggle("lavaWake", config.lavaWake, defaults.lavaWake, value -> config.lavaWake = value);
             liquidToggle("lavaRainRipples", config.lavaRainRipples, defaults.lavaRainRipples, value -> config.lavaRainRipples = value);
@@ -277,9 +385,7 @@ public class NaturalityCategoryScreen extends OptionsSubScreen {
         if (category == Category.FOG) {
             var config = NaturalityConfig.get().fog;
             var defaults = new NaturalityConfig.Fog();
-            addReset(OptionInstance.createBoolean("naturality.config.fog.enabled",
-                OptionInstance.cachedConstantTooltip(Component.translatable("naturality.config.fog.enabled.tooltip")),
-                config.enabled, value -> config.enabled = value), defaults.enabled);
+            toggle("fog.enabled", config.enabled, defaults.enabled, value -> config.enabled = value);
             addReset(new OptionInstance<>("naturality.config.fog.pixelSize",
                 OptionInstance.cachedConstantTooltip(Component.translatable("naturality.config.fog.pixelSize.tooltip")),
                 (caption, value) -> Component.literal(caption.getString() + ": " + value + "×" + value),
@@ -293,17 +399,14 @@ public class NaturalityCategoryScreen extends OptionsSubScreen {
             addLightingOptions();
             return;
         }
+        if (category != Category.PORTAL) return;
         var config = NaturalityConfig.get().portalChanges;
         var defaults = new NaturalityConfig.PortalChanges();
-        addReset(OptionInstance.createBoolean("naturality.config.blocks", config.portalBlockChanges,
-            value -> config.portalBlockChanges = value), defaults.portalBlockChanges);
-        addReset(OptionInstance.createBoolean("naturality.config.particles", config.portalParticleChanges,
-            value -> config.portalParticleChanges = value), defaults.portalParticleChanges);
-        addReset(OptionInstance.createBoolean("naturality.config.glow", config.glowEffect,
-            value -> config.glowEffect = value), defaults.glowEffect);
-        addReset(volume("openingVolume", config.openingVolume, value -> config.openingVolume = value), defaults.openingVolume);
-        addReset(volume("ambientVolume", config.ambientVolume, value -> config.ambientVolume = value), defaults.ambientVolume);
-        addReset(volume("travelVolume", config.travelVolume, value -> config.travelVolume = value), defaults.travelVolume);
+        section("nether_portal");
+        toggle("blocks", config.portalBlockChanges, defaults.portalBlockChanges, value -> config.portalBlockChanges = value);
+        toggle("particles", config.portalParticleChanges, defaults.portalParticleChanges, value -> config.portalParticleChanges = value);
+        toggle("glow", config.glowEffect, defaults.glowEffect, value -> config.glowEffect = value);
+        section("end_portal");
         toggle("portal.endParallax", config.endParallax, defaults.endParallax, v -> config.endParallax = v);
         toggle("portal.endWalls", config.endWalls, defaults.endWalls, v -> config.endWalls = v);
         toggle("portal.endGlow", config.endGlow, defaults.endGlow, v -> config.endGlow = v);
@@ -311,10 +414,35 @@ public class NaturalityCategoryScreen extends OptionsSubScreen {
         toggle("portal.suppressEndSmoke", config.suppressEndSmoke, defaults.suppressEndSmoke, v -> config.suppressEndSmoke = v);
     }
 
+    private void section(String key) {
+        if (query.isBlank()) optionsList().addHeader(Component.translatable("naturality.config.section." + key));
+    }
+
+    private void addFeatureOptions(Category page) {
+        boolean header = false;
+        for (var feature : Feature.values()) if (ConfigLayout.category(feature) == page) {
+            if (!header) { section("startup"); header = true; }
+            String label = "naturality.config.feature." + feature.key();
+            var tooltip = Component.translatable(label + ".tooltip")
+                .append(" ").append(Component.translatable("naturality.config.restart.tooltip"));
+            if (feature.parent != null) tooltip.append(" ").append(Component.translatable("naturality.config.requires",
+                Component.translatable("naturality.config.feature." + feature.parent.key())));
+            var option = OptionInstance.createBoolean(label,
+                OptionInstance.cachedConstantTooltip(VisualPerformance.tooltip(label, tooltip)),
+                FeatureConfig.get().get(feature), value -> FeatureConfig.get().set(feature, value));
+            var reset = addReset(option, true, VisualPerformance.estimate("feature." + feature.key()));
+            var button = optionsList().findOption(option);
+            boolean editable = feature.group == Feature.Group.VISUAL || minecraft.level == null;
+            if (button != null) button.active = editable;
+            if (reset != null) reset.active = editable;
+        }
+    }
+
     private void serverToggle(String key, boolean value, boolean fallback, java.util.function.Consumer<Boolean> update) {
         String label = "naturality.config.gameplay." + key;
         boolean editable = minecraft.level == null || minecraft.hasSingleplayerServer();
         if (!editable) value = switch (key) {
+            case "sleepAcceleration" -> naturality.config.GameplaySettings.displayedSettings().sleepAcceleration();
             case "fireWrapping" -> naturality.config.GameplaySettings.clientFireWrapping();
             case "snowWrapping" -> naturality.config.GameplaySettings.clientSnowWrapping();
             case "snowCompaction" -> naturality.config.GameplaySettings.clientSnowCompaction();
@@ -330,6 +458,22 @@ public class NaturalityCategoryScreen extends OptionsSubScreen {
         if (reset != null) reset.active = editable;
     }
 
+    private void serverNumber(String key, int value, int fallback, int min, int max, java.util.function.IntConsumer update) {
+        boolean editable = minecraft.level == null || minecraft.hasSingleplayerServer();
+        if (!editable) {
+            var settings = naturality.config.GameplaySettings.displayedSettings();
+            value = key.equals("sleepMaxSpeed") ? settings.sleepMaxSpeed() : settings.sleepRampSeconds();
+        }
+        String label = "naturality.config.gameplay." + key;
+        var option = new OptionInstance<Integer>(label,
+            OptionInstance.cachedConstantTooltip(Component.translatable(label + ".tooltip")),
+            (caption, amount) -> Component.literal(caption.getString() + ": " + amount + (key.equals("sleepMaxSpeed") ? "×" : " s")),
+            new OptionInstance.IntRange(min, max), value, update::accept);
+        var reset = addReset(option, fallback);
+        var widget = optionsList().findOption(option);
+        if (widget != null) widget.active = editable;
+        if (reset != null) reset.active = editable;
+    }
     private void addIntro() {
         var introOption = OptionInstance.createBoolean("naturality.config.intro",
             OptionInstance.cachedConstantTooltip(Component.translatable("naturality.config.intro.tooltip")),
@@ -345,7 +489,8 @@ public class NaturalityCategoryScreen extends OptionsSubScreen {
     private void toggle(String key, boolean value, boolean fallback, java.util.function.Consumer<Boolean> update) {
         String label = "naturality.config." + key;
         addReset(OptionInstance.createBoolean(label,
-            OptionInstance.cachedConstantTooltip(Component.translatable(label + ".tooltip")), value, update::accept), fallback);
+            OptionInstance.cachedConstantTooltip(VisualPerformance.tooltip(label)), value, update::accept), fallback,
+            VisualPerformance.estimate(key));
     }
 
     private void number(String key, int value, int fallback, int min, int max, java.util.function.IntConsumer update) {
@@ -356,9 +501,7 @@ public class NaturalityCategoryScreen extends OptionsSubScreen {
     }
 
     private void liquidToggle(String key, boolean value, boolean fallback, java.util.function.Consumer<Boolean> update) {
-        String label = "naturality.config.liquids." + key;
-        addReset(OptionInstance.createBoolean(label,
-            OptionInstance.cachedConstantTooltip(Component.translatable(label + ".tooltip")), value, update::accept), fallback);
+        toggle("liquids." + key, value, fallback, update);
     }
 
     private void darknessDimensions(NaturalityConfig.DarknessDimensions dimensions) {
@@ -400,8 +543,7 @@ public class NaturalityCategoryScreen extends OptionsSubScreen {
     }
 
     private void cloudToggle(String key, boolean value, boolean fallback, java.util.function.Consumer<Boolean> update) {
-        String label = "naturality.config.clouds." + key;
-        addReset(OptionInstance.createBoolean(label, OptionInstance.cachedConstantTooltip(Component.translatable(label + ".tooltip")), value, update::accept), fallback);
+        toggle("clouds." + key, value, fallback, update);
     }
 
     private void cloudNumber(String key, int value, int fallback, int min, int max, java.util.function.IntConsumer update) {
@@ -412,9 +554,7 @@ public class NaturalityCategoryScreen extends OptionsSubScreen {
     }
 
     private void dynamicToggle(String key, boolean value, boolean defaultValue, java.util.function.Consumer<Boolean> update) {
-        String label = "naturality.config.dynamicLighting." + key;
-        addReset(OptionInstance.createBoolean(label,
-            OptionInstance.cachedConstantTooltip(Component.translatable(label + ".tooltip")), value, amount -> update.accept(amount)), defaultValue);
+        toggle("dynamicLighting." + key, value, defaultValue, update);
     }
 
     private void dynamicNumber(String key, int value, int defaultValue, int min, int max, java.util.function.IntConsumer update) {
@@ -439,13 +579,16 @@ public class NaturalityCategoryScreen extends OptionsSubScreen {
     }
 
     private <T> @org.jspecify.annotations.Nullable Button addReset(OptionInstance<T> option, T defaultValue) {
+        return addReset(option, defaultValue, null);
+    }
+
+    private <T> @org.jspecify.annotations.Nullable Button addReset(OptionInstance<T> option, T defaultValue,
+            VisualPerformance.@org.jspecify.annotations.Nullable Impact impact) {
         var widget = option.createButton(options, 0, 0, 240);
         if (!query.isBlank()) {
-            String haystack = (categoryTitle(buildingCategory).getString() + " " + widget.getMessage().getString())
-                .toLowerCase(java.util.Locale.ROOT);
-            for (String word : query.strip().toLowerCase(java.util.Locale.ROOT).split("\\s+"))
-                if (!haystack.contains(word)) return null;
-            if (!searchHeader) { optionsList().addHeader(categoryTitle(buildingCategory)); searchHeader = true; }
+            String haystack = (searchLabelsOnly ? "" : categoryTitle(buildingCategory).getString() + " ") + widget.getMessage().getString();
+            if (!searchQuery.matches(haystack, impact)) return null;
+            if (!searchHeader) { optionsList().addHeader(categoryPath(buildingCategory)); searchHeader = true; }
             matches++;
         }
         var reset = new Button.Plain(0, 0, 60, 20, Component.translatable("naturality.config.reset"), _ -> {
@@ -479,6 +622,7 @@ public class NaturalityCategoryScreen extends OptionsSubScreen {
         if (applied) return;
         applied = true;
         NaturalityConfig.get().save();
+        FeatureConfig.get().save();
         if (minecraft.level == null || minecraft.hasSingleplayerServer()) NaturalityServerConfig.get().save();
         if (initialIntro != NaturalityServerConfig.get().portalIntroAnimation
                 || !initialGameplay.equals(naturality.config.GameplaySettings.serverSettings())) NaturalityServerConfig.get().save();

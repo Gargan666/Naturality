@@ -37,6 +37,11 @@ public abstract class ReputationMobMixin implements ReputationHolder {
     private void naturality$allies(LivingEntity target, CallbackInfoReturnable<Boolean> cir) {
         if (target instanceof Player player && Reputation.illagerAlly((Mob)(Object)this, player)) cir.setReturnValue(false);
     }
+    @Inject(method = "playAmbientSound", at = @At("HEAD"))
+    private void naturality$conversationBob(CallbackInfo ci) {
+        var mob = (Mob)(Object)this;
+        if (mob instanceof Villager body && mob.level() instanceof ServerLevel level) GossipReactions.speaking(level, body);
+    }
     @Inject(method = "serverAiStep", at = @At("HEAD"))
     private void naturality$fearBeforeWork(CallbackInfo ci) {
         var mob = (Mob)(Object)this;

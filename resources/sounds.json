@@ -1,23 +1,36 @@
 {
+  "cave_ambience": {
+    "sounds": [{ "name": "naturality:cave_ambience_nice1", "stream": true }]
+  },
   "end_ambience_1": {
     "subtitle": "subtitles.naturality.end_ambience",
-    "sounds": ["naturality:end/weird_1"]
+    "sounds": [
+      "naturality:end/weird_1"
+    ]
   },
   "end_ambience_2": {
     "subtitle": "subtitles.naturality.end_ambience",
-    "sounds": ["naturality:end/weird_2"]
+    "sounds": [
+      "naturality:end/weird_2"
+    ]
   },
   "end_ambience_3": {
     "subtitle": "subtitles.naturality.end_ambience",
-    "sounds": ["naturality:end/weird_3"]
+    "sounds": [
+      "naturality:end/weird_3"
+    ]
   },
   "end_ambience_4": {
     "subtitle": "subtitles.naturality.end_ambience",
-    "sounds": ["naturality:end/weird_4"]
+    "sounds": [
+      "naturality:end/weird_4"
+    ]
   },
   "end_ambience_5": {
     "subtitle": "subtitles.naturality.end_ambience",
-    "sounds": ["naturality:end/weird_5"]
+    "sounds": [
+      "naturality:end/weird_5"
+    ]
   },
   "end_ambience": {
     "subtitle": "subtitles.naturality.end_ambience",
@@ -64,5 +77,38 @@
         "stream": true
       }
     ]
+  },
+  "block.lirestone.break": {
+    "sounds": [
+      "naturality:blocks/lirestone/break1",
+      "naturality:blocks/lirestone/break2",
+      "naturality:blocks/lirestone/break3",
+      "naturality:blocks/lirestone/break4"
+    ],
+    "subtitle": "subtitles.block.generic.break"
+  },
+  "block.lirestone.place": {
+    "sounds": [
+      "naturality:blocks/lirestone/place1",
+      "naturality:blocks/lirestone/place2",
+      "naturality:blocks/lirestone/place3",
+      "naturality:blocks/lirestone/place4"
+    ],
+    "subtitle": "subtitles.block.generic.place"
+  },
+  "block.lirestone.step": {
+    "sounds": [
+      "naturality:blocks/lirestone/step1",
+      "naturality:blocks/lirestone/step2",
+      "naturality:blocks/lirestone/step3",
+      "naturality:blocks/lirestone/step4",
+      "naturality:blocks/lirestone/step5",
+      "naturality:blocks/lirestone/step6"
+    ],
+    "subtitle": "subtitles.block.generic.footsteps"
   }
+,
+  "block.echo_coral.break": { "subtitle": "subtitles.block.generic.break", "sounds": ["naturality:blocks/echo_coral/break1", "naturality:blocks/echo_coral/break2", "naturality:blocks/echo_coral/break3"] },
+  "block.echo_coral.place": { "subtitle": "subtitles.block.generic.place", "sounds": ["naturality:blocks/echo_coral/place1", "naturality:blocks/echo_coral/place2", "naturality:blocks/echo_coral/place3", "naturality:blocks/echo_coral/place4"] },
+  "block.echo_coral.step": { "subtitle": "subtitles.block.generic.footsteps", "sounds": ["naturality:blocks/echo_coral/step1", "naturality:blocks/echo_coral/step2", "naturality:blocks/echo_coral/step3", "naturality:blocks/echo_coral/step4"] }
 }

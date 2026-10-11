@@ -42,6 +42,7 @@ public final class WeatherSystem {
         return weather == null ? null : weather.at(System.nanoTime());
     }
     public static WeatherProfile profile(Level level) {
+        if (!naturality.config.Feature.WEATHER_CYCLES.enabled()) return DISABLED;
         var server = level.getServer();
         return server == null ? DISABLED
             : WeatherWorldData.get(server).profile(level.dimension().identifier().toString());
@@ -89,6 +90,7 @@ public final class WeatherSystem {
         EndWeatherSystem.initialize();
         PayloadTypeRegistry.clientboundPlay().register(WeatherPayload.TYPE, WeatherPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(DistantLightningPayload.TYPE,DistantLightningPayload.CODEC);
+        if (!naturality.config.Feature.WEATHER_CYCLES.enabled()) return;
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             SERVER_SESSIONS.put(server, UUID.randomUUID().getLeastSignificantBits());
             for(var level:server.getAllLevels())restore(level);

@@ -29,16 +29,19 @@ public record LirestoneBoulderFeature() implements Feature {
 
     public static void initialize() {
         Registry.register(BuiltInRegistries.FEATURE_TYPE, Naturality.id("lirestone_boulder"), CODEC);
+        if (!naturality.config.Feature.LIRESTONE_BOULDERS.enabled()) return;
         BiomeModifications.addFeature(BiomeSelectors.foundInTheEnd(), GenerationStep.Decoration.LOCAL_MODIFICATIONS, PLACED);
     }
 
     @Override public MapCodec<LirestoneBoulderFeature> codec() { return CODEC; }
 
     public static boolean isEndStone(BlockState state) {
-        return state.is(Blocks.END_STONE) || state.is(NaturalityBlocks.SMOOTH_ENDSTONE) || state.is(NaturalityBlocks.LIRESTONE);
+        return state.is(Blocks.END_STONE) || state.is(NaturalityBlocks.SMOOTH_ENDSTONE)
+            || state.is(NaturalityBlocks.LIRESTONE) || state.is(NaturalityBlocks.SMOOTH_LIRESTONE);
     }
 
     @Override public boolean place(WorldGenLevel level, ChunkGenerator generator, RandomSource random, BlockPos origin) {
+        if (!naturality.config.Feature.LIRESTONE_BOULDERS.enabled()) return false;
         // Material patches can reach the main island; additional geometry remains in the outer End.
         if (level.getLevel().dimension() != Level.END || Math.hypot(origin.getX(), origin.getZ()) < 1280
                 || !isEndStone(level.getBlockState(origin.below()))) return false;
@@ -65,7 +68,12 @@ public record LirestoneBoulderFeature() implements Feature {
                 blocks.add(pos);
             }
         }
-        for (BlockPos pos : blocks) level.setBlock(pos, NaturalityBlocks.LIRESTONE.defaultBlockState(), 2);
+        for (BlockPos pos : blocks) {
+            var state=level.getBlockState(pos);
+            var material=state.is(NaturalityBlocks.SMOOTH_ENDSTONE) || state.is(NaturalityBlocks.SMOOTH_LIRESTONE)
+                ? NaturalityBlocks.SMOOTH_LIRESTONE : NaturalityBlocks.LIRESTONE;
+            level.setBlock(pos,material.defaultBlockState(),2);
+        }
         return !blocks.isEmpty();
     }
 

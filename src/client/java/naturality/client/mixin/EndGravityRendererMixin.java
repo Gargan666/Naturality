@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class EndGravityRendererMixin {
     @Inject(method="extractRenderState(Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/client/renderer/entity/state/LivingEntityRenderState;F)V",at=@At("TAIL"))
     private void naturality$extract(LivingEntity e,LivingEntityRenderState state,float partial,CallbackInfo ci) {
-        float inversion=EndGravity.inversion(e,true);
+        float inversion=naturality.client.weather.GravityPreviewContext.active()?0:EndGravity.inversion(e,true);
         ((EndGravityRenderState)state).naturality$inversion(inversion);
         if(inversion==0)return;
         // World look direction expressed in the rolled body's local frame.

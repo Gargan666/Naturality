@@ -13,6 +13,8 @@ public final class WindParticleControl {
         boolean naturality$isLandedLeaf();
     }
     private WindParticleControl() {}
-    public static void mark(@org.jspecify.annotations.Nullable Particle particle, boolean immune) { if (particle != null && immune) ((Access)particle).naturality$windImmune(true); }
-    public static boolean immune(Particle particle) { return ((Access)particle).naturality$windImmune(); }
+    public static void mark(@org.jspecify.annotations.Nullable Particle particle, boolean immune) {
+        if (particle instanceof Access access && immune) access.naturality$windImmune(true);
+    }
+    public static boolean immune(Particle particle) { return particle instanceof Access access && access.naturality$windImmune(); }
 }

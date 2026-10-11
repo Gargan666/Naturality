@@ -53,7 +53,7 @@ public final class VillagerBread {
     private static boolean social(Villager body) {
         var brain = body.getBrain();
         return body.isAlive() && !body.isSleeping() && !body.isTrading()
-            && !((VillagerWorkVisuals)body).naturality$isDisplayingTrade()
+            && (!(body instanceof VillagerWorkVisuals visuals) || !visuals.naturality$isDisplayingTrade())
             && (brain.isActive(Activity.IDLE) || brain.isActive(Activity.MEET) || brain.isActive(Activity.PLAY) || brain.isActive(Activity.REST));
     }
     private void hold(Villager body, long time) {

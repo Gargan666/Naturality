@@ -15,7 +15,6 @@ import java.nio.ByteOrder;
 import java.util.Map;
 import java.util.SplittableRandom;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.resources.Identifier;
 
@@ -49,7 +48,7 @@ public final class ProceduralFluids {
     private ProceduralFluids() {}
 
     public static void initialize() {
-        ClientTickEvents.END_CLIENT_TICK.register(client -> {
+        naturality.client.sleep.SleepVisuals.register(client -> {
             if (view == null || client.level == null || client.isPaused()) return;
             for (var simulation : simulations) simulation.tick();
             upload();

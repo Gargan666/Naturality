@@ -20,6 +20,7 @@
 #include <minecraft:texture_sampling.glsl>
 #include <minecraft:oit.glsl>
 #include <naturality:pixel_lighting.glsl>
+#include <naturality:cutout_pixels.glsl>
 #include <naturality:procedural_fluids.glsl>
 #include <naturality:feature_settings.glsl>
 #include <naturality:procedural_fire.glsl>
@@ -77,19 +78,19 @@ vec4 calculateFinalColor(vec4 color, bool waterSprite, bool submergedTerrain) {
     if (!submergedTerrain && WaterEnvironment.x != 0 && NATURALITY_FOG_ENABLED) {
         // Replace only distance fog's flat RGB with the sky behind this fragment.
         // Keep environmental/cave coverage and premultiplied OIT alpha intact.
-        vec2 fogUV = gl_FragCoord.xy / vec2(textureSize(NaturalityWaterAtmosphere, 0));
-        vec3 atmosphere = texture(NaturalityWaterAtmosphere, fogUV).rgb;
-        #ifdef OIT_ACCUMULATE
-        atmosphere *= color.a;
-        #endif
         float distanceFog = linear_fog_value(cylindricalVertexDistance, distanceStart, distanceEnd);
-        result.rgb += (atmosphere - fogColor.rgb) * distanceFog;
-        // Rain haze meets the directional atmosphere (including sunset), not
-        // a uniform horizon color. Leave ordinary cave/environment fog intact.
         float rainFog = intBitsToFloat(WaterEnvironment.z);
         float environmentalFog = linear_fog_value(sphericalVertexDistance, FogEnvironmentalStart, FogEnvironmentalEnd);
-        result.rgb += (atmosphere - fogColor.rgb * naturality_world_fog_brightness(fogColor.a))
-            * max(0.0, environmentalFog - distanceFog) * rainFog;
+        float rainCoverage = max(0.0, environmentalFog - distanceFog) * rainFog;
+        if (distanceFog != 0.0 || rainCoverage != 0.0) {
+            vec2 fogUV = gl_FragCoord.xy / vec2(textureSize(NaturalityWaterAtmosphere, 0));
+            vec3 atmosphere = textureLod(NaturalityWaterAtmosphere, fogUV, 0.0).rgb;
+            #ifdef OIT_ACCUMULATE
+            atmosphere *= color.a;
+            #endif
+            result.rgb += (atmosphere - fogColor.rgb) * distanceFog;
+            result.rgb += (atmosphere - fogColor.rgb * naturality_world_fog_brightness(fogColor.a)) * max(0.0, environmentalFog - distanceFog) * rainFog;
+        }
     }
     // Underwater surface extinction belongs to the depth-tested water draw,
     // not a fullscreen pass using opaque depth behind translucent entities.
@@ -113,38 +114,69 @@ void main() {
     fragColor = vec4(gl_FragCoord.z, cylindricalVertexDistance, sphericalVertexDistance, 1.0);
     return;
     #endif
-    vec4 shade = vec4(naturality_pixel_lighting(naturalityBlockPosition, naturalityShade.rgb), naturalityShade.a);
-    vec4 light = vec4(naturality_pixel_lighting(naturalityBlockPosition, vertexColor.rgb), vertexColor.a);
+    bool texelLighting = int(round(naturalityShade.a * 255.0)) == 242;
+    vec3 lightingGrid = texelLighting ? naturality_texel_lighting_grid(texCoord0, TextureSize)
+        : naturality_pixel_grid(naturalityBlockPosition);
+    vec4 shade = vec4(naturality_pixel_lighting_grid(lightingGrid, naturalityShade.rgb),
+        texelLighting ? 1.0 : naturalityShade.a);
+    vec4 light = vec4(naturality_pixel_lighting_grid(lightingGrid, vertexColor.rgb), vertexColor.a);
     vec3 waterPosition = naturalityBlockPosition + vec3(naturalitySectionOrigin - ivec3(WaterMap.x, 0, WaterMap.y));
     // Offset perpendicular to the visible face, rather than diagonally toward
     // the camera (which selected different columns along cliffs when moving).
-    vec3 faceNormal = normalize(cross(dFdx(naturalityBlockPosition), dFdy(naturalityBlockPosition)));
-    faceNormal *= dot(faceNormal, WaterCamera.xyz - waterPosition) < 0.0 ? -1.0 : 1.0;
-    vec4 waterColumn = naturality_water_column((waterPosition + faceNormal * 0.02).xz);
-    float waterDepth = naturality_water_depth(waterPosition, waterColumn);
-    float daylight = naturality_water_daylight(waterDepth, waterColumn.z);
-    // Hide the finite column-map boundary in a broad transition, not a square.
-    float mapEdge = min(min(waterPosition.x, waterPosition.z), min(256.0 - waterPosition.x, 256.0 - waterPosition.z));
-    float mapWeight = smoothstep(0.0, 24.0, mapEdge);
-    daylight = mix(1.0, daylight, mapWeight);
+    vec3 positionDx = dFdx(naturalityBlockPosition), positionDy = dFdy(naturalityBlockPosition);
+    vec3 surfaceNormal = abs(cross(positionDx, positionDy));
+    vec2 shimmerUV = vec2(0.0), shimmerUVDx = vec2(0.0), shimmerUVDy = vec2(0.0);
+    if (WaterSwitches.z != 0 && (NaturalityFluidInfo.w & 1) == 0) {
+        vec4 shimmerBounds = NaturalityFluidBounds[0];
+        vec2 shimmerPixel = (floor(fract(naturalityBlockPosition.xz) * 16.0) + 0.5) / 16.0;
+        shimmerUV = mix(shimmerBounds.xy, shimmerBounds.zw, shimmerPixel);
+        shimmerUVDx = dFdx(shimmerUV); shimmerUVDy = dFdy(shimmerUV);
+    }
+    vec4 waterColumn = vec4(0.0);
+    float waterDepth = 0.0, daylight = 1.0, mapWeight = 1.0;
+    if (WaterMap.w != 0) {
+        vec3 faceNormal = normalize(cross(positionDx, positionDy));
+        faceNormal *= dot(faceNormal, WaterCamera.xyz - waterPosition) < 0.0 ? -1.0 : 1.0;
+        waterColumn = naturality_water_column((waterPosition + faceNormal * 0.02).xz);
+        waterDepth = naturality_water_depth(waterPosition, waterColumn);
+        daylight = naturality_water_daylight(waterDepth, waterColumn.z);
+        // Hide the finite column-map boundary in a broad transition, not a square.
+        float mapEdge = min(min(waterPosition.x, waterPosition.z), min(256.0 - waterPosition.x, 256.0 - waterPosition.z));
+        mapWeight = smoothstep(0.0, 24.0, mapEdge);
+        daylight = mix(1.0, daylight, mapWeight);
+    }
     #ifndef OIT_ALPHA_ONLY
-    // Remove only skylight/ambient. The block-light-only lightmap sample retains
-    // torches, sea lanterns and the existing fractional dynamic lighting field.
-    vec2 lightUV = clamp(naturalityLightLevels, vec2(0.5 / 16.0), vec2(15.5 / 16.0));
-    vec3 localLight = texture(Sampler2, vec2(lightUV.x, 0.5 / 16.0)).rgb;
-    float blockLevel = clamp((lightUV.x * 16.0 - 0.5) / 15.0, 0.0, 1.0);
-    localLight *= smoothstep(0.0, 0.06, blockLevel);
-    localLight = naturality_pixel_lighting(naturalityBlockPosition, localLight);
-    // Retain actual propagated skylight. Adding column depth to the lightmap
-    // coordinate invented daylight under overhangs and along submerged cliffs.
-    light.rgb = mix(min(light.rgb, localLight), light.rgb, daylight);
+    // Uniform guard: preserve derivatives, but skip an unused block-light sample
+    // and grid evaluation when water absorption cannot affect the result.
+    if (WaterMap.w != 0 && WaterSwitches.x != 0 && WaterSwitches.w == 0) {
+        // Remove only skylight/ambient. The block-light-only lightmap sample retains
+        // torches, sea lanterns and the existing fractional dynamic lighting field.
+        vec2 lightUV = clamp(naturalityLightLevels, vec2(0.5 / 16.0), vec2(15.5 / 16.0));
+        vec3 localLight = texture(Sampler2, vec2(lightUV.x, 0.5 / 16.0)).rgb;
+        float blockLevel = clamp((lightUV.x * 16.0 - 0.5) / 15.0, 0.0, 1.0);
+        localLight *= smoothstep(0.0, 0.06, blockLevel);
+        localLight = naturality_pixel_lighting_grid(lightingGrid, localLight);
+        // Retain actual propagated skylight. Adding column depth to the lightmap
+        // coordinate invented daylight under overhangs and along submerged cliffs.
+        light.rgb = mix(min(light.rgb, localLight), light.rgb, daylight);
+    }
+    #endif
+    vec4 sampledColor = UseRgss == 1 ? sampleRGSS(Sampler0, texCoord0, 1.0f / TextureSize)
+        : sampleNearest(Sampler0, texCoord0, 1.0f / TextureSize);
+    #ifdef ALPHA_CUTOUT
+    if (naturalityFluidKind < 0 && naturalityFireKind < 0 && !waterSprite)
+        sampledColor = naturality_cutout_pixels(Sampler0, texCoord0, TextureSize, sampledColor);
+    // All derivatives used by ordinary terrain have been captured above. Fluid
+    // and fire shaders can replace alpha, so keep those on their original path.
+    if (naturalityFluidKind < 0 && naturalityFireKind < 0 && !waterSprite
+            && sampledColor.a * (light.a * shade.a) < ALPHA_CUTOUT) discard;
     #endif
     // Molten surfaces are self-lit. Skip lightmap, ambient occlusion and
     // directional face shading so lava sides keep the same brightness as tops.
     vec4 lighting = naturalityFluidKind >= 2 && NATURALITY_EMISSIVE_LAVA ? vec4(1.0) : vec4(
         naturality_adaptive_light(light.rgb)
         * naturality_step_brightness(shade.rgb, NATURALITY_AO_STEPS), light.a * shade.a);
-    vec4 color = (UseRgss == 1 ? sampleRGSS(Sampler0, texCoord0, 1.0f / TextureSize) : sampleNearest(Sampler0, texCoord0, 1.0f / TextureSize)) * lighting;
+    vec4 color = sampledColor * lighting;
     if (naturalityFluidKind >= 0)
         color = naturality_fluid_color(naturalityFluidKind, naturalityBlockPosition, naturalitySectionOrigin, naturalityFluidUV, naturalityFlow) * lighting;
     if (naturalityFireKind >= 0)
@@ -186,29 +218,25 @@ void main() {
             sphericalVertexDistance, cylindricalVertexDistance,
             FogEnvironmentalStart, FogEnvironmentalEnd,
             FogRenderDistanceStart, FogRenderDistanceEnd, FogColor).rgb;
-        fogged += (texture(NaturalityWaterAtmosphere, fogUV).rgb - FogColor.rgb) * waterFog * fogOpacity;
+        fogged += (textureLod(NaturalityWaterAtmosphere, fogUV, 0.0).rgb - FogColor.rgb) * waterFog * fogOpacity;
         float environmentalFog = linear_fog_value(sphericalVertexDistance, FogEnvironmentalStart, FogEnvironmentalEnd);
-        fogged += (texture(NaturalityWaterAtmosphere, fogUV).rgb
+        fogged += (textureLod(NaturalityWaterAtmosphere, fogUV, 0.0).rgb
             - FogColor.rgb * naturality_world_fog_brightness(FogColor.a))
             * max(0.0, environmentalFog - waterFog) * intBitsToFloat(WaterEnvironment.z) * fogOpacity;
         color.a = mix(color.a, 1.0, coverage);
         color.rgb = fogged / max(color.a, 0.0001);
     }
-    vec3 surfaceNormal = abs(cross(dFdx(naturalityBlockPosition), dFdy(naturalityBlockPosition)));
     // Derivatives must be evaluated before the per-fragment floor eligibility
     // branch; divergent derivative sampling caused unstable shimmer at edges.
-    float pattern = 0.0;
-    if (WaterSwitches.z != 0)
-        pattern = naturality_fluid_color(0, naturalityBlockPosition, naturalitySectionOrigin,
-            naturalityBlockPosition.xz, vec3(0)).r;
+    vec2 shimmerDx = positionDx.xz;
+    vec2 shimmerDy = positionDy.xz;
     if (WaterSwitches.z != 0 && waterDepth > 2.0 && waterPosition.y >= waterColumn.y - 0.08
             && waterPosition.y <= waterColumn.y + 0.08 && surfaceNormal.y > max(surfaceNormal.x, surfaceNormal.z) * 4.0) {
+        float pattern = naturality_still_water_pattern(naturalityBlockPosition, naturalitySectionOrigin, shimmerDx, shimmerDy);
         // Project the SAME still-water field and lattice vertically onto exposed
         // floor tops. Dark sprite areas contribute zero, never a dark decal.
         if ((NaturalityFluidInfo.w & 1) == 0) {
-            vec4 bounds = NaturalityFluidBounds[0];
-            vec2 pixel = (floor(fract(naturalityBlockPosition.xz) * 16.0) + 0.5) / 16.0;
-            pattern = dot(texture(Sampler0, mix(bounds.xy, bounds.zw, pixel)).rgb, vec3(0.2126, 0.7152, 0.0722));
+            pattern = dot(textureGrad(Sampler0, shimmerUV, shimmerUVDx, shimmerUVDy).rgb, vec3(0.2126, 0.7152, 0.0722));
         }
         float highlight = smoothstep(0.47, 0.82, pattern);
         float sun = WaterCamera.w * clamp(naturalityLightLevels.y * 16.0 - 0.5, 0.0, 15.0) / 15.0;
@@ -227,11 +255,11 @@ void main() {
         // and discarded samples write neither color nor depth.
         float coverage = fract(52.9829189 * fract(dot(floor(gl_FragCoord.xy), vec2(0.06711056, 0.00583715))));
         if (chunkVisibility < 1.0 && coverage >= chunkVisibility) discard;
-    } else {
+    } else if (chunkVisibility != 1.0) {
         vec3 arrivalFog = FogColor.rgb;
         if (WaterEnvironment.x != 0 && NATURALITY_FOG_ENABLED)
-            arrivalFog = texture(NaturalityWaterAtmosphere,
-                gl_FragCoord.xy / vec2(textureSize(NaturalityWaterAtmosphere, 0))).rgb;
+            arrivalFog = textureLod(NaturalityWaterAtmosphere,
+                gl_FragCoord.xy / vec2(textureSize(NaturalityWaterAtmosphere, 0)), 0.0).rgb;
         color.rgb = mix(arrivalFog, color.rgb, chunkVisibility);
     }
     if (fallingFluidTail) color.a *= tailOpacity;

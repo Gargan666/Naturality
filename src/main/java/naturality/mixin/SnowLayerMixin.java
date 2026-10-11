@@ -17,6 +17,17 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(SnowLayerBlock.class)
 public abstract class SnowLayerMixin {
+    @Inject(method="updateShape",at=@At("HEAD"),cancellable=true)
+    private void naturality$unchangedSupport(BlockState state,LevelReader level,net.minecraft.world.level.ScheduledTickAccess ticks,
+            BlockPos pos,net.minecraft.core.Direction direction,BlockPos neighborPos,BlockState neighbor,
+            net.minecraft.util.RandomSource random,CallbackInfoReturnable<BlockState> cir) {
+        // Partial snow beside this cell cannot change this column's support.
+        // Vertical updates (including removing the support) always take the normal path.
+        if(naturality.config.GameplaySettings.snowWrapping(level)
+                && direction.getAxis()!=net.minecraft.core.Direction.Axis.Y
+                && neighbor.is(net.minecraft.world.level.block.Blocks.SNOW)
+                && neighbor.getValue(SnowLayerBlock.LAYERS)<8)cir.setReturnValue(state);
+    }
     @Inject(method = "canBeReplaced(Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/item/context/BlockPlaceContext;)Z", at = @At("HEAD"), cancellable = true)
     private void naturality$replaceEmptyOwner(BlockState state, BlockPlaceContext context, CallbackInfoReturnable<Boolean> cir) {
         var level = context.getLevel();

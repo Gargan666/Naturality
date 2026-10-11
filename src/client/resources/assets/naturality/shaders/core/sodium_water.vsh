@@ -88,6 +88,8 @@ void main() {
     }
     naturalitySubmerged=0;
     int windTag=(fluidSprite || naturalityFireKind>=0)?255:int(round(_vert_color.a*255.0));
+    // Preserve the bell's lighting-coordinate marker for the shared fragment shader.
+    if (windTag == 242) naturalityShade.a = 242.0 / 255.0;
     position.xz+=naturality_wind_offset(_vert_position,naturalitySectionOrigin,windTag);
     gl_Position=u_ProjectionMatrix*u_ModelViewMatrix*vec4(position,1.0);
     bool anchoredCrop=windTag>=120 && windTag<=127;

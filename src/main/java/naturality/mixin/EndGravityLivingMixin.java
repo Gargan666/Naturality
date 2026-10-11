@@ -34,6 +34,11 @@ public abstract class EndGravityLivingMixin {
     private double naturality$glideGravity(double gravity) {
         return EndGravity.inverted((LivingEntity)(Object)this)?-gravity:gravity;
     }
+    @ModifyExpressionValue(method="checkFallDamage",at=@At(value="INVOKE",target="Lnet/minecraft/world/entity/LivingEntity;getY()D"))
+    private double naturality$landingAtFeet(double y) {
+        var entity=(LivingEntity)(Object)this;
+        return EndGravity.inverted(entity)?entity.getBoundingBox().maxY-.01:y;
+    }
     @Shadow protected abstract float getJumpPower();
     @Inject(method="jumpFromGround",at=@At("HEAD"),cancellable=true)
     private void naturality$ceilingJump(CallbackInfo ci) {

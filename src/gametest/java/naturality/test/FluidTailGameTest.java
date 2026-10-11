@@ -82,6 +82,10 @@ public final class FluidTailGameTest implements FabricClientGameTest {
         var renderer=new net.minecraft.client.renderer.block.FluidRenderer(client.getModelManager().getFluidStateModelSet());
         var block=client.level.getBlockState(pos);
         renderer.tesselate(client.level,pos,layer->consumer,block,block.getFluidState());
+        for (var vertex : vertices) {
+            check(vertex[0] == Math.round(vertex[0]) && vertex[2] == Math.round(vertex[2]),
+                "Exposed column walls and corners meet exact block boundaries without cracks");
+        }
         int tails=0,actualSides=0,recessedCaps=0;
         for(int i=0;i<vertices.size();i+=4) {
             var first=vertices.get(i);
@@ -99,9 +103,10 @@ public final class FluidTailGameTest implements FabricClientGameTest {
         check(recessedCaps==(hasTail?1:0),"Only air-ended falling fluid has its original underside recessed upward");
         for(var tail:vertices)if(tail[3]==1 && tail[1]==(pos.getY()&15)) {
             boolean matched=false;
-            for(var actual:vertices)if(actual[3]==0 && actual[0]==tail[0] && actual[1]==tail[1] && actual[2]==tail[2]) {
+            // Connected corners now belong to two faces with different cardinal
+            // shades. Match the corresponding face, not every coincident vertex.
+            for(var actual:vertices)if(actual[3]==0 && actual[0]==tail[0] && actual[1]==tail[1] && actual[2]==tail[2] && actual[5]==tail[5]) {
                 check(actual[4]==tail[4],"Join vertices share identical light samples");
-                check(actual[5]==tail[5],"Join vertices share identical biome tint and face shading");
                 matched=true;
             }
             check(matched,"Tail joins the exact endpoint of an actual fluid side");

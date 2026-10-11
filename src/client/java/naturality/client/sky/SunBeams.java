@@ -32,6 +32,7 @@ public final class SunBeams implements AutoCloseable {
     private @org.jspecify.annotations.Nullable GpuBuffer vertices;
     private @org.jspecify.annotations.Nullable TextureAtlasSprite sampledSprite;
     private int color = 0xFFFFDA70;
+    private final SunLensFlare flare = new SunLensFlare();
 
     private void rebuildGrid(TextureAtlasSprite sprite) {
         if (vertices != null) vertices.close();
@@ -57,12 +58,19 @@ public final class SunBeams implements AutoCloseable {
         return 0.6F - 0.5F * ease;
     }
 
+    /** Shared eased closeness for the beams and camera flare (45 degrees to center). */
+    public static float closeness(float alignment) {
+        float focus = Math.clamp((alignment - 0.70710678F) / (1 - 0.70710678F), 0, 1);
+        return focus * focus * (3 - 2 * focus);
+    }
+
     public void render(RenderPass pass, PoseStack pose, float angle, float rain, TextureAtlasSprite sprite) {
         if (rain <= 0) return;
         if (sampledSprite != sprite) {
             sampledSprite = sprite;
             rebuildGrid(sprite);
             var image = ((SunSpriteAccess) sprite.contents()).naturality$sunImage();
+            flare.updateSource(sprite);
             // The yellow border is the most yellow opaque color, excluding the white center
             // and transparent padding. Read the actual atlas source, including resource packs.
             int best = -1;
@@ -80,8 +88,11 @@ public final class SunBeams implements AutoCloseable {
         float distance = (float) Math.sqrt(transform.m30() * transform.m30()
             + transform.m31() * transform.m31() + transform.m32() * transform.m32());
         float alignment = distance > 0 ? -transform.m32() / distance : 0;
-        float focus = Math.clamp((alignment - 0.70710678F) / (1 - 0.70710678F), 0, 1);
-        float viewOpacity = 0.3F + 0.7F * focus * focus * (3 - 2 * focus);
+        float focus = closeness(alignment);
+        float viewOpacity = 0.3F + 0.7F * focus;
+        var settings = naturality.config.NaturalityConfig.get().effects;
+        if (settings.cameraFlare) flare.prepare(transform, pose, focus, rain, color);
+        if (!settings.sunBeams) return;
         var tint = new Vector4f(ARGB.red(color) / 255F, ARGB.green(color) / 255F,
             ARGB.blue(color) / 255F, opacity(angle) * rain * viewOpacity);
         var indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
@@ -95,5 +106,8 @@ public final class SunBeams implements AutoCloseable {
         pass.drawIndexed(6, 1, 0, 0, 0);
     }
 
-    @Override public void close() { if (vertices != null) vertices.close(); }
+    @Override public void close() {
+        if (vertices != null) vertices.close();
+        flare.close();
+    }
 }

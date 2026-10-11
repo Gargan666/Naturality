@@ -1,5 +1,6 @@
 package naturality.client.snow;
 
+import com.mojang.blaze3d.platform.NativeImage;
 import java.util.*;
 import java.util.function.Predicate;
 import naturality.snow.SnowGeometry;
@@ -15,7 +16,7 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.block.*;
 import net.minecraft.world.level.block.state.BlockState;
 
-/** Snow drips clipped to the actual side quads underneath coated top edges. */
+/** Snow painted into cached sprite variants on the original model faces. */
 public final class SnowOverlayModel extends WrapperBlockStateModel {
     private static final Identifier OVERLAY = Identifier.fromNamespaceAndPath("naturality","block/snow_overlay");
     private static volatile Map<Identifier,TextureAtlasSprite> sprites=Map.of();
@@ -25,7 +26,8 @@ public final class SnowOverlayModel extends WrapperBlockStateModel {
     }
     public SnowOverlayModel(BlockStateModel wrapped) { super(wrapped); }
     @Override public @org.jspecify.annotations.Nullable Object createGeometryKey(BlockAndTintGetter l,BlockPos p,BlockState s,RandomSource r) {
-        return !naturality.config.GameplaySettings.clientSnowWrapping()
+        return l instanceof SnowRenderRegion region && !region.naturality$mayHaveSnow()
+            || !naturality.config.GameplaySettings.clientSnowWrapping()
             || !naturality.config.NaturalityConfig.get().effects.snowOverlays
             || naturality.snow.NoSnowSideOverlay.contains(s) || naturality.snow.SnowSupportOnly.contains(s) || snowOwner(l,p)==null
             ? wrapped.createGeometryKey(l,p,s,r) : null;
@@ -46,6 +48,10 @@ public final class SnowOverlayModel extends WrapperBlockStateModel {
     }
     @Override public void emitQuads(QuadEmitter e,BlockAndTintGetter level,BlockPos pos,BlockState state,
             RandomSource random,Predicate<@org.jspecify.annotations.Nullable Direction> cull) {
+        if (level instanceof SnowRenderRegion region && !region.naturality$mayHaveSnow()) {
+            wrapped.emitQuads(e,level,pos,state,random,cull);
+            return;
+        }
         naturality.snow.SnowGeometryCache.begin();
         try { emitCached(e,level,pos,state,random,cull); }
         finally { naturality.snow.SnowGeometryCache.end(); }
@@ -74,11 +80,11 @@ public final class SnowOverlayModel extends WrapperBlockStateModel {
             p.x(),p.y()+offset,p.z(),p.ux(),p.uz(),p.vx(),p.vz()));
         if(tops.isEmpty()) { wrapped.emitQuads(e,level,pos,state,random,cull);return; }
         boolean leaves=state.getBlock() instanceof LeavesBlock || foliage;
-        var sides=new ArrayList<Side>();
         var edgeOcclusion=new EdgeOcclusion(level,pos,snowBoxes);
         e.pushTransform(q -> {
             if(q.cullFace()!=null && cull.test(q.cullFace()))return true;
             if(q.lightFace().getAxis()==Direction.Axis.Y)return true;
+            var sides=new ArrayList<Side>();
             // Arrange a rectangular side as top A, bottom A, bottom B, top B.
             for(int a=0;a<4;a++) {
                 int b=(a+3)%4,d=(a+1)%4,c=(a+2)%4;
@@ -88,11 +94,8 @@ public final class SnowOverlayModel extends WrapperBlockStateModel {
 
                 float[][] p=new float[4][3],uv=new float[4][2];int[] order={a,d,c,b};
                 for(int i=0;i<4;i++){int v=order[i];p[i][0]=q.x(v);p[i][1]=q.y(v);p[i][2]=q.z(v);uv[i][0]=q.u(v);uv[i][1]=q.v(v);}
-                TextureAtlasSprite source=null;
-                if(leaves) {
-                    float u=(q.u(a)+q.u(c))/2,v=(q.v(a)+q.v(c))/2;
-                    source=spriteLookup.find(u,v);
-                }
+                float centerU=(q.u(a)+q.u(c))/2,centerV=(q.v(a)+q.v(c))/2;
+                TextureAtlasSprite source=spriteLookup.find(centerU,centerV);
                 var side=new Side(p,uv,q.lightFace(),source);
                 if(foliage)sides.add(side);
                 else {
@@ -141,14 +144,24 @@ public final class SnowOverlayModel extends WrapperBlockStateModel {
                         runStart=-1;
                     }
                 }
+                if(source!=null && !sides.isEmpty()) {
+                    var tintSource=q.tintIndex()<0?null:net.minecraft.client.Minecraft.getInstance().getBlockColors().getTintSource(state,q.tintIndex());
+                    int tint=tintSource==null?0xFFFFFF:tintSource.colorInWorld(state,level,pos)&0xFFFFFF;
+                    var key=compositeKey(source,sides,tint,leaves);
+                    var composite=SnowTextureAtlas.sprite(key,source,overlay,()->raster(source,overlay,sides,tint,leaves));
+                    if(composite!=source) {
+                        for(int vertex=0;vertex<4;vertex++)q.uv(vertex,
+                            (q.u(vertex)-source.getU0())/(source.getU1()-source.getU0()),
+                            (q.v(vertex)-source.getV0())/(source.getV1()-source.getV0()));
+                        q.materialBake(new Material.Baked(composite,false),MutableQuadView.BAKE_NORMALIZED);
+                        q.tintIndex(-1);
+                    }
+                }
                 break;
             }
             return true;
         });
         try { wrapped.emitQuads(e,level,pos,state,random,cull); } finally { e.popTransform(); }
-        boolean movingLeaves=state.is(net.minecraft.tags.BlockTags.LEAVES)
-            && naturality.client.weather.WindRendering.windExposed(level,pos);
-        for(var side:sides) emit(e,side,overlay,leaves,movingLeaves,pos,state);
     }
     private static float mix(float a,float b,float t){return a+(b-a)*t;}
     /** Reuse the same translated blockers for all texel strips in a column. Mesh-local only. */
@@ -192,125 +205,84 @@ public final class SnowOverlayModel extends WrapperBlockStateModel {
                 net.minecraft.world.phys.shapes.BooleanOp.ONLY_FIRST);
         }
     }
-    private static void emit(QuadEmitter e,Side s,TextureAtlasSprite overlay,boolean leaves,
-            boolean movingLeaves,BlockPos pos,BlockState state) {
-        var p=s.p;float width=(float)Math.hypot(p[3][0]-p[0][0],p[3][2]-p[0][2]);
-        float height=p[0][1]-p[1][1];if(width<1e-5 || height<1e-5)return;
-        var modelOffset=state.getOffset(pos);
-        var material=new Material.Baked(overlay,false);
-        int density=Math.max(overlay.contents().width(),overlay.contents().height());
-        var sourceSprite = s.sprite;
-        if(leaves && sourceSprite!=null)density=Math.max(density,Math.max(sourceSprite.contents().width(),sourceSprite.contents().height()));
-        density=Math.min(256,density);
-        // Masked foliage uses only source texel edges. Crossed
-        // plant planes are diagonal: a world-space pixel grid does not match
-        // their texture pixels and leaks snow into the transparent cutout.
-        var sourceX=cuts(width,density,s,true,leaves);
-        var sourceY=cuts(height,density,s,false,leaves);
-        float[] topOffsets=new float[sourceX.length-1];
-        if(leaves) {
-            Arrays.fill(topOffsets,Float.POSITIVE_INFINITY);
-            for(int x=0;x<topOffsets.length;x++)for(int y=0;y<sourceY.length-1;y++) {
-                if(sourceVisible(s,(sourceX[x]+sourceX[x+1])/2,(sourceY[y]+sourceY[y+1])/2,width,height)) {
-                    topOffsets[x]=sourceY[y];break;
-                }
+    private record CompositeKey(Identifier source,List<Integer> mask,int tint,boolean foliage) { }
+    private static CompositeKey compositeKey(TextureAtlasSprite source,List<Side> sides,int tint,boolean foliage) {
+        var mask=new ArrayList<Integer>();
+        for(var side:sides) {
+            for(var uv:side.uv) {
+                mask.add(Math.round((uv[0]-source.getU0())/(source.getU1()-source.getU0())*65536));
+                mask.add(Math.round((uv[1]-source.getV0())/(source.getV1()-source.getV0())*65536));
             }
+            mask.add(Math.round(side.textureOffset*65536));mask.add(Math.round(side.textureWidth*65536));
+            mask.add(Math.round((float)Math.hypot(side.p[3][0]-side.p[0][0],side.p[3][2]-side.p[0][2])*65536));
+            mask.add(Math.round((side.p[0][1]-side.p[1][1])*65536));
         }
-        var ys=new TreeSet<Float>();
-        for(float y:sourceY)ys.add(y);
-        // Non-foliage offsets are all zero; insert this identical row grid once.
-        if(!leaves)for(int i=0;i<=density;i++) {
-            float y=i/(float)density;if(y<=height)ys.add(y);
+        return new CompositeKey(source.contents().name(),List.copyOf(mask),tint,foliage);
+    }
+    private static NativeImage raster(TextureAtlasSprite source,TextureAtlasSprite overlay,List<Side> sides,int tint,boolean foliage) {
+        var original=((SnowSpritePixels)source.contents()).naturality$image();
+        var snow=((SnowSpritePixels)overlay.contents()).naturality$image();
+        int width=source.contents().width(),height=source.contents().height();
+        var result=new NativeImage(original.getWidth(),original.getHeight(),false);
+        for(int y=0;y<original.getHeight();y++)for(int x=0;x<original.getWidth();x++) {
+            int color=original.getPixel(x,y);
+            result.setPixel(x,y,(color&0xFF000000)
+                |(((color>>>16)&255)*((tint>>>16)&255)/255)<<16
+                |(((color>>>8)&255)*((tint>>>8)&255)/255)<<8
+                |(color&255)*(tint&255)/255);
         }
-        Float[] rows=ys.toArray(Float[]::new);
-        for(int y=0;y<rows.length-1;y++)for(int x=0;x<sourceX.length-1;) {
-            float t=rows[y],b=rows[y+1],topOffset=topOffsets[x];
-            if(t<topOffset || t>=topOffset+1){x++;continue;}
-            if(!visible(s,overlay,leaves,(sourceX[x]+sourceX[x+1])/2,(t+b)/2,width,height,topOffset)){x++;continue;}
-            int start=x++;
-            while(!leaves && x<sourceX.length-1 && topOffsets[x]==topOffset && Math.floor(s.textureOffset+sourceX[x])==Math.floor(s.textureOffset+sourceX[start])
-                    && visible(s,overlay,leaves,(sourceX[x]+sourceX[x+1])/2,(t+b)/2,width,height,topOffset))x++;
-            float l=sourceX[start],r=sourceX[x];
-            for(int i=0;i<4;i++) {
-                float along=i<2?l:r,down=i==0||i==3?t:b;
-                float f=along/width;
-                // The decal sits slightly in front of the support to avoid z-fighting.
-                // Overlap only its top edge with the snow skirt so oblique views
-                // cannot reveal a rasterization crack between the two planes.
-                float joinOverlap=!leaves && down==0 ? 1F/512 : 0;
-                float vertexX=mix(p[0][0],p[3][0],f),vertexY=p[0][1]-down+joinOverlap,
-                    vertexZ=mix(p[0][2],p[3][2],f);
-                int alpha=255;
-                if(movingLeaves) {
-                    int leafTag=naturality.client.weather.WindRendering.leafTag(
-                        vertexX+(float)modelOffset.x,vertexY+(float)modelOffset.y,vertexZ+(float)modelOffset.z);
-                    if(leafTag>=160 && leafTag<=191) {
-                        int faceAxis=s.face.getAxis()==Direction.Axis.Z ? 1 : 0;
-                        alpha=224+faceAxis*4+((leafTag-160)&3);
+        for(var side:sides) {
+            double u0=(side.uv[0][0]-source.getU0())/(source.getU1()-source.getU0());
+            double v0=(side.uv[0][1]-source.getV0())/(source.getV1()-source.getV0());
+            double ua=(side.uv[3][0]-side.uv[0][0])/(source.getU1()-source.getU0());
+            double va=(side.uv[3][1]-side.uv[0][1])/(source.getV1()-source.getV0());
+            double ub=(side.uv[1][0]-side.uv[0][0])/(source.getU1()-source.getU0());
+            double vb=(side.uv[1][1]-side.uv[0][1])/(source.getV1()-source.getV0());
+            double determinant=ua*vb-va*ub;
+            if(Math.abs(determinant)<1e-12)continue;
+            int columns=Math.max(1,(int)Math.round(Math.max(Math.abs(ua)*width,Math.abs(va)*height)));
+            double rows=Math.max(1,Math.max(Math.abs(ub)*width,Math.abs(vb)*height));
+            double worldWidth=Math.hypot(side.p[3][0]-side.p[0][0],side.p[3][2]-side.p[0][2]);
+            double worldHeight=side.p[0][1]-side.p[1][1];
+            for(int frameY=0;frameY<original.getHeight();frameY+=height)for(int frameX=0;frameX<original.getWidth();frameX+=width) {
+                double[] starts=new double[columns];Arrays.fill(starts,Double.POSITIVE_INFINITY);
+                if(foliage)for(int y=0;y<height;y++)for(int x=0;x<width;x++) {
+                    if((original.getPixel(frameX+x,frameY+y)>>>24)==0)continue;
+                    double u=(x+.5)/width-u0,v=(y+.5)/height-v0;
+                    double a=(u*vb-v*ub)/determinant,b=(ua*v-va*u)/determinant;
+                    if(a<0||a>1||b<0||b>1)continue;
+                    int column=Math.clamp((int)(a*columns),0,columns-1);
+                    starts[column]=Math.min(starts[column],Math.max(0,b-.5/rows));
+                }
+                for(int y=0;y<height;y++)for(int x=0;x<width;x++) {
+                    int base=original.getPixel(frameX+x,frameY+y);
+                    if(foliage && (base>>>24)==0)continue;
+                    double u=(x+.5)/width-u0,v=(y+.5)/height-v0;
+                    double a=(u*vb-v*ub)/determinant,b=(ua*v-va*u)/determinant;
+                    if(a<0||a>1||b<0||b>1)continue;
+                    double snowU=side.textureOffset+a*worldWidth;
+                    double snowV=foliage?b-starts[Math.clamp((int)(a*columns),0,columns-1)]:b*worldHeight;
+                    snowU=foliage?snowU/side.textureWidth:snowU-Math.floor(snowU);
+                    if(!Double.isFinite(snowV)||snowV<0||snowV>=1)continue;
+                    int color=snow.getPixel(Math.clamp((int)(snowU*overlay.contents().width()),0,overlay.contents().width()-1),
+                        Math.clamp((int)(snowV*overlay.contents().height()),0,overlay.contents().height()-1));
+                    int alpha=color>>>24;
+                    if(alpha==0)continue;
+                    int below=result.getPixel(frameX+x,frameY+y),belowAlpha=below>>>24;
+                    int outputAlpha=foliage?base>>>24:alpha+(belowAlpha*(255-alpha)+127)/255;
+                    int blended=outputAlpha<<24;
+                    for(int channel=0;channel<3;channel++) {
+                        int shift=channel*8;
+                        int over=(color>>>shift)&255,under=(below>>>shift)&255;
+                        int value=foliage?(over*alpha+under*(255-alpha)+127)/255
+                            :(over*alpha*255+under*belowAlpha*(255-alpha)+outputAlpha*255/2)/(outputAlpha*255);
+                        blended|=Math.clamp(value,0,255)<<shift;
                     }
-                }
-                e.pos(i,vertexX+s.face.getStepX()/1024F,vertexY,vertexZ+s.face.getStepZ()/1024F)
-                    .color(i,(alpha<<24)|0xFFFFFF);
-                // One sampled overlay color per foliage texel: no independent
-                // world-space texture grid or partial-pixel color boundaries.
-                if(leaves)e.uv(i,(s.textureOffset+(l+r)/2)/s.textureWidth,((t+b)/2-topOffset)/height);
-                else e.uv(i,s.textureOffset+along-(float)Math.floor(s.textureOffset+l),down-topOffset);
-            }
-            e.materialBake(material,MutableQuadView.BAKE_NORMALIZED);
-            e.tintIndex(-1).cullFace(null).shadeDirectionOverride(s.face).emit();
-        }
-    }
-    private static Float[] cuts(float length,int density,Side side,boolean horizontal,boolean masked) {
-        var edges=new TreeSet<Float>();edges.add(0F);edges.add(length);
-        if(!masked) {
-            float offset=horizontal?side.textureOffset:0;
-            for(int i=(int)Math.floor(offset*density)+1;i<(offset+length)*density;i++)edges.add(i/(float)density-offset);
-        }
-        if(masked && side.sprite!=null) {
-            var sprite=side.sprite;
-            for(int axis=0;axis<2;axis++) {
-                float low=axis==0?sprite.getU0():sprite.getV0();
-                float span=axis==0?sprite.getU1()-low:sprite.getV1()-low;
-                int pixels=axis==0?sprite.contents().width():sprite.contents().height();
-                float from=(side.uv[0][axis]-low)/span;
-                float to=(side.uv[horizontal?3:1][axis]-low)/span;
-                if(Math.abs(to-from)<1e-6)continue;
-                for(int i=0;i<=pixels;i++) {
-                    float f=(i/(float)pixels-from)/(to-from);
-                    if(f>1e-6 && f<1-1e-6)edges.add(f*length);
+                    result.setPixel(frameX+x,frameY+y,blended);
                 }
             }
         }
-        return edges.toArray(Float[]::new);
-    }
-    private static boolean visible(Side side,TextureAtlasSprite overlay,boolean leaves,float x,float y,float width,float height,float topOffset) {
-        float u=side.textureOffset+x;
-        if(transparent(overlay,leaves?u/side.textureWidth:u-(float)Math.floor(u),leaves?(y-topOffset)/height:y-topOffset))return false;
-        return !leaves || sourceVisible(side,x,y,width,height);
-    }
-    private static boolean sourceVisible(Side side,float x,float y,float width,float height) {
-        if(side.sprite==null)return false;
-        float a=x/width,b=y/height;
-        var uv=side.uv;
-        float u=mix(mix(uv[0][0],uv[3][0],a),mix(uv[1][0],uv[2][0],a),b);
-        float v=mix(mix(uv[0][1],uv[3][1],a),mix(uv[1][1],uv[2][1],a),b);
-        var s=side.sprite;
-        if (s == null) return false;
-        return !transparent(s,(u-s.getU0())/(s.getU1()-s.getU0()),(v-s.getV0())/(s.getV1()-s.getV0()));
-    }
-    private static boolean transparent(TextureAtlasSprite s,float u,float v) {
-        var c=s.contents();return c.isTransparent(0,Math.clamp((int)(u*c.width()),0,c.width()-1),Math.clamp((int)(v*c.height()),0,c.height()-1));
+        return result;
     }
 }
-
-
-
-
-
-
-
-
-
-
-
 

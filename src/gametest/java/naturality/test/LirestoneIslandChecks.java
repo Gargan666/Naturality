@@ -35,7 +35,7 @@ final class LirestoneIslandChecks {
                 for(int y=0;y<volume.sizeY();y++) {
                     int wy=volume.blockY(y);
                     if(!materials.inSmallIsland(wy) || buffer.get(volume.indexUnchecked(x,y,z))<=0)continue;
-                    if(!end.getBlockState(new BlockPos(wx,wy,wz)).is(NaturalityBlocks.LIRESTONE))
+                    if(!end.getBlockState(new BlockPos(wx,wy,wz)).is(NaturalityBlocks.LIRESTONE) && !end.getBlockState(new BlockPos(wx,wy,wz)).is(NaturalityBlocks.SMOOTH_LIRESTONE))
                         throw new AssertionError("Whole Lirestone island has an unconverted block at "+wx+","+wy+","+wz);
                     mask.set(volume.indexUnchecked(x,y,z));count++;highest=Math.max(highest,wy);
                     minX=Math.min(minX,wx);maxX=Math.max(maxX,wx);minZ=Math.min(minZ,wz);maxZ=Math.max(maxZ,wz);

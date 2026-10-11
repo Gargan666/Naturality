@@ -11,12 +11,17 @@ import net.minecraft.world.level.gamerules.GameRules;
 public final class SkyEvents {
     private static final Map<ServerLevel, Map<SkyEventType, SkyEventCycle>> STATES = new WeakHashMap<>();
     private static final Map<ServerLevel, RainbowCycle> RAINBOWS = new WeakHashMap<>();
+    private static final Map<ServerLevel, ProximityCycle> PROXIMITIES = new WeakHashMap<>();
+    public static ProximityCycle proximityCycle(ServerLevel level) { return PROXIMITIES.get(level); }
     private SkyEvents() {}
     public static Map<String, Map<String, SkyEventSettings>> defaults() {
         var dimensions = new java.util.concurrent.ConcurrentHashMap<String, Map<String, SkyEventSettings>>();
         for (String id : List.of("minecraft:overworld", "minecraft:the_end")) {
             var events = new java.util.concurrent.ConcurrentHashMap<String, SkyEventSettings>();
-            for (var type : SkyEventType.pool(id)) events.put(type.id, new SkyEventSettings());
+            for (var type : SkyEventType.pool(id)) {
+                var settings = new SkyEventSettings(); settings.strength = Math.min(settings.strength, type.maxStrength());
+                events.put(type.id, settings);
+            }
             dimensions.put(id, events);
         }
         return dimensions;
@@ -26,7 +31,11 @@ public final class SkyEvents {
         if (!SkyEventType.pool(id).contains(type)) return 0;
         if (type == SkyEventType.RAINBOW && (isNight(level) || !RainbowCycle.validRain(rainfall(level)))) return 0;
         var settings = SkyEventWorldData.get(level.getServer()).settings(level, type);
-        if (settings.override) return Math.clamp(settings.strength, 0, 20);
+        if (settings.override) return Math.clamp(settings.strength, 0, type.maxStrength());
+        if (type == SkyEventType.PROXIMITY) {
+            var cycle = PROXIMITIES.get(level);
+            return cycle == null ? 0 : cycle.strength();
+        }
         if (type == SkyEventType.RAINBOW) {
             var cycle = RAINBOWS.get(level);
             return cycle == null ? 0 : cycle.strength();
@@ -45,6 +54,7 @@ public final class SkyEvents {
     }
     public static void initialize() {
         PayloadTypeRegistry.clientboundPlay().register(SkyEventPayload.TYPE, SkyEventPayload.CODEC);
+        if (!naturality.config.Feature.SKY_EVENT_CYCLES.enabled()) return;
         SkyEventCommand.initialize();
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             for(var level:server.getAllLevels()) {
@@ -56,6 +66,9 @@ public final class SkyEvents {
                         long seed = level.getSeed() ^ level.getGameTime() ^ type.id.hashCode();
                         var cycle=type==SkyEventType.END_FLASHES ? SkyEventCycle.endFlashes(seed) : new SkyEventCycle(seed);
                         cycle.restore(saved);cycles.put(type,cycle);
+                    } else if(type==SkyEventType.PROXIMITY) {
+                        var cycle = new ProximityCycle(level.getSeed() ^ type.id.hashCode());
+                        cycle.restore(saved); PROXIMITIES.put(level, cycle);
                     } else if(type==SkyEventType.RAINBOW) {
                         var cycle=new RainbowCycle(level.getSeed() ^ level.getGameTime() ^ type.id.hashCode());
                         cycle.restore(saved);RAINBOWS.put(level,cycle);
@@ -64,7 +77,7 @@ public final class SkyEvents {
                 AuroraEvents.restore(level);
             }
         });
-        ServerLifecycleEvents.SERVER_STOPPED.register(_ -> { STATES.clear(); RAINBOWS.clear(); AuroraEvents.clear(); });
+        ServerLifecycleEvents.SERVER_STOPPED.register(_ -> { STATES.clear(); RAINBOWS.clear(); PROXIMITIES.clear(); AuroraEvents.clear(); });
         ServerPlayConnectionEvents.JOIN.register((handler, _, server) -> {
             for (var level : server.getAllLevels()) send(handler.player, level);
         });
@@ -72,6 +85,11 @@ public final class SkyEvents {
             for (var level : server.getAllLevels()) {
                 var pool = SkyEventType.pool(level.dimension().identifier().toString());
                 if (pool.isEmpty()) continue;
+                if (pool.contains(SkyEventType.PROXIMITY)) {
+                    var cycle = PROXIMITIES.computeIfAbsent(level, _ -> new ProximityCycle(level.getSeed()));
+                    cycle.tick(level.getGameRules().get(GameRules.ADVANCE_WEATHER), isNight(level));
+                    naturality.weather.EnvironmentWorldData.get(server).write(key(level, SkyEventType.PROXIMITY), cycle.snapshot());
+                }
                 if (pool.contains(SkyEventType.AURORA_BOREALIS) || pool.contains(SkyEventType.END_AURORA)) AuroraEvents.tick(level);
                 if (pool.contains(SkyEventType.RAINBOW)) RAINBOWS.computeIfAbsent(level, _ -> new RainbowCycle(
                     level.getSeed() ^ level.getGameTime() ^ SkyEventType.RAINBOW.id.hashCode()))
@@ -105,7 +123,9 @@ public final class SkyEvents {
             if ((type == SkyEventType.AURORA_BOREALIS || type == SkyEventType.END_AURORA)
                     && !SkyEventWorldData.get(level.getServer()).settings(level, type).override)
                 value = player.level() == level ? AuroraEvents.strength(level, player.blockPosition()) : 0;
-            ServerPlayNetworking.send(player, new SkyEventPayload(level.dimension().identifier(), type.id, value));
+            var proximity = PROXIMITIES.get(level);
+            ServerPlayNetworking.send(player, new SkyEventPayload(level.dimension().identifier(), type.id, value,
+                type == SkyEventType.PROXIMITY && proximity != null ? proximity.appearance() : 0));
         }
     }
 }

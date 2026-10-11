@@ -88,7 +88,11 @@ public final class SurfaceSnowModel extends WrapperBlockStateModel {
         }
         e.materialBake(material,MutableQuadView.BAKE_NORMALIZED);
         e.tag(0x534E0000 | ((lightShift+64)&255));
-        e.cullFace(null).shadeDirectionOverride(normal).emit();
+        // Vanilla snow uses the vanilla inset-face lighting stencil. Enhanced
+        // shading blends another cell into fitted patches and creates seams
+        // where they meet ordinary snow, especially next to local light sources.
+        e.cullFace(null).shadeDirectionOverride(normal)
+            .shadeMode(net.fabricmc.fabric.api.client.renderer.v1.mesh.ShadeMode.VANILLA).emit();
     }
 }
 

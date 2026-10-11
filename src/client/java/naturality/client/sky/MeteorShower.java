@@ -9,7 +9,6 @@ import java.util.*;
 import java.util.Random;
 import naturality.Naturality;
 import naturality.sky.*;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -31,7 +30,7 @@ public final class MeteorShower implements AutoCloseable {
     public static void initialize() {
         ClientPlayConnectionEvents.INIT.register((_, _) -> clear());
         ClientPlayConnectionEvents.DISCONNECT.register((_, _) -> clear());
-        ClientTickEvents.END_CLIENT_TICK.register(MeteorShower::tick);
+        naturality.client.sleep.SleepVisuals.register(MeteorShower::tick);
     }
     private static void clear() { METEORS.clear(); world = null; spawnBudget = 0; }
     public static float strength() { return SkyEventsClient.strength(world, SkyEventType.METEOR_SHOWER); }

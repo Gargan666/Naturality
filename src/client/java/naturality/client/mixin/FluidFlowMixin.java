@@ -19,6 +19,8 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
+import org.spongepowered.asm.mixin.injection.ModifyArgs;
+import org.spongepowered.asm.mixin.injection.invoke.arg.Args;
 
 /** Vanilla fluid tint alpha is opaque; carry a corner flow angle in that byte.
  * The paired terrain shader restores alpha before lighting, even with effects OFF.
@@ -27,6 +29,17 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
 public abstract class FluidFlowMixin {
     @Shadow @Final private FluidStateModelSet fluidModels;
     @Unique private static final ThreadLocal<FlowCorners> naturality$corners = new ThreadLocal<>();
+
+    @ModifyArgs(method = "vertex", at = @At(value = "INVOKE",
+        target = "Lcom/mojang/blaze3d/vertex/VertexConsumer;addVertex(FFFIFFIIFFF)V"))
+    private void naturality$connectExposedFaces(Args args) {
+        var corners = naturality$corners.get();
+        if (corners == null) return;
+        // Apply after flow encoding: side vertices must retain their side tag.
+        args.set(0, naturality.client.fluid.FluidGeometry.connectedCoordinate(corners.level, corners.pos, args.get(0), true));
+        args.set(1, naturality.client.fluid.FluidGeometry.connectedHeight(corners.level, corners.pos, args.get(1)));
+        args.set(2, naturality.client.fluid.FluidGeometry.connectedCoordinate(corners.level, corners.pos, args.get(2), false));
+    }
 
     @WrapMethod(method = "tesselate")
     private void naturality$flowCorners(BlockAndTintGetter level, BlockPos pos, FluidRenderer.Output output,
@@ -73,6 +86,9 @@ public abstract class FluidFlowMixin {
             int color, float u, float v, int originalLight) {
         var corners = naturality$corners.get();
         if(corners==null)return light;
+        x = naturality.client.fluid.FluidGeometry.connectedCoordinate(corners.level, corners.pos, x, true);
+        y = naturality.client.fluid.FluidGeometry.connectedHeight(corners.level, corners.pos, y);
+        z = naturality.client.fluid.FluidGeometry.connectedCoordinate(corners.level, corners.pos, z, false);
         return corners.light(x,y,z,light);
     }
 

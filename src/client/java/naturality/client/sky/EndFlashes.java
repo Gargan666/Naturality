@@ -116,6 +116,7 @@ public final class EndFlashes {
                 pulses[i].tick(clockTime + i * 104729L * 600L + i * 100L, strength(), weight(i));
                 if (pulses[i].audibleStart()
                         && !(client.gui.screen() instanceof net.minecraft.client.gui.screens.WinScreen)) {
+                    if(naturality.config.NaturalityConfig.get().epilepsyMode)naturality.client.weather.LightningFlashes.strike();
                     var sound = new EventSound(pulses[i]);
                     int delay = Math.max(1, Math.round(EndFlashState.SOUND_DELAY_IN_TICKS / pulses[i].speed()));
                     manager.playDelayed(sound, delay);
@@ -134,6 +135,7 @@ public final class EndFlashes {
         // Suppress ClientLevel's second sound scheduler; each pulse is handled above.
         @Override public boolean flashStartedThisTick() { return false; }
         @Override public float getIntensity(float partial) {
+            if(naturality.config.NaturalityConfig.get().epilepsyMode)return 0;
             float result = 0;
             for (int i = 0; i < pulses.length; i++)
                 result = Math.max(result, pulses[i].eventIntensity(partial) * pulses[i].size());
@@ -143,6 +145,7 @@ public final class EndFlashes {
         @Override public float getYAngle() { return pulses[0].getYAngle(); }
         public int soundsScheduled() { return soundsScheduled; }
         public List<Flash> visible(float partial, float darkness) {
+            if(naturality.config.NaturalityConfig.get().epilepsyMode)return List.of();
             var flashes = new ArrayList<Flash>();
             for (int i = 0; i < pulses.length; i++) {
                 float intensity = pulses[i].eventIntensity(partial) * darkness;

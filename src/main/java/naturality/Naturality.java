@@ -17,20 +17,28 @@ public class Naturality implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
-		NaturalityBlocks.initialize();
-		naturality.worldgen.LirestoneBoulderFeature.initialize();
-		NaturalityEffects.initialize();
-        naturality.starfall.StarfallEntities.initialize();
+        naturality.entity.ArrowImpactPayload.initialize();
+        naturality.config.FeatureConfig.get().save();
+        if (naturality.config.Feature.CONTENT.enabled()) {
+            NaturalityBlocks.initialize();
+            naturality.worldgen.LirestoneCrags.initialize();
+            naturality.worldgen.EndWilds.initialize();
+            naturality.worldgen.LirestoneBoulderFeature.initialize();
+            NaturalityEffects.initialize();
+            naturality.starfall.StarfallEntities.initialize();
+            naturality.villager.VillagerBobbers.initialize();
+        }
         naturality.config.GameplaySettings.initialize();
+        naturality.sleep.SleepAcceleration.initialize();
+        naturality.particle.FireballImpactPayload.initialize();
         naturality.weather.WeatherSystem.initialize();
         naturality.sky.SkyEvents.initialize();
         naturality.snow.SnowCompaction.initialize();
         naturality.snow.SnowLighting.initialize();
 		NaturalitySounds.initialize();
         NaturalityParticles.initialize();
-        naturality.villager.VillagerBobbers.initialize();
-        naturality.villager.FishingSpots.initialize();
-        naturality.villager.Reputation.initialize();
+        if (naturality.config.Feature.VILLAGER_WORK.enabled()) naturality.villager.FishingSpots.initialize();
+        if (naturality.config.Feature.REPUTATION.enabled()) naturality.villager.Reputation.initialize();
 		naturality.portal.PortalOpeningManager.initialize();
 		// This code runs as soon as Minecraft is in a mod-load-ready state.
 		// However, some things (like resources) may still be uninitialized.

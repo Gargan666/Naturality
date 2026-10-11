@@ -27,6 +27,7 @@ public final class FallingFluidTail {
     private FallingFluidTail() {}
 
     public static boolean eligible(BlockAndTintGetter level,BlockPos pos,FluidState fluid) {
+        if (!naturality.config.Feature.FLUID_TAILS.enabled()) return false;
         var settings=NaturalityConfig.get().liquids;
         boolean water=fluid.getType().isSame(Fluids.WATER),lava=fluid.getType().isSame(Fluids.LAVA);
         return ((water && settings.water) || (lava && settings.lava))
@@ -52,6 +53,10 @@ public final class FallingFluidTail {
                 case EAST -> {x0=x1=x+0.999F;}
                 default -> throw new IllegalStateException();
             }
+            x0=FluidGeometry.connectedCoordinate(level,pos,x0,true);
+            x1=FluidGeometry.connectedCoordinate(level,pos,x1,true);
+            z0=FluidGeometry.connectedCoordinate(level,pos,z0,false);
+            z1=FluidGeometry.connectedCoordinate(level,pos,z1,false);
             var cardinal=level.cardinalLighting();
             float shade=cardinal.up()*(side.getAxis()==Direction.Axis.Z?cardinal.north():cardinal.west());
             int color=ARGB.scaleRGB(tint,shade);

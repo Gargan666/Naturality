@@ -27,7 +27,7 @@ public final class DynamicLightingGameTest implements FabricClientGameTest {
             context.waitTicks(2);
             context.runOnClient(client -> {
                 if (resetAll(client.gui.screen()) != 10 + NaturalityConfig.DynamicLighting.defaultEntityLights().size()) throw new AssertionError("Dynamic lighting must expose every resettable control");
-                if (config.updateTicks != 2) throw new AssertionError("Update interval reset failed");
+                if (config.updateTicks != new NaturalityConfig.DynamicLighting().updateTicks) throw new AssertionError("Update interval reset failed");
             });
             context.takeScreenshot("dynamic-lighting-settings");
             context.runOnClient(client -> client.gui.screen().onClose());
@@ -153,8 +153,12 @@ public final class DynamicLightingGameTest implements FabricClientGameTest {
                 for (int height : new int[] {240, 319, 340, 512}) {
                     server.runCommand("tp @a 0.5 " + height + " 0.5 0 25");
                     world.getConnection().waitForClientboundPackets();
+                    // Packet delivery moves the player before the next rendered
+                    // camera update. Source selection deliberately uses that camera.
+                    context.runOnClient(client -> client.player.getAbilities().flying = true);
+                    context.waitFor(client -> client.gameRenderer.mainCamera().position()
+                        .distanceToSqr(client.player.getEyePosition()) < 1.0);
                     context.runOnClient(client -> {
-                        client.player.getAbilities().flying = true;
                         for (boolean precise : new boolean[] {true, false}) {
                             config.subBlockPrecision = precise;
                             DynamicLighting.invalidate();

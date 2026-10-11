@@ -26,6 +26,10 @@ public abstract class SnowRenderRegionMixin implements SnowRenderRegion {
     @Shadow @Final private int minSectionZ;
     @Unique private Map<Long, SectionCopy> naturality$snowSections = Map.of();
 
+    @Unique private boolean naturality$mayHaveSnow = true;
+    @Override public boolean naturality$mayHaveSnow() { return naturality$mayHaveSnow; }
+    @Override public void naturality$markSnowFree() { naturality$mayHaveSnow = false; }
+
     @Override
     public void naturality$setSnowSections(Map<Long, SectionCopy> sections) {
         naturality$snowSections = Map.copyOf(sections);

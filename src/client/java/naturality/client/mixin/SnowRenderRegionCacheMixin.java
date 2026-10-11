@@ -24,10 +24,20 @@ public abstract class SnowRenderRegionCacheMixin {
     private void naturality$captureSnow(ClientLevel level, long node, CallbackInfoReturnable<RenderSectionRegion> cir) {
         if (!GameplaySettings.clientSnowWrapping()) return;
         int x = SectionPos.x(node), y = SectionPos.y(node), z = SectionPos.z(node);
+        // Probe palettes on the client thread before copying. Conservatively
+        // include the complete old snapshot volume, including neighboring owners.
+        boolean snow = naturality.client.snow.SnowRegionPresence.mayHaveSnow(level, node);
+        if (!snow) {
+            ((SnowRenderRegion) cir.getReturnValue()).naturality$markSnowFree();
+            // Tall sugar cane also uses this existing vertical snapshot to find
+            // its wind anchor. Keep the lower margin for sections with stalks.
+            if (!naturality.client.snow.SnowRegionPresence.hasRootedStalk(level, node)) return;
+        }
         var copies = new HashMap<Long, SectionCopy>();
         // A 32-block owner/support search plus one AO neighbor needs a three-section
         // vertical margin. Reuse vanilla's cache and capture before workers start.
         for (int dy : new int[] {-3, -2, 2, 3}) {
+            if (!snow && dy > 0) continue;
             if (y + dy < level.getMinSectionY() || y + dy >= level.getMaxSectionY()) continue;
             for (int dz = -1; dz <= 1; dz++) for (int dx = -1; dx <= 1; dx++) {
                 copies.put(SectionPos.asLong(x + dx, y + dy, z + dz),

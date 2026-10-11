@@ -125,6 +125,34 @@ public final class FluidsGameTest implements FabricClientGameTest {
                 context.waitTicks(3);
                 context.takeScreenshot("fluids-diagonal-moved-" + x);
             }
+            context.runOnClient(client -> {
+                for (int x : new int[]{-16, -1, 0, 15, 16}) {
+                    var pos = new net.minecraft.core.BlockPos(x, 110, 0);
+                    int local = x & 15;
+                    int localY = pos.getY() & 15;
+                    if (naturality.client.fluid.FluidGeometry.connectedHeight(client.level, pos, localY + 0.001F) != localY
+                        || naturality.client.fluid.FluidGeometry.connectedHeight(client.level, pos, localY + 0.999F) != localY + 1)
+                        throw new AssertionError("Exposed vertical liquid edges remain inset");
+                    for (boolean axis : new boolean[]{false, true}) {
+                        int base = axis ? local : 0;
+                        if (naturality.client.fluid.FluidGeometry.connectedCoordinate(client.level, pos, base + 0.001F, axis) != base
+                            || naturality.client.fluid.FluidGeometry.connectedCoordinate(client.level, pos, base + 0.999F, axis) != base + 1)
+                            throw new AssertionError("Exposed liquid faces do not meet at the block boundary");
+                    }
+                }
+                var solid = new net.minecraft.core.BlockPos(0, 99, 0);
+                if (naturality.client.fluid.FluidGeometry.connectedHeight(client.level, solid, 3.001F) != 3.001F)
+                    throw new AssertionError("Liquid bottom inset against solid geometry was removed");
+                if (naturality.client.fluid.FluidGeometry.connectedCoordinate(client.level, solid, 0.001F, true) != 0.001F)
+                    throw new AssertionError("Liquid inset against solid geometry was removed");
+            });
+            for (int x : new int[]{-14, 14}) {
+                server.runCommand("tp @a " + (x + 1.4) + " 104 12.6 45 5");
+                world.getConnection().waitForClientboundPackets();
+                world.getConnection().waitForChunksRender();
+                context.waitTicks(3);
+                context.takeScreenshot("fluids-connected-fall-corner-" + x);
+            }
             // Localized light exposes constant face lighting hidden by daylight.
             server.runCommand("time set 18000");
             server.runCommand("setblock -18 101 40 sea_lantern");

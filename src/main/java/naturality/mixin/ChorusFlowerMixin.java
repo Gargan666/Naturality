@@ -32,6 +32,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class ChorusFlowerMixin extends Block {
     protected ChorusFlowerMixin(BlockBehaviour.Properties properties) { super(properties); }
 
+    @Override
+    protected net.minecraft.world.level.block.SoundType getSoundType(BlockState state) {
+        return net.minecraft.world.level.block.SoundType.ROOTS;
+    }
+
     @Inject(method = "createBlockStateDefinition", at = @At("TAIL"))
     private void naturality$properties(StateDefinition.Builder<Block, BlockState> builder, CallbackInfo ci) {
         builder.add(ChorusFlowers.FACING, ChorusFlowers.BLOOM);
@@ -126,5 +131,6 @@ public abstract class ChorusFlowerMixin extends Block {
     private static void naturality$completedConnections(LevelAccessor level, BlockPos target, RandomSource random,
             int spread, CallbackInfo ci) {
         ChorusFlowers.refreshConnections(level, target);
+        naturality.chorus.ChorusSprouts.scatter(level,target,random);
     }
 }

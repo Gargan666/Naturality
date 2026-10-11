@@ -54,14 +54,21 @@ public final class WindRendererGameTest implements FabricClientGameTest {
                     for(int i=0;i<4;i++) {
                         int tag=q.color(i)>>>24;
                         if(tag>=160 && tag<=191)marked[0]++;
-                        if(tag>=224 && tag<=231)marked[1]++;
+                        if(tag>=160 && tag<=191 && naturality.client.snow.SnowTextureAtlas.isCompositeUv(q.u(0),q.v(0)))marked[1]++;
                     }
                 });
                 var state=client.level.getBlockState(pos);
                 client.getModelManager().getBlockStateModelSet().get(state).emitQuads(emitter,slice,pos,state,
                     net.minecraft.util.RandomSource.create(0),direction -> false);
                 if(marked[0]==0)throw new AssertionError("Snowy section-edge leaf lacks wind: "+pos);
-                if(marked[1]==0)throw new AssertionError("Snow overlay lacks interpolated leaf-wind tags: "+pos);
+                // Sodium may omit all side quads of an interior leaf. Require
+                // decal tags on the exposed border, including section crossings.
+                boolean border = x == 14 || x == 17 || z == 14 || z == 17;
+                if(border && marked[1]==0)throw new AssertionError("Composited snow must share the original leaf-wind tags: "+pos
+                    + ", owner=" + slice.getBlockState(pos.above())
+                    + ", exposure=" + naturality.client.weather.WindRendering.windExposed(slice,pos)
+                    + ", reference=" + WindShapes.raw(() -> naturality.test.reference.ReferenceWindShelter.hasOpenSkyPath(slice,pos,
+                        p -> slice.getBrightness(net.minecraft.world.level.LightLayer.SKY,p))));
             }
         } catch(ReflectiveOperationException e) { throw new AssertionError("Cannot test Sodium snapshot",e); }
     }
@@ -143,7 +150,7 @@ public final class WindRendererGameTest implements FabricClientGameTest {
                         for(int i=0;i<4;i++) {
                             int alpha=quad.color(i)>>>24;
                             if(alpha<=127 || alpha>=160 && alpha<=191) marked[0]++;
-                            if(alpha>=224 && alpha<=231) marked[2]++;
+                            if(alpha>=160 && alpha<=191 && naturality.client.snow.SnowTextureAtlas.isCompositeUv(quad.u(0),quad.v(0))) marked[2]++;
                             if(state.is(net.minecraft.tags.BlockTags.LEAVES) && alpha>=160 && alpha<=191
                                     || state.getBlock() instanceof net.minecraft.world.level.block.CropBlock && alpha>=120 && alpha<=127)
                                 marked[1]++;
@@ -171,7 +178,7 @@ public final class WindRendererGameTest implements FabricClientGameTest {
                         throw new AssertionError("Missing shared-leaf or crop-root wind tags for "+state+" at "+pos);
                     if(state.is(net.minecraft.tags.BlockTags.LEAVES) && client.level.getBlockState(pos.above()).is(net.minecraft.world.level.block.Blocks.SNOW)
                             && marked[2]==0)
-                        throw new AssertionError("Snow-on-leaf overlay lacks interpolated leaf-wind tags at "+pos);
+                        throw new AssertionError("Composited snow lacks the original leaf-wind tags at "+pos);
                 }
             });
             for(boolean oit:new boolean[]{false,true}) {

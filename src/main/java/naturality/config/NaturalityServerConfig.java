@@ -15,6 +15,9 @@ public final class NaturalityServerConfig {
     private static final Path FILE = FabricLoader.getInstance().getConfigDir().resolve("naturality-server.json");
     private static volatile java.util.Map<String, naturality.weather.WeatherProfile> legacyWeather = java.util.Map.of();
     private static final NaturalityServerConfig INSTANCE = load();
+    public volatile boolean sleepAcceleration = true;
+    public volatile int sleepMaxSpeed = 200;
+    public volatile int sleepRampSeconds = 30;
     public volatile boolean portalIntroAnimation = true;
     public volatile boolean fireWrapping = true;
     public volatile boolean snowWrapping = true;
@@ -26,6 +29,8 @@ public final class NaturalityServerConfig {
     @SuppressWarnings({"null", "unused"}) // Validate values populated reflectively by Gson.
 
     public void validate() {
+        sleepMaxSpeed = Math.clamp(sleepMaxSpeed, 1, 1000);
+        sleepRampSeconds = Math.clamp(sleepRampSeconds, 1, 120);
     }
 
     public static java.util.Map<String, naturality.weather.WeatherProfile> takeLegacyWeather() {
@@ -35,6 +40,20 @@ public final class NaturalityServerConfig {
     }
 
     public static NaturalityServerConfig get() { return INSTANCE; }
+
+    public void reset() {
+        var defaults = new NaturalityServerConfig();
+        sleepAcceleration = defaults.sleepAcceleration;
+        sleepMaxSpeed = defaults.sleepMaxSpeed;
+        sleepRampSeconds = defaults.sleepRampSeconds;
+        portalIntroAnimation = defaults.portalIntroAnimation;
+        fireWrapping = defaults.fireWrapping;
+        snowWrapping = defaults.snowWrapping;
+        snowCompaction = defaults.snowCompaction;
+        weatherThaw = defaults.weatherThaw;
+        weatherSnowAccumulation = defaults.weatherSnowAccumulation;
+        vanillaPortalEntry = defaults.vanillaPortalEntry;
+    }
 
     private static NaturalityServerConfig load() {
         if (Files.exists(FILE)) {

@@ -79,7 +79,7 @@ public final class DynamicLighting {
             pendingDrops.clear();
         }
         var level = DynamicLighting.level;
-        if (level == null) return;
+        if (level == null || client.isPaused()) return;
         var config = NaturalityConfig.get().dynamicLighting;
         if (!config.enabled) {
             if (!state.emitters.isEmpty() || !state.field.isEmpty()) publish(Map.of(), it.unimi.dsi.fastutil.longs.Long2IntMaps.EMPTY_MAP, false, 0);
@@ -97,8 +97,9 @@ public final class DynamicLighting {
         for (Entity entity : level.entitiesForRendering()) {
             if (entity.isRemoved() || entity.isSpectator() || entity.position().distanceToSqr(camera) > range * range) continue;
             if (config.heldItems && entity instanceof LivingEntity living) {
-                add(sources, (long)entity.getId() * 4, handPosition(living, true), living.getEyePosition(), itemLight(living.getMainHandItem()), camera, config);
-                add(sources, (long)entity.getId() * 4 + 1, handPosition(living, false), living.getEyePosition(), itemLight(living.getOffhandItem()), camera, config);
+                int mainLight = itemLight(living.getMainHandItem()), offLight = itemLight(living.getOffhandItem());
+                if (mainLight > 0) add(sources, (long)entity.getId() * 4, handPosition(living, true), living.getEyePosition(), mainLight, camera, config);
+                if (offLight > 0) add(sources, (long)entity.getId() * 4 + 1, handPosition(living, false), living.getEyePosition(), offLight, camera, config);
             }
             int bodyLight = config.emissiveMobs
                 ? config.entityLightLevels.getOrDefault(BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString(), 0) : 0;
@@ -117,25 +118,23 @@ public final class DynamicLighting {
                     }
                 }
             }
-            Vec3 body = entity.position().add(0, entity.getBbHeight() * 0.5, 0);
-            add(sources, (long)entity.getId() * 4 + 2, body, body, bodyLight, camera, config);
+            if (bodyLight > 0) {
+                Vec3 body = entity.position().add(0, entity.getBbHeight() * 0.5, 0);
+                add(sources, (long)entity.getId() * 4 + 2, body, body, bodyLight, camera, config);
+            }
         }
         for (Drop drop : pendingDrops) if (drop.position.distanceToSqr(camera) <= range * range)
             add(sources, drop.id, drop.position, drop.position, itemLight(drop.item), camera, config);
         sources.sort(Comparator.comparingDouble(Source::distance));
         if (sources.size() > Math.clamp(config.maxSources, 8, 128))
             sources.subList(Math.clamp(config.maxSources, 8, 128), sources.size()).clear();
-        // Membership/brightness changes bypass the movement cadence so the first
-        // dropped-item tick replaces the held/bridging light in one publication.
+        // Select by distance as before, then compare by identity: walking around
+        // stationary lights must not invalidate the field when their order swaps.
+        sources.sort(Comparator.comparingLong(Source::id));
         boolean sameSources = sources.size() == previousSources.size();
-        if (sameSources) {
-            var identities = new HashMap<Long, Integer>();
-            for (Source source : previousSources) identities.put(source.id, source.light);
-            for (Source source : sources) if (!Objects.equals(identities.get(source.id), source.light)) {
-                sameSources = false;
-                break;
-            }
-        }
+        for (int i = 0; sameSources && i < sources.size(); i++)
+            sameSources = sources.get(i).id == previousSources.get(i).id
+                && sources.get(i).light == previousSources.get(i).light;
         if (!scheduled && sameSources && !dirty && lastSubBlock == config.subBlockPrecision) return;
         // Distance is only a sorting key; camera movement must not rebuild a fixed field.
         boolean unchanged = sources.size() == previousSources.size();
@@ -204,8 +203,17 @@ public final class DynamicLighting {
         for (var entry : smooth.long2IntEntrySet()) if (oldSmooth.get(entry.getLongKey()) != entry.getIntValue())
             sections.add(net.minecraft.core.SectionPos.blockToSection(entry.getLongKey()));
         for (long key : oldSmooth.keySet()) if (!smooth.containsKey(key)) sections.add(net.minecraft.core.SectionPos.blockToSection(key));
-        for (long section : sections) level.setSectionDirtyWithNeighbors(net.minecraft.core.SectionPos.x(section),
-            net.minecraft.core.SectionPos.y(section), net.minecraft.core.SectionPos.z(section));
+        // Preserve precisely the same section neighborhood, but notify overlaps once.
+        var affected = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
+        for (long section : sections) {
+            int x = net.minecraft.core.SectionPos.x(section), y = net.minecraft.core.SectionPos.y(section), z = net.minecraft.core.SectionPos.z(section);
+            for (int dx = -1; dx <= 1; dx++) for (int dy = -1; dy <= 1; dy++) for (int dz = -1; dz <= 1; dz++)
+                affected.add(net.minecraft.core.SectionPos.asLong(x + dx, y + dy, z + dz));
+        }
+        for (long section : affected) {
+            int x = net.minecraft.core.SectionPos.x(section), y = net.minecraft.core.SectionPos.y(section), z = net.minecraft.core.SectionPos.z(section);
+            level.setSectionRangeDirty(x, y, z, x, y, z);
+        }
         // Publish first: removals must be seen when decrease propagation executes.
         for (long old : previous.keySet()) if (!next.containsKey(old)) engine.checkBlock(BlockPos.of(old));
         // Recheck current sources too, restoring them after server light packets.

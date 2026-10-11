@@ -1,3 +1,638 @@
+PROXIMITY SKY EVENT (2026-10-11)
+-------------------------------
+Overworld Proximity chooses one planet for a fixed episode of 48000-120000
+server ticks (two to five normal Minecraft days). Quiet night ticks roll at
+1-pow(0.9,1/1200), a default 10% chance per eligible minute. Days hide the
+sprite while preserving its planet, position seed and remaining duration.
+The scheduler follows advance_weather, like other Overworld sky events.
+World data saves the random sequence, selected planet, appearance and timer;
+the synchronized sky_event_v2 payload carries the appearance seed as well
+as the existing dimension/event/strength fields.
+Proximity strength is a planet ID, with no easing between values:
+1 Mercury, 2 Venus, 3 Mars, 4 Jupiter, 5 Saturn, 6 Uranus, 7 Neptune; 0 is off.
+/skyevent minecraft:overworld proximity <0-7|auto> overrides/releases it.
+Higher values are rejected, and status names the selected planet and chance.
+Supplied resources/textures/sky/<planet>.png sprites use the celestial blend,
+with small seeded size variation (0.7-1.0 quad half-size at distance 100).
+The camera-centered sprite is placed randomly above the horizon, clear of
+the moon's entire X/Y orbital plane (absolute Z component initially >=0.45).
+Small sinusoidal independent motion retains that clearance, without inheriting
+the star sphere rotation. Daylight/rain/star visibility govern its opacity.
+The Proximity startup feature appears in the Sky category. Resource reloads
+use fresh texture-manager bindings, and world changes reset client selection.
+Validation: assemble and the proximity + sky-events client suites passed.
+Tests cover all seven sprite draws, horizon/moon clearance during drift,
+day/night return, fixed episode selection, invalid strength rejection,
+world isolation and real save/reopen restoration. Screenshots inspected for
+the star-sized planet presentation. Log: build/proximity-test.log.
+
+LARGE OVERWORLD CAVE AMBIENCE (2026-10-11)
+-----------------------------------------
+CaveAmbience loops only resources/sounds/cave_ambience_nice1.ogg through the
+streamed naturality:cave_ambience event, at original pitch with no positional
+attenuation, using Minecraft's Ambient/Environment volume. It belongs to the
+visual overhaul and runs only in the Overworld. Local cave classification checks
+every ten unpaused ticks: the listener must be underground by WeatherShelter,
+outside fluid, with four blocks of overhead clearance and at least 16 blocks of
+combined opposing-ray clearance on three of four horizontal axes. This rejects
+small rooms, low ceilings, narrow tunnels and surface shelters. Rays inspect
+only loaded chunks, never loading terrain or treating absent chunks as air.
+Gain moves from silence to full volume or back over 60 ticks (three seconds).
+The loop stops at zero gain; moving between qualifying rooms during a partial
+fade retains playback. Pause freezes detection/fades; world changes stop and
+reset the loop immediately. The End ambience scheduler remains independent.
+Validation passed: assemble and runClientGameTest -PclientTests=cave-ambience.
+Log: build/cave-ambience-final.log.
+The suite checks large rooms, narrow tunnels, gradual gain, low ceilings,
+surface rejection, unloaded terrain and dimension cleanup. Tests mute output;
+the supplied recording's loop seam has not been judged by listening.
+
+LONGER CONVERSATIONS AND PARTNER FOCUS (2026-10-11)
+Ordinary villager conversations now last 100 ticks (5 seconds); emotional gossip
+lasts 180 ticks (9 seconds). Animation envelopes and chatter follow those shared
+durations, with gossip speaker noises spaced every 30 ticks. Ordinary speech
+establishes a conversational pair on both participants; gossip stores each
+speaker/listener partner. After normal villager AI and before the look controller
+runs, active participants restore their partner as LOOK_TARGET and interaction
+target, preventing nearby player-look behaviors from stealing their attention.
+Idle/meeting participants stop wandering during the exchange. Focus ends on
+expiry, partner departure/death, trade, sleep or danger (including reputation
+fear). The 800-tick gossip transfer interval remains unchanged.
+Validation: reputation suite and assemble passed, including six-second gossip
+focus overriding a player look target, trade interruption, ordinary conversation
+remaining active at four seconds and expiring at five. Native gossip selection
+in the reaction test is seeded to avoid sampling only non-shareable cure gossip.
+Logs: build/conversation-focus.log and build/conversation-focus-final.log.
+
+GENERAL CONVERSATION AND PRIVATE WAKE-UP GOSSIP (2026-10-11)
+Speaking villagers with a nearby villager interaction target now broadcast a
+neutral conversation bob (event 72). This uses a subtle upward/default head
+motion at half the gossip speaker amplitude, accompanying the normal ambient
+voice without extra duplicate sounds. Emotional gossip can replace a neutral
+conversation animation. Gossip's native pair cooldown is shortened from 1200
+to 800 ticks when reputation is enabled, allowing 50% more frequent transfers;
+meeting opportunities and normal transfer limits still apply.
+Night waking retains the one-point shared penalty and morning trade refusal,
+but no longer broadcasts an upset reaction to neighbors. Only the sleeper
+gets the immediate angry particles, disapproval and unhappy counter. It stores
+25 minor-negative gossip about the waking player; neighbors learn this complaint
+later through native gossip, with normal transfer loss and decay. Spreading the
+complaint does not charge another shared-score penalty. Damage wake-ups still
+produce the normal witnessed-hit reaction separately from the private wake event.
+Validation: reputation client suite and assemble passed, including neutral
+speech bob, no immediate neighbor anger/knowledge, later complaint transfer,
+and rejecting gossip at 799 ticks then permitting it at 800 ticks.
+Log: build/conversation-wake-gossip-final.log.
+
+CUTOUT OVERLAY EDGE FILTERING (2026-10-11)
+-------------------------------------------
+Terrain cutout shaders now use the owning texel at magnified binary-alpha
+boundaries. This prevents texture filtering from mixing invisible neighboring
+RGB into grass-side and other cutout overlay edges. Opaque interiors, distant
+mip filtering and authored partial-alpha texels retain their existing sampling.
+Procedural fluids and fire are excluded. Custom snow side textures are already
+precomposed; this change does not alter snow placement or lighting rules.
+Validation: overlay-edge GPU regression reproduced a bright fringe (red 52)
+and restored the expected edge value (26). Distant and partial-alpha outputs
+were identical. Fabric in-game grass scenes with/without snow loaded and
+captured successfully with Fabric and Sodium. Assemble and debug preparation passed.
+Logs: build/overlay-edge-test.log, build/overlay-edge-sodium-test.log,
+build/overlay-edge-build.log.
+WORLDGEN SNOW BENEATH TREE CANOPIES (2026-10-11)
+----------------------------------------------
+SnowWorldgen now scans each generated snow-pass column down through leaves,
+logs, air and vegetation until its first solid surface. After encountering a
+leaf canopy, it places one snow layer above each separated leaf tier and on
+the ground beneath it, even without direct sky exposure. This applies to all
+blocks in the leaves tag, including spruce/pine trees. Plants remain intact
+with fitted snow above them and their ground support marked snowy. Solid roofs
+stop the scan; native per-position biome precipitation, block light, snow
+support and build-height checks still apply. Existing snow is not deepened.
+The existing server snow-wrapping setting gates this extension. Only newly
+generated chunks are affected; existing terrain is not rewritten.
+Validation: offline assemble and snow-worldgen passed. The actual vanilla
+snow/freeze feature test covers three separated spruce leaf tiers, sheltered
+ground and fern, roofs above/below leaves, water, warm biomes and disabling
+wrapping, alongside existing exposed vegetation checks.
+Log: build/tree-snow-test.log. Artifact: build/libs/naturality-1.0.0.jar.
+
+EXPRESSIVE VILLAGER GOSSIP (2026-10-11)
+Actual native gossip transfers now compare the listener's before/after entries.
+New positive information triggers a listener nod and quiet yes; negative
+information triggers a listener head shake and quiet no. The speaker performs
+subtle upward bobs for positive news or downward bobs for negative news, returning
+to its default pose each cycle. Speakers mix quiet ambient noises with matching
+yes/no noises over a three-second animation. Sounds use volume 0.25 with slight
+pitch variation; events 68-71 synchronize the four roles to clients. Animations
+fade in/out and a three-second cooldown prevents overlapping chatter. Empty or
+unchanged transfers do not react; mixed news uses the stronger weighted polarity,
+with negative taking ties. All effects obey the reputation feature toggle and
+leave native gossip selection, transfer, prices and shared scores unchanged.
+Validation: reputation client suite and assemble passed. Tests exercise actual
+positive/negative Villager.gossip calls, distinct speaker/listener events and
+empty exchanges. Log: build/gossip-reactions-final.log. Initial launch was
+interrupted by an unrelated missing EndFlashes nested class; rerun passed.
+
+VANILLA GOSSIP / CUSTOM REPUTATION INTEGRATION (2026-10-11)
+Villager prices now combine the permanent shared 0-100 score adjustment with
+native local gossip: -floor(weighted gossip * offer price multiplier), plus the
+existing Hero discount and native demand/stock calculation. Local hurt/kill
+rumors, temporary trading goodwill and permanent/temporary cure goodwill now
+actually influence prices again. Native gossip generation, weighted transfer,
+transfer loss, daily decay, type caps and NBT persistence remain in vanilla.
+The Minecraft 26.3 source confirms minor-positive cap 25, major-positive cap 20;
+older indexed wiki data can differ. Open prices refresh when gossip or the shared
+score/Hero status changes; the refresh signature is now recorded correctly.
+Shared scores do not change when rumors spread or decay: custom hit/kill/cure,
+gift and raid rewards stay single-counted. Trading gives no shared score, but
+its native temporary local goodwill can discount prices. Custom score thresholds
+still govern refusal, fear, golem hostility and illager friendliness; native
+gossip cannot trigger additional golem hostility above the custom zero threshold.
+Main wiki fetch was
+robots-blocked; indexed wiki documentation was cross-checked against local source.
+Validation: reputation suite and assemble passed; tests cover positive/negative
+price effects, daily decay, transfer loss, personal permanent cure goodwill,
+unchanged shared score, live trading goodwill prices and native gossip reload.
+Logs: build/reputation-gossip.log and build/reputation-gossip-final.log.
+
+FITTED SNOW LIGHTING STENCIL (2026-10-11)
+---------------------------------------
+The nighttime soul-lantern report was captured with the Fabric/Indigo renderer.
+Reproduction found ordinary snow emitted VANILLA-shaded quads while fitted snow
+emitted ENHANCED-shaded quads. Enhanced inset-face lighting blends another cell
+into the fitted patches, producing a different field where they meet ordinary
+snow. SurfaceSnowModel now explicitly selects ShadeMode.VANILLA, matching native
+snow. Existing physical-cell rebasing, snow heights, shape culling, wind tags,
+texture coordinates and pixelated brightness settings are retained.
+
+The snow-surface-lighting suite creates a lantern surrounded by ordinary snow
+and snow fitted down from the owner above the lantern. It asserts both paths
+select native shading and compares their actual tessellated lightmap values at
+at least four shared ground-plane corners. Both assertions passed; the full
+Fabric snow suite also passed, including smooth/flat lighting and fitted shape
+regressions. Logs: build/snow-surface-lighting-baseline.log (different modes),
+build/snow-surface-lighting-fixed.log and build/snow-surface-lighting-seams.log.
+Before/after captures: snow-lantern-lighting-baseline and
+snow-lantern-lighting-fixed under build/run/clientGameTest/screenshots.
+Normal assemble, compileGametestJava and prepareDebugLaunch passed
+(build/snow-surface-lighting-build.log). Packaged renderer contains the validated
+VANILLA shading correction in build/libs/naturality-1.0.0.jar. Restart Minecraft
+to apply it.
+
+BELL PIXEL LIGHTING ALIGNMENT (2026-10-11)
+-----------------------------------------
+The vanilla bell floor model maps texture V=1..16 over full-height stone posts
+(Y=0..16). Its 15 stretched texture rows therefore cannot align with the regular
+1/16-block lighting cells. Wall/between-wall supports also have stretched UVs.
+BellLightingModel marks opaque bell support quads with reserved alpha tag 242,
+preserving their geometry, UVs and RGB tint. The shared terrain fragment shader
+uses atlas-texel centers for these faces and restores fully opaque shade alpha.
+Marked faces retain geometry caching with a distinct key from unmarked models.
+The animated bell body continues through its existing entity-rendering path.
+
+The texel grid supplies the same sample offset to vertex/AO and sky/block light,
+including local block-light samples. Texture pixels, adaptive brightness bands
+and saturation calculations retain their existing behavior. Ordinary terrain
+keeps its section-local 1/16-block grid. Bell supports follow the resource pack's
+actual texture resolution. No extra geometry, vertex attributes or draw passes.
+Sodium preserves the marker in the existing shade varying; foliage and underwater
+markers retain their separate ranges. The lighting-off path stays fully opaque.
+
+The bell-lighting client suite checks every bell attachment/facing/powered state
+against the unmarked model for identical vertices, UVs and RGB tint, and checks
+18,761 GPU pixels against a stretched-UV cell-center oracle. Screenshots cover
+both transparency modes and an oblique view. Logs: build/bell-lighting-test.log
+and build/bell-lighting-sodium-test.log. Restart Minecraft after rebuilding.
+Both final runs passed, as did assemble, compileGametestJava and
+prepareDebugLaunch (build/bell-lighting-build.log). Packaged mod:
+build/libs/naturality-1.0.0.jar.
+
+HEAT WAVE RENDERING AND SCAN OPTIMIZATION (2026-10-11)
+----------------------------------------------------
+HeatWaves preserves the current toggle-version effect with tall rows: the same
+64-source selection/order, scan radius/cadence, heat volumes, proximity/spatial
+tapers, world-anchored patches, clock and power controls. The fragment shader
+exits before wave generation/destination testing when strength is zero, skips
+volumes whose maximum strength cannot win, and ends the destination search once
+its strength is sufficient for the existing min(mask,destination) calculation.
+The projection inverse is calculated in the vertex stage and shared by both
+fragment depth queries, rather than recalculated for each pixel/query.
+
+A bounded quad replaces the full-screen triangle. Its vertex shader projects
+all active volume corners with the actual draw projection/view matrices; an
+eye-plane crossing conservatively keeps the full viewport. A one-pixel margin
+covers numerical edge rounding. This only bounds the heat post-process; it does
+not change terrain, entity or particle culling. Zero-strength volumes are omitted
+from uploads while the scanned source list and tie order remain unchanged.
+
+The renderer reuses three fenced uniform buffers and no longer allocates an
+unused scene depth attachment (about 7.9 MiB saved at 1920x1080). Zero power skips
+source scanning. Scans test each section palette once and read section-local
+states directly. Lake/column merging compacts the list in one pass and allocates
+only the final merged box for each group, avoiding repeated list shifts and
+intermediate bounds. GPU resources are released/recreated with renderer close.
+
+HeatWavesGameTest compares source order/type and GPU output against a frozen
+pre-optimization renderer in test sources/resources only. Coverage includes
+depth occlusion, FOV changes, camera turns, projection skew, camera inside heat,
+resizing, both transparency modes, power zero/re-enable and source removal.
+Final isolated vanilla suite passed, including a seeded fragmented-source field
+across chunk/section boundaries with more than 64 candidates. Original/current
+output differed in at most 16 of 164,673 pixels (floating-point/nearest-sample
+edges); fully depth-occluded output matched exactly. 1080p CPU+GPU pass timings
+(median of 5 batches of 12): isolated fire 0.494 -> 0.109 ms, lake 0.764 ->
+0.421 ms, synthetic 64 volumes 1.046 -> 0.360 ms, fragmented 0.995 -> 0.421 ms.
+These are isolated pass timings on the local RTX 4070, not whole-game FPS
+promises; timings vary with concurrent machine load. Lake scan allocation fell
+from 3,184 to 1,864 bytes/scan. Log: build/heat-waves-optimization-isolated.log.
+Separate build outputs/launch descriptor in build/heat-validation avoid other
+concurrent Gradle compiles replacing classes while the test JVM is running.
+The same suite passed with Sodium, including both transparency modes and all
+source/pixel comparisons (at most 18 differing pixels of 163,840/164,673).
+Log: build/heat-waves-optimization-sodium.log. Comparison shaders/classes are
+gametest-only and are excluded from the production mod.
+Normal assemble, compileGametestJava and prepareDebugLaunch passed; log:
+build/heat-waves-optimization-build.log. Artifact: build/libs/naturality-1.0.0.jar.
+Restart Minecraft to load the optimized renderer.
+
+TERRAIN HOLE INVESTIGATION (2026-10-10)
+--------------------------------------
+The reported snowy-mountain hole affects stone/grass terrain, with Sodium absent.
+Its coordinates were lost. No production culling change has been made: the exact
+failure has not yet been reproduced, and neither fog nor snow culling is proven
+responsible. Do not treat the regression's success as a fix for that report.
+
+The new terrain-culling client suite creates a snow-covered, bending stone ridge
+and tests five exterior/valley viewpoints. It traces first-hit surfaces, checks
+their sections against the native occlusion graph and current frustum draw list,
+then checks small camera moves within the eight-block cell where Minecraft reuses
+the graph. All views passed (68-75 first-hit sections each), as did the existing
+fog-culling suite. The terrain suite skips Sodium, whose graph is separate.
+Logs: build/terrain-culling-validation.log and build/terrain-culling-baseline.log.
+Screenshots: build/run/clientGameTest/screenshots/*_terrain-culling-*.png.
+
+If this hole recurs, capture position AND rotation with a brief F3+C before
+moving, then note whether F3+A restores it. That supplies a repeatable camera
+view and tells us whether rebuilding the terrain changes the failure.
+
+ITEM AND PROJECTILE LIQUID SPLASHES (2026-10-10)
+---------------------------------------------
+WaterEntrySplash and LavaEntrySplash also track Projectile subclasses and dropped
+ItemEntity instances. They use the same continuous descent, strictly-over-five-
+blocks threshold, first fluid contact, spectator/silent/passenger exclusions and
+descent resets as living entities and boats. Impact columns retain entity-bound
+footprint sizing and the existing water/lava timing rules. Item/projectile splash
+height is 25% of the normal height, footprint and pixel-stepped ring expansion
+are 50%, and airborne droplets are fewer, smaller and launched less forcefully.
+Living entities and boats keep their existing splash dimensions. Items and
+projectiles never play Naturality's loud water splash sound; living entities and
+boats retain it. Lava impacts continue to have no custom splash sound.
+The liquid-projectiles client suite covers high/short arrow and item falls into
+both liquids, one splash per entry, no loud sound for either new category, and
+the living-entity sound regression. Its initial run was blocked before tests by
+a Fabric LivingEntity mixin startup failure (ClassInfo.findInterface while
+calculating aiStep locals); see build/liquid-projectiles-test.log.
+
+POSED MOB DEATH SMOKE (2026-10-10)
+--------------------------------
+The normal mob-death poof burst now starts across sampled cubes of the last
+rendered death pose, including body rotation, limbs and model scaling. A passive
+DeathSmokeLayer records transformed visible cube samples only for dying mobs.
+The same twenty vanilla poofs use these samples, with larger initial quads to
+compensate for the small first smoke_death sprite. Each poof now starts directly
+at its model sample and follows normal particle physics from there, with no
+return motion toward the old spawn position. The initial size boost holds for
+two ticks and relaxes to native size by tick eight.
+DeathSmokeParticle extends ExplodeParticle, retaining its sprite sequence, random
+velocity, collision, lifetime and subsequent drift. The provider is scoped to
+LivingEntity.makePoofParticles; unrelated poofs retain their existing provider.
+Offscreen deaths without a recent model snapshot fall back to ordinary poofs.
+Weak keys avoid retaining entities or worlds; snapshots expire after four ticks.
+The custom ghast crash uses its existing server particle burst.
+Validation: offline assemble, mob-arrows, smoke and prepareDebugLaunch passed.
+The death tests check posed samples, scoped provider selection, natural drift
+without returning toward an original spawn five blocks above the model, context
+cleanup and unrelated poof passthrough.
+Previous smoke regression: build/mob-death-smoke-validation.log.
+Natural-drift revision: assemble, mob-arrows and prepareDebugLaunch passed;
+build/mob-death-smoke-drift.log. The eight-tick drift screenshot was inspected.
+Updated artifact: build/libs/naturality-1.0.0.jar; restart the game to apply it.
+
+MOB DEATH SMOKE SPRITES (2026-10-10)
+----------------------------------
+The vanilla poof particle now uses smoke_death_0 through smoke_death_11 from
+resources/textures/particle, in numeric animation order. Its existing
+ExplodeParticle provider advances the sequence once over the particle's lifetime,
+preserving vanilla drift, tint, size variation and lifetime. The override is
+src/client/resources/assets/minecraft/particles/poof.json; other uses of poof
+share the new appearance. Validation: gradlew assemble --offline passed.
+
+MOB DEATH TEXTURE PIXELS (2026-10-10)
+-----------------------------------
+Mobs using the default living-entity death animation progressively lose individual
+texture texels, reaching 80% removal at tick 19 before vanilla's tick-20
+removal and smoke. The fixed texture-coordinate order does not flicker or restore
+removed pixels. Shuffled groups of five texels retain one pixel each, leaving
+20% of the texture (within one texel for an incomplete group); visible coverage varies with transparent
+texels and overlapping model faces. Source textures are never modified.
+MobDeathRendererMixin carries interpolated progress in unused overlay-U bits;
+entity.vsh restores the original overlay coordinates and entity.fsh discards
+selected texels before color/lighting and OIT handling. Native tint, movement,
+death rotation, drops and smoke timing remain intact. Players, normal ghasts and
+happy ghasts are excluded. Both ghast types are excluded even without an active
+custom crash target. Layers using the living overlay helper share
+the effect; independently rendered equipment/emissive layers retain their paths.
+Ghast exclusion validation: offline assemble passed; build/mob-death-ghast-exclusion.log.
+This follows the Visual Overhaul feature gate and adds no texture allocations.
+Validation: offline assemble, mob-arrows client suite and prepareDebugLaunch
+passed. Tests check initial/mid/final progress, native overlay bits and player
+exclusion. Initial and final pig/zombie screenshots were visually inspected.
+Log: build/mob-death-validation.log. Artifact: build/libs/naturality-1.0.0.jar.
+Restart the game to load the updated mixins and shaders.
+
+SNOWFALL UPDATE BACKPRESSURE (2026-10-10)
+----------------------------------------
+Dense layer changes were repeatedly recomputing the survival geometry of adjacent
+snow and refreshing the same grass coverage. A controlled 512-block update wave
+over leaves/fences allocated 8.2-8.8 MB before this change. Eliminating redundant
+horizontal partial-snow support checks and grass refreshes for layer-count-only
+changes reduced that fixture to roughly 3.6-4.6 MB per wave in the later vanilla
+run. Initial and warmed timings vary with JIT; these are server-thread allocation
+measurements, not total RAM consumption or a measured gameplay FPS improvement.
+
+SnowfallBudget limits natural snowfall per ServerLevel/game tick to eight block
+changes, four changed owner sections and 32 expensive preflight attempts, with a
+soft 1 ms budget for survival checks/entity pushing/block updates. An admitted
+first change may finish past the time limit so complex supports still progress.
+It covers vanilla-position accumulation and the irregular-support path. Ice
+freezing and precipitation handlers retain their existing behavior. Player
+placement, commands and ordinary block edits are not throttled.
+
+There is no pending-position queue or growing backlog. Rejected weather attempts
+are retried by future natural precipitation sampling. A rotating admission window
+prevents a fixed chunk iteration order from permanently favoring its first
+columns. Only a few counters and up to four section keys are retained per level,
+with weak world keys. Large storms may accumulate more slowly, while keeping the
+same layer limits and snow geometry. Vanilla behavior passes through when both
+custom snow wrapping and active custom accumulation are disabled.
+
+Full block notifications, lighting, observer/redstone updates, client packets,
+entity pushing and saving remain enabled. Only horizontal notifications from
+partial snow bypass the neighboring snow's redundant vertical-support test.
+Vertical support removal still validates survival. Grass coverage refreshes are
+skipped only when both old/new states are snow below eight layers; placing,
+removing and crossing the full-layer boundary retain the original handling.
+
+Validation: snow-storm, snow-weather, snow, wind-shapes and gameplay passed on the
+default renderer. The stress test includes fixed-order fairness for 16 columns,
+progress after a soft-budget overrun, preflight/write/section caps, support removal,
+and a 512-column storm. That storm applied 255 changes across 32 ticks, never
+exceeding eight changes in one tick, and client heights matched the server.
+Rain-50 two-layer and extreme-rain seven-layer accumulation above signs still pass.
+Logs: build/snow-storm-baseline.log, build/snow-storm-validation.log and
+build/snow-storm-budget-validation.log. Reproduce with -PclientTests=snow-storm.
+The final snow-storm/snow-weather/snow-compat run also passed with Sodium
+0.9.3-alpha.1 (build/snow-storm-sodium.log), including disabled-feature passthrough
+and synchronized storm heights. The dense snow fixture screenshot was checked.
+Offline assemble and prepareDebugLaunch passed (build/snow-storm-build.log).
+Updated artifact: build/libs/naturality-1.0.0.jar. Restart the game to apply it.
+
+FLAT EXPLOSION PARTICLES (2026-10-09)
+-----------------------------------
+FlatExplosionParticle replaces both vanilla explosion and explosion_emitter
+providers during the visual overhaul. Each produces a stationary horizontal
+quad at the effect origin, with its top facing world up and a second reverse
+face visible from below, plus a camera-facing copy at the same position and
+80% size. The explosion_flat_0 through explosion_flat_6 sprites
+play once at two ticks per frame, at full opacity and full brightness; the
+horizontal quad disappears after 14 ticks. The camera-facing copy begins on the
+third sprite (explosion_flat_2), holds it for an extra two ticks, and completes
+its animation at 12 ticks. The horizontal
+base quad is twelve blocks wide and the copy is 9.6 blocks wide; both have constant
+size, ignore movement and are immune to wind. ExplosionParticleSizeMixin passes
+the packet's explosion strength to the provider. Base scale is strength / 4;
+scales below 1 are doubled and capped at 1. TNT (strength 4) retains its original
+twelve-block horizontal width and 9.6-block camera-facing copy. Stronger
+explosions retain their original proportional scaling.
+The horizontal render plane sits 1/512 block above the effect origin to avoid
+z fighting with coplanar block surfaces while retaining normal depth occlusion.
+Large-fireball block impacts send FireballImpactPayload before the explosion
+packet. The client pairs this with the explosion center, places the effect at
+the exact hit location, and rotates the surface quad toward the struck block
+face's outward normal, including walls and ceilings. Its 1/512-block offset
+follows that normal; the smaller copy remains camera-facing. Entity impacts
+and explosions without impact metadata retain the world-up plane. Exact face
+alignment requires Naturality on the server; pending metadata expires after
+20 ticks and is cleared when the client world changes.
+Particle definitions live in the
+Minecraft explosion.json and explosion_emitter.json overrides; assets remain
+under resources/textures/particle. Validation: gradlew assemble --offline passed.
+
+LIVE FOREST PROFILE AND SHAPE QUERY OPTIMIZATION (2026-10-06)
+-----------------------------------------------------------
+The user's stationary forest view was recorded for 30 seconds in the existing
+Minecraft process, without changing the world. Among 2,275 render-thread CPU
+samples, particle open-sky/shelter queries appeared in 673 (29.6%), wind shape
+translation in 246 (10.8%), and portal clip metadata lookup in 167 (7.3%). These
+are inclusive, overlapping stack counts, not additive costs or GPU/FPS timings.
+Profile: build/forest-render-diagnosis.jfr; compact results and complete example
+stacks: build/forest-profile-summary.txt and build/forest-profile-paths.txt.
+
+Portal clipping now stores the plane on each deferred item/model submission.
+The old WeakHashMap used record hashCode, traversing the entire item quad list
+for every quad, including ordinary unclipped items. Direct metadata also keeps
+equal-valued submissions from accidentally sharing different clipping planes.
+
+RaycastShapePresence inspects loaded section palettes once per ray and bypasses
+neighbor searches only when fire, snow or wind-eligible blocks are absent from
+the full search volume. Snow's 32-block owner range and section/chunk borders
+are retained. Unknown/unloaded chunks and non-Level views use the original
+search. No chunks are requested by this shortcut. Scopes are thread-local,
+bounded and restored through nested rays/exceptions; edits are seen next ray.
+
+WindShapes reuses immutable translated collision/outline shapes by original
+shape identity, retaining up to four context variants per cached block. Entries
+expire with the existing tick, weather and state keys. The raw-shape recursion
+counter now reuses one small per-thread array instead of repeatedly removing and
+allocating ThreadLocal entries. Nested scopes and exceptions restore the depth.
+Wind displacement, leaf transparency, ray hits and particle behavior are retained.
+No distant leaf/wind LOD, particle deletion or spawn blocking was added here.
+
+The forest-performance suite checks equal item-record identities with different
+portal planes, both model/item constructor hooks, absence of quad-list hashing,
+1,536 exact collision/outline/visual ray comparisons across client/server worlds,
+negative coordinates, nested palette scopes, unloaded chunks, next-ray edits,
+shape variants and exception cleanup. The reference traversal bypasses only the
+new presence gates, retaining the original neighbor hooks for comparison.
+In the final vanilla run's last warm benchmark round, the mixed foliage/roof ray
+fell from 43.37 to 22.56 microseconds/call. Repeated translated shapes fell from
+152 to 0 allocated bytes/call on the client. These focused results are affected
+by JIT/GC and do not predict overall gameplay FPS or establish a GPU bottleneck.
+
+Passed vanilla suites: forest-performance, wind-shapes, portal, fire, snow and
+particle-weather. Logs: build/forest-validation.log and
+build/forest-final-validation.log. Portal clipping and snow screenshots checked.
+The focused forest-performance suite also passed with Sodium 0.9.3-alpha.1
+(build/forest-sodium-validation.log).
+Offline assemble and prepareDebugLaunch passed (build/forest-build.log), restoring
+the normal launch classpath. Artifact: build/libs/naturality-1.0.0.jar.
+The live game must restart before comparing the same forest scene with the patch.
+
+OVERWORLD RENDERING AND CHUNK-BUILD REDUNDANCY (2026-10-06)
+--------------------------------------------------------
+Preserves draw distances, cloud coverage, foliage motion, water/lighting formulas,
+particle density and spawn behavior. No particle visibility deletion or spawn
+blocking was reintroduced. No chunk-generation rate cap or quality reduction.
+
+SnowRenderRegionCacheMixin now probes loaded chunk palettes on the client thread
+before requesting extended snapshots. A snow-free region requests zero extra
+sections instead of up to 36 and bypasses snow-owner/overlay work during meshing.
+The probe covers the full existing 3x3x7 search volume, so neighboring/distant
+snow owners still receive the original immutable snapshots. Regions containing
+sugar cane keep the lower snapshot margin for tall stalk wind anchors. Worker
+threads still never inspect live terrain or load absent chunks.
+
+Wind shelter probes skip air collision queries, reuse the diagonal ray cursor,
+and visit the same six cells directly for the five-block vertical probe. Diagonal
+quarter-block sampling and collision clipping remain unchanged. Exposure keys
+use a primitive map. Wind GPU data is shared across terrain passes in a frame;
+identical data can also retain its buffer across paused frames. Dynamic lighting
+does not advance its clock or rebuild the field while the integrated game pauses.
+
+Cloud geometry omits gradient walls already discarded as back-facing and caps
+whose existing shader opacity is zero. Height transitions trigger a rebuild,
+with conservative rounding margins; face ordering and cloud range are retained.
+The synthetic 64-chunk fixture submits 45,463 faces instead of 91,362. Other
+styles retain their original geometry. This is a face count, not an FPS result.
+
+Terrain shares its pixel-lighting grid, skips unused water absorption/block-light
+work, rejects transparent ordinary terrain texels before color processing, and
+avoids atmosphere samples with zero fog coverage or completed chunk arrival.
+Derivatives needed after early rejection are captured first. Fluid/fire alpha,
+OIT phases, submerged shimmer and shoreline behavior retain their existing paths.
+Foliage shaders skip zero wind and zero-weight storm shake calculations.
+
+Waterfall/lavafall scans share section-palette fluid presence within each existing
+256-column batch. Empty sections are skipped, and loaded chunks/cursors reused;
+the scan order, cadence, ranges, border/impact rules and particle counts are intact.
+Presence caches reset every batch so edits cannot leave stale fluid absence.
+
+Validation includes frozen-original wind geometry comparisons at 512 positions,
+snapshot immutability/neighbor snow/tall-stalk checks, waterlogged-state detection,
+GPU uniform reuse/reload, pause/resume, cloud heights/styles and classic/OIT views.
+Repeated warm wind probes reduced allocation in the tested roof fixture from
+2,704 to 2,392 bytes/call in the final vanilla run (3,504 to 3,072 with Sodium);
+timing varies with JIT/GC. Test fixtures were corrected
+for current cloud defaults, packet/camera synchronization, and Sodium's already
+culled interior leaf sides. Production defaults were not changed.
+
+Passed vanilla coverage: render-redundancy, clouds, wind-compat, wind-shapes, snow,
+snow-compat, lighting, dynamic-lighting, water, water-rain, water-occlusion,
+waterfall, lava-effects, fluids, chunks (including saved-world reopening), and
+overworld-loading. Passed Sodium 0.9.3-alpha.1 coverage: render-redundancy, clouds,
+wind-compat, snow-compat, lighting and water. Logs: build/render-redundancy-*.log.
+Some initial combined runs stop at the corrected fixture assertions; subsequent
+chunk, fluid and Sodium logs contain the relevant completed suites.
+
+The overworld-loading suite records world creation, arrival, stationary rendering
+and travel with render distance 32. Profiles: build/overworld-before.jfr and
+build/overworld-after.jfr; screenshots in the corresponding build directories.
+These lockstep tests include frame limiting, different JIT warm-up and incomplete
+distant chunk arrival. They identify CPU work but do not establish gameplay FPS
+or reproduce the user's exact stationary 30-FPS scene. No FPS target is asserted.
+Final offline assemble and prepareDebugLaunch passed, as did the final vanilla
+render-redundancy/wind-shapes run (build/render-redundancy-final-build.log).
+Artifact: build/libs/naturality-1.0.0.jar; test/reference classes are not packaged.
+
+WATER AND DYNAMIC LIGHT OPTIMIZATION (2026-10-06)
+------------------------------------------------
+Visual settings, animation timing, water shading formulas, light strength/range,
+source caps, sub-block precision and update cadence remain unchanged.
+
+WaterVisuals keeps a bounded 384-entry chunk-column cache, reuses overlapping
+samples when the map moves, and skips filtering/uploading an unchanged map.
+Block edits invalidate their chunk; chunk load/replacement/unload also invalidates
+neighbors because biome interpolation crosses chunk borders. Biome packets reset
+cached samples. The existing eight rotating tiles plus camera tile are still
+checked each tick, retaining the original 32-tick maximum refresh interval.
+Chunk identity uses weak references so the cache cannot retain unloaded chunks;
+world changes and resource reloads clear it. Frame uniform staging reuses its
+112-byte direct buffer; GPU buffer lifetime remains unchanged.
+
+Terrain shimmer evaluates its four procedural texture samples only on eligible
+submerged floor fragments. Explicit gradients remain outside the divergent branch
+and feed the same lattice/palette math, preserving stable shoreline sampling.
+Fluid animation, refraction, fog, turbidity and transparency quality are retained.
+
+Dynamic lighting skips position/collision work for non-emitting hands/bodies,
+compares the distance-selected sources in stable identity order, and deduplicates
+overlapping section rebuild notifications without changing the affected sections.
+Emitter clearance checks short-circuit without allocating translated/inflated
+collision-box lists, and bypass empty air collision shapes. Light propagation
+reuses its block-position cursor and records the final light wave without queuing
+cells too dim to illuminate another cell (minimum edge attenuation is 16).
+
+The water-light-performance suite compares frozen original implementations with
+optimized outputs: all 65,536 water pixels, emitter placement, and complete light
+maps match in the fixtures. Covers water additions/removals/roofs, swamp transitions,
+negative-coordinate window shifts, resource rebuilding, unload/reload and replacing
+an existing chunk through a full packet; light tests include snow, slabs, leaves,
+walls, clearance boundaries, multiple sources and both precision modes.
+
+Single-process CPU microbenchmarks with Sodium (not overall FPS/GPU timings):
+- Stationary water update: 643.1 -> 1.6 microseconds/call.
+- Clear-space emitter placement: 5.65 -> 2.85 microseconds/call;
+  Java allocation: 8,680 -> 424 bytes/call.
+- Tested fractional field: 617.1 -> 464.2 microseconds/call;
+  Java allocation: 405,275 -> 320,803 bytes/call.
+JIT/GC and scene geometry affect these figures; no overall FPS gain is asserted.
+
+Passed vanilla suites: water-light-performance, dynamic-lighting, water, water-rain,
+water-occlusion, fluids. Passed with Sodium 0.9.3-alpha.1: water-light-performance,
+dynamic-lighting, water. Screenshots checked for water, shimmer, lava and held light.
+Two old test assertions now read the existing configured defaults instead of stale
+hard-coded values; production defaults were not changed.
+Logs: build/water-light-validation.log and build/water-light-sodium-validation.log.
+Offline assemble and prepareDebugLaunch passed (build/water-light-build.log).
+Final artifact: build/libs/naturality-1.0.0.jar.
+
+END GENERATION HALO BACKGROUND SAVING (2026-10-06)
+-------------------------------------------------
+The last user-world shutdown wrote 1,054 End proto chunks over roughly 13 seconds.
+Region headers/NBT showed only partial generation stages (691 structure_starts,
+125 biomes, 120 terrain, 118 initialize_light), totaling about 0.5 MB compressed.
+Vanilla's eager saving excludes proto chunks, leaving this loaded generation halo
+for unload/shutdown; custom End material generation itself is not rerun on save.
+
+EndProtoChunkSaveMixin checkpoints idle End proto chunks through vanilla ChunkMap
+saving. It scans at most 64 existing holders and starts at most two snapshots per
+idle call, checking a soft 1 ms budget between candidates. It yields when the tick
+has no spare time or 16 chunk writes are already outstanding. The iterator walks
+published holder snapshots without loading chunks; stale holders are skipped.
+Repeated saves use a 30-second cooldown. Pending generation dependencies, save-off,
+full chunks, other dimensions and shutdown are excluded from this added work.
+Vanilla still performs final saves, error handling, compression, synchronous writes
+and durable flush/close. No world format, terrain formula or user option changed.
+
+Generation reuse marks partial End chunks dirty again: ProtoChunk block/entity
+mutations do not independently mark dirty, and neighboring decoration may change
+an existing stage without advancing its status. This protects modifications made
+after an earlier checkpoint, including shutdown during the save cooldown.
+
+The end-save suite force-loads an 8x8 End area with a 1,012-chunk generation halo.
+Fabric's lockstep test timing reports no ordinary idle budget, so both benchmark
+variants receive identical explicit idle windows over 600 ticks. Baseline retained
+all 1,012 dirty proto chunks; patched retained only the one deliberately held busy.
+Single-run whole-world close timings were 1,961 ms baseline versus 1,653 ms patched;
+these include client teardown and are not a prediction for the user's world/disk.
+Checks include save-off, exhausted tick budget, two-snapshot cap, generation safety,
+full-chunk edits, checkpointed partial terrain, and later decoration across reopen.
+Benefit depends on idle time before quitting; immediately exiting after exploration
+can still require the normal shutdown flush. Water/dynamic lighting are separate.
+Logs: build/end-save-baseline.log and build/end-save-validation.log.
+Validation: end-save, end-terrain and offline assemble passed. Final mod artifact:
+build/libs/naturality-1.0.0.jar.
+
 F5 BLACK SCREEN / MISSING SHADER RESOURCES (2026-10-06)
 ----------------------------------------------------
 The 02:15:58 missing-shader errors were caused by stale Fabric launch metadata,
@@ -36,6 +671,33 @@ Validation: offline assemble and end-flight passed, including idle pose,
 backward/sideways cape sway and clearing the shared model on flight entry.
 Log: build/elytra-cape-final-test.log.
 
+GHAST CHARGE SQUASH (2026-10-06)
+------------------------------
+SquashingGhastRenderer scales the whole hostile ghast model, including tentacles,
+around the body center. Its synced charging flag drives a smooth nine-tick ramp
+to 12% vertical compression; X/Z expand by 1/sqrt(verticalScale) to retain volume.
+When charging ends (normally at firing), a damped cosine releases the compression,
+overshoots into a slight stretch and settles exactly to rest within 24 ticks.
+GhastSquash updates once per unpaused client tick with render interpolation,
+including ghasts outside the view. Per-entity weak state clears on world changes.
+Happy ghasts, vanilla shooting logic, movement and collision boxes are unchanged.
+Validation: assemble and ghast-squash passed. Tests cover charge ramp, continuous
+release, elastic overshoot, exact rest and server-synced render-state transitions.
+Rest/charge/release screenshots inspected. Log: build/ghast-squash-test.log.
+
+MODELED DRAGON FIREBALLS (2026-10-06)
+----------------------------------
+Dragon fireballs now use the supplied fireball_dragon.java core geometry and
+resources/textures/entity/fireball_dragon.png, copied from the artist's model
+folder. It shares the ordinary large fireball's scale, fullbright core and
+forward/left rotation. The dragon renderer never submits a fire shell and
+suppresses the generic entity-fire animation. Its old dragon-breath trail is
+replaced by four large smoke puffs per tick, matching the other modeled fireballs.
+Vanilla movement, impacts, dragon-breath area clouds and damage are retained.
+Validation: assemble and fireball-model passed for all three projectile types,
+including shell presence/absence, no automatic ignition and dense large smoke.
+Log: build/dragon-fireball-test.log. Two final model captures inspected.
+
 MODELED FIREBALLS (2026-10-05)
 ----------------------------
 FireballModelRenderer replaces the item renderers for fireball and small_fireball
@@ -61,7 +723,8 @@ movement, hits, target ignition and explosions retain vanilla logic. Trails now
 emit four LARGE_SMOKE puffs per client tick, distributed across the last movement
 segment with a small width-relative spread. The existing large smoke provider
 uses 2.5 times the ordinary smoke size and retains its normal rise and animation.
-Dragon fireballs retain their existing renderer and behavior.
+Dragon fireballs now share this rendering and smoke path without a fire shell;
+see MODELED DRAGON FIREBALLS above.
 Validation: offline assemble and fireball-model client suite passed. Both types
 use the renderer and no longer self-ignite; UV stepping/wrapping and dense large
 smoke emission are checked. All six faces are tested for axis-aligned UV edges
@@ -106,6 +769,36 @@ End, disconnecting or changing worlds stops playback and resets the interval.
 Validation: gradlew assemble --offline passed; sound/subtitle JSON parsed and
 all five clips verified in packaged resources. In-game listening not performed.
 
+IMPACT-BASED EMBEDDED MOB ARROWS (2026-10-10)
+------------------------------------------
+Successful non-piercing arrow hits send their entity-relative impact position,
+flight direction and body yaw to tracking clients. The mob arrow layer chooses
+the nearest visible model cube surface facing the shooter instead of a random
+body part, then retains its part path, cube index and local attachment through
+animation. Recorded offsets account for body turns before the initial binding.
+Arrow size remains independent of model scale. Impact records belong to client
+entity instances through a weak-key cache; count-indexed slots are overwritten
+by new hits and tolerate impact packets arriving before vanilla count metadata.
+Arrows whose original impact was not observed (such as already embedded arrows
+when beginning to track a mob) retain the original randomized fallback. Player
+arrows retain vanilla behavior. Projectile damage and piercing are unchanged.
+Validation: isolated assemble and mob-arrows passed, including synchronized real
+pig/zombie hits, resolved model attachments, six approach directions and size
+regressions. Both opposing screenshots inspected. Log:
+build/mob-arrow-impact-isolated.log. Initial shared-output runs stopped at login
+with unrelated missing EndFlashes$State classes; isolated compilation resolved it.
+
+REGULAR-SIZED EMBEDDED ARROWS (2026-10-10)
+---------------------------------------
+Embedded mob arrows now keep unit world scale instead of inheriting mob size,
+ghast enlargement/squash, baby scaling or nested model-part scale. The attachment
+position still uses the full animated model transform. A unit orthogonal basis
+preserves model orientation and mirroring while removing stretch and shear;
+the normal matrix is updated to match. The mob-arrows regression checks unit
+axis lengths, orthogonality and unchanged attachment position under rotated,
+nonuniform ghast-sized transforms. Validation: assemble and mob-arrows passed;
+build/mob-arrow-size-test.log.
+
 EMBEDDED MOB ARROWS (2026-10-05)
 -------------------------------
 LivingEntityRenderer now includes a mob arrow layer using the existing synced
@@ -117,6 +810,24 @@ invisible mobs are skipped. No damage or projectile behavior changes.
 The mob-arrows client suite verifies real projectile hits and render-state counts
 on a pig and zombie; two opposing screenshots were inspected. Assemble, gameplay
 and mob-arrows passed. Logs: build/mob-arrows-test.log and build/mob-arrows-final.log.
+
+END DRAGON FOG CHUNK-EDGE FIX (2026-10-06)
+---------------------------------------
+Dragon boss fog limits environmental visibility to 96 blocks. Sodium culls
+chunks against the nearer environmental/render-distance boundary, but the
+End atmosphere previously faded only at the configured render distance.
+At larger render distances chunks therefore disappeared before any fade.
+EndFogTransparency now bounds the atmosphere's render-distance fade by the
+nearer environmental/render endpoint, ending up to one chunk before it.
+During boss fog it fades from 60 to 80 blocks, ahead of the 96-block boundary.
+The silhouette transition and final sky fade retain their existing dithering.
+Ordinary End edge fog also finishes before its chunk boundary. Fluid fog,
+blindness/darkness, disabled atmospheric fog and other dimensions retain their
+existing paths. PixelFogGameTest now checks actual extracted boss FogData at
+seven chunks and captures the dragon-fight boundary with Sodium.
+Validation: assemble and fog suite passed with Sodium and vanilla; active
+dragon-boss boundary captures inspected. Logs: build/end-boss-sodium-fog-fix.log
+and build/end-boss-vanilla-fog-fix.log.
 
 PURPLE END ATMOSPHERE (2026-10-05)
 ---------------------------------
@@ -829,6 +1540,17 @@ Log: build/butcher-nearest-tempt.log.
 
 FALLING FLUID VISUAL TAILS (2026-10-03)
 ------------------------------------
+Exposed vanilla liquid sides now reach exact X/Z block boundaries when the
+neighbor is air. The former 0.001-block side inset left visible cracks where
+perpendicular faces met. FluidGeometry applies the correction after vertex flow
+encoding, preserving side identification and lighting. Faces touching non-air
+blocks retain their inset against overlapping geometry. FallingFluidTail uses
+the same correction so its walls connect with the real liquid above. The fluids
+suite checks exposed boundaries at positive/negative section edges, preserved
+solid-contact insets, and close waterfall/lavafall corners.
+Exposed Y edges also remove the bottom 0.001-block inset over air and restore
+full-height corners lowered to 0.999 under air. Partial surface heights and
+solid-contact offsets remain intact; vertex lighting samples the corrected Y.
 Actively falling water/lava ending above air gets a one-block visual continuation
 of its animated flowing side texture. The extension has four double-sided walls,
 no bottom or top cap, and no fluid state, collision or gameplay effect. Its alpha
@@ -4737,6 +5459,9 @@ fractional UV offsets. TerrainParticlePixelMixin chooses integer source-texel
 origins and preserves a quarter-texture crop. TerrainParticleExtractMixin emits
 the crop as per-texel quads and omits zero to four distinct random texels per
 fragment, creating crisp pixel-aligned cutouts and occasional transparent holes.
+Fragments progressively lose additional random texels after the first 20% of
+their lifetime. Removal reaches every texel at 95% of life, or by the final tick
+for short-lived fragments. Removed texels stay absent for the rest of life.
 Larger source sprites emit more quads because each sampled texel remains its own
 visible pixel. Mixin registration is in naturality.client.mixins.json. Full Gradle
 verification was unavailable because the cached Loom plugin metadata could not
@@ -6060,3 +6785,1697 @@ All four Lirestone screenshots were inspected in build/run/clientGameTest/screen
 including 0003_lirestone-entire-island.png. Production JAR rebuilt at
 build/libs/naturality-1.0.0.jar. Restart Minecraft and use fresh chunks or a new
 world to see the new distribution; previously generated terrain is not rewritten.
+
+CHORUS SPROUT (2026-10-06)
+-------------------------
+Registered naturality:chorus_sprout and its BlockItem as Chorus Sprout, beside
+Short Grass in the Natural Blocks creative tab. Uses the supplied authoritative
+resources/textures/block/chorus_sprout.png with an untinted crossed-plane block
+model and flat inventory sprite. Copies Short Grass properties: zero hardness,
+no collision, replaceable, warped roots sounds, positional offset and piston popping.
+Custom VegetationBlock permits only End Stone and Lirestone beneath it; losing
+support removes the sprout. Shears collect it; ordinary breaking drops nothing.
+No wheat seeds, bonemeal growth, recipes or natural generation are added.
+Obtain with /give @s naturality:chorus_sprout or the creative tab.
+Validation: assemble and isolated smooth-endstone client suite passed, checking
+both substrates, rejection of dirt/support removal, zero hardness, no collision,
+shears drops and ordinary empty drops. Log: build/chorus-sprout-test.log.
+Production JAR rebuilt at build/libs/naturality-1.0.0.jar.
+
+CHORUS SPROUTS AROUND GENERATED PLANTS (2026-10-06)
+------------------------------------------------
+ChorusFlowerMixin's completed generatePlant hook now calls ChorusSprouts.scatter
+after repairing the tree's connections. Each new plant requests 1-4 sprouts in
+a shuffled set of the 24 columns within two blocks of its base. Nearby ground
+may be up to two blocks above or below the base, supporting small ledge steps.
+Only empty, in-bounds positions where the existing sprout can survive are used:
+End Stone and Lirestone support it, while Smooth End Stone and other substrates
+remain unsupported. Existing nearby sprouts count toward the four-sprout cap.
+Occupied blocks are preserved. Collision-chunk checks skip unavailable neighbors,
+and worldgen write bounds are respected. The search is bounded and adds no
+chunk-generation requests. This applies to native initial chorus-plant generation;
+ordinary flower random ticks do not repeatedly scatter more sprouts.
+
+Validation: offline assemble plus chorus-sprouts, chorus-flowers and smooth-endstone
+passed in build/chorus-sprouts-final.log (43s). Native ChorusPlantFeature fixtures
+produced 83 sprouts across 32 plants, with varying 1-4 groups and 27 sprouts on
+stepped ground. Repeat scattering stays at or below four. Unsupported ground,
+void edges and gold-block obstacles produce no misplaced sprouts. Fresh End chunks
+contain 12 natural sprouts around six plant bases; every sprout has valid support
+and a nearby ground-rooted plant. Existing flower orientation, bloom inheritance,
+crowns, stem connections, sprout drops/properties and material checks pass.
+Screenshot inspected: build/run/clientGameTest/screenshots/0000_chorus-plant-base-sprouts.png.
+Production JAR rebuilt at build/libs/naturality-1.0.0.jar. Restart Minecraft and
+explore newly generated End chunks to see the vegetation; older plants are not
+retroactively decorated.
+
+CHORUS BLOCK SOUNDS (2026-10-06)
+------------------------------
+Chorus Sprout and Chorus Flower use SoundType.ROOTS, the full vanilla Warped
+Roots sound set. Chorus Plant uses SoundType.STEM, matching Warped Stem.
+This covers breaking, placing, hitting, stepping and landing. Existing chorus
+plant/flower mixins override the inherited sound lookup for all their states.
+Chorus Sprout sets its sound properties during registration.
+Validation: assemble and isolated smooth-endstone client suite passed, comparing all three sound sets against their requested vanilla blocks. Log: build/chorus-sounds-test.log. Production JAR rebuilt.
+
+LIRESTONE CUSTOM SOUNDS (2026-10-06)
+----------------------------------
+Lirestone uses the supplied resources/sounds/blocks/lirestone OGG set.
+Registered block.lirestone.break, block.lirestone.place and block.lirestone.step
+sound events pool all four break, four placement and six footstep clips equally.
+The block's SoundType uses break for destruction/mining hits, place for placement,
+and step for footsteps/landing. Normal block-action volume/pitch handling applies.
+resources/sounds.json maps these events and reuses vanilla generic subtitles.
+All 14 clips are packaged and verified to have OGG headers.
+Validation: assemble and isolated smooth-endstone client suite passed, including all five Lirestone sound bindings. Log: build/lirestone-sounds-test.log. Production JAR rebuilt. In-game listening was not performed.
+
+LIRESTONE MONO AUDIO (2026-10-06)
+-------------------------------
+All 14 resources/sounds/blocks/lirestone OGG clips were stereo and have been
+converted to true single-channel Vorbis by averaging the left/right channels.
+Original 44100 Hz sample rates and decoded frame counts/durations are preserved.
+Stereo originals remain in build/audio-backups/lirestone. Conversion metadata:
+build/lirestone-mono-report.json. Local converter: build/convert-lirestone-mono.py.
+Validation: assemble passed (build/lirestone-mono-build.log); all 14 clips read
+from build/libs/naturality-1.0.0.jar verify as one channel at 44100 Hz.
+
+SMOOTH LIRESTONE (2026-10-06)
+---------------------------
+Registered naturality:smooth_lirestone and its BlockItem as Smooth Lirestone,
+following Smooth End Stone's relationship to End Stone. Copies Lirestone's full
+properties: hardness 2.5, resistance 9, custom mono sound set and pickaxe rule.
+Uses resources/textures/block/smooth_lirestone.png on all six faces and its item.
+Building Blocks lists it immediately after Lirestone. Ordinary mining drops
+Lirestone; Silk Touch drops Smooth Lirestone. Smelting Lirestone yields one
+Smooth Lirestone in 200 ticks with 0.1 XP; obtaining Lirestone unlocks the recipe.
+Shares Lirestone's six block tags plus stone crafting/tool item tags, including
+chorus plant/flower support and dragon immunity. No world generation added.
+/give @s naturality:smooth_lirestone obtains it.
+Validation: assemble and isolated smooth-endstone client suite passed, covering properties/sounds, wooden pickaxe, crafting/dragon tags, regular and Silk Touch drops, actual furnace smelting and chorus flower support. Packaged texture/model/recipe/loot verified. Log: build/smooth-lirestone-test.log. Production JAR rebuilt.
+
+SMOOTH LIRESTONE TEXTURE VARIANTS (2026-10-06)
+-------------------------------------------
+The randomized blockstate uses normal and mirrored models, including rotated
+variants. Both smooth_lirestone.json and smooth_lirestone_mirrored.json bind
+all faces to naturality:block/smooth_lirestone. An earlier client log reported
+missing mirrored model; the current production JAR includes both models and
+the supplied PNG. Assemble passed and both packaged texture bindings verified.
+Log: build/smooth-lirestone-texture-fix.log. Restart the client with the current JAR.
+
+LIRESTONE CRAGS AND SMOOTH MATERIAL GENERATION (2026-10-06)
+---------------------------------------------------------
+Added naturality:lirestone_crags (Lirestone Crags) to Fabric's native End biome
+selection, with matching midlands/barrens and small-island selection. Keeps the
+center biome unchanged. Regions vary by seed and can be found using
+/locate biome naturality:lirestone_crags. Retains Endermen, gateways, End City
+eligibility and the existing outer terrain shapes. No chorus feature is added;
+neighboring native chorus features also reject roots whose tree/crown/sprout
+footprint could reach the biome. Manual flower placement remains available.
+Crags converts every natural stone column to the Lirestone family, including
+its full underside. The biome zoom boundary uses a cached four-cell horizontal
+halo to avoid unconverted stone at fuzzy biome boundaries.
+All Lirestone replacement paths now preserve the smooth material relationship:
+regular End Stone surfaces become Lirestone; Smooth End Stone becomes Smooth
+Lirestone. This includes ordinary patches, rare entire small islands and Crags.
+The deep layers that would become Smooth End Stone also become Smooth Lirestone
+when converted in the same surface pass. Partly buried boulders preserve smooth
+source stone while exposed boulder rock remains regular Lirestone. Existing
+Lirestone and Smooth Lirestone count as rock without resetting layer depth.
+Added the missing Smooth Lirestone mirrored model used by its stone-style
+random blockstate variants.
+Validation: Crags seed-map, locator, center protection, full-depth material and
+chorus exclusion checks passed. A 25-chunk sample contained 4,882 Lirestone cap
+blocks and 97,562 Smooth Lirestone blocks across 2,443 land columns. The ordinary
+patch/boulder/whole-island, smooth-block properties/loot/recipes, chorus-sprouts,
+and End chunk-performance suites passed (build/lirestone-material-regressions.log).
+Terrain density and solid geometry fingerprints stayed unchanged. Measured
+64-chunk generation batches took 0.43-0.59 seconds in the test environment.
+These generation changes affect fresh chunks; existing terrain is not rewritten.
+Final assemble and Crags client suite passed with the mirrored model present and no missing-model warnings (build/lirestone-crags-final.log). Production JAR rebuilt.
+
+NATURAL LIRESTONE CRAGS MATERIAL BORDERS (2026-10-06)
+--------------------------------------------------
+Lirestone conversion now extends outside Crags with a seed-dependent, winding
+fringe. Two coherent noise scales (38 and 11 blocks) vary its reach around
+22 blocks by up to 16 blocks. Circular distance checks avoid square expansion;
+noise variation produces irregular bays and protrusions instead of an abrupt
+biome-color outline. All Crags interior columns still fully convert, retaining
+regular Lirestone caps and Smooth Lirestone below. Ordinary deposits remain
+outside the fringe; biome selection, chorus exclusion and terrain shape are
+unchanged. The conversion lookup samples the generator's caching biome resolver,
+not the WorldGenRegion's limited loaded-chunk view, so its halo cannot request
+unready neighbor chunks. Halo cells are sampled once per chunk.
+Fresh generation only; already generated chunk materials are not rewritten.
+Validation: assemble, Lirestone Crags interior/chorus checks, seeded-fringe reproducibility and variation, and End chunk-performance passed (build/lirestone-border-final.log). The sampled fringe added 3,004 columns, with 774 different decisions under another seed. Geometry hashes stayed unchanged; 64-chunk batches measured 0.46-0.61 seconds.
+Lirestone patch, rim preference, boulder smooth-material preservation and whole-island generation regression suite also passed (build/lirestone-border-deposits.log). Production JAR rebuilt.
+
+DISTORTION POSE NETWORKING AND HARD-LANDING PARTICLES (2026-10-06)
+----------------------------------------------------------------
+Inverted player pose changes move the body's lower origin to keep ceiling-facing
+feet anchored. EndGravityEntityMixin now applies that same displacement to the
+server listener's firstGoodY/lastGoodY movement baselines via GravityMovementAccess.
+EndGravityServerMovementMixin updates the desired pose immediately after player
+input and command packets, before subsequent movement packets. This prevents
+crouch/standing and elytra height changes from being mistaken for physical jumps
+or movement into the ceiling. GravityPoseAccess invokes vanilla updatePlayerPose;
+normal equipment, flight eligibility and collision checks remain in charge.
+EndGravityLivingMixin redirects the hard-fall debris origin to boundingBox.maxY
+minus 0.01 while inverted, leaving it just outside the supporting ceiling. This
+is separate from the already mirrored sprint/footstep particle path.
+DistortionInteractionGameTest uses an Overworld player with the actual effect,
+real repeated shift presses, real double-jump elytra activation and the server's
+flight flag. It also verifies pose-adjusted movement baselines and captures the
+actual ServerLevel.sendParticles Y coordinate for a hard landing. The probe is
+registered only in the test mixin configuration.
+Validation: assemble plus interactions/end-weather/end-movement/end-flight
+regressions passed (build/distortion-interactions.log). The final focused suite
+including the hard-landing particle probe passed (build/distortion-interactions-final.log).
+
+DISTORTION DURING CREATIVE FLIGHT (2026-10-06)
+---------------------------------------------
+Creative flight no longer exempts players from an active Distortion effect or
+its return-to-normal easing. Rotation, mirrored eyes/models, gravity-local
+movement and pose handling remain active while flying. Ordinary creative flight
+without Distortion retains its previous End weather exemption.
+DistortionCreativeFlightMixin mirrors LocalPlayer's creative vertical flight
+input: jump moves toward gravity-local up, and sneak toward gravity-local down.
+The upward-fall soft spring excludes intentional creative flight.
+Validation: assemble and distortion-creative client integration suite passed
+(build/distortion-creative.log). Checks include active flight, inverted client
+camera and server state, jump/sneak directions, spring exemption and returning
+upright after clearing the effect while retaining creative flight.
+
+DISTORTION VISUAL POSE ANCHORING (2026-10-06)
+--------------------------------------------
+Ceiling-anchored player height changes now shift both Entity.yo and yOld by the
+same origin adjustment as the current position. Pose changes therefore retain
+the previous-frame feet in the new coordinate frame, instead of interpolating
+from an obsolete body origin. This removes the camera jump when crouching or
+entering/leaving the elytra hitbox while retaining vanilla eye-height smoothing.
+EndGravityAvatarMixin mirrors AvatarRenderer's vertical render offset by the
+cosine of the inversion angle. In particular the ordinary downward crouch model
+offset becomes upward at full inversion, so the complete crouched model remains
+aligned with the supporting ceiling rather than floating a quarter block away.
+Interaction checks now verify fixed current/previous feet and unchanged camera
+position at pose-change boundaries for crouch, standing and fall-flying poses.
+The third-person crouch screenshot uses a lit ceiling, hides the HUD, and equips
+the elytra only for the subsequent actual double-jump flight checks.
+Validation: assemble, visual interaction and end-flight suites passed
+(build/distortion-visual-pose.log); final focused visual/input/landing-particle
+checks passed (build/distortion-visual-final.log). The unobstructed crouch-contact
+screenshot was inspected: build/run/clientGameTest/screenshots/0000_distortion-crouch-ceiling-contact.png.
+
+DISTORTION INVENTORY PREVIEW CURSOR TRACKING (2026-10-06)
+-------------------------------------------------------
+InventoryScreen's shared entity preview extractor now scopes
+GravityPreviewContext around render-state creation, restoring it in finally.
+EndGravityRendererMixin suppresses the world inversion and look-frame conversion
+only while extracting that GUI preview. The inventory then applies its native
+cursor-driven body/head rotations to an upright preview. This also covers the
+creative inventory, which uses the same mouse-following helper. World rendering
+and the player's physical/camera Distortion state remain active.
+Validation: assemble and distortion-interactions passed
+(build/distortion-inventory-preview.log). The test invokes the real private
+inventory extraction helper, verifies upright preview state and scope cleanup,
+and confirms that the subsequent world avatar state is still fully inverted.
+
+CONFUSION STATUS EFFECT (2026-10-07)
+-----------------------------------
+Registered harmful effect naturality:confusion, with a pink spiral status icon.
+Hotbar and main-inventory storage identities shuffle visually without moving their
+ItemStacks. Level I shuffles every 40 ticks (2 seconds); higher levels use
+max(5, floor(40/level)) ticks. The total movement cap is five at level I, increasing
+by two per level up to 35. Two movers are reserved for a physical offhand exchange,
+so the ordinary visual batch uses 2-3 slots at level I. Armor/crafting/container
+storage and the offhand slot itself stay in their native positions.
+
+ConfusionOffhand is server-owned. At each shuffle interval it has a 25% chance
+to exchange the actual offhand stack with one random hotbar storage slot. It can
+snatch equipment out of offhand or put a hotbar item there, including exchanging
+with an empty slot. Normal inventory/equipment synchronization sends the result
+to clients. The held item and offhand behavior follow their actual server storage.
+OffhandTransfer detects synced exchanges and eases HUD items between their old
+positions and their new positions; the offhand frame remains fixed and appears
+only when the actual offhand contains an item.
+
+The original offhand is remembered when confusion begins. Removal/expiration
+moves the surviving original back, swapping the current offhand into its found
+inventory slot or carried cursor. Object identity preserves damage/count changes;
+if dragging or loading replaced the object, only one unambiguous item/component
+match is accepted. Worn armor and external containers/dropped items are excluded.
+A lost/consumed original is not recreated. An originally empty offhand is cleared
+by moving its replacement into an empty inventory slot, when space is available.
+No existing item is deleted or overwritten. Tracking survives player save/reload
+using a fingerprint snapshot, never a stack spawned as a replacement.
+
+Visual hotbar selection retains its on-screen cell. Number keys, wheel scrolling,
+menu hotbar swap keys, highlights, tooltips and click targets use visual order.
+Offhand retains normal equipment input; its slot does not enter the permutation.
+Menu slot coordinates are restored when the visual effect finishes, and weak
+tracking avoids retaining closed menus. Client player replacement resets layouts.
+
+Each ease uses max(12, round(30/sqrt(level))) ticks, with approximately +/-10%
+variation per slot: level I averages 1.5 seconds, II 1.05, IV 0.75, and high levels
+bottom out near 0.6 seconds. Returning home uses level-I timing. Quintic curves
+and random winding phases keep motion near the normal slot regions. Bounded
+headroom saturation prevents inherited curve offsets from drifting away.
+Interrupted easing captures position and X/Y velocity, blending momentum into
+its new curve over six ticks. The spring fades in over the last 22% of the ease
+and follows the bounded arrival tangent. Its displacement scales with actual
+approach velocity and settling time divided by spring frequency, so a slow
+arrival no longer receives a fixed launch boost.
+
+Use /effect give @s naturality:confusion 60 0 (level I), amplifier 1 for level II,
+and /effect clear @s naturality:confusion. Restart Minecraft to load this build.
+Both client and server need Naturality for the registered effect and item exchanges.
+
+Validation: focused confusion client suite checks permutations, gradual timing,
+position/velocity continuity, 1,000 rapid retargets and bounds, mapped inputs and
+mouse hit targets, synced activation/cleanup, real offhand exchanges, original
+restoration after moving and saved-state reload, lost-item non-recreation and
+empty-offhand restoration without deleting the replacement. HUD screenshots
+under build/run/clientGameTest/screenshots/*confusion* inspected.
+Latest test/build log: build/confusion-offhand-physical.log.
+Artifact: build/libs/naturality-1.0.0.jar; assemble and prepareDebugLaunch passed.
+ECHO CORAL SHELVES AND VIBRANT WASTES (2026-10-07)
+------------------------------------------------
+Registered naturality:vibrant_wastes (Vibrant Wastes) using native Fabric End
+biome selection for highlands/small islands and matching midlands/barrens.
+Keeps the central island unchanged, normal End atmosphere, Endermen, gateways
+and End City eligibility. Locate with /locate biome naturality:vibrant_wastes.
+Vibrant Wastes uses normal island stone and existing regional Lirestone deposits.
+
+Echo Coral shelf groups decorate natural undersides in the outer End, including
+initial world generation. Each group has one large circular shelf (radius 7-9),
+plus 0-5 companions: small radius 2-3 or medium radius 4-5, at most two medium.
+Centers are two blocks thick, tapering to one-block rims. Companions spread
+around the large shelf and follow nearby underside elevations; unavailable or
+obstructed attachments are skipped. All shelves attach to natural stone.
+Natural stone and other decorations are preserved. Each shelf validates its
+complete footprint before any writes. Chunk write-zone checks precede reads
+and native validation, preventing unsafe far-chunk requests or warning spam.
+
+One candidate per chunk is gated at 1/32 outside Vibrant Wastes and 1/3 inside
+it (about 10.7 times more attempts), then requires a suitable exposed underside.
+Vertical reservoir sampling lets lower and upper ledges receive groups.
+Central-island coral decoration is excluded inside radius 1280.
+Vibrant chorus placement tries 4-8 roots per chunk (average 6), versus vanilla
+0-4 (average 2). Existing flower variants, orientations, crowns and sprouts apply.
+Crags still excludes chorus. Removed duplicate Crags initialization/mixin entries.
+Fresh chunks only; previously generated terrain is not retroactively decorated.
+
+Validation: controlled undersides across 32 mixed seeds verify one large shelf,
+1-6 shelves per group, <=2 medium shelves, attachment, intact stone and obstacle
+rejection. Actual initial worldgen sample has 528 Echo Coral blocks and 21 chorus
+bases in Vibrant Wastes. Crags conversion/no-chorus and End chunk-performance
+suites passed with no unsafe read/far-write warnings (build/echo-shelves-safe.log).
+Density and solid geometry hashes stay unchanged; 64-chunk batches measured
+0.46-0.58 seconds in the test environment. Production assemble passed.
+Final focused visual suite passed (build/echo-shelves-visual.log). Inspected naturally attached circular coral ledges and denser topside chorus: screenshots/0000_vibrant-wastes-shelves.png and 0001_vibrant-wastes-chorus.png under build/run/clientGameTest. Artifact: build/libs/naturality-1.0.0.jar.
+
+ECHO CORAL WORLDGEN REVERTED (2026-10-07)
+---------------------------------------
+User canceled Echo Coral disks and Vibrant Wastes. Removed the shelf feature,
+its placed feature, Vibrant Wastes biome/registration/tags/name, dense chorus
+placement, and the corresponding test suite. Echo Coral block, item, texture,
+sounds and loot remain available. Existing Lirestone Crags and its natural
+conversion borders remain. The preceding shelves/Vibrant section is historical
+and no longer describes active generation. Already placed coral blocks in saved
+chunks are not deleted.
+Crags biome weight is now 1.5 registered once, preserving the effective weight previously obtained from duplicate 0.75 registrations before Vibrant Wastes. Seed-map coverage returns to 1,724/16,641 probes. Assemble and Crags conversion/fringe/no-chorus tests passed (build/remove-echo-worldgen-final.log). Rebuilt JAR verified to contain no shelf feature or Vibrant Wastes resources/classes.
+
+LYREN HEATH (2026-10-07)
+-----------------------
+Registered naturality:lyren_heath and its BlockItem, displayed as Lyren Heath in
+Natural Blocks after End Stone. Copies Smooth End Stone properties with hardness
+2.1 (30% lower than 3, roughly 30% shorter same-tool mining time), resistance 9,
+stone sounds and random ticking. Wooden pickaxe harvests it. Ordinary mining
+returns End Stone; Silk Touch returns Lyren Heath, following Smooth End Stone loot.
+Model: cube_bottom_top; sides naturality:block/lyren_heath, top lyren_heath_top,
+bottom minecraft:block/end_stone. Artist PNGs remain under resources/textures/block.
+Copies Smooth End Stone's six block tags, preserving chorus support and dragon
+immunity. No recipe or automatic world generation added.
+Random ticks make four grass-style attempts within +/-1 X/Z and -3..+1 Y to
+convert regular minecraft:end_stone only. Both source and target require an
+exposed top (no sturdy downward face or fluid above). No light requirement in
+the End; fully solid cover causes decay to End Stone on a random tick. Loaded chunks only; never converts Smooth End
+Stone, Lirestone or other substrates. /give @s naturality:lyren_heath obtains it.
+Validation: assemble and isolated smooth-endstone client suite passed for hardness/resistance/sound, wooden pickaxe, regular/Silk Touch drops, spread to exposed End Stone, Smooth End Stone exclusion, solid/water coverage and covered-source suppression. Packaged face bindings/PNGs verified. Log: build/lyren-heath-test.log. Production JAR rebuilt.
+
+LYREN HEATH COVER DECAY, FOOTSTEPS AND SPROUTS (2026-10-07)
+-------------------------------------------------------
+Lyren Heath reverts to regular End Stone when a fully solid collision cube is
+immediately above it, evaluated on random ticks rather than placement. Partial
+blocks and foliage do not cause this decay. Normal randomTickSpeed controls the
+variable delay. Spreading still requires an exposed top and ignores Smooth End Stone.
+The SoundType uses Warped Nylium's step sound and stone break/place/hit/fall sounds.
+Chorus Sprout now accepts Lyren Heath alongside End Stone and Lirestone.Validation: assemble and isolated smooth-endstone suite passed, including delayed random-tick decay, full-block versus slab/sprout cover, nylium footstep binding, stone break sounds, and sprout survival on Lyren Heath. Log: build/lyren-heath-decay-test.log. Production JAR rebuilt.
+
+LYREN HEATH SLOW SAME-HEIGHT SPREAD (2026-10-07)
+---------------------------------------------
+Spreading is restricted to the same Y level, within +/-1 X/Z; no upward or
+downward conversion. One candidate is tried on one in twelve random ticks,
+replacing four attempts with -3..+1 Y offsets every tick. This gives an eligible
+same-height neighbor about 9.6 times fewer attempts. Cover decay remains checked
+every random tick before the spreading gate, so slowing growth does not slow decay.
+Validation: assemble and isolated smooth-endstone suite passed, including sustained same-height spread and unchanged exposed End Stone probes above/below, exclusions, cover decay and sprout support. Log: build/lyren-heath-slow-spread-test.log. Production JAR rebuilt.
+
+END WILDS BIOME (2026-10-07)
+---------------------------
+Added naturality:end_wilds, displayed as End Wilds, to Fabric's End highlands
+and small-island selection (weight 1.5), with matching midlands/barrens.
+Retains normal End atmosphere, Endermen, gateways and End City eligibility.
+The central island stays vanilla. /locate biome naturality:end_wilds locates it.
+The existing surface material pass replaces the top block of every exposed
+natural-stone ledge with Lyren Heath in this biome, including lower ledges below
+overhangs. The cap is one block thick, with regular/smooth stone and existing
+Lirestone deposits below. Heath takes precedence over Lirestone fringe material
+on actual End Wilds surfaces. Surface checks use Minecraft's exact biome zoom
+rather than approximate quart-cell boundaries. Existing heath counts toward
+layer depth when processing stone below it. No extra terrain geometry added.
+Biome feature list has no chorus. The native chorus feature also rejects tree
+footprints reaching End Wilds, covering flowers/crowns/sprouts near borders.
+Player placement and existing Lyren Heath random-tick spreading/decay still work.
+Fresh chunks only; previously generated terrain is not retroactively rewritten.
+Validation: assemble, End Wilds registry/locator/central protection, one-block
+surface coverage/stone interiors, no chorus including direct native feature
+placement, Lirestone Crags conversion/fringe/no-chorus, and chunk performance.
+Sample: 4,541 Heath cap blocks and 211,899 stone blocks in fresh Wilds chunks.
+Geometry hashes unchanged; 64-chunk generation batches measured 0.45-0.60 seconds.
+Log: build/end-wilds-regions.log. Screenshot 0000_end-wilds-heath.png under
+build/run/clientGameTest/screenshots inspected. JAR: build/libs/naturality-1.0.0.jar.
+
+LARGER, SEPARATED END WILDS REGIONS (2026-10-07)
+--------------------------------------------
+EndBiomeRegionsMixin wraps the native End biome resolver after Fabric selection.
+The two Naturality biomes now share a signed, seed-dependent regional field:
+native Fabric End Perlin noise at a 1,024-block scale, plus 15% edge detail at
+320 blocks. Values above +0.22 select End Wilds, below -0.22 select Lirestone
+Crags; the intervening band restores ordinary vanilla End terrain biomes using
+their native erosion thresholds. Consequently Wilds occupies broader coherent
+areas and the two custom biomes are separated by ordinary End biomes. No custom
+biome can replace the center. Registration still supplies registry/locator
+integration; the regional resolver determines actual spatial placement.
+Heath caps, no-chorus rules, Crags stone conversion and its warped fringe remain.
+No terrain density changes. Fresh chunks only; saved biome layouts are retained.
+Validation: assemble plus End Wilds and Crags worldgen/material/no-chorus suites
+and End chunk-performance passed (build/end-biome-regions.log). Geometry hashes
+unchanged; 64-chunk batches measured 0.52-0.63 seconds in the test environment.
+Additional 16,384-block-wide map sampled at 64-block intervals found 13,660 Wilds
+cells and 1,210 runs at least 256 blocks wide. Every sampled Wilds cell was checked
+for Crags within a 64-block neighborhood at 32-block intervals; none was found.
+Broad-region/separation and actual Heath generation tests passed:
+build/end-wilds-separation.log. Rebuilt JAR: build/libs/naturality-1.0.0.jar.
+
+LYREN SPROUT AND LYREN GROWTH (2026-10-08)
+----------------------------------------
+Registered naturality:lyren_sprout and naturality:lyren_growth with BlockItems,
+displayed as Lyren Sprout and Lyren Growth. Both instantiate ChorusSproutBlock
+and copy Chorus Sprout's full properties: instant breaking, no collision, same
+12-by-13-block-unit outline, Warped Roots sounds, vegetation behavior and ground
+support (End Stone, Lirestone, Lyren Heath). Smooth End Stone and dirt remain
+unsupported. Shears drop the respective plant item; ordinary breaking drops none.
+Cross models and generated flat inventory icons use the supplied
+resources/textures/block/lyren_sprout.png and lyren_growth.png. Normal resource
+packaging includes edits automatically. Natural Blocks lists both after Chorus
+Sprout. No worldgen or growth behavior added. /give @s naturality:lyren_sprout
+and /give @s naturality:lyren_growth obtain the blocks.
+Validation: assemble and focused smooth-endstone client suite passed, including
+both plants' shapes, collision, sounds, hardness, substrate survival and actual
+shearing/ordinary loot. All blockstate/model/item/loot/texture assets verified in
+build/libs/naturality-1.0.0.jar. Log: build/lyren-plants-test.log.
+
+LYREN PLANTS IN END WILDS (2026-10-08)
+-----------------------------------
+End Wilds now decorates its Lyren Heath with a mixed Lyren Sprout/Lyren Growth
+feature at VEGETAL_DECORATION. Uses Minecraft 26.3 plains grass placement rules:
+noise threshold -0.8 selects 5 or 10 patch centers per chunk, in-square placement,
+WORLD_SURFACE_WG heightmap, biome filter, 32 attempts per center, trapezoid offsets
+of +/-7 X/Z and +/-3 Y, and an air filter. Each successful placement chooses
+Sprout or Growth equally. Combined density matches one plains grass feature,
+rather than adding two full-density grass features.
+The final placement checks actual End Wilds membership, Lyren Heath immediately
+below, an empty target, normal plant survival and the native chunk write zone.
+This prevents border spill, placement on other substrates and overwriting plants
+or features. Chorus remains excluded. Applies to initial/new chunks only.
+Validation: fresh End Wilds sample contains 370 Lyren Sprouts and 420 Lyren Growths;
+all are on Heath, survive, and stay inside the biome. Grass cap and no-chorus
+checks passed. Screenshot 0000_end-wilds-heath.png inspected under
+build/run/clientGameTest/screenshots. Build/test log:
+build/lyren-plants-worldgen-final.log. Artifact: build/libs/naturality-1.0.0.jar.
+Assemble, End Wilds vegetation and End chunk-performance suites passed. Geometry fingerprints remain unchanged. Production JAR rebuilt.
+
+PATCHY LYREN HEATH IN END WILDS (2026-10-08)
+------------------------------------------
+Wilds surface Heath is now gated by LyrenHeathPatches, rather than covering
+all exposed tops. Two seed-dependent Simplex fields in absolute X/Z coordinates
+use a 24-block body scale and 18% detail at 7 blocks; threshold 0.15 leaves
+irregular coherent patches with exposed stone between them. The cap remains
+one block thick, and existing regular/smooth End Stone and Lirestone material
+rules apply outside patches. Patch decisions agree across chunk borders and
+across exposed ledges in the same column. Existing grass-style spreading and
+cover decay remain available after world generation.
+Sprouts/Growths retain their plains-style attempt rules and only succeed above
+actual Heath, so their generation follows the surface patches. No chorus added.
+New chunks only; previous fully covered chunks are not rewritten.
+Fresh 25-chunk Wilds sample: 1,865 Heath surface blocks, 2,859 bare stone surface
+blocks (~39.5% Heath), 150 Lyren Sprouts and 127 Lyren Growths. Placement/survival,
+no-chorus, broad-region and Crags-separation checks passed.
+Build/test log: build/lyren-heath-patches.log. Artifact:
+build/libs/naturality-1.0.0.jar.
+Assemble, End Wilds patch/vegetation and End chunk-performance suites passed. Terrain geometry hashes stayed unchanged. Updated patchy surface screenshot inspected: build/run/clientGameTest/screenshots/0000_end-wilds-heath.png.
+
+LYREN HEATH SPREADING REMOVED (2026-10-08)
+Lyren Heath no longer converts neighboring End Stone. Random ticks only retain
+its decay to End Stone under fully solid cover. Sprout support, sounds, mining
+and loot remain as configured.
+
+Validation: assemble and isolated smooth-endstone gameplay suite passed, including no conversion after 3000 random ticks, covered decay and sprout support. Log: build/lyren-heath-no-spread-test.log. Production JAR rebuilt.
+
+LYREN HEATH RANDOM TOP ROTATION (2026-10-08)
+Four equally weighted, position-stable model variants rotate only the top-face
+UVs by 0/90/180/270 degrees. Side and bottom faces keep their original orientation.
+
+Validation: assemble passed; all four blockstate model references and their packaged top UV rotations verified in the production JAR. Log: build/lyren-heath-top-rotation-build.log.
+
+ROUGH HEATH EDGES AND WILDS BOULDER GROUPS (2026-10-08)
+----------------------------------------------------
+LyrenHeathPatches now warps X/Z by up to 7 blocks with a 17-block noise field,
+then combines the existing 24-block patch body with 36% edge detail at 5 blocks
+and 13% fine detail at 2.5 blocks. Absolute coordinates preserve seed coherence
+across chunk borders while making patch edges much rougher and less smooth.
+Fresh sample: 1,661 Heath surface blocks and 3,063 bare surface blocks; mixed
+Lyren vegetation remains limited to actual Heath. Existing spreading unchanged.
+
+Added naturality:wilds_boulders to End Wilds before vegetation, with one candidate
+per three chunks followed by valid-ground checks. Groups contain one dominant
+rock (radius 4-6, height 7-10) and 1-4 successful smaller companions (radius 2-3,
+height 3-5) around it. Main material randomly chooses End Stone or Lirestone;
+companions use the other material so every successful group contains both.
+Leaning, faceted shapes and varied local ground heights avoid perfect ellipsoids.
+All footprints require bare natural rock inside End Wilds. Heath, plants,
+structures, void edges, excessive slopes and unsafe chunk writes reject the rock.
+The main rock and at least one companion must validate before any group writes.
+Lirestone preserves Smooth Lirestone when replacing smooth source stone.
+No central-island decoration or changes to existing small boulders elsewhere.
+Applies to fresh chunks; existing patches/terrain are not rewritten.
+
+Validation: assemble, End Wilds patch/vegetation and chunk-performance suites
+passed (build/wilds-boulder-groups.log). Focused complete-group test passed
+(build/wilds-boulder-validation.log): 303 exposed End Stone and 110 Lirestone
+blocks, including 83 blocks at least six above the foundation. Heath obstruction
+rejection checked. Rough-edged natural patch screenshot inspected. Geometry
+fingerprints stay unchanged. Artifact: build/libs/naturality-1.0.0.jar.
+
+CONFIG PRESETS AND STARTUP FEATURE OPTIONS (2026-10-08)
+-----------------------------------------------------
+The root configuration menu now has Config Presets alongside the existing
+groups. Three title-screen buttons apply ordinary settings once:
+- Default restores the exact shipped defaults, including numeric values and
+  normally disabled settings such as the upper cloud layer.
+- Clientside Only keeps default client visuals, disables added content and all
+  server feature switches, disables the existing fire/snow/portal gameplay
+  changes, and enables vanillaPortalEntry. Restart before vanilla multiplayer.
+- No Visual Overhaul retains content and gameplay, disables all optional visual
+  and ambience settings, and restores vanilla portal entry and fire/snow shapes.
+  Models for added content, effect UI and required gravity cameras remain.
+There is no saved mode/preset field and no preset enforcement after application.
+Users can reproduce any preset manually or customize any of its settings.
+
+Added 58 searchable, individually resettable startup switches under Gameplay >
+Content / Gameplay Features and Effects > Visual Features. Their tooltips state
+dependencies and restart requirements. The options cover content registration,
+End terrain/materials, Crags/Wilds biomes, both boulder features, Lyren plants,
+chorus flowers/crowns/sprouts, Distortion/Confusion/Starfall, villager work and
+profession groups, bread/shelter/gates/reputation, crowd panic, fishing returns,
+sand events, fireball ignition, weather/gravity/wind, elytra, snow generation,
+lightning, sky events and their individual visuals, End ambience, weather and
+underwater audio, shadows, breaking fragments, leads, bobbers, arrows, fireballs,
+ghast animation, elytra cape motion, entity fire, fluid tails and artwork.
+Existing fine-grained visual controls remain available in their original pages.
+
+Configuration files:
+- config/naturality.json: existing client settings.
+- config/naturality-server.json: existing seven gameplay settings.
+- config/naturality-features.json: ordinary boolean feature map; absent keys
+  default on. Unknown keys are retained. Parent switches gate dependent features.
+FeatureConfig reads before mixin transformation and freezes the active settings
+for the process. Menu edits save the next startup settings; presets and content/
+server feature edits are available from the title screen. The UI reports when
+effective settings differ from the active startup snapshot. Restart is required
+for changed startup features, including optional visual mixins/resource overrides.
+Client and server must agree on content and structural features (especially
+chorus state definitions and Distortion entity data). Disabling content does not
+migrate blocks/items already saved in worlds.
+
+FeatureMixinPlugin conditionally removes structural and rendering mixins.
+Clientside Only skips custom blocks/items/effects/entities and restores vanilla
+chorus states and tracked entity data. FeatureResourcesMixin filters ONLY this
+mod's Fabric resource pack: content data is hidden when content is disabled,
+the End noise-settings override follows End terrain, and vanilla asset/shader
+overrides follow the visual options. Custom content assets remain available.
+Protocol registrations and content renderers stay available where needed.
+Codec registrations remain present with content enabled even when the relevant
+world-generation feature is disabled, so biome data can still be decoded.
+
+ConfigPresetGameTest checks exact defaults, preset settings, numeric resets and
+independent edits, and emits JSON fixtures in build/run/clientGameTest/preset-fixtures.
+ConfigMenuGameTest exercises the actual preset buttons, feature edit and search.
+The feature-startup suite runs each fixture in a fresh JVM, checks registrations,
+resource filtering and renderer fallback, and opens a local test world.
+writeVanillaRegistrySnapshot runs Minecraft bootstrap in a separate JVM without
+Fabric; feature-startup compares Clientside Only against its complete vanilla
+static registry/block-state IDs and sampled entity tracked-data tables. All
+42,801 entries matched. Default, Clientside Only, No Visual Overhaul and a mixed
+independent-feature configuration passed separate launch/world tests. Config,
+gameplay, fireball-model and ghast-squash regression suites passed. An actual
+external vanilla-server connection has not been exercised.
+Logs: build/config-presets-final-regression.log,
+build/config-preset-clientside_only-final.log,
+build/config-preset-no_visual_overhaul-final.log,
+build/config-preset-mixed_features-final.log.
+Final menu and End Wilds regression passed with the new boulder option
+(build/config-presets-wilds-final.log). Production build, portal/rope/weather
+checks and prepareDebugLaunch passed (build/config-presets-production-build.log).
+Rebuilt artifact: build/libs/naturality-1.0.0.jar. Existing local run/config
+settings were left unchanged; automated test config files were restored.
+
+COMMON, FLAT OBLONG WILDS BOULDERS (2026-10-08)
+---------------------------------------------
+Wilds boulder placement now uses 64 candidates per chunk instead of the original
+1-in-3 rarity filter. Actual successful groups remain constrained by valid bare
+Wilds ground, Heath/decoration protection and writable chunk boundaries.
+Main rocks use radius 4-6 with independently varied elliptical axes: major
+1.15-1.70 times radius, minor 0.65-0.95 times radius, random horizontal rotation,
+and height 4-5 (previously 7-10). Smaller companions retain radius 2-3 and now
+height 2-3. Removed high-frequency faceting and lean in favor of smooth low domes.
+Every group retains a dominant main rock and opposite-material companions.
+Ground-following outer skirts may trim away from Heath or steep drops, while
+central footprints require bare rock. Up to six blocks of local elevation
+variation and eight between group members are tolerated. Heath is never replaced.
+Footprint biome checks use the world resolver's four possible horizontal biome
+cells instead of the limited WorldGenRegion biome view; this prevents wider
+footprints from requesting unavailable neighboring chunks. Config WILDS_BOULDERS
+switch remains respected. Fresh chunks only.
+Validation: assemble, End Wilds shape/group/Heath protection, actual boulder
+frequency and chunk-performance suites passed (build/wilds-oblong-adaptive.log).
+Boulders appeared in 16/22 sampled bare Wilds chunks (~73%). Controlled group had
+163 exposed End Stone and 128 Lirestone blocks. Terrain geometry fingerprints
+unchanged; 64-chunk batches measured 0.45-0.61 seconds in the test environment.
+Artifact: build/libs/naturality-1.0.0.jar.
+
+BOULDER CROWNS, GAPS AND RARER LIRESTONE (2026-10-08)
+---------------------------------------------------
+Wilds rock domes now use a vertically enlarged ellipsoid clipped at the intended
+height, giving broad crowns. Any final tier containing fewer than four blocks
+is removed, eliminating the single-block tip. Oblong axes/rotation remain.
+Each rock independently has a 20% Lirestone chance and 80% End Stone chance;
+groups no longer force opposite materials for every companion. Smooth Lirestone
+replacement rule remains when the chosen Lirestone rock buries smooth stone.
+Normal group plans require at least two empty horizontal blocks between their
+rock footprints. Generation also detects already-decorated rock above native
+terrain density in a two-block neighborhood, preventing repeated attempts from
+stacking/merging fields. A 1-in-20 group flag relaxes spacing for rare merges.
+Companions use slightly wider separation and 3-5 candidate positions; at least
+one companion remains required. Heath and obstruction checks remain active.
+Validation: assemble, End Wilds generation and chunk-performance passed
+(build/wilds-spacing-crowns.log). Focused crown/material validation passed
+(build/wilds-crown-material-checks.log): each connected test rock had >=4 blocks
+on its highest tier. Actual sample contained boulders in 18/22 bare chunks,
+with 1,350 End Stone boulder-top columns versus 109 Lirestone columns. Generation
+stayed common. 64-chunk batches measured 0.54-0.85 seconds; terrain hashes unchanged.
+Artifact: build/libs/naturality-1.0.0.jar. Fresh chunks only; existing boulders
+are not reshaped or removed.
+
+HEATH NEVER OVERRIDES LIRESTONE (2026-10-08)
+------------------------------------------
+EndStoneLayers now allows a Heath cap only when no Lirestone deposit/full-island/
+Crags-fringe conversion has been selected for that block. Regular and Smooth
+Lirestone take precedence over overlapping Heath patch masks. Existing Lirestone
+blocks were already excluded from the material pass's End Stone source branch.
+Current LyrenHeathBlock has only cover decay and no spreading behavior, so it
+cannot convert neighboring Lirestone after generation either.
+Validation: assemble and End Wilds regression passed (build/heath-preserve-lirestone.log).
+Explicit overlapping masks test confirms all regular/smooth Lirestone cap blocks
+remain intact, with a nonempty Heath mask to exercise the conflict. Existing
+vegetation, no-chorus, biome separation, crown/material and density checks pass.
+Final log: build/heath-lirestone-overlap-check.log. Production JAR rebuilt:
+build/libs/naturality-1.0.0.jar. Applies to new chunks; already generated Heath
+is not retroactively removed.
+
+BOULDERS BLEND INTO TERRAIN, WIDER GAPS (2026-10-08)
+-------------------------------------------------
+Wilds boulder tops now interpolate from their intended crown height down to
+local ground height in each footprint column. A broad inner crown (32% of the
+elliptical radius) transitions through a cubic smoothstep shoulder to zero rise
+at the edge. Downhill sides no longer inherit the center's fixed-height rim;
+they gradually meet their own terrain height. Small final-tier removal remains.
+Normal inter-rock footprint and existing-decoration buffers increase from two
+to three blocks; companion centers move two blocks farther outward. The existing
+5% merge allowance, 20% Lirestone odds, high attempt count, Heath protection and
+config switch remain. No underlying island density changes. Fresh chunks only.
+Validation: assemble, End Wilds material/Heath/no-chorus, broad crowns, frequency,
+and chunk-performance suites passed (build/wilds-terrain-blend.log). Boulders
+appeared in 17/22 bare chunks. Sample boulder-top columns: 1,002 End Stone versus
+187 Lirestone. Controlled group: 207 exposed End Stone and 24 Lirestone blocks.
+Artifact: build/libs/naturality-1.0.0.jar.
+
+PROCEDURAL SQUARE SUN LENS FLARE (2026-10-10)
+------------------------------------------
+SunBeams now also draws six subtle lens ghosts along the projected sun-to-screen-
+center line. SunBeams.closeness shares the existing eased 45-degree camera cone
+between beam opacity and flare strength/chain reach. Flare strength fades again
+inside roughly ten degrees and is zero at exact center (with a small central
+dead zone), so ghosts disappear before bunching up over the sun.
+
+Each ghost is a separate smoothly positioned screen-space quad with its own
+16x16 procedural raster. Hollow square rings, square glows and small cores use
+subtle warm/cool tints derived from the active sun sprite. No image assets,
+per-frame texture generation or framebuffer-wide pixel grid. Aspect correction
+keeps cells square; GUI scale does not control their resolution. Tune
+SPRITE_RESOLUTION in sun_lens_flare.fsh, ALONG/SIZE in sun_lens_flare.vsh, and
+strength() in SunLensFlare.java. One static buffer and one draw for all six;
+the buffer closes with the owning SkyRenderer.
+
+Uses the existing Sun beams option (tooltip updated), celestial brightness/rain
+fade, and sky rendering order. Terrain/clouds can cover individual ghosts just
+as they cover sky; this is not a post-terrain camera overlay. A visual-shape ray
+from the actual camera toward the sun additionally suppresses the entire chain
+when terrain hides its source, within the effective render distance. Sun below
+the horizon, behind the camera or outside the closeness cone produces no flare;
+the shader also fades the chain as the source leaves the viewport. Clouds use
+normal sky layering rather than a separate source-visibility sampling pass.
+
+Validation: offline assemble and sunset client suite passed. Focused assertions
+cover centered/outside/behind-camera zero strength and the inner fade. Screenshots
+cover offset, near-center, centered, resource reload and terrain obstruction.
+Logs: build/sun-flare-test.log and build/sun-flare-final.log.
+Artifact: build/libs/naturality-1.0.0.jar.
+
+COLORED LENS GHOSTS AND LARGE TERMINAL FLARE (2026-10-10)
+------------------------------------------------------
+The last ghost now has 3x the width/height of the next-largest (SIZE 0.216 vs
+0.072). Its broad translucent fill and square rim retain the independent 16x16
+raster. The six ghosts use more saturated amber, cyan, lime, red and green
+colors, with layered chromatic square rims on the larger elements. Sun altitude
+smoothly warms the palette to gold/orange/copper at BOTH sunrise and sunset;
+full daytime color returns above normalized sun height 0.45. The active sun
+sprite still lightly modulates the palette. Center fade/chain motion unchanged.
+The old hard horizon rejection was removed: existing celestial brightness now
+fades the flare along with the visible sun through sunrise/sunset. Terrain
+source blocking and sky/cloud layering remain as described above.
+Validation captures include noon, centered, resource reload, blocked source,
+sunrise and sunset. Build/test log: build/sun-flare-color.log.
+Validation passed: assemble, prepareDebugLaunch and sunset suite; noon and both horizon screenshots inspected. Additional horizon capture log: build/sun-flare-color-horizon.log.
+
+LENS FLARE CAMERA OVERLAY (2026-10-10)
+------------------------------------
+Supersedes the sky-layering/source-ray behavior above. SunBeams captures the
+rendered sun transform, current world projection, tint and strength during the
+sky pass. SunLensFlareOverlayMixin draws the pending flare to the main color
+target immediately before GuiRenderer.render, after the world, hand, screen
+and post effects. No depth testing and no terrain/cloud source occlusion ray:
+on-screen sun positions can produce flare over all scene content, beneath GUI.
+Pending data resets at the start of each frame and is consumed once, preventing
+stale flare on menus, dimensions without a sun or disabled Sun beams. Projection
+is captured from the sun pass, avoiding the subsequent hand/GUI projection.
+
+Flare strength retains a faint baseline outside the beams' 45-degree closeness
+cone, and the viewport fade begins beyond the screen edge instead of inside it.
+Shared closeness still varies strength and chain length; the exact-center fade
+remains. Existing celestial weather/horizon brightness remains respected.
+Validation: sunset suite includes centered and terrain-covered source captures.
+Build/test log: build/sun-flare-overlay.log.
+
+SUN CONFIG SECTION (2026-10-10)
+-------------------------------
+Atmosphere > Sky now links to Sun. Sun contains the existing Sun beams toggle,
+an independent Camera flare toggle, and Maximum flare opacity (0-100%, default
+14%, preserving prior intensity). All three support search/reset/save. Existing
+sunBeams JSON key remains; effects.cameraFlare defaults true and
+cameraFlareMaxOpacity defaults 14 for missing keys. Opacity is clamped on load
+and rendering. Preset reset and reflective disableVisuals include new fields.
+Flare capture runs even with beams off; beams still render with flare off.
+Changes take effect without restarting. Validation log: build/sun-config.log.
+
+PARTIAL SUN VISIBILITY THRESHOLD (2026-10-10)
+------------------------------------------
+The camera overlay now gates its strength using up to 25 visual-shape rays
+across a 5x5 sample of the active sun sprite's opaque face (transparent padding
+excluded). Fewer than 30% clear samples produces no flare; a smoothstep restores
+full strength at 70% visible. Partial exposure can therefore produce a flare
+without the old all-or-nothing center ray, while tiny slivers cannot. Samples
+refresh on sprite reload. Terrain visibility is checked once per client tick,
+from the actual camera, within effective render distance; no world retained by
+the weak cache. This checks block visual shapes, not cloud or entity coverage.
+Overlay ordering, center fade, palette and independent config remain intact.
+Validation log: build/sun-flare-visibility.log; sunset suite checks threshold
+boundaries plus clear/centered/terrain-covered screenshots.
+
+GHAST MOVEMENT LEAN (2026-10-10)
+------------------------------
+The whole hostile ghast model now leans toward its horizontal movement, including
+tentacles, around the same body-center pivot as the charge squash. World-space
+velocity is eased per unpaused client tick (18% of the remaining difference),
+interpolated for rendering and projected into the ghast's body-facing frame.
+Total lean approaches an eight-degree limit smoothly with speed. Stopping eases
+back upright. The movement lean composes with charged squash and elastic release;
+vanilla facing, movement, hitboxes and happy ghasts retain their usual behavior.
+Validation: assemble and ghast-squash passed, including diagonal direction, angle
+limit, reversal, rest recovery, actual synced movement render-state tilt and the
+existing charge/release checks. Movement screenshot inspected.
+Log: build/ghast-lean-test.log. An unrelated EndFlashes$State class-loading failure
+on the initial client launch was resolved by rebuilding the client classes.
+Validation: assemble and prepareDebugLaunch passed; initial test launch failed on unrelated FireShapeAccessor loading, isolated sunset retry passed (build/sun-flare-visibility-retry.log). Clear-source and fully covered screenshots inspected.
+
+EDITABLE GRAYSCALE LENS FLARE SPRITES (2026-10-10)
+------------------------------------------------
+All six procedural silhouettes are now editable 16x16 grayscale PNGs in
+resources/textures/misc/sun_flare_0.png through sun_flare_5.png. The last file is
+the large terminal element. Existing build resource mapping packages them under
+assets/naturality/textures/misc. No build task regenerates or overwrites artwork.
+Supplied masks bake the former coverage to white RGB/varying alpha. Shader uses
+grayscale luminance times alpha for strength and retains dynamic day/horizon
+palette and chromatic rims. No procedural shape mask remains in the shader.
+Each PNG's native resolution determines its own pixels through texelFetch;
+resolution can be changed independently, without snapping sprite movement.
+Six textured quad draws replace the original single procedural draw. Textures
+are managed/reloaded by Minecraft; visibility/ordering/config remain unchanged.
+Editing and resource-pack instructions: resources/textures/misc/README.txt.
+Validation log: build/sun-flare-sprites.log.
+Validation: final assemble, prepareDebugLaunch and sunset suite passed, including texture reload. All six packaged PNGs verified grayscale; reloaded screenshot inspected. Log: build/sun-flare-sprites-final.log.
+
+HAPPY GHAST MOVEMENT LEAN (2026-10-10)
+-----------------------------------
+Happy ghasts and ghastlings now share the hostile ghast's eight-degree movement
+lean, tick easing, render interpolation and body-facing projection. The vanilla
+HappyGhastRenderer is extended, retaining its age models, harness and rope layers;
+all model layers rotate around the body center. The adult pivot is -2.004 model
+blocks, with the vanilla .2375 baby mesh factor applied for ghastlings. Ridden
+happy ghasts use the same velocity-driven path. The charge squash remains specific
+to hostile ghasts. World changes reset motion state for both entity types.
+Validation: assemble and ghast-squash passed, including synced movement and bounded
+render-state lean for adult/baby happy ghasts plus hostile charge/lean regressions.
+Happy ghast movement screenshot inspected. Log: build/happy-ghast-lean-test.log.
+
+ENTITY SUN-FLARE OCCLUSION (2026-10-10)
+-------------------------------------
+The existing sun-face samples now check visible entity bounding boxes as well
+as block visual shapes. Both feed the same visible-area fraction: <=30% visible
+suppresses flare and >=70% restores its full visibility multiplier. A single
+entity query covers the sample-ray volume per tick; block-hidden rays need no
+entity intersections. Removed/invisible/spectator entities and entities beyond
+their render-distance limit are excluded. The camera entity is excluded in
+first person, but can occlude in third person. Box coverage approximates entity
+silhouettes; it does not resolve gaps between model parts or texture alpha.
+Sunset validation includes a stationary giant covering the sun.
+Log: build/sun-flare-entities.log.
+
+GHAST RIDER SEATS AND CRASH LANDINGS (2026-10-10)
+----------------------------------------------
+GhastMotion now eases horizontal lean on both server and client. Happy-ghast
+passenger attachments rotate around the exact body center with the same eased
+pitch/roll as the model, keeping all four vanilla seat positions and moving the
+front rider forward/down during forward lean. Ordinary passenger interpolation
+smooths the positions between ticks. Adults and ghastlings use their native size.
+The hostile ghast pivot is corrected for its native 4.5x mesh (1.8045 blocks above
+its origin); happy ghasts use 2.004 blocks and the .2375 baby mesh factor.
+
+Ghasts and happy ghasts now retain their dead body until a crash finishes. The
+server searches a ten-block horizontal cylinder below the death position, at any
+height down to the world's build minimum. It selects the nearest reachable loaded
+collision top supporting a quarter-block item footprint, with clear space above;
+lava/other fluids, cactus, fire and lit campfires are rejected. Searches and ray
+paths never request new chunks. If no safe top exists, a random angle and radius
+within the cylinder choose a fallback descent toward the first surface/fluid in
+that column, or the void. Drops can be lost to lava in this fallback as requested.
+
+The model stretches by 18% over six ticks, then rotates over ten ticks so its top
+faces the velocity direction. A 20-60 tick flight uses normalized expo-in motion
+(2^(10*t)-1)/1023. Server head-tip collision follows the animated stretch/rotation;
+the final body position places the top at the contact point. Impact emits a burst
+of large smoke and removes the corpse. Vanilla death roll/removal is suppressed
+for these entities; AI/despawning is disabled during the brief crash. Riders are
+dismounted on death. Living ghast charge squash and movement lean remain active.
+
+Vanilla loot rolls, kill credit, equipment chances and XP are evaluated at death.
+Items, harnesses, leads and XP are held until impact; items are placed together on
+the landing top with no horizontal scatter. Pending loot, XP, origin, target and
+flight progress are saved with the entity, preventing duplicate rolls on reload.
+Other entity deaths and loot retain their normal paths.
+
+Validation: offline assemble and ghast-crash/ghast-squash client suites passed.
+Coverage includes safe single-block landing over lava, cactus rejection, delayed
+items/XP, save serialization, exact single loot release, happy-ghast harness and
+lead retention, destructive lava fallback within radius, all four seats and the
+front seat's forward/vertical offset. Existing charge, elastic release, movement
+lean and adult/baby checks also passed. Stretch, head-first flight, happy-ghast
+flight and collected surface-drop captures inspected.
+Logs: build/ghast-crash-build.log and build/ghast-crash-test.log.
+
+GHAST DEATH PARTICLES AND EASING RETUNE (2026-10-10)
+-------------------------------------------------
+Crash impact now emits 20 vanilla POOF particles (actual mob death smoke), replacing
+large ambient smoke. Custom ghast/happy-ghast rotation uses expo-in-out: death turns
+use it for quaternion interpolation, and movement lean/rider seats use shared
+eight-tick expo-in-out transitions instead of the old exponential damping.
+Flight position/speed retains its original expo-in acceleration.
+Death deformation now follows downward velocity, with no deformation at zero or
+upward speed. Vertical stretch increases linearly to a subtle 6% at four blocks
+per tick, with compensating X/Z compression to retain volume. The previous timed
+18% stretch has been removed. Server head-contact calculations use the same
+speed-dependent extent and rotation easing as the rendered pose. Charge squash
+and elastic firing release remain their separate charging animation.
+Validation: assemble and ghast-crash/ghast-squash passed, including expo-in-out
+endpoints/symmetry, speed-dependent deformation limits, safe/unsafe landing,
+pending loot/XP/equipment, rider positions and existing charge/lean checks.
+Vanilla death-poof capture inspected. Log: build/ghast-easing-test.log.
+
+GHAST SINE DESCENT, LONG TURN AND KILLING RECOIL (2026-10-10)
+----------------------------------------------------------
+The death turn now fades in over 48 ticks with expo-in-out, leaving a substantial
+moving phase before the model becomes fully head-first. Flights last 50-100 ticks,
+plus the short initial transition. Descent distance is the normalized integral
+of easeInSine velocity, so velocity itself follows 1-cos(pi*t/2), replacing the
+previous exponential acceleration. Rendered orientation and server head-contact
+follow the combined flight velocity, including recoil.
+
+The killing damage source supplies a .55-block/tick impulse away from the hit.
+It eases to zero over sixteen ticks independently of the fall, and its integrated
+displacement overlays the fall path. The fall path compensates the final recoil
+travel so the same safe landing surface remains the destination. Recoil and its
+flight progress persist in saved state.
+
+Falling ghasts/happy ghasts no longer receive the vanilla red death overlay.
+Rotated death models get conservative render-culling bounds encompassing body
+and tentacles. On impact, the server explicitly publishes the final position and
+keeps the body for six ticks so client interpolation can show ground contact
+before the death-poof/removal. Normal twenty-tick death removal stays suppressed;
+held loot and XP are released with the vanilla POOF burst after this arrival.
+
+Validation: assemble and ghast-crash/ghast-squash passed. Added checks cover sine
+velocity/integrated distance, long partially rotated flight, recoil direction
+and finite decay, recoil serialization, actual untinted client body beyond the
+vanilla death duration, and existing safe/fallback/loot/equipment/rider behavior.
+Untinted partial-turn and ground-poof captures inspected.
+Logs: build/ghast-sine-build.log and build/ghast-sine-test.log.
+
+GHAST RECOIL TURN AND DIRECTIONAL LANDING (2026-10-10)
+--------------------------------------------------
+Death orientation now includes a separate recoil-direction turn: it eases in over
+8 ticks with expo-in-out, then eases away over ticks 10-30 while the long falling
+turn takes over. The killing impulse is synchronized to clients and restored from
+saved flight data. Server head-contact and client model rendering share the same
+combined quaternion, preserving the landing contact and existing slow fall turn.
+Safe-surface selection now prefers candidates within roughly a 70-degree forward
+cone around horizontal killing-blow velocity, then favors alignment and distance.
+If the cone has no safe candidates, other safe surfaces remain eligible. Zero
+horizontal impulse keeps ordinary nearest-surface selection; the ten-block
+cylinder, hazard exclusions and random unsafe fallback are retained.
+Validation: assemble and ghast-crash/ghast-squash passed. New checks verify an
+aligned safe surface beats a closer backward one and the early model top turns
+into recoil. Existing landing, loot, tint, visibility, save and riding checks
+passed. Early recoil-turn capture inspected. Log: build/ghast-direction-test.log.
+
+CONTINUOUS GHAST HIT-TUMBLE / FALL BLEND (2026-10-10)
+--------------------------------------------------
+The death hit now supplies damped angular carry, integrating its turn over time
+rather than fading the hit rotation back to upright. A small off-axis bank adds
+a three-dimensional tumble. The retained hit pose smoothly blends into the long
+velocity-facing fall orientation through the existing expo-in-out rotation fade.
+Recoil translation and sine-eased downward acceleration begin together from the
+first tick; the previous six-tick stationary fall wind-up is removed. Server
+head-contact and client visuals use the same blended quaternion and timing.
+Safe landing preference, fading recoil velocity, subtle speed deformation,
+untinted visibility, impact death particles and held loot remain active.
+Validation: assemble and ghast-crash/ghast-squash passed. Added checks verify the
+hit turn carries onward instead of unwinding and remains continuous across the
+recoil-decay transition. Existing directional landing, visibility, loot, saved
+state, riding, charge and movement checks passed. Hit/fall captures inspected.
+Log: build/ghast-physics-blend-test.log.
+
+GHAST TRANSITION STABILITY (2026-10-10)
+-------------------------------------
+Recoil now eases over 32 ticks rather than 16, overlapping the accelerating descent
+instead of stopping before falling speed builds. Final recoil displacement is
+still compensated so safe landing positions remain unchanged. Death rotation now
+uses a stable compensated fall heading rather than continually normalizing the
+instantaneous velocity around its turnaround. This removes orientation-target
+flips near low speed while preserving the separate hit-driven angular tumble.
+Server head contact and client model pose use the same stable heading convention.
+Validation: assemble and ghast-crash/ghast-squash passed, covering finite recoil
+fade, hit carry, continuous rotation blend, safe/directional/fallback landing,
+loot, saved state, untinted visibility and riding. Fall capture inspected.
+Log: build/ghast-transition-test.log.
+
+POST-HIT FORWARD-SECTOR GHAST LANDING (2026-10-10)
+-----------------------------------------------
+Landing selection is deferred until eight ticks of initial recoil have displaced
+the ghast. The ten-block search radius is centered at that post-hit position,
+and only the forward semicircle (kill-hit heading plus/minus ninety degrees) is
+eligible. Safe surfaces behind that plane are excluded instead of merely ranked
+lower. Unsafe random fallback uses the same angular sector and radius. If the
+hit has no horizontal direction, the ghast's facing supplies the sector heading.
+During acquisition, recoil and a gentle downward acceleration remain active.
+At selection, the current downward velocity carries into the sine-eased flight,
+avoiding a velocity reset. Remaining recoil continues overlaying the descent.
+The unplanned/planned phase, search origin and entry velocity persist with loot.
+Early death rendering remains untinted and uses the hit tumble before a target
+exists; its stable falling heading is prepared when the chosen target arrives.
+Validation: assemble and ghast-crash/ghast-squash passed. Tests verify no target at
+killing blow, selection after actual displacement, strict exclusion of backward
+safe spots, and both safe/fallback destinations within the forward post-hit
+semicircle. Landing loot, equipment, death animation and riding regressions pass.
+Surface-drop capture inspected. Logs: build/ghast-sector-build.log and
+build/ghast-sector-test.log.
+
+PHYSICS-BASED GHAST DEATH FALL (2026-10-10)
+----------------------------------------
+Replaced the age-driven position path and quaternion blend with a per-tick
+velocity/rotation simulation for both ghasts and happy ghasts. Gravity is opposed
+by decaying residual lift and quadratic aerodynamic drag, approaching a finite
+terminal speed. The killing hit adds angular momentum and linear recoil to actual
+previous travel, avoiding duplicate vanilla hurt knockback. New/teleported
+entities ignore discontinuous previous-position travel. A damped angular spring
+resists slow-speed tipping; the equilibrium angle grows with downward speed via
+expo-in-out and reaches head-first only at 2.4 blocks/tick. Angular velocity
+persists through the complete descent instead of switching between animations.
+The coefficients and upright-restoring torque are stylized ghast behavior, not a
+measured balloon mass/shape model or a full rigid-body fluid simulation.
+After the retained eight-tick post-hit landing search, bounded spring/damper
+horizontal guidance engages with expo-in-out over ten ticks. It steers toward the
+chosen forward-sector safe surface without replacing velocity. Collision uses
+vertical support of the rotated/scaled body cube, allowing upright/tilted landings
+on shorter falls. Body orientation is synchronized to clients and interpolated;
+velocity, angular velocity and rotation persist with held loot. Existing subtle
+speed stretch, untinted rendering, impact poofs, harness/loot capture and riding
+lean are retained. No fixed flight-duration endpoint or forced age-driven flip.
+Research: NASA's falling-object equations describe gravity, speed-squared drag
+and terminal velocity. FAA Balloon Flying Handbook chapter 2 describes buoyancy,
+loss of lift as the envelope cools, and slow response due to mass and momentum.
+https://www1.grc.nasa.gov/beginners-guide-to-aeronautics/falling-object-with-air-resistance/
+https://www.faa.gov/regulations_policies/handbooks_manuals/aviation/Balloon_Flying_Handbook_FAA-H-8083-11B/bfh_chapter_2.pdf
+Validation: assemble and ghast-crash/ghast-squash client suites passed. Tests cover
+bounded acceleration/terminal speed, speed-dependent tipping, continuous angular
+steps, short safe landings, a 90-block long fall with upright start and strong
+high-speed tipping, directional search, lava fallback, save/load, held loot and
+harness, client tint/lifetime, rider lean and charged squash. Initial/fast-fall
+captures visually inspected. First physics guidance overshot the single-block
+landing fixture; revised bounded steering passes both ghast safe-landing cases.
+Log: build/ghast-dynamics-test.log. Artifact: build/libs/naturality-1.0.0.jar.
+
+SMOOTH GHAST LANDING CURVE AND EARLIER TIPPING (2026-10-10)
+-------------------------------------------------------
+Lowered the speed-dependent tipping range from 0.6-2.4 to 0.25-1.65 blocks/tick;
+angular inertia and damping still soften the actual turn. Both ghast types now
+follow one quintic horizontal landing curve rather than repeatedly applying
+capped spring steering. The curve starts with current velocity and acceleration,
+then ends at the selected surface with zero horizontal velocity/acceleration.
+Vertical gravity, residual lift and drag remain simulated. A short forward
+simulation estimates contact time including rotated body support; the horizontal
+curve settles two ticks earlier to accommodate prediction differences. Curve
+parameters persist in saves; older planned deaths acquire a curve from their
+loaded position/velocity. Forward-sector selection after initial recoil, collision,
+loot/harness capture, impact smoke and existing live movement/charge effects stay.
+Validation: assemble and ghast-crash/ghast-squash passed. New checks verify curve
+endpoint, preserved entry velocity, stationary landing tangent and bounded changes
+in horizontal velocity across the arc. Short/long safe landings, lava fallback,
+rotation continuity, client lifetime/tint, loot/equipment and riding checks pass.
+Safe-surface drop screenshot inspected. Log: build/ghast-curve-test.log.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply it.
+
+UNGUIDED GHAST DEATH FALL (2026-10-10)
+------------------------------------
+Removed all landing spot selection, safe/hazard searches, forward-sector/random
+fallback choices, quintic landing curves, predicted arrival time, destination
+snapping and tracked destination data. Both ghast types now integrate their hit
+momentum and actual previous travel with gravity, decaying lift and quadratic
+drag throughout the entire fall. Nearby terrain does not affect motion until
+actual collision. Existing speed-dependent rotation, angular momentum, subtle
+stretch, untinted visibility, impact poofs and held drops/harness remain active.
+Drops and XP are released at the actual collision point; lava impacts naturally
+destroy items. Falls into the void finish below the normal void threshold.
+Saved deaths retain velocity/rotation/loot and resume freely; destinations and
+curve fields from older saves are ignored. Earlier landing-selection and curve
+entries above are superseded by this user-requested removal.
+Validation: assemble and ghast-crash/ghast-squash passed. Updated fixture verifies
+exact free integration despite a nearby raised surface, actual collision drop
+positions, short/long ground impacts, natural lava impact, save/load, untinted
+client lifetime, equipment capture and live riding/charge behavior.
+Log: build/ghast-free-fall-test.log. Artifact: build/libs/naturality-1.0.0.jar.
+
+REGIONAL PIXEL HEAT WAVES (2026-10-10)
+------------------------------------
+HeatWaves adds a depth-clipped scene warp within a two-block box halo around
+lava blocks and a two-block-high column immediately above ordinary/soul fire.
+Four-screen-pixel rows sway horizontally with a three-pixel maximum displacement.
+Inverse sampling stretches/compresses the scene, tapering at volume boundaries;
+foreground opaque surfaces stop the heat ray. Hands and GUI render afterward.
+The pass follows scene transparency and precedes edge fog/cloud overlays. Its
+occlusion uses opaque depth; translucent foreground surfaces are not independent
+occluders. Visual Overhaul gates activation. Shader-pack compatibility is untested.
+Loaded chunks within 24 blocks of the camera are scanned at most every five ticks
+(or after moving four blocks); empty section palettes are skipped. Contiguous lava
+runs/rows merge without filling missing corners. At most 64 nearest merged volumes
+are uploaded, so exceptionally fragmented scenes can omit farther sources. This
+is a block-volume approximation, including flowing lava, not fluid-surface geometry.
+GPU targets resize with the window and close with LevelRenderer; empty regions
+skip the copy/draw. No chunk loads or world mutations are introduced by the effect.
+Validation: heat-waves client suite passed in classic and improved transparency;
+checks lava/fire bounds and removal. Both striped-backdrop screenshots inspected.
+Log: build/heat-waves-test.log. Implementation: HeatWaves.java, heat_waves.fsh and
+EndFogCompositeMixin. Restart Minecraft to load the new shader/render code.
+
+WORLD-ANCHORED HEAT BANDS AND POWER SLIDER (2026-10-10)
+---------------------------------------------------
+Heat wave phase now samples the absolute world height of the strongest visible
+heat-volume segment, quantized into 1/16-block bands. Camera position supplies
+only the coordinate reconstruction; gl_FragCoord no longer drives wave phase.
+Bands therefore stay attached to world height as the camera moves or rotates.
+The displacement remains horizontal in screen space, with nearest scene sampling.
+Liquids > Heat wave power is a searchable 0-200% slider with an individual Reset.
+100% reproduces the original three-screen-pixel amplitude; the new default is
+50% (1.5 pixels) and the maximum is 200% (six pixels). Zero skips the scene copy
+and draw. liquids.heatWavePower is saved in naturality.json and sanitized to
+0-200; existing config files receive the reduced default automatically.
+Validation: heat-waves and config client suites passed with configuration caching
+disabled after a cached test compiler classpath omitted client outputs. Covers
+both transparency modes, source removal, zero/max power screenshots, a moved
+camera screenshot, searchable slider/reset and JSON/default/clamp behavior.
+Default/max/moved-camera captures inspected. Test log:
+build/heat-waves-anchored-test.log. Supersedes the screen-row/default-power details
+in the preceding regional heat-wave entry.
+
+HEAT WAVE PROXIMITY FADE (2026-10-10)
+-----------------------------------
+Each heat volume now receives a per-frame smoothstep strength based on the
+camera's three-dimensional distance to its nearest point. Strength starts at
+zero 20 blocks from the volume and reaches the configured power at eight blocks;
+it fades back out along the same curve when leaving. The two-block lava/fire
+geometry and world-height wave phase remain as previously documented.
+Source scanning now extends to 28 blocks, leaving a discovery margin beyond the
+visible fade boundary for the existing five-tick/four-block scan cadence. Regions
+whose proximity weights are all zero skip the scene copy/draw. Proximity weights
+use the spare min-box W channel of the existing uniform, with no new GPU resource.
+Validation: focused heat-waves client suite passed; continuous/monotonic fade,
+zero/full endpoints, camera inside a volume, and actual increasing GPU weights
+on approach were checked. Approach screenshots visually inspected. Log:
+build/heat-waves-proximity-test.log. The run used the temporary
+build/heat-proximity-test.init.gradle to exclude an unrelated TerrainCullingGameTest
+compile error (protected ViewArea.getRenderSection); that source was not edited.
+
+LAVA OUTER-BLOCK AND FIRE HEIGHT HEAT TAPER (2026-10-10)
+-----------------------------------------------------
+Lava distortion retains full spatial strength through the inner halo block and
+smoothly fades across the outer block to zero at its boundary. Fire distortion
+instead fades over the entire two-block column, strongest at its bottom and zero
+at its top; a narrow side-edge mask keeps displacement inside the fire column.
+Both tapers multiply the existing proximity fade and configured power. Source
+kind travels in the spare max-box W uniform channel. Fire metadata follows merged
+columns and is cleared with the scanned world/renderer resources.
+Validation: heat-waves client suite passed on the normal test compilation path;
+classic/improved-transparency and maximum-power screenshots were inspected.
+Log: build/heat-waves-spatial-test.log. Shader: heat_waves.fsh. The earlier uniform
+layout and shader descriptions are superseded by these distinct spatial tapers.
+
+LOCAL HEAT-WAVE PATCHES ON LARGE LAVA SURFACES (2026-10-10)
+--------------------------------------------------------
+The horizontal wave now varies across a world-anchored X/Z lattice of two-block
+patches. Each lattice point has a deterministic phase and speed; smoothstep
+interpolation joins its four neighboring waves. Height remains quantized into
+1/16-block bands. Large merged lava volumes therefore contain locally different
+motion rather than one synchronized row displacement across the whole lake.
+Interpolation keeps displacement bounded by the existing power slider. Spatial
+lava/fire tapers and proximity fading still multiply the local wave strength.
+A camera X/Z origin reduced modulo 512 blocks keeps shader coordinates precise;
+lattice seeds wrap at the matching period, preserving continuity across origin
+wraps and negative coordinates. The uniform adds one vec4 after the box array.
+Validation: heat-waves client suite passed, including a 25-by-11-block lava lake
+captured at two times; both lake screenshots visually inspected. Existing source,
+proximity, power and transparency checks also passed. Log:
+build/heat-waves-local-test.log. Restart Minecraft to apply the packaged update.
+
+HEAT WAVE ENABLE TOGGLE (2026-10-10)
+----------------------------------
+Liquids now has a Heat waves ON/OFF toggle directly above Heat wave power, with
+its own Reset button and global-search support. liquids.heatWaves defaults to
+true for new/existing config files. Turning it off immediately clears scanned
+heat metadata and skips all heat scanning, scene copies and draws. Turning it
+back on rescans the current world; the chosen power remains unchanged.
+Validation: config client suite passed, including toggle/search/reset and the
+existing-config default. Log: build/heat-waves-toggle-test.log.
+
+CONFIGURATION TOPICS, PRESET REFRESH AND FPS GUIDANCE (2026-10-10)
+---------------------------------------------------------------
+The root menu now contains Config Presets, Visuals, Content and World Generation,
+Gameplay, and Audio. The former general Gameplay Features and Visual Features
+lists are replaced by topic placement alongside the related existing controls.
+ConfigLayout uses an exhaustive switch to give every startup feature one home.
+Menu pages form an explicit parent/child tree; global search shows that path.
+Multiword searches prefer option names, falling back to category context when
+there is no name match. Single-word category searches still include their options.
+Search remains editable, retains individual resets, and restores prior scroll.
+
+Visuals groups lighting/shadows, sky/atmosphere, water/lava, portals, fire/heat,
+snow, particles, entities/animation and glint. Water and Lava have separate pages;
+Heat waves and Heat wave power are together under Fire and Heat. Content groups
+End terrain/biomes, chorus, and effects/Starfall. Gameplay groups villagers,
+mobs/fishing, weather/sky, movement/portal travel, and block/snow rules. Audio
+collects End ambience, weather/underwater muffling, wind, splash sounds and all
+portal volume controls. Storage filenames and existing JSON keys are unchanged.
+
+VisualPerformance adds qualitative tooltip estimates to fifteen selected toggles:
+- Low: pixel lighting, camera flare, ghast animation, fireball models, mob death
+  pixel fade and physics leads.
+- Medium: clouds, pixel shadows, water distortion, snow overlays and world glint
+  outlines.
+- High: weather particles, heat waves and pixel fog.
+- Extra High: dynamic lighting.
+These are provisional relative FPS-cost estimates for enabled effects at default
+settings while visible/active, not measured averages, percentages or additive
+costs. Tooltips explain scene-dependent drivers and explicitly say they are not
+measured averages. The authoring-time estimate is not a saved config option;
+unrated controls have no implied rating. No new FPS benchmark was collected.
+
+Six ordinary startup switches bring the total to 64: Ghast physics, arrow impact
+synchronization, fireball impact synchronization, mob death pixel fade, mob death
+smoke, and flat explosion particles. These expose previously unconditional newer
+hooks and allow the presets to cover them. Existing behavior stays on by default.
+The three presets still apply ordinary values once and remain customizable.
+Default uses current client/server defaults, including heat-wave power 50%, flare
+opacity 14%, and upper clouds off. Clientside Only disables the new server hooks,
+including GhastCrashMixin's extra LivingEntity data slots. Client visual ghast
+motion works without that mixin; ordinary dying ghasts no longer cast to its
+missing interface. No Visual Overhaul disables the new optional death/particle
+effects, heat waves and lens flare, and turns off the animation-only server hooks
+as well as its existing portal/fire/snow choices. Reapply an updated preset to
+include the new switches; there is no persisted preset identity or hidden mode.
+
+Ghast renderers stay installed when required by enabled server death physics,
+even if optional charge squash is off. Matching body lean remains when needed
+to align the server's rider offsets. With ghast physics off, vanilla death
+lifetime and rider positions return. Particle payload codecs/receivers remain
+registered; disabled visuals ignore their messages. Death/explosion providers,
+mixins and sprite descriptions follow their own switches. Required particle
+sprite definitions remain available independently of general replacement artwork.
+
+Validation: config, gameplay, ghast-crash, ghast-squash and mob-arrows passed
+(build/config-reorganization-test.log). The config suite covers topic navigation,
+global search, one result per feature, numeric resets, exact preset defaults,
+repeated-application stability and explicit uncertainty in performance tooltips.
+The separate feature-startup checks include vanilla tracked-data tables for both
+ghast types, vanilla death lifetime with physics off, and explosion provider
+selection. UI captures include config-main-categories, config-presets and
+config-performance-estimate under build/run/clientGameTest/screenshots.
+Final validation: Default, Clientside Only, No Visual Overhaul, and mixed visual
+switches all passed separate-process feature-startup tests. Clientside Only
+matched all 42,804 vanilla wire-table entries, including both ghast types. These
+remain local-world/protocol-table checks, not an external-server connection test.
+The mixed case keeps explosions enabled with general artwork off and ghast death
+physics enabled with optional squash off. Logs: build/config-reorganization-
+default.log, -clientside_only.log, -no_visual_overhaul.log and -mixed_features.log.
+Final menu run passed after tooltip translation/layout inspection
+(build/config-reorganization-menu-final.log). Build and prepareDebugLaunch passed
+(build/config-reorganization-build.log). Production JAR contains all 64 feature
+labels and 15 performance descriptions, and excludes test classes. Test configs
+were restored exactly; normal run/config files were not edited.
+Artifact: build/libs/naturality-1.0.0.jar. Restart Minecraft to load the update.
+
+NEAR-SOURCE HEAT STRENGTH AND SPEED (2026-10-10)
+---------------------------------------------
+Heat strength now has a fivefold peak at the source, easing back to its ordinary
+multiplier over the first 0.2 blocks via smoothstep. Wave speed separately peaks
+at threefold and eases down to ordinary speed over two blocks. Both use spatial
+source distance rather than camera distance; the configured power and camera
+proximity fade continue to multiply amplitude. Local X/Z phase/speed variation,
+world-height bands and lava-edge/fire-height tapering remain active.
+Fire distance is height above the column's bottom/source-top plane. Lava distance
+uses the merged source block bounds recovered by insetting its heat halo two
+blocks; flowing-fluid surface heights remain approximated by block bounds.
+For visible geometry inside a heat volume, heat now samples that geometry's
+world position instead of the average ray segment, retaining the thin near-source
+boost. Background rays retain their heat-segment midpoint. HeatSample carries
+source distance to the locally phased wave function without new GPU bindings.
+Validation: heat-waves client suite passed, including both transparency paths,
+proximity/power/source-removal checks and the large-lake fixture. Default and
+large-lake captures visually inspected. Log: build/heat-waves-source-boost-test.log.
+The power slider's previous pixel-amplitude descriptions now apply before this
+additional source multiplier. Restart Minecraft to apply the updated mod.
+
+FPS IMPACT SEARCH TAGS (2026-10-10)
+----------------------------------
+Global config search accepts #Low, #Medium, #High and #ExtraHigh, ignoring case.
+#Extra High, #Extra_High and #Extra-High also select the Extra High tier.
+Tags match exact VisualPerformance ratings; #High excludes Extra High. Multiple
+tags accept either tier, while ordinary words narrow the results (#High heat).
+Unrated controls are excluded from tagged searches; ON/OFF state does not affect
+the rating. Unknown tags produce no matches. Plain-text search and category
+fallback still work, with tags excluded from the phrase-length calculation.
+The search placeholder and tooltip explain the syntax. Filtered settings retain
+their normal edit/restart rules and Reset controls. Clearing search restores the
+previous page and scroll position. No config values or preset definitions changed.
+
+Validation: config client suite passed (build/config-impact-search-test.log),
+covering all fifteen rated settings, case/spacing, tier aliases, combined tags,
+text narrowing, exact-tier exclusion, unknown tags, unrated options, disabled
+options, live/startup edits and resets, and scroll restoration. The #Medium menu
+capture was visually inspected (screenshots/0003_config-impact-search.png under
+build/run/clientGameTest). Test configs were restored from their byte-for-byte
+backup. Build and prepareDebugLaunch passed (build/config-impact-search-build.log).
+Artifact: build/libs/naturality-1.0.0.jar. Restart Minecraft to load the update.
+
+UPWARD SOURCE PEAK AND TALL NEAR-SOURCE ROWS (2026-10-10)
+------------------------------------------------------
+The fivefold strength peak now applies only directly above the source footprint,
+never beside or beneath it. Lava's peak eases to ordinary strength over 0.2 blocks
+above its top; fire's peak eases over 0.5 blocks above its source-top plane. A narrow
+horizontal footprint-edge fade avoids a hard strength seam. Still-lava top height
+is approximated at block Y + 0.875; flowing fluid remains an approximation.
+Above the source, the first two rows are 1/4 block tall, the next four rows are
+1/8 block tall, and rows beyond one block return to 1/16 block. Their lattice is
+anchored to the source top. Speed uses each band's center height so taller rows
+retain a coherent phase rather than splitting into thin speed-driven strips.
+Existing patch variation, outer/upper spatial tapers, proximity fade and controls
+remain active. This supersedes the omnidirectional peak and uniformly fine-row
+behavior in the previous source-boost entry.
+Validation: heat-waves client suite passed, including both transparency modes,
+proximity and control checks plus the large-lake fixture. Maximum-power and lake
+captures visually inspected. Log: build/heat-waves-above-source-test.log.
+
+VIEWER-DISTANCE HEAT AMPLITUDE AND SPEED (2026-10-10)
+--------------------------------------------------
+Each volume now attenuates amplitude using the camera's distance to the source
+block bounds, with factor 4/sqrt(16+distance^2). It is full at contact, roughly
+45% at eight blocks and 24% at sixteen blocks, before the existing range fade.
+This prevents fixed screen-pixel offsets from becoming disproportionately large
+against a source that shrinks with viewing distance. Lava uses its inset source
+bounds and 0.875 top approximation; fire uses the source block beneath its column.
+The shared animation clock advances at 0.35+0.65*attenuation, based on the nearest
+scanned source. Source-local speed boosts and independent patch phase/speed still
+apply. Clock rate is integrated per frame from the pause-aware procedural tick
+clock, rather than multiplying total elapsed time by a changing distance factor;
+viewer movement therefore changes speed without jumping the global wave phase.
+World changes/renderer close reset the clock, and elapsed gaps are capped at 0.25s.
+Validation: heat-waves client suite passed; near/far approach captures inspected,
+with existing power, transparency, source removal and large-lake checks retained.
+Log: build/heat-waves-viewer-test.log. Restart Minecraft to apply the packaged mod.
+
+CLOUD SUN-FLARE OCCLUSION (2026-10-10)
+-----------------------------------
+CloudRenderer publishes active texture occupancy and current layer parameters
+for the camera overlay each frame. Remaining block/entity-clear sun rays cross
+both cloud layers before the shared 30%-70% visibility threshold is applied.
+Coverage follows resource-pack holes, animated X drift, X/Z offsets, cell width,
+layer height/thickness, opacity, flat style and distance fading. Multiple layers
+multiply transmission. Clouds-off frames have no retained layer coverage;
+vanilla fallback contributes its 12-block cells, 4-block thickness and opacity.
+Cell traversal handles shallow rays and side intersections without GPU readback.
+Coverage approximates volume occupancy, not individual dithered edge-fade pixels.
+The flare remains over world/hand and under GUI. Clouds themselves are unchanged.
+Validation: synthetic opaque/faint/reset checks and real cloud-renderer occupancy
+integration in the sunset/clouds suites. Logs: build/sun-flare-clouds.log and
+build/sun-flare-clouds-final.log.
+
+STABLE LAVA SURFACES AND EASED OUTER HEAT ROWS (2026-10-11)
+--------------------------------------------------------
+Heat waves no longer warp pixels whose camera ray intersects a lava source before
+the visible opaque scene depth. The shader intersects the inset source bounds
+(with the existing 0.875 source-top approximation), leaving the lake surface and
+its silhouette unchanged while scenery seen through surrounding heated air can
+still shimmer. Destination-mask checks also prevent shifted samples entering
+those excluded source pixels. Flowing lava retains the block-volume approximation.
+The closest two air rows remain 1/4 block tall. Above the first half block, row
+height smoothly eases toward 5/16 block at the outer range, approximately five
+times the previous outer 1/16-block rows. Band boundaries accumulate these eased
+heights from the source top, retaining a world-anchored lattice. This profile also
+covers the above-source-plane halo fringe outside the source footprint; only the
+strength peak remains confined to directly above the source. Speed uses each
+band's center height plus its lateral source distance to preserve coherent rows.
+Validation: heat-waves client suite passed; large-lake and maximum-power captures
+inspected. The lake texture is stable while the striped background shimmers.
+Log: build/heat-waves-air-rows-test.log. This supersedes the former shrinking
+row-height profile and source-surface distortion described in earlier entries.
+
+HEAT WAVE ROLLBACK TO TOGGLE VERSION, KEEPING TALL ROWS (2026-10-11)
+-----------------------------------------------------------------
+At the user's request, heat-wave behavior has been restored to the version at
+"Also, add a toggle for the effect next to the strength slider", with the current
+taller-row profile retained. Keeps the heat toggle/power slider, local two-block
+world-anchored patches, 20-to-eight-block proximity fade, lava outer-block taper,
+fire column-height taper, original amplitude and original patch animation rates.
+Removed subsequent source strength peaks, source-distance speed boosts, extra
+viewer-distance amplitude/speed attenuation and its integrated clock, explicit
+lava-source surface exclusion, and geometry-point heat sampling. Heat samples
+again use the original ray-segment midpoint and procedural animation clock.
+The preserved taller rows remain 1/4 block for the closest two bands and ease
+toward 5/16 block higher up, anchored to the source top as in the latest profile.
+All intervening heat-wave behavior entries are superseded by this rollback except
+for that taller-row profile. Other project features/configuration are unaffected.
+Validation: heat-waves client suite passed; the large-lake capture inspected.
+Log: build/heat-waves-revert-tall-test.log. Restart Minecraft to apply the update.
+
+CONTINUOUS GHAST MOVEMENT LEAN SMOOTHING (2026-10-11)
+--------------------------------------------------
+Replaced periodically restarted eight-tick lean easing with two persistent
+low-pass stages (25% response per tick per stage) after velocity-to-angle scaling.
+Rapid changes/sign jitter in velocity now damp out without restarting transitions
+or overshooting. Rendering interpolates between fixed previous/current tick
+samples; new targets cannot retroactively alter the previous render endpoint.
+Normal/happy/baby ghasts share this motion state, as do happy ghast riding points.
+The eight-degree velocity-scaled limit and smooth upright return remain intact.
+Death fall and charge squash behavior are unchanged.
+Validation: assemble passed. Dedicated ghast-squash client suite passed, including
+new alternating-velocity noise damping and render endpoint continuity checks,
+existing lean reversal/rest/limit, charge release and adult/baby happy ghast lean.
+Combined crash/squash run ended with client shutdown watchdog despite Gradle
+success; the dedicated lean suite was rerun cleanly to confirm completion.
+Logs: build/ghast-lean-smoothing-test.log and build/ghast-lean-smoothing-retest.log.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply it.
+
+JSON-CONTROLLED FLOATING MOB MOVEMENT TILT (2026-10-11)
+---------------------------------------------------
+Added config/naturality-floating-mob-tilt.json with an entities array of registry
+IDs. Defaults are ghast, happy_ghast, vex, allay, breeze, blaze and parrot in the
+minecraft namespace. Adding/removing IDs enables/disables movement tilt after
+restart; an empty list disables it. Modded living entity IDs work through the
+same living renderer hook. Missing config is generated; malformed config logs an
+error and uses defaults without overwriting the user's file.
+All listed mobs use the shared GhastMotion two-stage velocity smoothing and
+bounded eight-degree lean. One living renderer hook rotates the whole model and
+its layers about its body; ghast/happy-ghast pivots match their rider/body centers.
+Removed dedicated ghast and happy-ghast renderer tilt transforms so the effect
+is applied once through the same list-driven hook. Their custom renderers retain
+charge squash and death pose only. Happy-ghast seats use the same shared list and
+motion, so removing its ID also disables lean offsets. New mobs only get visual
+lean; ghast death physics remains limited to the two existing ghast types.
+Tilt fades out for passengers and is suppressed for dead mobs. Existing mobs
+outside the list retain vanilla rendering. Default JSON for the development game
+is run/config/naturality-floating-mob-tilt.json.
+Validation: assemble and floating-mob-tilt, ghast-squash, ghast-crash suites passed.
+Tests cover all five new render states, unlisted pig exclusion, bounded/smoothed
+lean, charge release, happy ghast adult/baby renderers and rider positions, and
+natural death fall/loot regressions. Group screenshot visually inspected.
+Unrelated in-progress snow edits initially blocked compilation; the remaining
+obsolete BlockColors call was updated to getTintSource/colorInWorld. The heat
+comparison test's private getPixelABGR call was replaced by public getPixel plus
+ARGB.toABGR so the game-test source set can compile.
+Log: build/floating-mob-tilt-test.log. Artifact: build/libs/naturality-1.0.0.jar.
+
+Snow side overlays: texture composition (2026-10-11)
+SnowOverlayModel paints snow_overlay into lazily cached sprite variants rather
+than emitting decal planes. Original positions, normals, cull faces, and wind
+vertex tags stay on the original model. Only UV/material and tint selection
+change; source biome tint is baked into the underlying pixels while snow stays
+untinted. Leaves and walk-through foliage preserve the source alpha exactly,
+and each texture column starts at its first opaque texel. Ordinary transparent
+surfaces, including glass, alpha-compose opaque snow over their clear texels.
+Exposed-edge clipping, top-only plant/post rules, no_snow_side_overlay, and
+snow_support_only still apply. Source sprite dimensions, frame layouts,
+animation timing, interpolation, and mipmap metadata are retained.
+SnowTextureAtlas reserves atlas space and uploads new variants on the render
+thread. The cache is shared by equal source/UV-mask/tint combinations; atlas
+space expands through resource reload when needed. Upload retirement happens
+before the previous atlas releases its native images, and stale mesh epochs
+cannot read disposed source/overlay images. Generated images and animation GPU
+buffers are released on reload. CPU pixels and padded mipmaps use the same
+block atlas, including Sodium; no extra terrain sampler or shader is needed.
+Checks: snow (Fabric/Indigo renderer), snow-compat, and wind-compat. Use the
+compatibility suites for Sodium; the full snow suite directly creates Indigo
+lighting helpers and cannot run under Sodium's replacement renderer.
+MOONLIT CLOUD TEXTURE AND TRUE OPAQUE BASES
+At 100% opacity, stable cloud caps and fully colored side rows now block the sky
+completely throughout the inner 75% of cloud distance. Previously the vanilla
+0-to-cloud-distance alpha fade made every surface slightly transparent. Only the
+outer 25% fades out; intentional cap transitions/side gradients still multiply alpha.
+At night, occupied cloud-texture cells receive moon-aligned silver-blue highlights
+near the moon and a subtle warmer outer halo. Boundary texture cells are brighter
+than interior cells; fixed per-texel variation preserves crisp cloud-resolution
+steps. Both layers use the active texture occupancy and scrolling coordinates.
+No new cloud texture, screen glow or transparent moon overlay is added.
+CloudMoonLighting samples the same camera moon/sun/phase attributes as SkyRenderer;
+moonlit strength eases with night/horizon/weather, and phase strength ranges from
+100% for full moon to 10% for new moon, symmetrically through waxing/waning phases.
+Lighting changes RGB only and cannot reveal stars/auroras through an opaque cap.
+Focused verification: assemble runClientGameTest -PclientTests=clouds, including
+moonlit full/new-moon and 50%/100% opacity captures under a known occupied texel.
+
+MOON HIGHLIGHT ALIGNMENT AND UNDERSIDE PIXELS
+CloudMoonDirectionMixin captures the moon's actual rendered direction in camera
+space; cloud pixels are transformed into that same space before comparison.
+This avoids mirrored or mismatched coordinate conventions as the moon moves.
+Underside/top moonlight is now sampled on square surface pixels with the same
+world-space size as side fade rows (thickness / max(fadePixels, 3)). An extra
+face byte carries the four actual exposed texture-cell boundaries. Highlights
+fade inward from those edges over up to 75% of the layer thickness (bounded to
+40% of cell width); internal texture seams do not create false bright borders.
+The glow changes color only and preserves fully opaque cloud bases. Both cloud
+layers, cap height transitions, cloud self-occlusion and both transparency paths
+use the same refined surface grid.
+
+Cloud underside moon glow now includes empty diagonal texture neighbors in its
+boundary mask. Concave corners get a pixelated inward falloff based on distance
+to the corner, joining neighboring edge bands without square unlit gaps.
+
+POTENT LIGHTNING IMPACT FLASH AND EPILEPSY MODE (2026-10-11)
+---------------------------------------------------------
+LightningFlashes adds one screen-wide impact pulse per bolt, starting at 90%
+opacity and fading quadratically to zero over 120 ms. LightningAudioMixin marks
+the first visible/audible strike and suppresses vanilla's repeated multi-tick
+sky-flash calls. Existing underground exposure rules still gate the cue.
+Hud extraction draws the world tint before HUD widgets. Timers clear after expiry
+or world changes, preventing retained world references or cross-world effects.
+Epilepsy mode is a client NaturalityConfig boolean, false by default, presented
+as the first root config option above category navigation and included in global
+search. The reduced lightning cue is a subtle blue tint (maximum opacity below
+8%) easing in over 200 ms and away within one second. Vanilla's Hide Lightning
+Flashes accessibility preference also selects this reduced cue. Epilepsy mode
+suppresses bright End-flash geometry and lightmap intensity, replacing audible
+End-flash events with the same gentle blue cue while preserving sounds.
+The first main-menu visit after resources load opens a native ConfirmScreen:
+!EPILEPSY WARNING!
+Naturality has certain visual effects that could cause seizure in epileptic people. Turn on epilepsy mode?
+Buttons are exactly YES and NO. YES sets epilepsyMode=true; NO sets it false.
+Both choices immediately save epilepsyWarningAcknowledged=true and return to the
+main menu. The acknowledgement is global client config, so the warning is not
+per world/session. Existing installations without the new field get the prompt
+on their next main-menu visit. Config changes remain available afterward.
+Validation: assemble plus epilepsy-mode/config/lightning suites passed
+(build/lightning-epilepsy-test.log). Final epilepsy-mode suite additionally
+verified both choices and acknowledgement in the actual JSON on disk
+(build/lightning-epilepsy-final.log). First-launch warning and blue-tint screenshots
+were inspected in build/run/clientGameTest/screenshots.
+
+GRADUAL SLEEP SIMULATION (2026-10-11)
+-----------------------------------
+Sleeping now ramps the native synchronized server tick rate from its existing
+baseline to a configurable multiplier instead of jumping to morning. Defaults
+are 20x maximum and a 30-second ramp; ranges are 1-100x and 1-120 seconds.
+Entity AI, block/random/scheduled ticks, weather evolution, world clocks and
+client world animations (including the game-time-driven clouds) use the native
+accelerated simulation. Actual throughput depends on server capacity. All
+worlds share the server rate, including worlds containing awake players.
+Acceleration respects each world's players_sleeping_percentage gamerule and
+ignores spectators. Losing the required sleepers resets the ramp and restores
+the prior rate. Administrator rate changes become the new baseline; freezing
+or sprinting suspends sleep acceleration. No independent duplicate world ticks.
+
+WHEN_DARK bed rules allow daytime sleep and nearby monsters no longer reject
+entry. Bed distance, obstruction, occupancy, respawn rules and dimensions whose
+beds explode retain native handling. The instant skip/weather-clear branch is
+suppressed while enabled. Optional automatic waking occurs at the next morning,
+including sleep begun during the day; disabling it permits continuous sleep.
+Entering bed no longer immediately resets TIME_SINCE_REST: it resets only after
+more than 6,000 simulation ticks in the current uninterrupted sleep. Straw beds
+are destroyed without drops on every wake, including immediate manual waking.
+
+Gameplay > Block and Snow Rules > Sleeping contains the live server toggle,
+maximum multiplier, ramp-duration sliders and morning-wake toggle with Reset
+controls, search integration and remote-server read-only values. Gameplay
+settings protocol v3 synchronizes these values to clients. Default and No Visual
+Overhaul enable the system with default numeric values; Clientside Only disables
+it. Turning the full feature off restores vanilla sleep and tick rate.
+
+Validation: focused sleep and config client suites passed (build/sleep-test.log).
+Coverage includes survival daytime sleep near a zombie, no deep-sleep jump,
+client tick-rate/settings synchronization, strict 6,000/6,001 rest threshold,
+immediate straw-bed consumption, normal/custom rate restoration, morning wake,
+disabled daytime rejection, ramp endpoints and preset/reset/menu expectations.
+
+
+LIGHTNING FLASH ENVELOPE (2026-10-11)
+-----------------------------------
+Normal lightning flashes now smoothly build up over 0.1 seconds, hold at peak
+for 0.4 seconds, then smoothly decay over 1 second. Each strike independently
+randomizes hold and decay by +/-0.2 seconds (0.2-0.6 and 0.8-1.2 seconds).
+Timing uses elapsed real time during rendering, with smoothstep endpoints;
+cleanup waits for the full envelope instead of cutting it off after 1 second.
+Epilepsy mode and vanilla Hide Lightning Flashes retain the subtle blue cue.
+Validation: assemble and epilepsy-mode client suite passed, including envelope
+boundaries and midpoint checks at minimum/default/maximum randomized durations.
+Log: build/lightning-envelope-final.log.
+
+SLEEP VISUAL SIMULATION, MUFFLING AND SKY EASING (2026-10-11)
+----------------------------------------------------------
+Minecraft.getTickTargetMillis caps normal client ticks at 20 Hz, even when the
+server runs faster. The sleep_state payload now distinguishes sleep acceleration
+from administrator rate changes. SleepVisuals supplies fractional accumulated
+extra simulation steps at the synchronized world rate, interleaving client world
+clocks/weather, remote entities, block entities, random display ticks, custom
+visual spawn/update callbacks, the entire particle engine (including emitters),
+and texture animations. The local player's input/network tick stays at its
+normal cadence, including when riding. Native limits and custom particle budgets
+remain per simulation step; faster births and faster lifetimes keep density
+bounded rather than accumulating the speed multiplier's worth of live particles.
+
+Rain/snow, rise/leaf particles, portal particles, star trails, waterfalls and
+impact columns, ripples, fire/fluid procedural animation, heat-wave clock,
+ghast/floating-mob animation, and sky-event callbacks share the visual steps.
+Procedural fire/fluid GPU uploads occur once after the extra simulation work.
+Frame-driven rope physics and ordinary lightning pulses use accelerated time;
+the reduced-flash accessibility cue retains its smooth real-time timing.
+Pause, disconnect, world changes and waking stop/reset extra steps.
+
+All OpenAL channels use a sleep low-pass filter with real-time exponential
+entry/release easing (0.65-second response). Deep sleep reduces filter gain to
+35% and high-frequency gain to 1%; this multiplies the existing shelter and
+underwater filters instead of replacing them. New one-shots are filtered before
+playback, existing channels are updated, and channel destruction releases filters.
+The hooks remain available when visual-overhaul/underwater-audio switches are OFF;
+server-owned full sleep toggle and the sleeping listener control this effect.
+
+SkyRenderState sun/moon/star angles receive frame-time angular damping with a
+0.12-second response, shortest-arc wrap handling and pause-aware timing. The
+filter fades out over 0.75 seconds on waking, restoring normal sky extraction.
+Rendered sun flare, sunset, sun beams and captured moon/cloud direction consume
+the eased celestial transforms. World time and gameplay are not delayed by this
+render-only easing.
+
+Maximum speed defaults to 200x (ten times the previous 20x), with a 1-1000x
+slider and unchanged 30-second ramp. Native total rate is capped at 10,000 TPS;
+actual server/client throughput remains hardware-dependent. Presets and Reset
+use 200x. Existing saved numeric choices remain intact; use the max-speed Reset
+or Default preset to adopt the new default in an existing configuration.
+
+Validation: sleep/config/particle-weather passed (build/sleep-visual-test-final.log).
+Sleep/epilepsy-mode/audio passed (build/sleep-easing-audio-test.log), including
+existing actual OpenAL underwater/shelter checks. The focused final sleep run
+checks accelerated spawn callbacks, particle age/motion, procedural animation,
+client state synchronization, sky angle wrap/pause, frame-rate-independent audio
+easing, waking restoration, actual sleep-only OpenAL low-pass attachment and
+composition with immersion/shelter, and 199 extra particle steps at the new 200x
+default while the local player tick remains unchanged (build/sleep-high-speed-test.log).
+This supersedes the earlier 20x default and the assumption that native tick-rate
+synchronization alone accelerates local client particles/animations.
+
+VELOCITY-ONLY SLEEP PARTICLES AND EASED CLOUD DRIFT (2026-10-11)
+-------------------------------------------------------------
+Removed the entire sleep client-simulation replay loop. ParticleEngine, emitters,
+random display ticks, block/entity ticks, texture simulation and every local
+spawn callback now run once at their ordinary client cadence. Particle age,
+friction/gravity evolution, sprite sequences and configured lifetimes are not
+multiplied. Particle.move scales only its requested displacement by the current
+sleep rate, including native particles, smoke, leaves, splashes and wind drift.
+Custom direct-position rain/snow cards, rising particles and detached star trails
+scale their motion explicitly. Portal motes advance their curved motion path
+faster without advancing lifetime; entity-attached trails retain their anchors.
+Waking restores the velocity factor to 1 without modifying stored velocities.
+
+SleepClockMixin advances only client game/sky clock counters before normal native
+particle ticking. This is constant work instead of repeating world simulation,
+and keeps particle/controller timestamps consistent. Fire animation advances its
+frame counter arithmetically and uploads once per normal tick. Procedural fluid
+simulation stays at normal cadence; heat waves add an inexpensive integrated
+sleep-time offset to their existing clock. The 200x default, server simulation,
+phantom threshold, straw-bed consumption, muffling and celestial easing remain.
+This supersedes the prior accelerated particle spawning/lifetime and repeated
+client-simulation behavior in SLEEP VISUAL SIMULATION, MUFFLING AND SKY EASING.
+
+SleepCloudClockMixin eases the cloud drift clock at frame time (0.12-second
+response), then passes the same fractional clock to native clouds, both custom
+layers and CloudSunOcclusion. Layer speed/direction/offset settings are retained.
+Pause freezes easing; world changes reset it. A 0.75-second release restores
+ordinary cloud scrolling smoothly after waking. The full sleep toggle controls
+this alongside sky easing; config tooltips describe velocity-only particles.
+
+Validation: sleep and particle-weather passed (build/sleep-velocity-only-test.log).
+The sleep checks assert normal spawn callback counts and particle age, faster
+motion at 2x, exactly one particle tick with 200x displacement at the default
+speed, no spawner or player tick replay, wake restoration and actual OpenAL
+muffling. Cloud-clock checks cover ordinary passthrough, intermediate accelerated
+positions, pause and release. Sleep/clouds/heat-waves regression log:
+build/sleep-velocity-clouds-test.log.
+
+
+
+AUTHORITATIVE SLEEP CLOCKS WITHOUT RENDER REVERSALS (2026-10-11)
+------------------------------------------------------------
+Removed SleepClockMixin and SleepVisuals.advanceClock. They advanced the client
+world clock at requested TPS, even when server work could not achieve that rate.
+Native time synchronization then corrected it backward, producing the repeated
+sky/cloud sawtooth reported by the user. Client world clocks now use only native
+ordinary client ticks and authoritative server time updates; sleep does not
+manufacture extra client game time. No simulation or particle replay is restored.
+
+Cloud easing retains the newest observed game-time target during acceleration.
+Sky easing first unwraps sun/moon/star observations across the full-circle boundary
+and retains forward observed rotation, so dawn is not mistaken for a correction.
+Backward native time corrections do not reverse either rendered motion. Both
+continue frame-time easing toward observed progress rather than extrapolating
+at requested server speed. Ordinary rendering, pause/world reset behavior and
+smooth wake release remain. Cloud drawing and sun-ray occlusion still share the
+same eased clock. Particle velocity-only behavior and sleep audio are unchanged.
+This supersedes the cheap client-clock advance described in the preceding entry.
+
+Validation: sleep/clouds passed (build/sleep-authoritative-clock-test.log).
+The regression drives 600 noisy frames with repeated 240-tick prediction/correction
+sawteeth and a dawn wrap, checking non-reversing cloud/sky motion and that cloud
+position never invents progress beyond observed time. A native client tick under
+a requested 4,000 TPS advances game time by exactly one tick; the previous clock
+hook would add 199 more. Particle spawn/age cadence, 200x velocity, sky/cloud
+pause/release, native/custom cloud render cases, sleep rules and OpenAL muffling
+remain covered. The server's actual throughput was not measured in the user's
+live world; the requested-rate overprediction mechanism is verified in code and
+by the controlled regression.
+
+IMMEDIATE NORMAL TIME ON WAKING, NO MORNING WAKE (2026-10-11)
+-----------------------------------------------------------
+SleepAcceleration.stopped now checks the remaining sleeping quorum and restores
+the prior server tick rate and broadcasts sleep_state=false directly within the
+wake operation, before straw-bed cleanup. It does not wait for END_SERVER_TICK.
+Administrator rate changes remain respected; acceleration continues if other
+sleepers still meet the sleeping-percentage rule. Normal/default and custom
+baseline restoration are tested before another controller/server tick executes.
+
+Removed the 0.75-second sky/cloud release/catch-up period. On acceleration ending,
+celestial angles and cloud scroll immediately return to ordinary authoritative
+rendering; their forward-only easing remains active while sleeping. Audio still
+uses its requested gentle muffling/release easing. Velocity-only particles and
+the 200x default are retained.
+
+Daybreak no longer wakes players. Removed the morning deadline, all automatic
+morning-wake logic, sleepWakeAtMorning config field, menu toggle and translations.
+Legacy saved values for that removed field are ignored, so existing configurations
+also allow continuous sleep through dawn. The Sleeping section now has three
+controls: full toggle, maximum speed and ramp duration. Presets/reset and menu
+expectations were updated. Gameplay settings protocol v4 omits the obsolete flag.
+
+Validation: sleep, config and clouds passed using stable compiled/runtime snapshots
+(build/sleep-immediate-wake-snapshot-test.log). Tests include sleeping across the
+next dawn, immediate 20/30 TPS baseline restoration on manual wake without another
+tick, zero-delay sky/cloud passthrough, retained correction/wrap regressions,
+normal particle spawning/aging with accelerated velocity, OpenAL muffling and
+updated preset/menu controls. Earlier runs were disrupted by concurrent editor
+compiles deleting classes from the live test classpath (NaturalityTags and
+FallImpactDroplets$Face). The snapshot launcher in
+build/sleep-wake-validation.init.gradle isolates class outputs and the runtime
+classpath/launch descriptor; no production code change was needed for those
+missing-class errors. This entry supersedes automatic morning waking and visual
+wake-release descriptions in previous sleep entries.
+
+SUN FLARE CENTER FADE REMOVED (2026-10-11)
+----------------------------------------
+Camera flare no longer fades away near screen center. Shared sun closeness now
+only increases strength, reaching the configured maximum when looking directly
+at the sun. Sprite centers still converge smoothly with the projected sun.
+Tooltip and existing sunset regression assertions reflect the new behavior.
+Validation log: build/sun-flare-no-center-fade.log.

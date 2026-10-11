@@ -132,6 +132,7 @@ public final class ChorusFlowers {
 
     /** One roll per completed tip; the final stem wears flowers on its free faces. */
     public static boolean crown(LevelAccessor level, BlockPos stem, BlockState flower, RandomSource random) {
+        if (!naturality.config.Feature.CHORUS_CROWNS.enabled()) return false;
         if (!level.getBlockState(stem).is(Blocks.CHORUS_PLANT)) return false;
         int stemNeighbors = 0;
         boolean exposed = false;

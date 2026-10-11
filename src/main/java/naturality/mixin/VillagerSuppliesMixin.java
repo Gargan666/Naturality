@@ -26,6 +26,7 @@ public abstract class VillagerSuppliesMixin {
     @Unique private boolean naturality$loading;
 
     @Unique private void naturality$supplyButcher() {
+        if (!naturality.config.Feature.BUTCHER_WORK.enabled()) return;
         var body = (Villager)(Object)this;
         if (!naturality$loading && !naturality$butcherSupplied
                 && body.getVillagerData().profession().is(VillagerProfession.BUTCHER)) {
@@ -36,6 +37,7 @@ public abstract class VillagerSuppliesMixin {
     }
 
     @Unique private void naturality$supplyFarmer() {
+        if (!naturality.config.Feature.FARMER_WORK.enabled()) return;
         var body = (Villager)(Object)this;
         if (naturality$pendingFarmSupplies && body.getVillagerData().profession().is(VillagerProfession.FARMER)) {
             naturality$pendingFarmSupplies = false;

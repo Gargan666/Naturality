@@ -61,7 +61,13 @@ public final class SmoothEndstoneGameTest implements FabricClientGameTest {
                 check(lirestone.is(NaturalityBlocks.LIRESTONE), "Lirestone block registration failed");
                 check(lirestone.getDestroySpeed(level, lirestonePos) == 2.5F
                     && lirestone.getBlock().getExplosionResistance() == Blocks.END_STONE.getExplosionResistance()
-                    && lirestone.getSoundType() == vanilla.getSoundType(), "Lirestone hardness/resistance/sound incorrect");
+                    && lirestone.getSoundType() == naturality.NaturalitySounds.LIRESTONE, "Lirestone hardness/resistance/sound incorrect");
+                check(lirestone.getSoundType().getBreakSound() == naturality.NaturalitySounds.LIRESTONE_BREAK
+                    && lirestone.getSoundType().getPlaceSound() == naturality.NaturalitySounds.LIRESTONE_PLACE
+                    && lirestone.getSoundType().getStepSound() == naturality.NaturalitySounds.LIRESTONE_STEP
+                    && lirestone.getSoundType().getHitSound() == naturality.NaturalitySounds.LIRESTONE_BREAK
+                    && lirestone.getSoundType().getFallSound() == naturality.NaturalitySounds.LIRESTONE_STEP,
+                    "Lirestone custom sound bindings incorrect");
                 check(lirestone.is(BlockTags.MINEABLE_WITH_PICKAXE) && lirestone.is(BlockTags.DRAGON_IMMUNE),
                     "Lirestone End Stone tags missing");
                 check(new ItemStack(Items.WOODEN_PICKAXE).isCorrectToolForDrops(lirestone), "Wooden pickaxe must harvest Lirestone");
@@ -73,6 +79,127 @@ public final class SmoothEndstoneGameTest implements FabricClientGameTest {
                     new ItemStack(Items.IRON_PICKAXE));
                 check(lirestoneDrops.size() == 1 && lirestoneDrops.getFirst().is(NaturalityBlocks.LIRESTONE_ITEM),
                     "Lirestone should drop itself");
+
+                BlockPos smoothLirePos = pos.offset(6, 0, 0);
+                var smoothLire = NaturalityBlocks.SMOOTH_LIRESTONE.defaultBlockState();
+                level.setBlockAndUpdate(smoothLirePos, smoothLire);
+                check(smoothLire.getDestroySpeed(level, smoothLirePos) == 2.5F
+                    && smoothLire.getBlock().getExplosionResistance() == lirestone.getBlock().getExplosionResistance()
+                    && smoothLire.getSoundType() == lirestone.getSoundType(), "Smooth Lirestone properties must match Lirestone");
+                check(new ItemStack(Items.WOODEN_PICKAXE).isCorrectToolForDrops(smoothLire)
+                    && smoothLire.is(BlockTags.DRAGON_IMMUNE), "Smooth Lirestone mining/dragon tags missing");
+                var smoothLireItem = new ItemStack(NaturalityBlocks.SMOOTH_LIRESTONE_ITEM);
+                check(smoothLireItem.is(net.minecraft.tags.ItemTags.STONE_CRAFTING_MATERIALS)
+                    && smoothLireItem.is(net.minecraft.tags.ItemTags.STONE_TOOL_MATERIALS), "Smooth Lirestone stone material tags missing");
+                var regularLireDrops = Block.getDrops(smoothLire, level, smoothLirePos, null, level.players().getFirst(), new ItemStack(Items.WOODEN_PICKAXE));
+                check(regularLireDrops.size() == 1 && regularLireDrops.getFirst().is(NaturalityBlocks.LIRESTONE_ITEM), "Smooth Lirestone must drop Lirestone");
+                var silkLireDrops = Block.getDrops(smoothLire, level, smoothLirePos, null, level.players().getFirst(), silkTool);
+                check(silkLireDrops.size() == 1 && silkLireDrops.getFirst().is(NaturalityBlocks.SMOOTH_LIRESTONE_ITEM), "Silk Touch must drop Smooth Lirestone");
+                furnace.setItem(0, new ItemStack(NaturalityBlocks.LIRESTONE_ITEM));
+                furnace.setItem(2, ItemStack.EMPTY);
+                for (int tick = 0; tick < 205; tick++)
+                    net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity.serverTick(level, furnacePos, level.getBlockState(furnacePos), furnace);
+                check(furnace.getItem(2).is(NaturalityBlocks.SMOOTH_LIRESTONE_ITEM), "Furnace must smelt Lirestone into Smooth Lirestone");
+                check(ChorusFlowers.flower(Direction.UP, 0, RandomSource.create(1)).canSurvive(level, smoothLirePos.above()), "Smooth Lirestone must support chorus flowers");
+
+                BlockPos coralPos = pos.offset(8, 0, 0);
+                var coral = NaturalityBlocks.ECHO_CORAL.defaultBlockState();
+                level.setBlockAndUpdate(coralPos, coral);
+                check(coral.getDestroySpeed(level, coralPos) == Blocks.BROWN_MUSHROOM_BLOCK.defaultBlockState().getDestroySpeed(level, coralPos)
+                    && coral.getBlock().getExplosionResistance() == Blocks.BROWN_MUSHROOM_BLOCK.getExplosionResistance(), "Echo Coral must match mushroom block strength");
+                check(coral.is(BlockTags.MINEABLE_WITH_AXE) && new ItemStack(Items.WOODEN_AXE).isCorrectToolForDrops(coral), "Echo Coral axe mining incorrect");
+                check(coral.getSoundType() == naturality.NaturalitySounds.ECHO_CORAL
+                    && coral.getSoundType().getBreakSound() == naturality.NaturalitySounds.ECHO_CORAL_BREAK
+                    && coral.getSoundType().getPlaceSound() == naturality.NaturalitySounds.ECHO_CORAL_PLACE
+                    && coral.getSoundType().getStepSound() == naturality.NaturalitySounds.ECHO_CORAL_STEP,
+                    "Echo Coral custom sounds missing");
+                check(NaturalityBlocks.ECHO_CORAL.asItem() == NaturalityBlocks.ECHO_CORAL_ITEM, "Echo Coral block item mapping missing");
+                var coralDrops = Block.getDrops(coral, level, coralPos, null, level.players().getFirst(), ItemStack.EMPTY);
+                check(coralDrops.size() == 1 && coralDrops.getFirst().is(NaturalityBlocks.ECHO_CORAL_ITEM), "Echo Coral must drop itself without a tool");
+
+                BlockPos heathPos = pos.offset(20, 0, 0);
+                var heath = NaturalityBlocks.LYREN_HEATH.defaultBlockState();
+                level.setBlockAndUpdate(heathPos, heath);
+                check(heath.getDestroySpeed(level, heathPos) == 2.1F
+                    && heath.getBlock().getExplosionResistance() == Blocks.END_STONE.getExplosionResistance()
+                    && heath.getSoundType() == NaturalityBlocks.LYREN_HEATH_SOUNDS,
+                    "Lyren Heath mining strength/sound incorrect");
+                check(new ItemStack(Items.WOODEN_PICKAXE).isCorrectToolForDrops(heath), "Wooden pickaxe must harvest Lyren Heath");
+                var heathDrops = Block.getDrops(heath, level, heathPos, null, level.players().getFirst(), new ItemStack(Items.WOODEN_PICKAXE));
+                check(heathDrops.size() == 1 && heathDrops.getFirst().is(Items.END_STONE), "Lyren Heath must drop End Stone");
+                var silkHeathDrops = Block.getDrops(heath, level, heathPos, null, level.players().getFirst(), silkTool);
+                check(silkHeathDrops.size() == 1 && silkHeathDrops.getFirst().is(NaturalityBlocks.LYREN_HEATH_ITEM), "Silk Touch must collect Lyren Heath");
+                for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
+                    if (dx != 0 || dz != 0) level.setBlockAndUpdate(heathPos.offset(dx, 0, dz), Blocks.END_STONE.defaultBlockState());
+                }
+                BlockPos smoothProbe = heathPos.offset(1, 0, 1);
+                BlockPos coveredProbe = heathPos.offset(-1, 0, -1);
+                BlockPos wetProbe = heathPos.offset(-1, 0, 1);
+                level.setBlockAndUpdate(smoothProbe, NaturalityBlocks.SMOOTH_ENDSTONE.defaultBlockState());
+                level.setBlockAndUpdate(coveredProbe.above(), Blocks.STONE.defaultBlockState());
+                level.setBlockAndUpdate(wetProbe.above(), Blocks.WATER.defaultBlockState());
+                BlockPos upperProbe = heathPos.offset(1, 1, -1);
+                BlockPos lowerProbe = heathPos.offset(0, -1, 1);
+                level.setBlockAndUpdate(upperProbe, Blocks.END_STONE.defaultBlockState());
+                level.setBlockAndUpdate(lowerProbe, Blocks.END_STONE.defaultBlockState());
+                level.setBlockAndUpdate(lowerProbe.above(), Blocks.AIR.defaultBlockState());
+                var heathRandom = RandomSource.create(1234);
+                for (int tick = 0; tick < 3000; tick++) heath.randomTick(level, heathPos, heathRandom);
+                check(level.getBlockState(heathPos.east()).is(Blocks.END_STONE), "Lyren Heath must not spread to exposed End Stone");
+                check(level.getBlockState(upperProbe).is(Blocks.END_STONE) && level.getBlockState(lowerProbe).is(Blocks.END_STONE), "Lyren Heath must not spread up or down");
+                check(level.getBlockState(smoothProbe).is(NaturalityBlocks.SMOOTH_ENDSTONE), "Lyren Heath must not convert Smooth End Stone");
+                check(level.getBlockState(coveredProbe).is(Blocks.END_STONE) && level.getBlockState(wetProbe).is(Blocks.END_STONE), "Lyren Heath must not spread beneath solid cover or water");
+                check(heath.getSoundType().getStepSound() == Blocks.WARPED_NYLIUM.defaultBlockState().getSoundType().getStepSound()
+                    && heath.getSoundType().getBreakSound() == net.minecraft.world.level.block.SoundType.STONE.getBreakSound(), "Lyren Heath must combine nylium footsteps with stone break sounds");
+                level.setBlockAndUpdate(heathPos.above(), Blocks.STONE.defaultBlockState());
+                check(level.getBlockState(heathPos).is(NaturalityBlocks.LYREN_HEATH), "Lyren Heath must wait for a random tick before decay");
+                level.setBlockAndUpdate(heathPos.east(), Blocks.END_STONE.defaultBlockState());
+                for (int tick = 0; tick < 3000; tick++) heath.randomTick(level, heathPos, heathRandom);
+                check(level.getBlockState(heathPos.east()).is(Blocks.END_STONE), "Covered Lyren Heath must not spread");
+
+                check(level.getBlockState(heathPos).is(Blocks.END_STONE), "Fully covered Lyren Heath must decay to End Stone");
+                level.setBlockAndUpdate(heathPos.above(), Blocks.AIR.defaultBlockState());
+                level.setBlockAndUpdate(heathPos, heath);
+                var sprout = NaturalityBlocks.CHORUS_SPROUT.defaultBlockState();
+                for(var lyrenBlock:java.util.List.of(NaturalityBlocks.LYREN_SPROUT,NaturalityBlocks.LYREN_GROWTH)) {
+                    var lyren=lyrenBlock.defaultBlockState();
+                    var plantPos=heathPos.above();
+                    check(lyren.getSoundType()==sprout.getSoundType()
+                        && lyren.getDestroySpeed(level,plantPos)==sprout.getDestroySpeed(level,plantPos)
+                        && lyren.getCollisionShape(level,plantPos).isEmpty(),"Lyren plant properties differ from Chorus Sprout");
+                    check(lyren.getShape(level,plantPos).bounds().equals(sprout.getShape(level,plantPos).bounds()),"Lyren plant outline differs");
+                    for(var substrate:java.util.List.of(Blocks.END_STONE,NaturalityBlocks.LIRESTONE,NaturalityBlocks.LYREN_HEATH,
+                        NaturalityBlocks.SMOOTH_ENDSTONE,Blocks.DIRT)) {
+                        level.setBlockAndUpdate(heathPos,substrate.defaultBlockState());
+                        check(lyren.canSurvive(level,plantPos)==sprout.canSurvive(level,plantPos),"Lyren plant support differs");
+                    }
+                    var bareDrops=Block.getDrops(lyren,level,plantPos,null,level.players().getFirst(),ItemStack.EMPTY);
+                    var sheared=Block.getDrops(lyren,level,plantPos,null,level.players().getFirst(),new ItemStack(Items.SHEARS));
+                    check(bareDrops.isEmpty() && sheared.size()==1 && sheared.getFirst().is(lyrenBlock.asItem()),"Lyren plant shearing loot incorrect");
+                }
+                level.setBlockAndUpdate(heathPos,heath);
+                check(sprout.canSurvive(level, heathPos.above()), "Chorus Sprout must survive on Lyren Heath");
+                level.setBlockAndUpdate(heathPos.above(), sprout);
+                heath.randomTick(level, heathPos, heathRandom);
+                check(level.getBlockState(heathPos).is(NaturalityBlocks.LYREN_HEATH), "Chorus Sprout must not cause Lyren Heath decay");
+                level.setBlockAndUpdate(heathPos.above(), Blocks.STONE_SLAB.defaultBlockState());
+                heath.randomTick(level, heathPos, heathRandom);
+                check(level.getBlockState(heathPos).is(NaturalityBlocks.LYREN_HEATH), "Partial blocks must not cause full-cover decay");
+                check(sprout.getSoundType() == Blocks.WARPED_ROOTS.defaultBlockState().getSoundType(), "Chorus Sprout must use warped roots sounds");
+                check(Blocks.CHORUS_FLOWER.defaultBlockState().getSoundType() == Blocks.WARPED_ROOTS.defaultBlockState().getSoundType(), "Chorus Flower must use warped roots sounds");
+                check(Blocks.CHORUS_PLANT.defaultBlockState().getSoundType() == Blocks.WARPED_STEM.defaultBlockState().getSoundType(), "Chorus Plant must use warped stem sounds");
+                check(sprout.canSurvive(level, lirestonePos.above()), "Chorus Sprout must survive on Lirestone");
+                BlockPos sproutBase = pos.offset(4, 0, 0);
+                level.setBlockAndUpdate(sproutBase, Blocks.END_STONE.defaultBlockState());
+                check(sprout.canSurvive(level, sproutBase.above()), "Chorus Sprout must survive on End Stone");
+                check(sprout.getDestroySpeed(level, sproutBase.above()) == 0.0F
+                    && sprout.getCollisionShape(level, sproutBase.above()).isEmpty(), "Chorus Sprout must be instant-breaking and non-colliding");
+                level.setBlockAndUpdate(sproutBase.above(), sprout);
+                var sproutDrops = Block.getDrops(sprout, level, sproutBase.above(), null, level.players().getFirst(), new ItemStack(Items.SHEARS));
+                check(sproutDrops.size() == 1 && sproutDrops.getFirst().is(NaturalityBlocks.CHORUS_SPROUT_ITEM), "Shears must collect Chorus Sprout");
+                check(Block.getDrops(sprout, level, sproutBase.above(), null, level.players().getFirst(), ItemStack.EMPTY).isEmpty(), "Ordinary breaking must not drop Chorus Sprout");
+                level.setBlockAndUpdate(sproutBase, Blocks.DIRT.defaultBlockState());
+                check(level.getBlockState(sproutBase.above()).isAir() && !sprout.canSurvive(level, sproutBase.above()), "Chorus Sprout must break when its End substrate is removed");
 
                 var end = s.getLevel(Level.END);
                 var island = end.getChunk(2, 0);
@@ -89,7 +216,7 @@ public final class SmoothEndstoneGameTest implements FabricClientGameTest {
                             continue;
                         }
                         depth++;
-                        if (material.is(NaturalityBlocks.LIRESTONE)) continue;
+                        if (material.is(NaturalityBlocks.LIRESTONE) || material.is(NaturalityBlocks.SMOOTH_LIRESTONE)) continue;
                         check(material.is(depth <= 2 ? Blocks.END_STONE : NaturalityBlocks.SMOOTH_ENDSTONE),
                             "Incorrect initial End island layer at " + probe + ", depth " + depth);
                         if (depth <= 2) regular++; else smooth++;

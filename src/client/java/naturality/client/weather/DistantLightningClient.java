@@ -1,7 +1,6 @@
 package naturality.client.weather;
 import java.util.ArrayList;
 import naturality.weather.DistantLightningPayload;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -17,13 +16,14 @@ public final class DistantLightningClient {
     private DistantLightningClient() {}
     public static void initialize() {
         ClientPlayNetworking.registerGlobalReceiver(DistantLightningPayload.TYPE,(p,c) -> c.client().execute(() -> receive(p)));
-        ClientTickEvents.END_CLIENT_TICK.register(client -> {
+        naturality.client.sleep.SleepVisuals.register(client -> {
             if(world!=client.level) { BOLTS.clear();world=client.level; }
             if(client.isPaused())return;
             BOLTS.removeIf(bolt -> { bolt.commonTick();bolt.tick();return bolt.isRemoved(); });
         });
     }
     public static void receive(DistantLightningPayload p) {
+        if (!naturality.config.Feature.LIGHTNING.enabled()) return;
         var client=Minecraft.getInstance();var level=client.level;
         if(level==null || !level.dimension().identifier().equals(p.dimension()))return;
         if(world!=level) { BOLTS.clear();world=level; }

@@ -2,7 +2,6 @@ package naturality.client.weather;
 
 import naturality.NaturalitySounds;
 import naturality.weather.*;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -34,7 +33,7 @@ public final class WeatherClient {
             world = null;
         });
         ClientPlayNetworking.registerGlobalReceiver(WeatherPayload.TYPE, (payload, _) -> WeatherSystem.receive(payload));
-        ClientTickEvents.END_CLIENT_TICK.register(WeatherClient::tick);
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK.register(WeatherClient::tick);
     }
     private static void stop(Minecraft client) {
         var weak = WeatherClient.weak;
@@ -58,7 +57,8 @@ public final class WeatherClient {
         if (world == null || client.isPaused()) return;
         WeatherSoundEnvironment.tick(client);
         var state = WeatherSystem.state(world);
-        if (!naturality.config.NaturalityConfig.get().effects.windSounds || state == null) { stop(client); return; }
+        if (!naturality.config.Feature.VISUAL_OVERHAUL.enabled()
+                || !naturality.config.NaturalityConfig.get().effects.windSounds || state == null) { stop(client); return; }
         var weak = WeatherClient.weak;
         var strong = WeatherClient.strong;
         // Keep silent loops alive so gradual crossfades do not repeatedly restart their clips.
@@ -80,7 +80,8 @@ public final class WeatherClient {
         @Override public void tick() {
             var client = Minecraft.getInstance();
             var s = client.level == null ? null : WeatherSystem.state(client.level);
-            if (!naturality.config.NaturalityConfig.get().effects.windSounds || s == null) { stop(); return; }
+            if (!naturality.config.Feature.VISUAL_OVERHAUL.enabled()
+                    || !naturality.config.NaturalityConfig.get().effects.windSounds || s == null) { stop(); return; }
             float exposure = WeatherSoundEnvironment.windExposure();
             if (WeatherSoundEnvironment.underground()) { volume = 0; return; }
             if (!client.gameRenderer.mainCamera().getFluidInCamera().equals(net.minecraft.world.level.material.FogType.NONE)) exposure *= .15F;

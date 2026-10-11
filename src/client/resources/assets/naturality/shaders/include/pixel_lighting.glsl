@@ -2,21 +2,27 @@
 #define NATURALITY_PIXEL_LIGHTING_GLSL
 #include <naturality:pixel_lighting_settings.glsl>
 
+// A model's UV texels may be stretched or offset relative to the block grid.
+// The bell's opaque support faces use this path; texture/alpha remain untouched.
+vec3 naturality_texel_lighting_grid(vec2 uv, vec2 atlasSize) {
+    if (!NATURALITY_LIGHTING_ENABLED) return vec3(0.0);
+    vec2 p = uv * atlasSize;
+    vec2 px = dFdx(p), py = dFdy(p);
+    float determinant = px.x * py.y - px.y * py.x;
+    if (abs(determinant) < 1e-12) return vec3(0.0);
+    vec2 offset = floor(p) + 0.5 - p;
+    return vec3(vec2(offset.x * py.y - offset.y * py.x,
+                    px.x * offset.y - px.y * offset.x) / determinant, 1.0);
+}
+
 // Evaluate an interpolated lighting field at a block-grid cell center.
 // AO and the sky/block lightmap use the same grid, before multiplication.
 // Texture sampling, alpha and atmospheric fog stay outside this calculation.
-vec3 naturality_pixel_lighting(vec3 position, vec3 shade) {
-    if (!NATURALITY_LIGHTING_ENABLED) return shade;
-    vec3 dx = dFdx(position);
-    vec3 dy = dFdy(position);
-    vec3 sx = dFdx(shade);
-    vec3 sy = dFdy(shade);
+vec3 naturality_pixel_grid(vec3 position) {
+    if (!NATURALITY_LIGHTING_ENABLED) return vec3(0.0);
+    vec3 dx = dFdx(position), dy = dFdy(position);
     vec3 normal = abs(cross(dx, dy));
-
-    // Project onto the face's dominant plane, including slabs and stairs.
-    vec2 p;
-    vec2 px;
-    vec2 py;
+    vec2 p, px, py;
     if (normal.x >= normal.y && normal.x >= normal.z) {
         p = position.yz; px = dx.yz; py = dy.yz;
     } else if (normal.y >= normal.z) {
@@ -25,14 +31,20 @@ vec3 naturality_pixel_lighting(vec3 position, vec3 shade) {
         p = position.xy; px = dx.xy; py = dy.xy;
     }
     float determinant = px.x * py.y - px.y * py.x;
-    if (abs(determinant) < 1e-12) {
-        return shade;
-    }
+    if (abs(determinant) < 1e-12) return vec3(0.0);
     vec2 offset = (floor(p * 16.0) + 0.5) / 16.0 - p;
-    // Solve in surface space, so perspective and camera angle cannot move the grid.
-    vec2 weights = vec2(offset.x * py.y - offset.y * py.x,
-                        px.x * offset.y - px.y * offset.x) / determinant;
-    return clamp(shade + sx * weights.x + sy * weights.y, 0.0, 1.0);
+    return vec3(vec2(offset.x * py.y - offset.y * py.x,
+                    px.x * offset.y - px.y * offset.x) / determinant, 1.0);
+}
+
+vec3 naturality_pixel_lighting_grid(vec3 grid, vec3 shade) {
+    if (!NATURALITY_LIGHTING_ENABLED) return shade;
+    vec3 sx = dFdx(shade), sy = dFdy(shade);
+    return grid.z == 0.0 ? shade : clamp(shade + sx * grid.x + sy * grid.y, 0.0, 1.0);
+}
+
+vec3 naturality_pixel_lighting(vec3 position, vec3 shade) {
+    return naturality_pixel_lighting_grid(naturality_pixel_grid(position), shade);
 }
 
 

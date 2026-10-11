@@ -7,10 +7,15 @@ import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectCategory;
 
 public final class NaturalityEffects {
+    public static final Holder<MobEffect> CONFUSION = Registry.registerForHolder(
+        BuiltInRegistries.MOB_EFFECT, Naturality.id("confusion"), new ConfusionEffect());
     public static final Holder<MobEffect> DISTORTION = Registry.registerForHolder(
         BuiltInRegistries.MOB_EFFECT, Naturality.id("distortion"), new DistortionEffect());
     private NaturalityEffects() {}
     public static void initialize() {}
+    private static final class ConfusionEffect extends MobEffect {
+        private ConfusionEffect() { super(MobEffectCategory.HARMFUL, 0xD67ACB); }
+    }
     private static final class DistortionEffect extends MobEffect {
         private DistortionEffect() { super(MobEffectCategory.HARMFUL, 0x9565CD); }
     }

@@ -43,15 +43,26 @@ fabricApi {
 // Explicit suite selection prevents a small visual change from running every test.
 tasks.named('runClientGameTest') {
     systemProperty 'naturality.test.suites', providers.gradleProperty('clientTests').getOrElse('')
+    systemProperty 'naturality.test.vanillaSnapshot', layout.buildDirectory.file('vanilla-registry-snapshot.json').get().asFile.absolutePath
+    if (providers.gradleProperty('clientTests').getOrElse('').split(',').contains('feature-startup')) {
+        dependsOn 'writeVanillaRegistrySnapshot'
+    }
 	systemProperty 'naturality.test.muteAudio', 'true'
 	doFirst {
 		def selection = systemProperties['naturality.test.suites'].toString().split(',').collect { it.trim() }
 		def valid = ['wind-compat', 'snow-compat', 'chunks', 'aurora', 'rainbow', 'sky-events', 'end-flashes', 'sunset', 'glint', 'snow', 'rain-splash', 'particle-weather', 'weather-commands', 'weather', 'gameplay', 'config', 'fire', 'water', 'water-rain', 'waterfall', 'lava-effects', 'water-ripples', 'water-occlusion', 'short-distance', 'fluids', 'flame', 'leaves', 'smoke', 'clouds', 'fog', 'lighting', 'dynamic-lighting', 'portal', 'end-portal', 'audio', 'all']
-		valid.add('breaking')
+		valid.add('heat-waves')
+        valid.add('proximity')
+        valid.add('bell-lighting')
+        valid.add('snow-surface-lighting')
+        valid.add('overlay-edge')
+        valid.add('breaking')
 		valid.add('entity-shadow')
 		valid.add('snow-weather')
+        valid.add('snow-storm')
 		valid.add('snow-performance')
 		valid.add('fog-culling')
+        valid.add('terrain-culling')
 		valid.add('particle-visibility')
 		valid.add('villagers')
 		valid.add('butcher')
@@ -63,10 +74,15 @@ tasks.named('runClientGameTest') {
 		valid.add('crowd-panic')
 		valid.add('wind-shapes')
 		valid.add('fluid-tail')
+		valid.add('liquid-projectiles')
 		valid.add('environment-persistence')
 		valid.add('snow-worldgen')
-		valid.add('lightning')
+		valid.add('epilepsy-mode')
+        valid.add('lightning')
 		valid.add('client-startup')
+        valid.add('feature-startup')
+        valid.add('distortion-interactions')
+        valid.add('distortion-creative')
         valid.add('distortion')
         valid.add('rise')
         valid.add('starfall')
@@ -77,11 +93,25 @@ tasks.named('runClientGameTest') {
 		valid.add('sky-state')
         valid.add('mob-arrows')
         valid.add('fireball-model')
+        valid.add('sleep')
+        valid.add('confusion')
+        valid.add('floating-mob-tilt')
+        valid.add('ghast-squash')
+        valid.add('ghast-crash')
         valid.add('chorus-flowers')
+        valid.add('chorus-sprouts')
         valid.add('smooth-endstone')
         valid.add('lirestone-worldgen')
+        valid.add('lirestone-crags')
+        valid.add('end-wilds')
         valid.add('end-terrain')
         valid.add('end-chunk-performance')
+        valid.add('end-save')
+        valid.add('water-light-performance')
+        valid.add('overworld-loading')
+        valid.add('forest-performance')
+        valid.add('render-redundancy')
+        valid.add('cave-ambience')
 		if (selection.any { !valid.contains(it) }) {
 			throw new GradleException('Choose relevant suites with -PclientTests=fog,lighting (available: wind-compat, snow-compat, chunks, aurora, rainbow, sky-events, end-flashes, sunset, glint, snow, rain-splash, particle-weather, weather-commands, weather, gameplay, config, fire, water, water-rain, waterfall, lava-effects, water-ripples, water-occlusion, short-distance, fluids, flame, leaves, smoke, clouds, fog, lighting, dynamic-lighting, portal, end-portal, audio; all explicitly runs everything).')
 		}
@@ -103,6 +133,15 @@ dependencies {
 	if (providers.gradleProperty('sodiumTestJar').isPresent()) {
 		clientRuntimeOnly files(providers.gradleProperty('sodiumTestJar').get())
 	}
+}
+
+// A separate JVM with no Fabric launcher gives the compatibility suite an actual vanilla baseline.
+tasks.register('writeVanillaRegistrySnapshot', JavaExec) {
+    group = 'verification'
+    dependsOn 'gametestClasses'
+    classpath = sourceSets.gametest.output + sourceSets.main.runtimeClasspath
+    mainClass = 'naturality.test.VanillaRegistrySnapshot'
+    args layout.buildDirectory.file('vanilla-registry-snapshot.json').get().asFile.absolutePath
 }
 
 def generateChorusFlowerModel = tasks.register('generateChorusFlowerModel') {
@@ -271,19 +310,6 @@ publishing {
 		// retrieving dependencies.
 	}
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

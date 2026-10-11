@@ -90,7 +90,9 @@ public final class LirestoneWorldgenGameTest implements FabricClientGameTest {
                     for(int x=0;x<16;x++)for(int z=0;z<16;z++)for(int y=48;y<=112;y++) {
                         pos.set(cx*16+x,y,cz*16+z);
                         if(chunk.getBlockState(pos).is(NaturalityBlocks.LIRESTONE)) {
-                            if(y>=111)changedCap++;else changedInterior++;
+                            check(y>=111,"Smooth source became regular Lirestone");changedCap++;
+                        } else if(chunk.getBlockState(pos).is(NaturalityBlocks.SMOOTH_LIRESTONE)) {
+                            check(y<111,"Regular surface became smooth Lirestone");changedInterior++;
                         }
                     }
                     check(chunk.getBlockState(protectedBlock).is(Blocks.GOLD_BLOCK),"Deposit replaced an unrelated block");
@@ -115,7 +117,10 @@ public final class LirestoneWorldgenGameTest implements FabricClientGameTest {
                 for(int cz=startZ;cz<startZ+16;cz++)for(int cx=startX;cx<startX+16;cx++) {
                     var chunk=end.getChunk(cx,cz);
                     boolean boulder=false;
+                    var crags=naturality.worldgen.LirestoneCrags.conversionColumns(end.getBiomeManager(),cx*16,cz*16,
+                        random.getOrCreateRandomFactory(naturality.Naturality.id("lirestone_patches")).at(0,0,0).nextLong());
                     for(int dx=0;dx<16;dx++)for(int dz=0;dz<16;dz++) {
+                        if(crags[dx+dz*16])continue;
                         int x=cx*16+dx,z=cz*16+dz;
                         var materials=terrain.surfaceMaterials(x,z);
                         boolean entire=actualPatches.converts(materials.smallIsland());
@@ -126,12 +131,12 @@ public final class LirestoneWorldgenGameTest implements FabricClientGameTest {
                             if(!LirestoneBoulderFeature.isEndStone(state)){depth=0;continue;}
                             depth++;
                             stone++;
-                            if(state.is(NaturalityBlocks.LIRESTONE))deposits++;
+                            if((state.is(NaturalityBlocks.LIRESTONE) || state.is(NaturalityBlocks.SMOOTH_LIRESTONE)))deposits++;
                             if(!entire && depth>=12 && cx>startX && cx<startX+15 && cz>startZ && cz<startZ+15
                                 && (end.getBlockState(probe.west()).isAir() || end.getBlockState(probe.east()).isAir()
                                     || end.getBlockState(probe.north()).isAir() || end.getBlockState(probe.south()).isAir())) {
                                 side++;
-                                if(state.is(NaturalityBlocks.LIRESTONE))sidePatches++;
+                                if((state.is(NaturalityBlocks.LIRESTONE) || state.is(NaturalityBlocks.SMOOTH_LIRESTONE)))sidePatches++;
                             }
                             if(surface) {
                                 surface=false;landColumns++;
@@ -146,10 +151,10 @@ public final class LirestoneWorldgenGameTest implements FabricClientGameTest {
                                         || end.getBlockState(probe.offset(-12,-3,0)).isAir()
                                         || end.getBlockState(probe.offset(0,-3,12)).isAir()
                                         || end.getBlockState(probe.offset(0,-3,-12)).isAir();
-                                    if(rim){rimArea++;if(state.is(NaturalityBlocks.LIRESTONE))rimPatches++;}
-                                    else {interiorArea++;if(state.is(NaturalityBlocks.LIRESTONE))interiorPatches++;}
+                                    if(rim){rimArea++;if((state.is(NaturalityBlocks.LIRESTONE) || state.is(NaturalityBlocks.SMOOTH_LIRESTONE)))rimPatches++;}
+                                    else {interiorArea++;if((state.is(NaturalityBlocks.LIRESTONE) || state.is(NaturalityBlocks.SMOOTH_LIRESTONE)))interiorPatches++;}
                                 }
-                                if(state.is(NaturalityBlocks.LIRESTONE)) {
+                                if((state.is(NaturalityBlocks.LIRESTONE) || state.is(NaturalityBlocks.SMOOTH_LIRESTONE))) {
                                     if(sampler.sampleValue(x,y,z)<=0) {
                                         boulderColumns++;boulder=true;
                                         if(views[1]==null)views[1]=probe.immutable();
@@ -181,7 +186,7 @@ public final class LirestoneWorldgenGameTest implements FabricClientGameTest {
                     for(int dx=0;dx<16;dx++)for(int dz=0;dz<16;dz++)for(int y=0;y<256;y++) {
                         probe.set(x+dx,y,z+dz);var state=chunk.getBlockState(probe);
                         if(LirestoneBoulderFeature.isEndStone(state))land++;
-                        if(state.is(NaturalityBlocks.LIRESTONE))lirestone++;
+                        if((state.is(NaturalityBlocks.LIRESTONE) || state.is(NaturalityBlocks.SMOOTH_LIRESTONE)))lirestone++;
                     }
                     if(land>1000 && lirestone==0) {
                         var column=generator.getBaseColumn(x+8,z+8,end,random);
@@ -199,11 +204,12 @@ public final class LirestoneWorldgenGameTest implements FabricClientGameTest {
                 // Place over a chunk border on a test foundation, then reject an obstructed attempt atomically.
                 BlockPos floor=new BlockPos(2000,230,2000);
                 for(int x=-7;x<=7;x++)for(int z=-7;z<=7;z++)for(int y=-5;y<=6;y++)
-                    end.setBlock(floor.offset(x,y,z),(y<=0?Blocks.END_STONE:Blocks.AIR).defaultBlockState(),2);
+                    end.setBlock(floor.offset(x,y,z),(y<=0?NaturalityBlocks.SMOOTH_ENDSTONE:Blocks.AIR).defaultBlockState(),2);
                 check(feature.place(end,generator,RandomSource.create(42),floor.above()),"Boulder cannot span a chunk boundary");
                 check(end.getBlockState(floor.above()).is(NaturalityBlocks.LIRESTONE),"Boulder has no exposed rock");
+                check(end.getBlockState(floor).is(NaturalityBlocks.SMOOTH_LIRESTONE),"Buried boulder did not preserve smooth stone");
                 for(int x=-7;x<=7;x++)for(int z=-7;z<=7;z++)for(int y=-5;y<=6;y++)
-                    end.setBlock(floor.offset(x,y,z),(y<=0?Blocks.END_STONE:Blocks.AIR).defaultBlockState(),2);
+                    end.setBlock(floor.offset(x,y,z),(y<=0?NaturalityBlocks.SMOOTH_ENDSTONE:Blocks.AIR).defaultBlockState(),2);
                 end.setBlock(floor.above(),Blocks.GOLD_BLOCK.defaultBlockState(),2);
                 check(!feature.place(end,generator,RandomSource.create(42),floor.above()),"Boulder overwrites another feature");
                 for(int x=-7;x<=7;x++)for(int z=-7;z<=7;z++)for(int y=-5;y<=6;y++)

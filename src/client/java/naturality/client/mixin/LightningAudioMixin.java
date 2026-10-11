@@ -14,6 +14,7 @@ import org.spongepowered.asm.mixin.injection.At;
 
 @Mixin(LightningBolt.class)
 public abstract class LightningAudioMixin {
+    @org.spongepowered.asm.mixin.Unique private boolean naturality$impactAnnounced;
     @WrapOperation(method = "tick", at = @At(value = "INVOKE", target =
         "Lnet/minecraft/world/level/Level;playLocalSound(DDDLnet/minecraft/sounds/SoundEvent;Lnet/minecraft/sounds/SoundSource;FFZ)V"))
     private void naturality$thunder(Level level, double x, double y, double z, SoundEvent sound,
@@ -25,6 +26,10 @@ public abstract class LightningAudioMixin {
     @WrapOperation(method = "tick", at = @At(value = "INVOKE", target =
         "Lnet/minecraft/world/level/Level;setSkyFlashTime(I)V"))
     private void naturality$surfaceFlash(Level level, int ticks, Operation<Void> original) {
-        if (ThunderAudio.audible()) original.call(level, ticks);
+        if(!(level instanceof ClientLevel)) {original.call(level,ticks);return;}
+        if(ThunderAudio.audible()) {
+            if(!naturality$impactAnnounced){naturality.client.weather.LightningFlashes.strike();naturality$impactAnnounced=true;}
+            // The impact overlay owns the timing; suppress vanilla multi-tick/repeated sky flashes.
+        }
     }
 }

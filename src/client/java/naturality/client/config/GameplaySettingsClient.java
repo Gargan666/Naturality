@@ -10,7 +10,7 @@ public final class GameplaySettingsClient {
     public static void initialize() {
         // Until the server advertises its settings, use vanilla gameplay (also for unmodded servers).
         ClientPlayConnectionEvents.INIT.register((_, _) ->
-            GameplaySettings.setClientSettings(new GameplaySettingsPayload(false, true, false, false, false, false)));
+            GameplaySettings.setClientSettings(new GameplaySettingsPayload(false, true, false, false, false, false, false, 200, 30)));
         ClientPlayConnectionEvents.DISCONNECT.register((_, _) -> GameplaySettings.setClientSettings(null));
         ClientPlayNetworking.registerGlobalReceiver(GameplaySettingsPayload.TYPE, (settings, context) -> {
             boolean changed = GameplaySettings.clientFireWrapping() != settings.fireWrapping()

@@ -22,18 +22,26 @@ public final class SnowAccumulationGameTest implements FabricClientGameTest {
             server.runCommand("gamerule minecraft:random_tick_speed 0");
             server.runCommand("setblock 0 101 0 oak_sign");
             context.waitTicks(410);
+            // Snowfall is deliberately spread over ticks under load. Retry the
+            // same natural opportunity without demanding a synchronous burst.
+            for(int tick=0;tick<40;tick++) {
+                server.runOnServer(s -> s.overworld().tickPrecipitation(new BlockPos(0,101,0)));
+                context.waitTicks(1);
+            }
             server.runOnServer(s -> {
                 var level=s.overworld();var support=new BlockPos(0,101,0);
-                for(int i=0;i<12;i++)level.tickPrecipitation(support);
                 var snow=level.getBlockState(support.above());
                 if(!snow.is(Blocks.SNOW) || snow.getValue(SnowLayerBlock.LAYERS)!=2)
                     throw new AssertionError("Rain 50 still accumulates two layers above a sign");
             });
             server.runCommand("weather minecraft:overworld rain 100");
             context.waitTicks(210);
+            for(int tick=0;tick<60;tick++) {
+                server.runOnServer(s -> s.overworld().tickPrecipitation(new BlockPos(0,101,0)));
+                context.waitTicks(1);
+            }
             server.runOnServer(s -> {
                 var level=s.overworld();var support=new BlockPos(0,101,0);
-                for(int i=0;i<20;i++)level.tickPrecipitation(support);
                 var snow=level.getBlockState(support.above());
                 if(!snow.is(Blocks.SNOW) || snow.getValue(SnowLayerBlock.LAYERS)!=7)
                     throw new AssertionError("Extreme rain retains the fitted seven-layer limit");

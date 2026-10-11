@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_lirestone": {
+      "conditions": {
+        "items": [
+          {
+            "items": "naturality:lirestone"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipes": "naturality:smooth_lirestone"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_lirestone"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "naturality:smooth_lirestone"
+    ]
+  }
+}

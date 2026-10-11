@@ -27,7 +27,7 @@ public abstract class WeatherAudioEngineMixin {
     @Inject(method = "tick", at = @At("TAIL"))
     private void naturality$filterWeather(boolean paused, CallbackInfo ci) {
         if (paused) return;
-        float indoor = WeatherSoundEnvironment.indoor();
+        float indoor = naturality.config.Feature.WEATHER_AUDIO.enabled() ? WeatherSoundEnvironment.indoor() : 0;
         float underwater = UnderwaterAudio.amount();
         instanceToChannel.forEach((sound, handle) -> {
             Identifier id = sound.getIdentifier();
@@ -41,5 +41,6 @@ public abstract class WeatherAudioEngineMixin {
     @Inject(method = "tick", at = @At("HEAD"))
     private void naturality$listenerImmersion(boolean paused, CallbackInfo ci) {
         UnderwaterAudio.update();
+        naturality.client.sleep.SleepAudio.update();
     }
 }

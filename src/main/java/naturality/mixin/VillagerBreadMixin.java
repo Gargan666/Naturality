@@ -22,8 +22,8 @@ public abstract class VillagerBreadMixin implements VillagerBreadState {
     @Override public VillagerBread naturality$bread() { return naturality$bread; }
     @Inject(method = "customServerAiStep", at = @At("TAIL"))
     private void naturality$evening(ServerLevel level, CallbackInfo ci) {
-        naturality$bread.tick(level, (Villager)(Object)this, level.getGameTime());
-        naturality$shelter.tick(level, (Villager)(Object)this, level.getGameTime());
+        if (naturality.config.Feature.VILLAGER_BREAD.enabled()) naturality$bread.tick(level, (Villager)(Object)this, level.getGameTime());
+        if (naturality.config.Feature.VILLAGER_SHELTER.enabled()) naturality$shelter.tick(level, (Villager)(Object)this, level.getGameTime());
     }
     @Inject(method = "addAdditionalSaveData", at = @At("HEAD"))
     private void naturality$beforeSaveBread(ValueOutput output, CallbackInfo ci) {
@@ -38,6 +38,7 @@ public abstract class VillagerBreadMixin implements VillagerBreadState {
     private void naturality$loadBread(ValueInput input, CallbackInfo ci) { naturality$bread.load(input); }
     @Inject(method = "wantsToPickUp", at = @At("HEAD"), cancellable = true)
     private void naturality$acceptBread(ServerLevel level, ItemStack stack, CallbackInfoReturnable<Boolean> cir) {
+        if (!naturality.config.Feature.VILLAGER_BREAD.enabled()) return;
         var body = (Villager)(Object)this;
         if (stack.is(Items.BREAD) || stack.is(net.minecraft.tags.ItemTags.WOOL)
                 && body.getVillagerData().profession().is(net.minecraft.world.entity.npc.villager.VillagerProfession.SHEPHERD))

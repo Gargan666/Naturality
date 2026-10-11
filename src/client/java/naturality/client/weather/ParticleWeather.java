@@ -5,7 +5,6 @@ import naturality.NaturalityParticles;
 import naturality.client.particle.WeatherClusterParticle;
 import naturality.config.NaturalityConfig;
 import naturality.weather.WeatherSystem;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.CloudStatus;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -24,7 +23,7 @@ public final class ParticleWeather {
     private ParticleWeather() {}
     public static void initialize() {
         WeatherClusterParticle.initialize();
-        ClientTickEvents.END_CLIENT_TICK.register(ParticleWeather::tick);
+        naturality.client.sleep.SleepVisuals.register(ParticleWeather::tick);
     }
     public static boolean enabled(ClientLevel level) { return naturality.config.NaturalityConfig.get().effects.weatherParticles && level.canHaveWeather() && WeatherSystem.state(level) != null; }
     public static int activeCount() { return ACTIVE.size(); }

@@ -12,9 +12,13 @@ public final class NaturalityConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path FILE = FabricLoader.getInstance().getConfigDir().resolve("naturality.json");
     private static final NaturalityConfig INSTANCE = load();
+    public boolean epilepsyMode = false;
+    public boolean epilepsyWarningAcknowledged = false;
     public Effects effects = new Effects();
     public static final class Effects {
         public boolean sunBeams = true;
+        public boolean cameraFlare = true;
+        public int cameraFlareMaxOpacity = 14;
         public boolean starPulses = true;
         public int auroraSegments = 2;
         public boolean smoke = true;
@@ -37,7 +41,7 @@ public final class NaturalityConfig {
         public boolean handGlintContours = true;
         public boolean previewGlintContours = true;
         public boolean inventoryGlintContours = true;
-        public void sanitize() { leafRestTicks = Math.clamp(leafRestTicks, 0, 200); auroraSegments = Math.clamp(auroraSegments, 1, 12); }
+        public void sanitize() { leafRestTicks = Math.clamp(leafRestTicks, 0, 200); auroraSegments = Math.clamp(auroraSegments, 1, 12); cameraFlareMaxOpacity = Math.clamp(cameraFlareMaxOpacity, 0, 100); }
     }
     public PortalChanges portalChanges = new PortalChanges();
     public Lighting lighting = new Lighting();
@@ -225,10 +229,13 @@ public final class NaturalityConfig {
         public boolean waterShimmer = true;
         public int waterDarkDepth = 12;
         public int waterPixelSize = 16;
+        public int heatWavePower = 50;
+        public boolean heatWaves = true;
 
         public void sanitize() {
             waterDarkDepth = Math.clamp(waterDarkDepth, 12, 96);
             waterPixelSize = Math.clamp(waterPixelSize, 1, 16);
+            heatWavePower = Math.clamp(heatWavePower, 0, 200);
         }
 
         public boolean includes(int sprite) {
@@ -293,6 +300,40 @@ public final class NaturalityConfig {
     }
 
     public static NaturalityConfig get() { return INSTANCE; }
+
+    public void reset() {
+        effects = new Effects();
+        portalChanges = new PortalChanges();
+        lighting = new Lighting();
+        fog = new Fog();
+        clouds = new Clouds();
+        liquids = new Liquids();
+        dynamicLighting = new DynamicLighting();
+        hardcoreDarkness = new HardcoreDarkness();
+    }
+
+    /** Every visual boolean is also individually editable in the menu. Numeric defaults are retained. */
+    public void disableVisuals() {
+        disableBooleans(effects);
+        disableBooleans(portalChanges);
+        disableBooleans(lighting);
+        disableBooleans(fog);
+        disableBooleans(clouds);
+        disableBooleans(clouds.base);
+        disableBooleans(clouds.upper);
+        disableBooleans(liquids);
+        disableBooleans(dynamicLighting);
+        disableBooleans(hardcoreDarkness.caves);
+        disableBooleans(hardcoreDarkness.moon);
+        portalChanges.openingVolume = portalChanges.ambientVolume = portalChanges.travelVolume = 0;
+    }
+
+    private static void disableBooleans(Object settings) {
+        for (var field : settings.getClass().getFields()) if (field.getType() == boolean.class) {
+            try { field.setBoolean(settings, false); }
+            catch (IllegalAccessException error) { throw new IllegalStateException(error); }
+        }
+    }
 
     @SuppressWarnings({"null", "unused"}) // Validate values populated reflectively by Gson.
     private static NaturalityConfig load() {

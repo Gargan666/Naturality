@@ -12,13 +12,14 @@ import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
-import net.minecraft.world.entity.projectile.hurtingprojectile.Fireball;
+import net.minecraft.world.entity.projectile.hurtingprojectile.AbstractHurtingProjectile;
 import naturality.Naturality;
 
 /** The supplied Blockbench cubes, split into a solid core and scrolling shell. */
-public final class FireballModelRenderer<T extends Fireball> extends EntityRenderer<T, FireballModelRenderer.State> {
+public final class FireballModelRenderer<T extends AbstractHurtingProjectile> extends EntityRenderer<T, FireballModelRenderer.State> {
     private static final ModelPart CORE = core();
     private final float scale;
+    private final boolean fireShell;
 
     public static final class State extends EntityRenderState {
         public float yaw;
@@ -26,9 +27,15 @@ public final class FireballModelRenderer<T extends Fireball> extends EntityRende
     }
 
     public FireballModelRenderer(EntityRendererProvider.Context context, float scale) {
+        this(context, scale, true);
+    }
+
+    public FireballModelRenderer(EntityRendererProvider.Context context, float scale, boolean fireShell) {
         super(context);
         this.scale = scale;
+        this.fireShell = fireShell;
     }
+    public boolean hasFireShell() { return fireShell; }
 
     private static ModelPart core() {
         MeshDefinition mesh = new MeshDefinition();
@@ -62,8 +69,8 @@ public final class FireballModelRenderer<T extends Fireball> extends EntityRende
             pose.rotate(Axis.YP.rotationDegrees(-state.ageInTicks * 6));
             pose.rotate(Axis.XP.rotationDegrees(state.ageInTicks * 9));
             pose.scale(-scale, -scale, scale);
-            submitPart(CORE, pose, collector, RenderTypes.entityCutout(Naturality.id("textures/entity/fireball.png")));
-            FireballShell.submit(pose, collector, state.ageInTicks);
+            submitPart(CORE, pose, collector, RenderTypes.entityCutout(Naturality.id(fireShell ? "textures/entity/fireball.png" : "textures/entity/fireball_dragon.png")));
+            if (fireShell) FireballShell.submit(pose, collector, state.ageInTicks);
             pose.popPose();
         }
         super.submit(state, pose, collector, camera);
@@ -79,5 +86,6 @@ public final class FireballModelRenderer<T extends Fireball> extends EntityRende
         });
     }
 }
+
 
 

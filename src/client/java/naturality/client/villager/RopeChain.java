@@ -46,7 +46,7 @@ public final class RopeChain {
         }
         double elapsed = Math.min(.1, (now - lastTime) / 1_000_000_000.0);
         lastTime = lastSeen = now;
-        if (!client.isPaused()) remainder += elapsed;
+        if (!client.isPaused()) remainder += elapsed * naturality.client.sleep.SleepVisuals.speed();
         length = Math.max(desired, length * .98 + desired * .02);
         simulation.pin(start, end);
         while (remainder >= .025) {

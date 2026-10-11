@@ -4,7 +4,6 @@ import java.util.WeakHashMap;
 import naturality.NaturalityParticles;
 import naturality.starfall.FallingStar;
 import net.fabricmc.fabric.api.client.particle.v1.ParticleProviderRegistry;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Camera;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.particle.SingleQuadParticle;
@@ -30,7 +29,7 @@ public final class StarTrailParticle extends SingleQuadParticle {
             sprites=set;
             return (_,level,x,y,z,vx,vy,vz,_)->new StarTrailParticle(level,x,y,z,new Vec3(vx,vy,vz),set.first(),null);
         });
-        ClientTickEvents.END_CLIENT_TICK.register(client->{
+        naturality.client.sleep.SleepVisuals.register(client->{
             if(client.level!=lastLevel) {attached.clear();lastLevel=client.level;}
             if(client.level==null || sprites==null)return;
             attached.entrySet().removeIf(entry->entry.getKey().isRemoved());
@@ -51,7 +50,7 @@ public final class StarTrailParticle extends SingleQuadParticle {
         if(star!=null) {
             if(star.isRemoved()) {remove();return;}
             setPos(star.getX(),star.getY()+star.getBbHeight()/2,star.getZ());velocity=star.getDeltaMovement();
-        } else {if(++age>=lifetime){remove();return;}setPos(x+velocity.x,y+velocity.y,z+velocity.z);}
+        } else {if(++age>=lifetime){remove();return;}double speed=naturality.client.sleep.SleepVisuals.speed();setPos(x+velocity.x*speed,y+velocity.y*speed,z+velocity.z*speed);}
     }
     @Override public void extract(QuadParticleRenderState output,Camera camera,float partial) {
         alpha=star==null?1:star.opacity(partial);

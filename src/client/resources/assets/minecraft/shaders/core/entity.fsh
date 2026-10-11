@@ -38,6 +38,7 @@ layout(location = 5) in vec4 overlayColor;
 #endif
 
 layout(location = 6) in vec2 texCoord0;
+layout(location = 8) in float naturalityDeathProgress;
 #ifdef GLINT
 layout(location = 7) in vec2 texCoordGlint;
 #endif
@@ -72,6 +73,22 @@ vec4 calculateFinalColor(vec4 color) {
 }
 
 void main() {
+    if (naturalityDeathProgress > 0.0) {
+        ivec2 size = textureSize(Sampler0, 0);
+        ivec2 pixel = ivec2(floor(fract(texCoord0) * vec2(size)));
+        // One survivor per five texels, with a stable shuffled order in each group.
+        // The final incomplete group differs from the target by at most one texel.
+        uint index = uint(pixel.y * size.x + pixel.x);
+        uint group = index / 5u;
+        uint count = min(5u, uint(size.x * size.y) - group * 5u);
+        uint hash = group * 747796405u + 2891336453u;
+        hash = ((hash >> ((hash >> 28u) + 4u)) ^ hash) * 277803737u;
+        hash = (hash >> 22u) ^ hash;
+        uint stride = count == 5u ? 1u + ((hash >> 16u) % 4u) : 1u;
+        uint lane = ((index % 5u) * stride + hash % count) % count;
+        float rank = (float(lane) + (float(hash & 65535u) + 0.5) / 65536.0) / float(count);
+        if (rank < 0.8 * naturalityDeathProgress) discard;
+    }
     vec4 color = texture(Sampler0, texCoord0);
 
     #ifdef OIT_ADDITIVE

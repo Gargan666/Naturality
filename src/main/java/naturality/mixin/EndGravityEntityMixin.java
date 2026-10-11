@@ -28,7 +28,14 @@ public abstract class EndGravityEntityMixin {
         boolean anchor=e instanceof net.minecraft.world.entity.player.Player && EndGravity.inverted(e);
         double top=e.getBoundingBox().maxY;
         original.call();
-        if(anchor)e.setPos(e.getX(),top-e.getBbHeight(),e.getZ());
+        if(anchor) {
+            double shift=top-e.getBoundingBox().maxY;
+            e.setPos(e.getX(),e.getY()+shift,e.getZ());
+            // Pose-origin adjustments are not motion: keep interpolation in the new frame.
+            e.yo+=shift;e.yOld+=shift;
+            if(e instanceof net.minecraft.server.level.ServerPlayer player && player.connection!=null)
+                ((naturality.weather.GravityMovementAccess)player.connection).naturality$poseShift(shift);
+        }
     }
     @Inject(method="getGravity",at=@At("RETURN"),cancellable=true)
     private void naturality$gravity(CallbackInfoReturnable<Double> cir) {

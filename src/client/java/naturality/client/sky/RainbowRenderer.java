@@ -8,7 +8,6 @@ import com.mojang.renderpearl.api.pipeline.*;
 import naturality.Naturality;
 import naturality.client.weather.ParticleWeather;
 import naturality.sky.SkyEventType;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -40,7 +39,7 @@ public final class RainbowRenderer implements AutoCloseable {
     private static float previousStrength, strength;
     private GpuBuffer vertices;
     public static void initialize() {
-        ClientTickEvents.END_CLIENT_TICK.register(RainbowRenderer::tick);
+        naturality.client.sleep.SleepVisuals.register(RainbowRenderer::tick);
         ClientPlayConnectionEvents.DISCONNECT.register((_, _) -> reset());
     }
     private static void reset() { world = null; previousStrength = strength = 0; }

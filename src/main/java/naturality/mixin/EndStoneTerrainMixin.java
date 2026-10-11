@@ -25,7 +25,8 @@ public abstract class EndStoneTerrainMixin {
             var sampler=random.getSampler(new naturality.worldgen.EndTerrainDensity(
                 ((NoiseBasedChunkGenerator)(Object)this).generatorSettings().value().noiseRouter().finalDensity()));
             EndStoneLayers.apply(chunk, random.getOrCreateRandomFactory(naturality.Naturality.id("lirestone_patches"))
-                .at(0, 0, 0).nextLong(),(naturality.worldgen.EndTerrainDensity.Sampler)sampler);
+                .at(0, 0, 0).nextLong(),(naturality.worldgen.EndTerrainDensity.Sampler)sampler,
+                ((NoiseBasedChunkGenerator)(Object)this).getBiomeSource().createCachingResolver(random),biomes);
         }
     }
 }

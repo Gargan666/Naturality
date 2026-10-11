@@ -8,7 +8,7 @@ import net.minecraft.world.level.material.FogType;
 public final class UnderwaterAudio {
     private static volatile float amount;
     private UnderwaterAudio() {}
-    public static float amount() { return amount; }
+    public static float amount() { return naturality.config.Feature.UNDERWATER_AUDIO.enabled() ? amount : 0; }
     public static float strength(float depth) {
         float t = Math.clamp((depth - 1.0F) / 3.0F, 0.0F, 1.0F);
         return t * t * (3.0F - 2.0F * t);

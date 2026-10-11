@@ -46,6 +46,7 @@ public abstract class EndFogCompositeMixin {
             CameraRenderState camera, GpuBufferSlice fog, Vector4f fogColor,
             boolean sky, boolean consistentDepth, CallbackInfo ci) {
         EndFogComposite.beginFrame(fogColor);
+        naturality.client.weather.WindRendering.beginFrame();
         naturality.client.fluid.WaterComposite.beginFrame();
         naturality.client.fluid.WaterVisuals.prepareFrame();
         naturality$fog = fog;
@@ -116,6 +117,7 @@ public abstract class EndFogCompositeMixin {
                 naturality$waterChunks = null;
             }
         }
+        naturality.client.fluid.HeatWaves.render(target);
         EndFogComposite.render(target, naturality$fog);
         naturality.client.sky.AuroraRenderer.render(target);
         var clouds = naturality$clouds;
@@ -138,8 +140,10 @@ public abstract class EndFogCompositeMixin {
     @Inject(method = "close", at = @At("TAIL"))
     private void naturality$close(CallbackInfo ci) {
         EndFogComposite.close();
+        naturality.client.fluid.HeatWaves.close();
         naturality.client.sky.AuroraRenderer.close();
         naturality.client.fluid.WaterComposite.close();
         naturality.client.fluid.WaterVisuals.close();
     }
 }
+

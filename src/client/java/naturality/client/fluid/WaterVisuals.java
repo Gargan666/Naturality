@@ -11,7 +11,6 @@ import com.mojang.renderpearl.api.textures.*;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import naturality.config.NaturalityConfig;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
@@ -46,6 +45,33 @@ public final class WaterVisuals {
     private static int wetColumns;
     private static float frameDepth;
     public static float cameraDepth() { return frameDepth; }
+    private static final int[] rawPixels = new int[SIZE * SIZE];
+    private static boolean mapChanged;
+    private static final ColumnTile[] mappedTiles = new ColumnTile[256];
+    // Retain overlap when the 256-block window moves; bound memory across travel.
+    private static final it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap<ColumnTile> columnCache =
+        new it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap<>(384);
+    private static final ByteBuffer frameData = ByteBuffer.allocateDirect(112).order(ByteOrder.nativeOrder());
+    private static final class ColumnTile {
+        final int[] pixels = new int[256], murk = new int[256];
+        final java.lang.ref.WeakReference<net.minecraft.world.level.chunk.LevelChunk> chunk;
+        boolean dirty = true;
+        int wet;
+        ColumnTile(net.minecraft.world.level.chunk.@org.jspecify.annotations.Nullable LevelChunk chunk) { this.chunk = new java.lang.ref.WeakReference<>(chunk); }
+    }
+    public static void invalidateChunk(ClientLevel changedWorld, int x, int z) {
+        if (world != changedWorld) return;
+        var cached = columnCache.get(net.minecraft.world.level.ChunkPos.pack(x, z));
+        if (cached != null) cached.dirty = true;
+    }
+    public static void invalidateChunkAndNeighbors(ClientLevel changedWorld, int x, int z) {
+        // BiomeManager's quart interpolation can read just across a chunk boundary.
+        for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++)
+            invalidateChunk(changedWorld, x + dx, z + dz);
+    }
+    public static void invalidateBiomes() {
+        for (var tile : columnCache.values()) tile.dirty = true;
+    }
     private static final int[] turbidity = new int[SIZE * SIZE];
     private static final float[] blurred = new float[SIZE * SIZE];
     private static final BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
@@ -54,7 +80,7 @@ public final class WaterVisuals {
     private static boolean fallingWater(FluidState fluid) {
         return fluid.is(FluidTags.WATER) && !fluid.isSource() && fluid.getValue(FlowingFluid.FALLING);
     }
-    public static void initialize() { ClientTickEvents.END_CLIENT_TICK.register(WaterVisuals::tick); }
+    public static void initialize() { naturality.client.sleep.SleepVisuals.register(WaterVisuals::tick); }
 
     public static boolean enabled() {
         var client = Minecraft.getInstance();
@@ -85,9 +111,17 @@ public final class WaterVisuals {
 
     private static void tick(Minecraft client) {
         var level = client.level;
-        if (level == null) { world = null; initialized = false; return; }
+        if (level == null) {
+            world = null;
+            initialized = false;
+            columnCache.clear();
+            java.util.Arrays.fill(mappedTiles, null);
+            return;
+        }
         if (!enabled() || client.isPaused()) return;
         allocate();
+        mapChanged = !initialized || world != level;
+        if (world != level) { columnCache.clear(); java.util.Arrays.fill(mappedTiles, null); }
         var p = client.gameRenderer.mainCamera().blockPosition();
         int x = Math.floorDiv(p.getX(), 32) * 32 - SIZE / 2;
         int z = Math.floorDiv(p.getZ(), 32) * 32 - SIZE / 2;
@@ -102,6 +136,7 @@ public final class WaterVisuals {
             for (int i = 0; i < 8; i++) updateTile(nextTile++ & 255);
             updateTile(((p.getZ() - originZ) >> 4) * 16 + ((p.getX() - originX) >> 4));
         }
+        if (!mapChanged) return;
         smoothTurbidity();
         var texture = WaterVisuals.texture;
         var image = WaterVisuals.image;
@@ -113,52 +148,72 @@ public final class WaterVisuals {
         var world = WaterVisuals.world;
         var image = WaterVisuals.image;
         if (world == null || image == null) return;
-        int wet = 0;
         int sx = (tile & 15) * 16, sz = (tile >> 4) * 16;
         var chunk = world.getChunkSource().getChunk((originX + sx) >> 4, (originZ + sz) >> 4, false);
-        for (int z = sz; z < sz + 16; z++) for (int x = sx; x < sx + 16; x++) {
-            int packed = 0;
-            turbidity[z * SIZE + x] = 0;
-            if (chunk != null) {
-                int wx = originX + x, wz = originZ + z;
-                int top = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, x & 15, z & 15);
-                cursor.set(wx, top, wz);
-                // Lily pads / vegetation above the water are permitted; solid roofs are not.
-                for (int i = 0; i < 16 && top > world.getMinY(); i++, top--) {
-                    cursor.setY(top);
-                    var state = chunk.getBlockState(cursor);
-                    if (state.getFluidState().is(FluidTags.WATER)) break;
-                    if (state.isSolidRender()) break;
-                }
-                cursor.setY(top);
-                var biome = world.getBiome(cursor);
-                turbidity[z * SIZE + x] = biome.is(Biomes.SWAMP) || biome.is(Biomes.MANGROVE_SWAMP) ? 254 : 0;
-                if (chunk.getFluidState(cursor).is(FluidTags.WATER)) {
-                    int bottom = top;
-                    int poolTop = fallingWater(chunk.getFluidState(cursor)) ? Integer.MIN_VALUE : top;
-                    while (bottom > world.getMinY() && top - bottom < 254) {
-                        cursor.setY(bottom - 1);
-                        var fluid = chunk.getFluidState(cursor);
-                        if (!fluid.is(FluidTags.WATER)) break;
-                        bottom--;
-                        // A falling sheet is not a deep pool. Keep the receiving
-                        // pool below it, with its own surface and actual depth.
-                        if (fallingWater(fluid)) poolTop = Integer.MIN_VALUE;
-                        else if (poolTop == Integer.MIN_VALUE) poolTop = bottom;
-                    }
-                    cursor.setY(top);
-                    if (poolTop != Integer.MIN_VALUE) {
-                        int murk = turbidity[z * SIZE + x] + 1;
-                        int height = Math.clamp(poolTop - world.getMinY(), 0, 65535);
-                        packed = murk << 24 | (height & 255) << 16 | (height >> 8) << 8 | (poolTop - bottom + 1);
-                    }
-                }
-            }
-            image.setPixel(x, z, packed);
-            if (packed != 0) wet++;
+        long key = net.minecraft.world.level.ChunkPos.pack((originX + sx) >> 4, (originZ + sz) >> 4);
+        var cached = columnCache.getAndMoveToLast(key);
+        if (cached == null || cached.chunk.get() != chunk) {
+            cached = new ColumnTile(chunk);
+            columnCache.put(key, cached);
+            if (columnCache.size() > 384) columnCache.removeFirst();
         }
-        wetColumns += wet - wetTiles[tile];
-        wetTiles[tile] = wet;
+        if (!cached.dirty && mappedTiles[tile] == cached) return;
+        if (cached.dirty) {
+            int wet = 0;
+            for (int z = sz; z < sz + 16; z++) for (int x = sx; x < sx + 16; x++) {
+                int packed = 0;
+                int local = (z - sz) * 16 + x - sx;
+                cached.murk[local] = 0;
+                if (chunk != null) {
+                    int wx = originX + x, wz = originZ + z;
+                    int top = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, x & 15, z & 15);
+                    cursor.set(wx, top, wz);
+                    // Lily pads / vegetation above the water are permitted; solid roofs are not.
+                    for (int i = 0; i < 16 && top > world.getMinY(); i++, top--) {
+                        cursor.setY(top);
+                        var state = chunk.getBlockState(cursor);
+                        if (state.getFluidState().is(FluidTags.WATER)) break;
+                        if (state.isSolidRender()) break;
+                    }
+                    cursor.setY(top);
+                    var biome = world.getBiome(cursor);
+                    cached.murk[local] = biome.is(Biomes.SWAMP) || biome.is(Biomes.MANGROVE_SWAMP) ? 254 : 0;
+                    if (chunk.getFluidState(cursor).is(FluidTags.WATER)) {
+                        int bottom = top;
+                        int poolTop = fallingWater(chunk.getFluidState(cursor)) ? Integer.MIN_VALUE : top;
+                        while (bottom > world.getMinY() && top - bottom < 254) {
+                            cursor.setY(bottom - 1);
+                            var fluid = chunk.getFluidState(cursor);
+                            if (!fluid.is(FluidTags.WATER)) break;
+                            bottom--;
+                            // A falling sheet is not a deep pool. Keep the receiving
+                            // pool below it, with its own surface and actual depth.
+                            if (fallingWater(fluid)) poolTop = Integer.MIN_VALUE;
+                            else if (poolTop == Integer.MIN_VALUE) poolTop = bottom;
+                        }
+                        cursor.setY(top);
+                        if (poolTop != Integer.MIN_VALUE) {
+                            int murk = cached.murk[local] + 1;
+                            int height = Math.clamp(poolTop - world.getMinY(), 0, 65535);
+                            packed = murk << 24 | (height & 255) << 16 | (height >> 8) << 8 | (poolTop - bottom + 1);
+                        }
+                    }
+                }
+                cached.pixels[local] = packed;
+                if (packed != 0) wet++;
+            }
+            cached.wet = wet;
+            cached.dirty = false;
+        }
+        for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
+            int local = z * 16 + x, index = (sz + z) * SIZE + sx + x;
+            if (rawPixels[index] != cached.pixels[local] || turbidity[index] != cached.murk[local]) mapChanged = true;
+            rawPixels[index] = cached.pixels[local];
+            turbidity[index] = cached.murk[local];
+        }
+        wetColumns += cached.wet - wetTiles[tile];
+        wetTiles[tile] = cached.wet;
+        mappedTiles[tile] = cached;
     }
 
     // A separable 25-block box filter softens biome changes without blurring
@@ -180,8 +235,8 @@ public final class WaterVisuals {
             float sum = 0;
             for (int i = -radius; i <= radius; i++) sum += blurred[Math.clamp(i, 0, SIZE - 1) * SIZE + x];
             for (int z = 0; z < SIZE; z++) {
-                int pixel = image.getPixel(x, z);
-                if ((pixel >>> 24) != 0) image.setPixel(x, z,
+                int pixel = rawPixels[z * SIZE + x];
+                image.setPixel(x, z, (pixel >>> 24) == 0 ? 0 :
                     (pixel & 0xFFFFFF) | (1 + Math.clamp(Math.round(sum / span), 0, 254)) << 24);
                 sum += blurred[Math.clamp(z + radius + 1, 0, SIZE - 1) * SIZE + x]
                     - blurred[Math.clamp(z - radius, 0, SIZE - 1) * SIZE + x];
@@ -253,7 +308,7 @@ public final class WaterVisuals {
             }
         }
         frameDepth = cameraDepth;
-        ByteBuffer data = ByteBuffer.allocateDirect(112).order(ByteOrder.nativeOrder());
+        ByteBuffer data = frameData.clear();
         data.putInt(originX).putInt(originZ).putInt(world == null ? 0 : world.getMinY()).putInt(active ? 1 : 0);
         data.putFloat((float) (p.x - originX)).putFloat((float) p.y).putFloat((float) (p.z - originZ)).putFloat(sun);
         data.putFloat(c.waterDarkDepth).putFloat(8).putFloat(c.waterPixelSize).putFloat(client.options.getEffectiveRenderDistance() * 16.0F);
@@ -305,6 +360,10 @@ public final class WaterVisuals {
         if (texture != null) { texture.close(); texture = null; }
         if (image != null) { image.close(); image = null; }
         initialized = false;
+        columnCache.clear();
+        java.util.Arrays.fill(mappedTiles, null);
+        java.util.Arrays.fill(rawPixels, 0);
+        java.util.Arrays.fill(turbidity, 0);
         world = null;
         wetColumns = 0;
         java.util.Arrays.fill(wetTiles, 0);

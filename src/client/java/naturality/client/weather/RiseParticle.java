@@ -24,7 +24,8 @@ public final class RiseParticle extends SingleQuadParticle {
     @Override public void tick() {
         xo=x;yo=y;zo=z;
         if(++age>=lifetime || y>level.getMaxY()+16){remove();return;}
-        var from=new Vec3(x,y,z);var next=from.add(vx,vy,vz);
+        double speed=naturality.client.sleep.SleepVisuals.speed();
+        var from=new Vec3(x,y,z);var next=from.add(vx*speed,vy*speed,vz*speed);
         if(level.clip(new ClipContext(from,next,ClipContext.Block.COLLIDER,ClipContext.Fluid.NONE,CollisionContext.empty())).getType()!=HitResult.Type.MISS){remove();return;}
         setPos(next.x,next.y,next.z);
     }

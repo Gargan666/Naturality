@@ -57,8 +57,23 @@ public final class LightSourcePlacement {
     }
 
     private static boolean clear(ClientLevel level, Vec3 point) {
-        for (AABB box : boxes(level, point, 1)) {
-            if (box.inflate(CLEARANCE * 0.5).contains(point)) return false;
+        BlockPos center = BlockPos.containing(point);
+        double pad = CLEARANCE * 0.5;
+        for (BlockPos pos : BlockPos.betweenClosed(center.offset(-1, -1, -1), center.offset(1, 1, 1))) {
+            double x = point.x - pos.getX(), y = point.y - pos.getY(), z = point.z - pos.getZ();
+            if (!LoadedChunks.has(level, pos)) {
+                if (x >= -pad && x < 1 + pad && y >= -pad && y < 1 + pad && z >= -pad && z < 1 + pad) return false;
+                continue;
+            }
+            var state = level.getBlockState(pos);
+            if (state.isAir()) continue;
+            var shape = state.getLightDampening() >= 15 ? Shapes.block() : state.getCollisionShape(level, pos);
+            for (AABB box : shape.toAabbs()) {
+                // Keep vanilla's inclusive minimum/exclusive maximum containment.
+                if (point.x >= box.minX + pos.getX() - pad && point.x < box.maxX + pos.getX() + pad
+                        && point.y >= box.minY + pos.getY() - pad && point.y < box.maxY + pos.getY() + pad
+                        && point.z >= box.minZ + pos.getZ() - pad && point.z < box.maxZ + pos.getZ() + pad) return false;
+            }
         }
         return true;
     }
@@ -73,6 +88,7 @@ public final class LightSourcePlacement {
                 continue;
             }
             var state = level.getBlockState(pos);
+            if (state.isAir()) continue;
             var shape = state.getLightDampening() >= 15 ? Shapes.block() : state.getCollisionShape(level, pos);
             for (AABB box : shape.toAabbs()) result.add(box.move(pos));
         }

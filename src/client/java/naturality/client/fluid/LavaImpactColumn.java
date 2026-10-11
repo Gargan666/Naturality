@@ -9,7 +9,7 @@ import net.minecraft.world.phys.Vec3;
 
 /** Temporary pixel-striped artwork on a rectangular animated splash column. */
 public final class LavaImpactColumn {
-    private record Splash(double x,double y,double z,double width,double depth,double height,long born,int tint,int light) {}
+    private record Splash(double x,double y,double z,double width,double depth,double height,double sizeScale,long born,int tint,int light) {}
     private static final List<Splash> SPLASHES=new ArrayList<>();
     private static @org.jspecify.annotations.Nullable ClientLevel world;
     public static final double RISE_TICKS=3, FALL_TICKS=40, TOTAL_TICKS=RISE_TICKS+FALL_TICKS, RING_TICKS=20;
@@ -44,14 +44,19 @@ public final class LavaImpactColumn {
             var surface=LavaSurface.at(level,pos.above(offset));
             if(surface!=null){y=surface.height(x-Math.floor(x),z-Math.floor(z));break;}
         }
-        double height=heightFor(fall),width=Math.max(.35,box.getXsize()*1.15),depth=Math.max(.35,box.getZsize()*1.15);
+        boolean small=entity instanceof net.minecraft.world.entity.item.ItemEntity || entity instanceof net.minecraft.world.entity.projectile.Projectile;
+        double sizeScale=small?.5:1;
+        double height=heightFor(fall)*(small?.25:1),width=Math.max(.35,box.getXsize()*1.15)*sizeScale,depth=Math.max(.35,box.getZsize()*1.15)*sizeScale;
         if(SPLASHES.size()>=64)SPLASHES.removeFirst();
-        SPLASHES.add(new Splash(x,y,z,width,depth,height,level.getGameTime(),LavaEffects.brightColor(),LightCoordsUtil.getLightCoords(level,pos.above())));
+        SPLASHES.add(new Splash(x,y,z,width,depth,height,sizeScale,level.getGameTime(),LavaEffects.brightColor(),LightCoordsUtil.getLightCoords(level,pos.above())));
         var random=java.util.concurrent.ThreadLocalRandom.current();
-        for(int i=0;i<Math.min(48,12+(int)(width*depth*8));i++) {
+        for(int i=0;i<Math.min(48,(small?6:12)+(int)(width*depth*8));i++) {
             var particle=net.minecraft.client.Minecraft.getInstance().particleEngine.createParticle(naturality.NaturalityParticles.LAVA_SPLASH,x+(random.nextDouble()-.5)*width,y+.08,z+(random.nextDouble()-.5)*depth,0,0,0);
             if(particle instanceof naturality.client.particle.ImpactDroplet drop)drop.naturality$landBeforeExpiring();
-            if(particle!=null)particle.setParticleSpeed((random.nextDouble()-.5)*.14,.22+Math.sqrt(height)*.18+random.nextDouble()*.08,(random.nextDouble()-.5)*.14);
+            if(particle!=null) {
+                if(small)particle.scale(.65F);
+                particle.setParticleSpeed((random.nextDouble()-.5)*.14*sizeScale,(.22+Math.sqrt(height)*.18+random.nextDouble()*.08)*sizeScale,(random.nextDouble()-.5)*.14*sizeScale);
+            }
         }
     }
     public static void render(LavaIntersection output,ClientLevel level,Vec3 eye,float partial) {
@@ -61,7 +66,7 @@ public final class LavaImpactColumn {
         for(var s:SPLASHES) {
             double age=level.getGameTime()-s.born+partial;
             float alpha=(float)Math.clamp((TOTAL_TICKS-age)/6*.85,0,.85);
-            int spread=ringSpreadPixels(age);
+            int spread=(int)Math.floor(ringSpreadPixels(age)*s.sizeScale);
             int left=(int)Math.floor((s.x-s.width/2)*16)-spread,right=(int)Math.ceil((s.x+s.width/2)*16)+spread;
             int north=(int)Math.floor((s.z-s.depth/2)*16)-spread,south=(int)Math.ceil((s.z+s.depth/2)*16)+spread;
             double width=(right-left)/16.0,depth=(south-north)/16.0;

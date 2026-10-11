@@ -7,6 +7,8 @@ import naturality.config.NaturalityConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.projectile.Projectile;
 
 /** Tracks actual descent because vanilla clears fallDistance before the water-entry effect. */
 public final class LavaEntrySplash {
@@ -22,7 +24,8 @@ public final class LavaEntrySplash {
         if(client.isPaused())return;
         var seen=new HashSet<Integer>();
         for(var entity:level.entitiesForRendering()) {
-            if(!(entity instanceof LivingEntity) && !(entity instanceof net.minecraft.world.entity.vehicle.boat.AbstractBoat) || entity.isSpectator())continue;
+            if(!(entity instanceof LivingEntity) && !(entity instanceof net.minecraft.world.entity.vehicle.boat.AbstractBoat)
+                && !(entity instanceof Projectile) && !(entity instanceof ItemEntity) || entity.isSpectator())continue;
             seen.add(entity.getId());
             var old=FALLS.get(entity.getId());
                         var contact=net.minecraft.core.BlockPos.containing(entity.getX(),entity.getY()+.05,entity.getZ());

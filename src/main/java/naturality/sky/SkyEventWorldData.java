@@ -34,13 +34,15 @@ public final class SkyEventWorldData extends SavedData {
     public SkyEventSettings settings(ServerLevel level, SkyEventType type) {
         String dimension = level.dimension().identifier().toString();
         var events = settings.computeIfAbsent(dimension, _ -> new HashMap<>());
-        return events.computeIfAbsent(type.id, _ -> new SkyEventSettings());
+        return events.computeIfAbsent(type.id, _ -> {
+            var event = new SkyEventSettings(); event.strength = Math.min(event.strength, type.maxStrength()); return event;
+        });
     }
 
     public void override(ServerLevel level, SkyEventType type, boolean enabled, int strength) {
         var event = settings(level, type);
         event.override = enabled;
-        event.strength = Math.clamp(strength, 0, 20);
+        event.strength = Math.clamp(strength, 0, type.maxStrength());
         setDirty();
         level.getServer().getDataStorage().scheduleSave();
     }

@@ -30,7 +30,7 @@ public final class VillagerBobberRenderer extends EntityRenderer<VillagerBobber,
         state.fishingOwnerId = owner == null ? -1 : owner.getId();
         state.glint = FishingBobberModel.rodGlint(owner);
         if (owner != null) {
-            Vec3 tip = ((VillagerWorkVisuals)owner).naturality$renderedRodTip();
+            Vec3 tip = owner instanceof VillagerWorkVisuals visuals ? visuals.naturality$renderedRodTip() : null;
             if (tip == null || tip.distanceToSqr(owner.position()) > 9) {
                 float yaw = Mth.lerp(partialTicks, owner.yBodyRotO, owner.yBodyRot) * Mth.DEG_TO_RAD;
                 tip = owner.getPosition(partialTicks).add(-Mth.cos(yaw) * 0.27 - Mth.sin(yaw) * 0.44,

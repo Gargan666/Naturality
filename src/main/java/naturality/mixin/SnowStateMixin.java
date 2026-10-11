@@ -20,7 +20,11 @@ public abstract class SnowStateMixin {
             int maximum=SnowGeometry.maxLayers(level,pos);
             if(maximum<8) state=state.setValue(net.minecraft.world.level.block.SnowLayerBlock.LAYERS,maximum);
         }
-        boolean wasSnow = level.getBlockState(pos).is(Blocks.SNOW);
+        var previous=level.getBlockState(pos);
+        boolean wasSnow = previous.is(Blocks.SNOW);
+        boolean sameCoverage=wasSnow && state.is(Blocks.SNOW)
+            && previous.getValue(net.minecraft.world.level.block.SnowLayerBlock.LAYERS)<8
+            && state.getValue(net.minecraft.world.level.block.SnowLayerBlock.LAYERS)<8;
         // Move the saved snow before neighbor updates can destroy it as unsupported.
         // Keep the layer count (including overflow blocks), rather than dropping
         // snow items and trying to reconstruct the coating afterward.
@@ -46,7 +50,7 @@ public abstract class SnowStateMixin {
                 for(int i=0;i<snowColumn.size();i++)level.setBlock(pos.above(i+1),snowColumn.get(i),flags);
             }
         }
-        if (result && !level.isClientSide() && (wasSnow || state.is(Blocks.SNOW)
+        if (result && !sameCoverage && !level.isClientSide() && (wasSnow || state.is(Blocks.SNOW)
                 || level.getBlockState(pos.above()).is(Blocks.SNOW))) SnowGeometry.refreshGrass(level, pos);
         return result;
     }

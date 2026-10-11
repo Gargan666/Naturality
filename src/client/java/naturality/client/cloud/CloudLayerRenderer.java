@@ -24,7 +24,7 @@ import org.jspecify.annotations.Nullable;
 
 /** Compact cloud shells using the active resource pack's occupancy grid. */
 public final class CloudLayerRenderer implements AutoCloseable {
-    private static final int UBO_SIZE = new Std140SizeCalculator().putVec4().putVec3().putVec3().putVec4().get();
+    private static final int UBO_SIZE = new Std140SizeCalculator().putVec4().putVec3().putVec3().putVec4().putVec4().putVec4().get();
     private boolean needsRebuild = true;
     private int prevCellX = Integer.MIN_VALUE;
     private int prevCellZ = Integer.MIN_VALUE;
@@ -35,6 +35,7 @@ public final class CloudLayerRenderer implements AutoCloseable {
 
     private CloudLayer settings = new CloudLayer();
     private int meshKey;
+    private int invisibleCaps;
     public void setTexture(net.minecraft.client.renderer.CloudRenderer.@org.jspecify.annotations.Nullable TextureData data) {
         this.texture = data == null ? null : new TextureData(data.cells(), data.width(), data.height());
         this.quadCount = 0;
@@ -45,7 +46,7 @@ public final class CloudLayerRenderer implements AutoCloseable {
         int maxFacesPerCell = 6;
         int maxCells = (radiusCells * 2 + 1) * (radiusCells * 2 + 1);
         int maxFaces = maxCells * maxFacesPerCell;
-        return maxFaces * 3;
+        return maxFaces * 4;
     }
 
     private static boolean isNorthEmpty(final long cellData) {
@@ -75,7 +76,15 @@ public final class CloudLayerRenderer implements AutoCloseable {
     ) {
         this.settings = settings;
         if (!settings.enabled || settings.opacityPercent == 0) { quadCount = 0; needsRebuild = true; return; }
-        int key = java.util.Objects.hash(settings.width, settings.thickness, settings.style, settings.fadingSides, range);
+        float relativeBottomY = (float)(bottomY + settings.heightOffset - cameraPosition.y);
+        float cameraHeight = -relativeBottomY / settings.thickness;
+        boolean gradient = settings.fadingSides && settings.style != 2 && settings.fadePixels >= 2;
+        // The fragment shader discards these caps at exactly zero opacity. Keep
+        // a small margin at the transition so rounding can never hide a visible cap.
+        int caps = gradient ? (cameraHeight <= .7499F ? 1 : 0) | (cameraHeight >= .2501F ? 2 : 0) : 0;
+        if (caps != invisibleCaps) { invisibleCaps = caps; needsRebuild = true; }
+        int key = 31 * (31 * (31 * (31 * settings.width + settings.thickness) + settings.style)
+            + (settings.fadingSides ? 1 : 0)) + range;
         if (key != meshKey) { meshKey = key; needsRebuild = true; }
         var texture = this.texture;
         if (texture != null) {
@@ -92,7 +101,6 @@ public final class CloudLayerRenderer implements AutoCloseable {
             }
 
             var faces = java.util.Objects.requireNonNull(this.utb);
-            float relativeBottomY = (float)(bottomY + settings.heightOffset - cameraPosition.y);
             // Double precision avoids drift jumps far from spawn and after long sessions.
             double cloudOffset = (gameTime + (double)partialTicks) * 0.03 * settings.speedPercent / 100.0;
             double cloudX = cameraPosition.x + settings.offsetX + cloudOffset;
@@ -116,7 +124,7 @@ public final class CloudLayerRenderer implements AutoCloseable {
 
                 try (GpuBufferSlice.MappedView view = faces.currentBuffer().map(false, true)) {
                     this.buildMesh(view.data(), cellX, cellZ, fancyClouds, radiusCells);
-                    this.quadCount = view.data().position() / 3;
+                    this.quadCount = view.data().position() / 4;
                 }
             }
 
@@ -128,7 +136,9 @@ public final class CloudLayerRenderer implements AutoCloseable {
                     // Preserve the live sky tint, replacing vanilla base alpha with the layer opacity.
                     Std140Builder.intoBuffer(view.data()).putVec4(ARGB.vector4fFromARGB32(color).setComponent(3, settings.opacityPercent / 100.0f)).putVec3(-xInCell, relativeBottomY, -zInCell).putVec3(settings.width, settings.thickness, settings.width)
                         .putVec4(settings.fadingSides && settings.style != 2 ? settings.fadePixels : 0,
-                            -relativeBottomY / settings.thickness, 0, 0);
+                            -relativeBottomY / settings.thickness, cellX, cellZ)
+                        .putVec4(CloudMoonLighting.sample(partialTicks))
+                        .putVec4(texture.width, texture.height, settings.fadePixels, 0);
                 }
             }
         }
@@ -231,10 +241,15 @@ public final class CloudLayerRenderer implements AutoCloseable {
         int indexY = Math.floorMod(cellZ + relativeCellZ, textureHeight);
         long cellData = cells[indexX + indexY * textureWidth];
         if (cellData != 0L) {
+            int corners = 0;
+            if (cells[Math.floorMod(indexX - 1, textureWidth) + Math.floorMod(indexY - 1, textureHeight) * textureWidth] == 0) corners |= 16;
+            if (cells[Math.floorMod(indexX + 1, textureWidth) + Math.floorMod(indexY - 1, textureHeight) * textureWidth] == 0) corners |= 32;
+            if (cells[Math.floorMod(indexX + 1, textureWidth) + Math.floorMod(indexY + 1, textureHeight) * textureWidth] == 0) corners |= 64;
+            if (cells[Math.floorMod(indexX - 1, textureWidth) + Math.floorMod(indexY + 1, textureHeight) * textureWidth] == 0) corners |= 128;
             if (extrude) {
-                this.buildExtrudedCell(faceBuffer, relativeCellX, relativeCellZ, cellData);
+                this.buildExtrudedCell(faceBuffer, relativeCellX, relativeCellZ, cellData, corners);
             } else {
-                this.buildFlatCell(faceBuffer, relativeCellX, relativeCellZ);
+                this.encodeFace(faceBuffer, relativeCellX, relativeCellZ, Direction.DOWN, 32 | ((cellData & 15L) != 0 ? 8 : 0) | (((int)(cellData & 15L) | corners) << 8));
             }
         }
     }
@@ -245,30 +260,39 @@ public final class CloudLayerRenderer implements AutoCloseable {
 
     private void encodeFace(final ByteBuffer faceBuffer, final int x, final int z, final Direction direction, final int flags) {
         if (settings.style == 0 && !settings.fadingSides && direction == Direction.UP) return;
+        if (settings.fadingSides && settings.style != 2 && settings.fadePixels >= 2) {
+            if (direction == Direction.UP && (invisibleCaps & 1) != 0
+                    || direction == Direction.DOWN && (invisibleCaps & 2) != 0) return;
+            // The camera stays inside cell (0,0); gradient walls are already
+            // discarded when back-facing. Retain their original draw ordering.
+            if (direction == Direction.NORTH && z <= 0 || direction == Direction.SOUTH && z >= 0
+                    || direction == Direction.WEST && x <= 0 || direction == Direction.EAST && x >= 0) return;
+        }
         int dirAndFlags = direction.get3DDataValue() | flags;
         dirAndFlags |= (x & 1) << 7;
         dirAndFlags |= (z & 1) << 6;
-        faceBuffer.put((byte)(x >> 1)).put((byte)(z >> 1)).put((byte)dirAndFlags);
+        faceBuffer.put((byte)(x >> 1)).put((byte)(z >> 1)).put((byte)dirAndFlags).put((byte)(flags >> 8));
     }
 
-    private void buildExtrudedCell(final ByteBuffer faceBuffer, final int x, final int z, final long cellData) {
-        this.encodeFace(faceBuffer, x, z, Direction.UP, 0);
-        this.encodeFace(faceBuffer, x, z, Direction.DOWN, 0);
+    private void buildExtrudedCell(final ByteBuffer faceBuffer, final int x, final int z, final long cellData, final int corners) {
+        int edge = (((int)(cellData & 15L) | corners) << 8) | ((cellData & 15L) != 0 ? 8 : 0);
+        this.encodeFace(faceBuffer, x, z, Direction.UP, edge);
+        this.encodeFace(faceBuffer, x, z, Direction.DOWN, edge);
 
         if (isNorthEmpty(cellData)) {
-            this.encodeFace(faceBuffer, x, z, Direction.NORTH, 0);
+            this.encodeFace(faceBuffer, x, z, Direction.NORTH, edge);
         }
 
         if (isSouthEmpty(cellData)) {
-            this.encodeFace(faceBuffer, x, z, Direction.SOUTH, 0);
+            this.encodeFace(faceBuffer, x, z, Direction.SOUTH, edge);
         }
 
         if (isWestEmpty(cellData)) {
-            this.encodeFace(faceBuffer, x, z, Direction.WEST, 0);
+            this.encodeFace(faceBuffer, x, z, Direction.WEST, edge);
         }
 
         if (isEastEmpty(cellData)) {
-            this.encodeFace(faceBuffer, x, z, Direction.EAST, 0);
+            this.encodeFace(faceBuffer, x, z, Direction.EAST, edge);
         }
 
 

@@ -13,18 +13,38 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 /** Rigid gameplay displacement: broad sway only, settling to a steady severe-wind pose. */
 public final class WindShapes {
     public static final ThreadLocal<ClipContext> PICK=new ThreadLocal<>();
-    private static final ThreadLocal<Integer> RAW=ThreadLocal.withInitial(() -> 0);
+    // Keep the tiny counter in place: remove/set used to allocate a ThreadLocal
+    // entry again for almost every block-shape query, including ordinary terrain.
+    private static final ThreadLocal<int[]> RAW=ThreadLocal.withInitial(() -> new int[1]);
     private static final java.util.Map<Level,Cache> CACHE=new java.util.WeakHashMap<>();
     private static final class Cache {
         long tick=Long.MIN_VALUE;
         WeatherState weather=WeatherState.CLEAR;
         final java.util.Map<BlockPos,Entry> values=new java.util.HashMap<>();
     }
-    private record Entry(BlockState state,Vec3 offset) {}
+    private static final class Entry {
+        final BlockState state;
+        final Vec3 offset;
+        // A small identity cache retains context-specific collision/outline variants.
+        // Shapes are immutable; entries already expire with the tick, weather or state.
+        java.util.IdentityHashMap<VoxelShape,VoxelShape> moved;
+        Entry(BlockState state,Vec3 offset) {this.state=state;this.offset=offset;}
+        VoxelShape move(VoxelShape shape) {
+            if(offset.equals(Vec3.ZERO))return shape;
+            if(moved==null)moved=new java.util.IdentityHashMap<>(4);
+            var result=moved.get(shape);
+            if(result==null) {
+                result=shape.move(offset.x,0,offset.z);
+                if(moved.size()>=4)moved.clear();
+                moved.put(shape,result);
+            }
+            return result;
+        }
+    }
     private WindShapes() {}
     public static <T> T raw(Supplier<T> work) {
-        int previous=RAW.get(); RAW.set(previous+1);
-        try { return work.get(); } finally { if(previous==0)RAW.remove(); else RAW.set(previous); }
+        var depth=RAW.get();depth[0]++;
+        try {return work.get();} finally {depth[0]--;}
     }
     public static boolean eligible(BlockState state) {
         return state.is(BlockTags.LEAVES) || state.getBlock() instanceof VineBlock || state.is(Blocks.SNOW);
@@ -35,26 +55,31 @@ public final class WindShapes {
         return weather!=null && weather.wind()>0;
     }
     public static VoxelShape move(BlockGetter view,BlockPos pos,BlockState state,VoxelShape shape) {
-        if(!(view instanceof Level) || RAW.get()!=0 || naturality.snow.ShapeRecursionGuard.active() || shape.isEmpty() || !eligible(state))return shape;
-        Vec3 offset=offset(view,pos,state);
-        return offset.equals(Vec3.ZERO)?shape:shape.move(offset.x,0,offset.z);
+        if(!(view instanceof Level level) || shape.isEmpty() || !eligible(state) || RAW.get()[0]!=0 || naturality.snow.ShapeRecursionGuard.active())return shape;
+        var weather=WeatherSystem.state(level);
+        if(weather==null || weather.wind()==0)return shape;
+        synchronized(CACHE) {return entry(level,pos,state,weather).move(shape);}
     }
     public static Vec3 offset(BlockGetter view,BlockPos pos,BlockState state) {
         if(!(view instanceof Level level) || !eligible(state))return Vec3.ZERO;
         var weather=WeatherSystem.state(level);
         if(weather==null || weather.wind()==0)return Vec3.ZERO;
         synchronized(CACHE) {
-            var cache=CACHE.computeIfAbsent(level,ignored -> new Cache());
-            if(cache.tick!=level.getGameTime() || !cache.weather.equals(weather)) {
-                cache.values.clear();cache.tick=level.getGameTime();cache.weather=weather;
-            }
-            var previous=cache.values.get(pos);
-            if(previous!=null && previous.state()==state)return previous.offset();
-            var result=raw(() -> compute(level,pos,state,weather));
-            if(cache.values.size()>=4096)cache.values.clear();
-            cache.values.put(pos.immutable(),new Entry(state,result));
-            return result;
+            return entry(level,pos,state,weather).offset;
         }
+    }
+    /** Called under CACHE's lock, shared by offsets and translated shape variants. */
+    private static Entry entry(Level level,BlockPos pos,BlockState state,WeatherState weather) {
+        var cache=CACHE.computeIfAbsent(level,ignored -> new Cache());
+        if(cache.tick!=level.getGameTime() || !cache.weather.equals(weather)) {
+            cache.values.clear();cache.tick=level.getGameTime();cache.weather=weather;
+        }
+        var previous=cache.values.get(pos);
+        if(previous!=null && previous.state==state)return previous;
+        var result=new Entry(state,raw(() -> compute(level,pos,state,weather)));
+        if(cache.values.size()>=4096)cache.values.clear();
+        cache.values.put(pos.immutable(),result);
+        return result;
     }
     private static Vec3 compute(Level level,BlockPos pos,BlockState state,WeatherState weather) {
         if(state.is(Blocks.SNOW)) {

@@ -1,7 +1,6 @@
 package naturality.client.weather;
 
 import java.util.ArrayList;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.level.Level;
@@ -18,7 +17,7 @@ public final class RiseWeather {
     private RiseWeather() {}
     public static void initialize() {
         RiseRenderLayer.initialize();
-        ClientTickEvents.END_CLIENT_TICK.register(RiseWeather::tick);
+        naturality.client.sleep.SleepVisuals.register(RiseWeather::tick);
     }
     private static void tick(Minecraft client) {
         if(client.level!=lastLevel){live.clear();budget=0;lastLevel=client.level;}

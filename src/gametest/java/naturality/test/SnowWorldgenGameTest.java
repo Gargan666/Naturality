@@ -30,6 +30,13 @@ public final class SnowWorldgenGameTest implements FabricClientGameTest {
             server.runCommand("setblock 5 101 0 short_grass");
             server.runCommand("setblock 5 105 0 stone");
             server.runCommand("setblock 40 101 0 short_grass");
+            for(int x:new int[]{8,9,10,11,12,40}) {
+                for(int y:new int[]{104,107,110})server.runCommand("setblock "+x+" "+y+" 8 spruce_leaves[persistent=true]");
+            }
+            server.runCommand("setblock 9 101 8 fern");
+            server.runCommand("setblock 10 106 8 stone");
+            server.runCommand("setblock 11 112 8 stone");
+            server.runCommand("setblock 12 101 8 water");
             server.runOnServer(instance -> {
                 var level=instance.overworld();
                 new SnowAndFreezeFeature().place(level,level.getChunkSource().getGenerator(),RandomSource.create(1),new BlockPos(0,100,0));
@@ -50,10 +57,20 @@ public final class SnowWorldgenGameTest implements FabricClientGameTest {
                 check(level.getBlockState(new BlockPos(4,102,0)).is(Blocks.SNOW),"Normal canopy snow still generates");
                 check(level.getBlockState(new BlockPos(5,102,0)).isAir(),"Foliage under roofs receives no worldgen snow");
                 check(level.getBlockState(new BlockPos(40,101,0)).is(Blocks.SHORT_GRASS) && level.getBlockState(new BlockPos(40,102,0)).isAir(),"Warm biome foliage remains snow-free");
+                for(int y:new int[]{101,105,108,111})check(level.getBlockState(new BlockPos(8,y,8)).is(Blocks.SNOW),"Snow covers ground and every separated leaf tier: "+y);
+                check(level.getBlockState(new BlockPos(8,100,8)).getValue(SnowyBlock.SNOWY),"Canopy ground marked snowy");
+                check(level.getBlockState(new BlockPos(9,101,8)).is(Blocks.FERN) && level.getBlockState(new BlockPos(9,102,8)).is(Blocks.SNOW),"Sheltered vegetation preserved with fitted snow");
+                check(level.getBlockState(new BlockPos(10,105,8)).isAir() && level.getBlockState(new BlockPos(10,101,8)).isAir(),"Solid roof below canopy blocks deeper snow");
+                check(level.getBlockState(new BlockPos(11,108,8)).isAir(),"Solid roof above tree blocks canopy pass");
+                check(level.getBlockState(new BlockPos(12,101,8)).is(Blocks.WATER),"Canopy water preserved");
+                check(level.getBlockState(new BlockPos(40,105,8)).isAir() && level.getBlockState(new BlockPos(40,101,8)).isAir(),"Warm canopy and ground snow-free");
+                level.setBlock(new BlockPos(8,105,8),Blocks.AIR.defaultBlockState(),2);
+                level.setBlock(new BlockPos(8,101,8),Blocks.AIR.defaultBlockState(),2);
                 NaturalityServerConfig.get().snowWrapping=false;
                 for(int x:new int[]{0,1,2,3})level.setBlock(new BlockPos(x,x==1?103:102,0),Blocks.AIR.defaultBlockState(),2);
                 new SnowAndFreezeFeature().place(level,level.getChunkSource().getGenerator(),RandomSource.create(1),new BlockPos(0,100,0));
                 check(level.getBlockState(new BlockPos(0,102,0)).isAir(),"Foliage snow requires wrapping enabled");
+                check(level.getBlockState(new BlockPos(8,105,8)).isAir() && level.getBlockState(new BlockPos(8,101,8)).isAir(),"Disabled wrapping leaves canopy interiors unchanged");
             });
         } finally { NaturalityServerConfig.get().snowWrapping=wrapping; }
     }

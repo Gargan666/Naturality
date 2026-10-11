@@ -16,6 +16,8 @@ layout(std140) uniform CloudInfo {
     vec3 CloudOffset;
     vec3 CellSize;
     vec4 FadeSettings;
+    vec4 MoonLight;
+    vec4 CloudTextureSize;
 };
 
 uniform isamplerBuffer CloudFaces;
@@ -25,6 +27,10 @@ layout(location = 1) out vec4 vertexColor;
 layout(location = 2) out vec2 fadePosition;
 layout(location = 3) flat out float fadeRows;
 layout(location = 4) flat out vec2 capWeights;
+layout(location = 5) out vec3 cloudLocal;
+layout(location = 6) flat out vec3 cloudBase;
+layout(location = 7) flat out int edgeMask;
+layout(location = 8) flat out int cloudDirection;
 
 /*
 // vertex function below should generate vec3s matching the indices in this array, but using less constants
@@ -91,7 +97,7 @@ const vec4[] faceColors = vec4[](
 
 void main() {
     int quadVertex = gl_VertexIndex % 4;
-    int index = (gl_VertexIndex / 4) * 3;
+    int index = (gl_VertexIndex / 4) * 4;
 
     int cellX = texelFetch(CloudFaces, index).r;
     int cellZ = texelFetch(CloudFaces, index + 1).r;
@@ -111,6 +117,10 @@ void main() {
     capWeights = vec2(1.0 - smoothstep(-0.25, 0.25, FadeSettings.y),
                      smoothstep(0.75, 1.25, FadeSettings.y));
     vertexDistance = fog_spherical_distance(pos);
+    cloudLocal = faceVertex * CellSize;
+    cloudBase = vec3(cellX, 0, cellZ) * CellSize + CloudOffset;
+    edgeMask = texelFetch(CloudFaces, index + 3).r & 255;
+    cloudDirection = direction;
     // Gradient clouds have no directional face shading; the live sky/weather tint remains.
     vertexColor = (FadeSettings.x >= 2.0 ? vec4(1.0) : (useTopColor ? faceColors[1] : faceColors[direction])) * CloudColor;
     if (FadeSettings.x >= 2.0 && direction < 2) {

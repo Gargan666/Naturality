@@ -1,9 +1,6 @@
 package naturality.client.portal;
 
 import java.lang.reflect.*;
-import java.util.Collections;
-import java.util.Map;
-import java.util.WeakHashMap;
 import net.minecraft.client.renderer.*;
 
 /** Carry a plane from entity extraction into deferred feature submissions. */
@@ -13,10 +10,13 @@ public final class PortalClippedCollector {
             return new PortalClippedVertexConsumer(buffer,xAxis,coordinate,side);
         }
     }
-    private static final Map<Object,Plane> PLANES=Collections.synchronizedMap(new WeakHashMap<>());
     private static Plane current;
-    public static void remember(Object submit) {if(current!=null) PLANES.put(submit,current);}
-    public static Plane plane(Object submit) {return PLANES.get(submit);}
+    public static void remember(Object submit) {
+        if (submit instanceof PortalClippedSubmit clipped) clipped.naturality$clipPlane(current);
+    }
+    public static Plane plane(Object submit) {
+        return submit instanceof PortalClippedSubmit clipped ? clipped.naturality$clipPlane() : null;
+    }
     public static SubmitNodeCollector wrap(SubmitNodeCollector target,boolean xAxis,double plane,int side) {
         return (SubmitNodeCollector)proxy(target,SubmitNodeCollector.class,new Plane(xAxis,plane,side));
     }
