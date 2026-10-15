@@ -6,15 +6,17 @@ import java.util.List;
 public enum SkyEventType {
     METEOR_SHOWER("meteor_shower", "Meteor Shower"),
     PROXIMITY("proximity", "Proximity"),
+    BLOOD_MOON("blood_moon", "Blood Moon"),
     AURORA_BOREALIS("aurora_borealis", "Aurora Borealis"),
     RAINBOW("rainbow", "Rainbow"),
     END_FLASHES("end_flashes", "End Flashes"),
     END_AURORA("end_aurora", "End Aurora");
-    public final String id, label;
-    public int maxStrength() { return this == PROXIMITY ? 7 : 20; }
+    public final String id;
+    public final String label;
+    public int maxStrength() { return this == BLOOD_MOON ? 1 : this == PROXIMITY ? 7 : 20; }
     SkyEventType(String id, String label) { this.id = id; this.label = label; }
     public static List<SkyEventType> pool(String dimension) {
-        if (dimension.equals("minecraft:overworld")) return List.of(METEOR_SHOWER, AURORA_BOREALIS, RAINBOW, PROXIMITY);
+        if (dimension.equals("minecraft:overworld")) return List.of(METEOR_SHOWER, AURORA_BOREALIS, RAINBOW, PROXIMITY, BLOOD_MOON);
         if (dimension.equals("minecraft:the_end")) return List.of(END_FLASHES, END_AURORA);
         return List.of();
     }

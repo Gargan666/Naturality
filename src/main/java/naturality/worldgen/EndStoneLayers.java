@@ -44,7 +44,7 @@ public final class EndStoneLayers {
                 if (state.is(Blocks.END_STONE) || state.is(NaturalityBlocks.SMOOTH_ENDSTONE)) {
                     depth++;
                     if(depth==1 && surface!=null)rim=surface.rimAffinity(y);
-                    boolean deposit=allLirestone || (entire && surface.inSmallIsland(y))
+                    boolean deposit=allLirestone || (entire && surface != null && surface.inSmallIsland(y))
                         || patches.contains(pos.getX(),y,pos.getZ(),depth,abundance,rim);
                     // The noise terrain starts as End Stone; its deeper layers become smooth in this pass.
                     boolean smooth=depth>2 || state.is(NaturalityBlocks.SMOOTH_ENDSTONE);
@@ -54,7 +54,7 @@ public final class EndStoneLayers {
                     // Patchy caps on exposed ledges, including shelves beneath island overhangs.
                     if(depth==1 && !deposit && surfaceBiomes!=null && surfaceBiomes.getBiome(pos).is(EndWilds.BIOME)
                         && chunk.getBlockState(pos.above()).isAir()
-                        && heathPatches.contains(pos.getX(),pos.getZ()))material=NaturalityBlocks.LYREN_HEATH;
+                        && heathPatches != null && heathPatches.contains(pos.getX(),pos.getZ()))material=NaturalityBlocks.LYREN_HEATH;
                     if (!state.is(material)) chunk.setBlockState(pos, material.defaultBlockState());
                 } else if (state.is(NaturalityBlocks.LIRESTONE) || state.is(NaturalityBlocks.SMOOTH_LIRESTONE)
                     || state.is(NaturalityBlocks.LYREN_HEATH)) depth++;

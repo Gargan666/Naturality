@@ -15,6 +15,7 @@ public final class FeatureResources {
         if (!namespace.equals("minecraft")) return true;
         // These descriptions provide sprites required by their independently enabled providers.
         if (path.equals("particles/poof.json")) return Feature.DEATH_SMOKE.enabled();
+        if (path.equals("particles/dragon_breath.json")) return Feature.VISUAL_OVERHAUL.enabled();
         if (path.equals("particles/explosion.json") || path.equals("particles/explosion_emitter.json"))
             return Feature.EXPLOSION_PARTICLES.enabled();
         if (path.contains("chorus_flower") || path.contains("chorus_plant")) return Feature.CHORUS_FLOWERS.enabled();

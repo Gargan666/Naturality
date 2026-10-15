@@ -96,7 +96,34 @@ public final class NaturalityBlocks {
             .setId(ResourceKey.create(Registries.ITEM, Naturality.id("lyren_heath")))
             .useBlockDescriptionPrefix()));
 
+    public static final Block MOSS = Blocks.register(
+        ResourceKey.create(Registries.BLOCK, Naturality.id("moss")),
+        net.minecraft.world.level.block.GlowLichenBlock::new,
+        BlockBehaviour.Properties.ofFullCopy(Blocks.GLOW_LICHEN).lightLevel(_ -> 0)
+            .sound(Blocks.MOSS_BLOCK.defaultBlockState().getSoundType()));
+    public static final BlockItem MOSS_ITEM = Registry.register(BuiltInRegistries.ITEM,
+        ResourceKey.create(Registries.ITEM, Naturality.id("moss")),
+        new BlockItem(MOSS, new Item.Properties()
+            .setId(ResourceKey.create(Registries.ITEM, Naturality.id("moss")))
+            .useBlockDescriptionPrefix()));
+
+    public static final Block CLOVERS = Blocks.register(
+        ResourceKey.create(Registries.BLOCK, Naturality.id("clovers")),
+        properties -> new net.minecraft.world.level.block.FlowerBedBlock(properties, 3),
+        BlockBehaviour.Properties.ofFullCopy(Blocks.WILDFLOWERS));
+    public static final BlockItem CLOVERS_ITEM = Registry.register(BuiltInRegistries.ITEM,
+        ResourceKey.create(Registries.ITEM, Naturality.id("clovers")),
+        new BlockItem(CLOVERS, new Item.Properties()
+            .setId(ResourceKey.create(Registries.ITEM, Naturality.id("clovers")))
+            .useBlockDescriptionPrefix()));
+
     public static void initialize() {
+        CLOVERS_ITEM.registerBlocks(Item.BY_BLOCK, CLOVERS_ITEM);
+        CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.NATURAL_BLOCKS)
+            .register(output -> output.insertAfter(Blocks.WILDFLOWERS, CLOVERS));
+        MOSS_ITEM.registerBlocks(Item.BY_BLOCK, MOSS_ITEM);
+        CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.NATURAL_BLOCKS)
+            .register(output -> output.insertAfter(Blocks.GLOW_LICHEN, MOSS));
         LYREN_HEATH_ITEM.registerBlocks(Item.BY_BLOCK, LYREN_HEATH_ITEM);
         CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.NATURAL_BLOCKS)
             .register(output -> output.insertAfter(Blocks.END_STONE, LYREN_HEATH));

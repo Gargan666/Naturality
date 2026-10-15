@@ -15,6 +15,15 @@ import net.minecraft.world.level.gamerules.GameRules;
 
 public final class WeatherGameTest implements FabricClientGameTest {
     private static void check(boolean condition, String message) { if (!condition) throw new AssertionError(message); }
+    /** Test conversion rules with an admitted attempt; snowfall backpressure has its own suite. */
+    private static void precipitate(net.minecraft.server.level.ServerLevel level, BlockPos pos) {
+        try {
+            var field = naturality.snow.SnowfallBudget.class.getDeclaredField("LEVELS");
+            field.setAccessible(true);
+            ((java.util.Map<?, ?>)field.get(null)).remove(level);
+        } catch (ReflectiveOperationException error) { throw new AssertionError(error); }
+        level.tickPrecipitation(pos);
+    }
     @Override public void runTest(ClientGameTestContext context) {
         var config = NaturalityServerConfig.get();
         boolean[] oldTransparency = new boolean[1];
@@ -59,26 +68,26 @@ public final class WeatherGameTest implements FabricClientGameTest {
                     check(WeatherSystem.precipitation(level, registry.getOrThrow(Biomes.DESERT).value(), pos) == Biome.Precipitation.NONE, "Cold desert stays dry");
                     check(WeatherSystem.precipitation(level, registry.getOrThrow(Biomes.JUNGLE).value(), pos) == Biome.Precipitation.RAIN, "Tropics stay rainy");
                     level.setBlockAndUpdate(pos, Blocks.AIR.defaultBlockState());
-                    level.tickPrecipitation(pos);
+                    precipitate(level,pos);
                     check(level.getBlockState(pos).is(Blocks.SNOW), "Temperature produces actual snow accumulation");
                     var firePos=pos;
                     level.setBlockAndUpdate(firePos,Blocks.FIRE.defaultBlockState());
-                    level.tickPrecipitation(firePos);
+                    precipitate(level,firePos);
                     check(level.getBlockState(firePos).is(Blocks.SNOW)
                             && level.getBlockState(firePos.above()).isAir(),
                         "Weather replaces fire with snow at the same position");
                     var sign = new BlockPos(7,101,7);
                     level.setBlockAndUpdate(sign,Blocks.OAK_SIGN.defaultBlockState());
                     level.getGameRules().set(GameRules.MAX_SNOW_ACCUMULATION_HEIGHT,3,s);
-                    level.tickPrecipitation(sign);
+                    precipitate(level,sign);
                     check(level.getBlockState(sign.above()).is(Blocks.SNOW),"Snowfall coats signs without replacing them");
-                    level.tickPrecipitation(sign);
+                    precipitate(level,sign);
                     check(level.getBlockState(sign.above()).getValue(net.minecraft.world.level.block.SnowLayerBlock.LAYERS)==2,
                         "Snowfall continues accumulating on non-motion-blocking supports");
-                    for(int i=0;i<12;i++) level.tickPrecipitation(sign);
+                    for(int i=0;i<12;i++) precipitate(level,sign);
                     check(level.getBlockState(sign.above()).getValue(net.minecraft.world.level.block.SnowLayerBlock.LAYERS)==2,
                         "Rain 50 caps irregular-support accumulation at two layers");
-                    for(int i=0;i<12;i++) level.tickPrecipitation(pos);
+                    for(int i=0;i<12;i++) precipitate(level,pos);
                     check(level.getBlockState(pos).getValue(net.minecraft.world.level.block.SnowLayerBlock.LAYERS)==2,
                         "Rain 50 caps ordinary accumulation at two layers");
                     check(WeatherSnow.accumulationLimit(level,0)==0,"Explicit snow accumulation disable is respected");
@@ -154,7 +163,7 @@ public final class WeatherGameTest implements FabricClientGameTest {
                     server.runOnServer(s->{
                         var level=s.overworld();
                         for(var snowPos : new BlockPos[]{new BlockPos(0,101,0),new BlockPos(7,102,7)}) {
-                            for(int i=0;i<20;i++)level.tickPrecipitation(snowPos);
+                            for(int i=0;i<20;i++)precipitate(level,snowPos);
                             check(level.getBlockState(snowPos).is(Blocks.SNOW)
                                 && level.getBlockState(snowPos).getValue(net.minecraft.world.level.block.SnowLayerBlock.LAYERS)==(rain==60?4:7),
                                 "Rain threshold caps natural accumulation without making full blocks");

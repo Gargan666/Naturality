@@ -23,25 +23,27 @@ public final class SleepAccelerationGameTest implements FabricClientGameTest {
         check(wrapped > initial && wrapped < initial + .05F, "Sky crosses dawn continuously through the short angular arc");
         float frozen = angle.sample(.2F, 0, true);
         check(frozen == wrapped, "Paused sky easing does not advance");
-        // Repeated native prediction -> authoritative correction sawtooth, at 200x.
-        var jitterSky = new naturality.client.sleep.SleepSky.Angle();
-        jitterSky.sample(6.0F, 0, true);
-        var jitterCloud = new naturality.client.sleep.SleepCloudClock();
-        jitterCloud.sample(1000, 0, true);
-        float previousSky = 6.0F;
-        double previousCloud = 1000;
-        for (int frame = 0; frame < 600; frame++) {
-            double actualTime = 1000 + frame * 8.0;
-            double correction = frame % 6 < 3 ? 240 : 0;
-            double cloudTime = jitterCloud.sample(actualTime + correction, 1.0 / 60, true);
-            float rawSky = (float)((6.0 + (actualTime + correction - 1000) * Math.PI * 2 / 24000) % (Math.PI * 2));
-            float skyTime = jitterSky.sample(rawSky, 1.0 / 60, true);
-            check(cloudTime >= previousCloud, "Lag corrections must not reverse cloud scroll");
-            check(skyTime >= previousSky, "Lag corrections must not reverse sky rotation, including dawn wrap");
-            check(cloudTime <= actualTime + 240, "Cloud rendering must not invent progress beyond observed time");
-            previousCloud = cloudTime; previousSky = skyTime;
-        }
+        var snapshots = new naturality.client.sleep.SleepCloudClock();
+        snapshots.sample(1000, 1, 0, true);
+        check(snapshots.sample(1200, 2, .06, true) == 1100, "Snapshot interpolation has a bounded eased midpoint");
+        check(snapshots.sample(1200, 2, .06, true) == 1200, "Interpolation reaches the server snapshot");
+        check(snapshots.sample(9999, 2, 1, true) == 1200, "Without a new snapshot rendering holds rather than predicting time");
+        check(snapshots.sample(1400, 3, 0, true) == 1200, "A new snapshot preserves continuity");
         check(angle.sample(.3F, 0, false) == .3F, "Sky motion returns to normal immediately on waking");
+        var continuous = new naturality.client.sleep.SleepCloudClock();
+        continuous.sample(1000, 1, 0, true);
+        double a = continuous.sample(1200, 2, .08, true);
+        double b = continuous.sample(1200, 2, .000001, true);
+        double next = continuous.sample(1400, 3, .000001, true);
+        check(Math.abs((next - b) - (b - a)) < .000001,
+            "A new time packet carries the displayed velocity instead of stopping the sky");
+        double held = continuous.sample(1400, 3, 1, true);
+        check(held == 1400 && continuous.sample(1400, 3, 1, true) == held,
+            "Missing packets hold the endpoint without extrapolating");
+        check(Math.abs(SleepAcceleration.elapsedTicks(0, 30, 200, 30, 20) - 60300) < .00001,
+            "Default 30-second ramp integrates exactly to 60,300 clock ticks");
+        check(Math.abs(SleepAcceleration.elapsedTicks(29, 2, 200, 30, 20) - (8000 - 199.0 / 3)) < .00001,
+            "An interval crossing the ramp cap integrates both speeds");
         var cloud = new naturality.client.sleep.SleepCloudClock();
         check(cloud.sample(1000, .016, false) == 1000, "Ordinary cloud movement is unchanged");
         cloud.sample(1000, 0, true);
@@ -83,9 +85,44 @@ public final class SleepAccelerationGameTest implements FabricClientGameTest {
             });
             context.waitTicks(120);
             context.runOnClient(client -> {
-                check(client.level.tickRateManager().tickrate() > 20, "Native rate synchronization reaches the client world and cloud clock");
+                check(naturality.client.sleep.SleepSnapshots.latest(client.level) != null, "Server time packets capture celestial and cloud snapshots");
+                check(client.level.tickRateManager().tickrate() == 20, "Sleep preserves normal client simulation rate");
+                check(naturality.client.sleep.SleepVisuals.speed() == 2, "Visual speed is synchronized independently of tick rate");
                 check(naturality.config.GameplaySettings.displayedSettings().sleepMaxSpeed() == 2,
                     "Server sleep configuration is synchronized to clients");
+            });
+            server.runOnServer(s -> {
+                var definition = s.registryAccess().getOrThrow(net.minecraft.world.clock.WorldClocks.OVERWORLD);
+                var instance = s.clockManager().getInstance(definition);
+                var saved = instance.packState();
+                var advanceRule = net.minecraft.world.level.gamerules.GameRules.ADVANCE_TIME;
+                boolean advanceTime = s.overworld().getGameRules().get(advanceRule);
+                s.overworld().getGameRules().set(advanceRule, true, s);
+                try {
+                    long gameTime = levelTime(s);
+                    int playerTicks = s.getPlayerList().getPlayers().getFirst().tickCount;
+                    for (int tick = 0; tick < 1000; tick++) naturality.sleep.SleepServerSnapshots.tickClocks(s);
+                    check(instance.totalTicks() == saved.totalTicks() + 2000,
+                        "Two-speed clock advancement requires no extra simulation ticks");
+                    check(levelTime(s) == gameTime && s.getPlayerList().getPlayers().getFirst().tickCount == playerTicks,
+                        "Clock advancement does not replay world or entity ticks");
+                    instance.loadFrom(new net.minecraft.world.clock.ClockState(saved.totalTicks(), .25F, .5F, false));
+                    for (int tick = 0; tick < 100; tick++) naturality.sleep.SleepServerSnapshots.tickClocks(s);
+                    check(instance.totalTicks() == saved.totalTicks() + 100 && instance.partialTick() == .25F,
+                        "Clock batching preserves fractional clock rates and partial ticks");
+                    instance.loadFrom(new net.minecraft.world.clock.ClockState(saved.totalTicks(), .25F, 1, true));
+                    for (int tick = 0; tick < 100; tick++) naturality.sleep.SleepServerSnapshots.tickClocks(s);
+                    check(instance.totalTicks() == saved.totalTicks() && instance.partialTick() == .25F,
+                        "Paused clocks remain paused during batched sleep updates");
+                    instance.loadFrom(saved);
+                    naturality.sleep.SleepServerSnapshots.tickClocks(s);
+                    s.clockManager().setTotalTicks(definition, 1234);
+                    check(instance.totalTicks() == 1234, "Time commands have no delayed clock work to replay afterward");
+                } finally {
+                    instance.loadFrom(saved);
+                    s.overworld().getGameRules().set(advanceRule, advanceTime, s);
+                    s.getPlayerList().broadcastAll(s.clockManager().createFullSyncPacket());
+                }
             });
             var particle = new ProbeParticle[1];
             var births = new int[1];
@@ -112,11 +149,11 @@ public final class SleepAccelerationGameTest implements FabricClientGameTest {
                 check(visualClock[1] - visualClock[0] >= 35, "Procedural fire animation follows accelerated visual ticks");
                 check(naturality.client.sleep.SleepAudio.amount() > .5, "Sleeping listener receives eased muffling");
                 verifySleepFilter();
-                float rate = client.level.tickRateManager().tickrate();
+                double speed = naturality.client.sleep.SleepVisuals.speed();
                 int before = particle[0].ticks, playerTicks = client.player.tickCount, beforeBirths = births[0];
                 double beforeX = particle[0].distance();
                 try {
-                    client.level.tickRateManager().setTickRate(4000);
+                    naturality.client.sleep.SleepVisuals.accept(new naturality.sleep.SleepStatePayload(true, 200));
                     long beforeTime = client.level.getGameTime();
                     client.level.tick(() -> true);
                     check(client.level.getGameTime() == beforeTime + 1,
@@ -126,14 +163,15 @@ public final class SleepAccelerationGameTest implements FabricClientGameTest {
                     check(particle[0].ticks - before == 1, "The 200x default still executes only one particle tick");
                     check(Math.abs(particle[0].distance() - beforeX - 20) < .00001, "One particle movement uses the 200x velocity multiplier");
                     check(client.player.tickCount == playerTicks, "Visual acceleration must preserve the local input/player clock");
-                } finally { client.level.tickRateManager().setTickRate(rate); }
+                } finally { naturality.client.sleep.SleepVisuals.accept(new naturality.sleep.SleepStatePayload(true, speed)); }
             });
             server.runOnServer(s -> {
                 var player = s.getPlayerList().getPlayers().getFirst();
                 check(player.isSleeping(), "Native deep sleep must not skip time or wake at 100 ticks");
-                check(s.tickRateManager().tickrate() > 20 && s.tickRateManager().tickrate() <= 40.1, "Simulation ramps within configured cap");
+                check(s.tickRateManager().tickrate() == 20 && SleepAcceleration.speed(s) == 2, "Time ramps to its cap while the server stays at 20 TPS");
                 // Drive the real controller deterministically to test the strict rest threshold.
                 player.stopSleepInBed(true, true);
+                config.sleepMaxSpeed = 1;
                 player.startSleeping(new BlockPos(0, 100, -1));
                 for (int i = 0; i < 6000; i++) SleepAcceleration.tick(s);
                 check(player.getStats().getValue(Stats.CUSTOM.get(Stats.TIME_SINCE_REST)) >= 12345, "Exactly half a night is insufficient");
@@ -141,12 +179,14 @@ public final class SleepAccelerationGameTest implements FabricClientGameTest {
                 check(player.getStats().getValue(Stats.CUSTOM.get(Stats.TIME_SINCE_REST)) == 0, "More than half a night resets phantom debt");
                 player.stopSleepInBed(true, true);
                 check(Math.abs(s.tickRateManager().tickrate() - 20) < .01, "Wake restores original rate immediately, before another server tick");
+                config.sleepMaxSpeed = 2;
                 s.tickRateManager().setTickRate(30);
                 player.startSleeping(new BlockPos(0, 100, -1));
                 for (int i = 0; i < 60; i++) SleepAcceleration.tick(s);
-                check(s.tickRateManager().tickrate() > 30, "Custom baseline accelerates");
+                check(s.tickRateManager().tickrate() == 30 && SleepAcceleration.speed(s) == 2, "Time accelerates without changing an administrator rate");
+                s.tickRateManager().setTickRate(25);
                 player.stopSleepInBed(true, true);
-                check(Math.abs(s.tickRateManager().tickrate() - 30) < .01, "Custom baseline is restored immediately in the wake operation");
+                check(s.tickRateManager().tickrate() == 25 && !SleepAcceleration.active(s), "Wake preserves administrator changes and immediately disables clock acceleration");
                 s.tickRateManager().setTickRate(20);
                 var pos = new BlockPos(2, 100, 2);
                 levelBed(s.overworld(), pos);
@@ -166,7 +206,16 @@ public final class SleepAccelerationGameTest implements FabricClientGameTest {
                 var player = s.getPlayerList().getPlayers().getFirst();
                 check(player.isSleeping(), "Crossing morning must not wake the sleeper");
                 player.stopSleepInBed(true, true);
-                check(Math.abs(s.tickRateManager().tickrate() - 20) < .01, "Manual wake immediately restores normal time");
+                check(!SleepAcceleration.active(s) && SleepAcceleration.clockTicks(s) == 1,
+                    "Wake stops acceleration inside the wake operation");
+                var definition = s.registryAccess().getOrThrow(net.minecraft.world.clock.WorldClocks.OVERWORLD);
+                var clock = s.clockManager().getInstance(definition);
+                boolean advance = s.overworld().getGameRules().get(net.minecraft.world.level.gamerules.GameRules.ADVANCE_TIME);
+                s.overworld().getGameRules().set(net.minecraft.world.level.gamerules.GameRules.ADVANCE_TIME, true, s);
+                long before = clock.totalTicks();
+                naturality.sleep.SleepServerSnapshots.tickClocks(s);
+                check(clock.totalTicks() == before + 1, "The very next clock update after waking advances by one tick");
+                s.overworld().getGameRules().set(net.minecraft.world.level.gamerules.GameRules.ADVANCE_TIME, advance, s);
             });
             float[] beforeFade = new float[1];
             context.runOnClient(client -> beforeFade[0] = naturality.client.sleep.SleepAudio.amount());
@@ -175,12 +224,50 @@ public final class SleepAccelerationGameTest implements FabricClientGameTest {
                 check(!naturality.client.sleep.SleepVisuals.accelerating(), "Wake stops particle velocity acceleration on the client");
                 check(naturality.client.sleep.SleepVisuals.speed() == 1, "Wake restores normal particle velocity");
                 check(naturality.client.sleep.SleepAudio.amount() < beforeFade[0], "Wake restores audio gradually");
+                double offset = naturality.client.sleep.SleepVisuals.boostSeconds();
+                naturality.client.sleep.SleepVisuals.accept(new naturality.sleep.SleepStatePayload(false, 1));
+                check(naturality.client.sleep.SleepVisuals.boostSeconds() == offset,
+                    "Wake keeps the cloud offset fixed instead of jumping or continuing acceleration");
             });
+            // Run the actual server at the default 200x setting, then the 1000x cap.
+            var observations = new long[3];
+            for (int cap : new int[]{200, 1000}) {
+                server.runOnServer(s -> {
+                    config.sleepMaxSpeed = cap; config.sleepRampSeconds = 1;
+                    s.overworld().getGameRules().set(net.minecraft.world.level.gamerules.GameRules.ADVANCE_TIME, true, s);
+                    s.getPlayerList().getPlayers().getFirst().startSleeping(new BlockPos(0, 100, -1));
+                });
+                context.waitTicks(30);
+                server.runOnServer(s -> {
+                    check(s.tickRateManager().tickrate() == 20 && SleepAcceleration.speed(s) == cap,
+                        "Even the highest sleep speed leaves the server at 20 TPS");
+                    observations[0] = levelTime(s);
+                    observations[1] = s.clockManager().getInstance(s.registryAccess().getOrThrow(net.minecraft.world.clock.WorldClocks.OVERWORLD)).totalTicks();
+                    observations[2] = s.getPlayerList().getPlayers().getFirst().tickCount;
+                });
+                context.waitTicks(20);
+                server.runOnServer(s -> {
+                    long worldTicks = levelTime(s) - observations[0];
+                    long clockTicks = s.clockManager().getInstance(s.registryAccess().getOrThrow(net.minecraft.world.clock.WorldClocks.OVERWORLD)).totalTicks() - observations[1];
+                    long playerTicks = s.getPlayerList().getPlayers().getFirst().tickCount - observations[2];
+                    check(worldTicks >= 15 && worldTicks <= 30 && playerTicks <= 30,
+                        "One second of sleep executes ordinary world and player work, independent of speed");
+                    check(clockTicks == worldTicks * cap, "High-speed time advancement matches the cap without extra ticks");
+                    System.out.println("Sleep " + cap + "x: " + worldTicks + " world ticks, " + playerTicks
+                        + " player ticks, " + clockTicks + " celestial ticks; server rate " + s.tickRateManager().tickrate());
+                    s.getPlayerList().getPlayers().getFirst().stopSleepInBed(true, true);
+                    check(!SleepAcceleration.active(s), "High-speed sleep stops synchronously on waking");
+                });
+                world.getConnection().waitForClientboundPackets();
+                context.runOnClient(client -> check(naturality.client.sleep.SleepVisuals.speed() == 1,
+                    "The wake packet immediately restores normal visual speed"));
+            }
         } finally {
             config.sleepAcceleration = enabled;
             config.sleepMaxSpeed = maximum; config.sleepRampSeconds = ramp;
         }
     }
+    private static long levelTime(net.minecraft.server.MinecraftServer server) { return server.overworld().getGameTime(); }
     private static final class ProbeParticle extends net.minecraft.client.particle.NoRenderParticle {
         int ticks;
         ProbeParticle(net.minecraft.client.multiplayer.ClientLevel level) { super(level, 0, 102, 0); lifetime = 1000; hasPhysics = false; }

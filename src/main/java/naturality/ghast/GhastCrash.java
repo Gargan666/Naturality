@@ -2,7 +2,7 @@ package naturality.ghast;
 
 import java.util.ArrayList;
 import java.util.List;
-import net.minecraft.core.particles.ParticleTypes;
+
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -62,13 +62,14 @@ public final class GhastCrash {
         return level.clip(new ClipContext(from, to, ClipContext.Block.COLLIDER, ClipContext.Fluid.ANY, entity));
     }
     public static void begin(LivingEntity entity) { begin(entity,null); }
-    public static void begin(LivingEntity entity, net.minecraft.world.damagesource.DamageSource source) {
-        if (!GhastMotion.supported(entity) || !(entity.level() instanceof ServerLevel level)) return;
+    public static void begin(LivingEntity entity, net.minecraft.world.damagesource.@org.jspecify.annotations.Nullable DamageSource source) {
+        if (!GhastMotion.supported(entity) || !(entity.level() instanceof ServerLevel)) return;
         GhastCrashBody body = (GhastCrashBody)entity;
         if (body.naturality$flight() != null || entity.isRemoved()) return;
         Flight flight = new Flight();
-        if (source!=null && source.getSourcePosition()!=null) {
-            Vec3 away=entity.position().add(0,GhastMotion.bodyCenter(entity),0).subtract(source.getSourcePosition());
+        var sourcePosition = source == null ? null : source.getSourcePosition();
+        if (sourcePosition != null) {
+            Vec3 away=entity.position().add(0,GhastMotion.bodyCenter(entity),0).subtract(sourcePosition);
             if (away.lengthSqr()>.00001) flight.impulse=away.normalize().scale(.55);
         }
         // Preserve actual travel; deltaMovement already includes vanilla killing-hit knockback.
@@ -119,6 +120,7 @@ public final class GhastCrash {
         ++flight.age;
         if (flight.impactAge>=0) {
             entity.setDeltaMovement(Vec3.ZERO); entity.syncPosition=true;
+            body.naturality$impactTicks(flight.age-flight.impactAge);
             if (flight.age-flight.impactAge>=6) finish(entity,level,flight);
             return;
         }
@@ -143,6 +145,7 @@ public final class GhastCrash {
             level.getChunkSource().sendToTrackingPlayers(entity,
                 net.minecraft.network.protocol.game.ClientboundTeleportEntityPacket.teleport(entity.getId(),
                     net.minecraft.world.entity.PositionMoveRotation.of(entity),java.util.Set.of(),false));
+            body.naturality$impactTicks(0);
         }
     }
     private static void finish(LivingEntity entity,ServerLevel level,Flight flight) {
@@ -152,8 +155,7 @@ public final class GhastCrash {
             item.setDeltaMovement(Vec3.ZERO); item.setDefaultPickUpDelay(); level.addFreshEntity(item);
         }
         ExperienceOrb.award(level, landing.add(0,.1,0), flight.experience);
-        level.sendParticles(ParticleTypes.POOF,entity.getX(),entity.getY()+GhastMotion.bodyCenter(entity),entity.getZ(),
-            20, entity.getBbWidth()*.35, entity.getBbHeight()*.35, entity.getBbWidth()*.35, .02);
+        level.broadcastEntityEvent(entity,(byte)60);
         flight.drops.clear(); flight.experience = 0;
         entity.remove(Entity.RemovalReason.KILLED);
     }
@@ -183,6 +185,7 @@ public final class GhastCrash {
         flight.landing=input.read("NaturalityCrashLanding",Vec3.CODEC).orElse(null);
         flight.impactAge=input.getIntOr("NaturalityCrashImpactAge",-1);
         flight.age = input.getIntOr("NaturalityCrashAge",0);
+        ((GhastCrashBody)entity).naturality$impactTicks(flight.impactAge<0 ? -1 : flight.age-flight.impactAge);
         flight.drops.addAll(input.read("NaturalityCrashLoot",ItemStack.CODEC.listOf()).orElse(List.of()));
         flight.experience = input.getIntOr("NaturalityCrashXP",0);
         ((GhastCrashBody)entity).naturality$flight(flight);

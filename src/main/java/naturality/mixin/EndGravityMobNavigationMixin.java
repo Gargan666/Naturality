@@ -15,12 +15,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(Mob.class)
 public abstract class EndGravityMobNavigationMixin {
-    @Shadow protected PathNavigation navigation;
-    @Unique private GroundPathNavigation naturality$uprightNavigation;
+    @SuppressWarnings("null") @Shadow protected PathNavigation navigation;
+    @Unique private @org.jspecify.annotations.Nullable GroundPathNavigation naturality$uprightNavigation;
 
     @Inject(method="serverAiStep",at=@At("HEAD"))
     private void naturality$changeWalkingSurface(CallbackInfo ci) {
         var mob=(Mob)(Object)this;
+        var upright = naturality$uprightNavigation;
         if(EndGravity.inverted(mob)) {
             if(navigation instanceof GroundPathNavigation ground && !(ground instanceof CeilingPathNavigation)) {
                 naturality$uprightNavigation=ground;
@@ -28,10 +29,10 @@ public abstract class EndGravityMobNavigationMixin {
                 navigation=new CeilingPathNavigation(mob,mob.level(),ground);
                 naturality$clearOldSteering(mob);
             }
-        } else if(naturality$uprightNavigation!=null) {
+        } else if(upright!=null) {
             if(navigation instanceof CeilingPathNavigation) {
                 navigation.stop();
-                navigation=naturality$uprightNavigation;
+                navigation=upright;
                 naturality$clearOldSteering(mob);
             }
             naturality$uprightNavigation=null;

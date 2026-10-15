@@ -43,7 +43,7 @@ public final class WeatherSystem {
     }
     public static WeatherProfile profile(Level level) {
         if (!naturality.config.Feature.WEATHER_CYCLES.enabled()) return DISABLED;
-        var server = level.getServer();
+        var server = java.util.Objects.requireNonNull(level.getServer());
         return server == null ? DISABLED
             : WeatherWorldData.get(server).profile(level.dimension().identifier().toString());
     }
@@ -111,7 +111,7 @@ public final class WeatherSystem {
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             for (var level : server.getAllLevels()) {
                 advance(level);
-                DistantLightning.tick(level);
+                if (!PreviewEnvironment.frozen(server)) DistantLightning.tick(level);
                 snapshot(level);
                 if (server.getTickCount() % 10 == 0)
                     for (var player : server.getPlayerList().getPlayers()) send(player, level);
@@ -127,7 +127,7 @@ public final class WeatherSystem {
     private static void send(net.minecraft.server.level.ServerPlayer player, ServerLevel level) {
         if (ServerPlayNetworking.canSend(player, WeatherPayload.TYPE)) {
             var current = state(level);
-            long session = SERVER_SESSIONS.computeIfAbsent(level.getServer(), _ -> UUID.randomUUID().getLeastSignificantBits());
+            long session = SERVER_SESSIONS.computeIfAbsent(java.util.Objects.requireNonNull(level.getServer()), _ -> UUID.randomUUID().getLeastSignificantBits());
             ServerPlayNetworking.send(player, new WeatherPayload(level.dimension().identifier(), session, current != null,
                 current == null ? WeatherState.CLEAR : current));
         }
@@ -137,23 +137,25 @@ public final class WeatherSystem {
         if (!p.enabled) { STATES.remove(level); CLOCKS.remove(level); RAIN_CYCLES.remove(level); WIND_CYCLES.remove(level); return; }
         long seed = level.getSeed() ^ level.dimension().identifier().hashCode();
         var old = STATES.get(level);
+        if (old != null && PreviewEnvironment.frozen(java.util.Objects.requireNonNull(level.getServer()))) return;
+        int rate = PreviewEnvironment.rate(java.util.Objects.requireNonNull(level.getServer()));
         boolean cycle = level.getGameRules().get(GameRules.ADVANCE_WEATHER) || old == null;
         long time = CLOCKS.getOrDefault(level, level.getGameTime());
-        if (cycle) time++;
+        if (cycle) time += rate;
         CLOCKS.put(level, time);
         var rainCycle = RAIN_CYCLES.computeIfAbsent(level, _ -> new WeatherChannel(seed ^ 0x5241494EL));
         var windCycle = WIND_CYCLES.computeIfAbsent(level, _ -> new WeatherChannel(seed ^ 0x57494E44L));
         float rain = rainCycle.tick(cycle, time, 0, 100,
-            1 - Math.pow(.6, 1.0 / 12000), 6000, 18000, 5000);
+            1 - Math.pow(.6, 1.0 / 12000), 6000, 18000, 5000, rate);
         float wind = windCycle.tick(cycle, time, p.minWind, p.maxWind,
-            1 - Math.pow(.65, 1.0 / 6000), 8000, 24000, 4200);
+            1 - Math.pow(.65, 1.0 / 6000), 8000, 24000, 4200, rate);
         float temp = old == null ? 50 : automaticTemperature(p, seed, time);
         float direction = automaticDirection(seed, time);
         if (!cycle && old != null) { wind = old.wind(); temp = old.temperature(); direction = old.direction(); }
         // The advance_weather gamerule pauses these autonomous slider cycles.
         // /weather edits independent profile overrides, not the vanilla clock.
         float targetDirection = p.overrideDirection ? p.direction : direction;
-        if (old != null) targetDirection = cycle ? approachDirection(old.direction(), targetDirection, .5F) : old.direction();
+        if (old != null) targetDirection = cycle ? approachDirection(old.direction(), targetDirection, .5F * rate) : old.direction();
         if (old == null) {
             STATES.put(level, new WeatherState(p.overrideRain ? p.rain : 0,
                 p.overrideWind ? p.wind : 0, p.overrideTemperature ? p.temperature : 50, targetDirection));
@@ -161,13 +163,13 @@ public final class WeatherSystem {
         }
         var target = new WeatherState(p.overrideRain ? p.rain : rain, p.overrideWind ? p.wind : wind,
             p.overrideTemperature ? p.temperature : temp, targetDirection);
-        if (old != null) target = new WeatherState(approach(old.rain(), target.rain(), .5F),
-            approach(old.wind(), target.wind(), .5F), approach(old.temperature(), target.temperature(), p.overrideTemperature ? .25F : .005F), targetDirection);
+        if (old != null) target = new WeatherState(approach(old.rain(), target.rain(), .5F * rate),
+            approach(old.wind(), target.wind(), .5F * rate), approach(old.temperature(), target.temperature(), (p.overrideTemperature ? .25F : .005F) * rate), targetDirection);
         STATES.put(level, target);
     }
     private static String key(ServerLevel level) { return "weather/"+level.dimension().identifier(); }
     private static void restore(ServerLevel level) {
-        var data=EnvironmentWorldData.get(level.getServer());
+        var data=EnvironmentWorldData.get(java.util.Objects.requireNonNull(level.getServer()));
         var saved=data.read(key(level));
         if(saved.isEmpty())return;
         STATES.put(level,new WeatherState(EnvironmentWorldData.number(saved,"rain"),EnvironmentWorldData.number(saved,"wind"),
@@ -179,7 +181,7 @@ public final class WeatherSystem {
     }
     private static void snapshot(ServerLevel level) {
         var state=STATES.get(level);if(state==null)return;
-        var data=EnvironmentWorldData.get(level.getServer());
+        var data=EnvironmentWorldData.get(java.util.Objects.requireNonNull(level.getServer()));
         data.write(key(level),Map.of("rain",EnvironmentWorldData.bits(state.rain()),"wind",EnvironmentWorldData.bits(state.wind()),
             "temperature",EnvironmentWorldData.bits(state.temperature()),"direction",EnvironmentWorldData.bits(state.direction()),
             "clock",CLOCKS.getOrDefault(level,0L)));
@@ -255,12 +257,12 @@ public final class WeatherSystem {
         }
 
         private float tick(boolean advance, long time, int minimum, int maximum, double startChance,
-                int minimumDuration, int maximumDuration, int noisePeriod) {
+                int minimumDuration, int maximumDuration, int noisePeriod, int rate) {
             if (!advance) return value;
             if (active) {
-                age++;
+                age += rate;
                 if (--remaining <= 0) active = false;
-            } else if (value <= .01F && random.nextDouble() < startChance) {
+            } else if (value <= .01F && random.nextDouble() < PreviewEnvironment.chance(startChance, rate)) {
                 active = true;
                 age = 0;
                 remaining = minimumDuration + random.nextInt(maximumDuration - minimumDuration + 1);
@@ -274,7 +276,7 @@ public final class WeatherSystem {
                 transition = transition * transition * (3 - 2 * transition);
                 target = initialBoost + (randomized - initialBoost) * transition;
             }
-            value += Math.clamp(target - value, -.04F, .04F);
+            value += Math.clamp(target - value, -.04F * rate, .04F * rate);
             return value;
         }
     }

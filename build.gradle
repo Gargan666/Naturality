@@ -52,7 +52,14 @@ tasks.named('runClientGameTest') {
 		def selection = systemProperties['naturality.test.suites'].toString().split(',').collect { it.trim() }
 		def valid = ['wind-compat', 'snow-compat', 'chunks', 'aurora', 'rainbow', 'sky-events', 'end-flashes', 'sunset', 'glint', 'snow', 'rain-splash', 'particle-weather', 'weather-commands', 'weather', 'gameplay', 'config', 'fire', 'water', 'water-rain', 'waterfall', 'lava-effects', 'water-ripples', 'water-occlusion', 'short-distance', 'fluids', 'flame', 'leaves', 'smoke', 'clouds', 'fog', 'lighting', 'dynamic-lighting', 'portal', 'end-portal', 'audio', 'all']
 		valid.add('heat-waves')
+        valid.add('creeper-biome')
+        valid.add('maddened-creeper')
+        valid.add('maddened-zombie')
+        valid.add('maddened-spawns')
+        valid.add('insanity')
+        valid.add('ambient-horror')
         valid.add('proximity')
+        valid.add('blood-moon')
         valid.add('bell-lighting')
         valid.add('snow-surface-lighting')
         valid.add('overlay-edge')
@@ -71,15 +78,22 @@ tasks.named('runClientGameTest') {
         valid.add('villager-shelter')
         valid.add('animal-care')
         valid.add('reputation')
+        valid.add('navigation')
+        valid.add('camera-hands')
+        valid.add('menu-world')
+        valid.add('hardcore-lighting')
 		valid.add('crowd-panic')
 		valid.add('wind-shapes')
 		valid.add('fluid-tail')
 		valid.add('liquid-projectiles')
+		valid.add('liquid-slopes')
 		valid.add('environment-persistence')
 		valid.add('snow-worldgen')
+        valid.add('mountain-waterfalls')
 		valid.add('epilepsy-mode')
         valid.add('lightning')
 		valid.add('client-startup')
+        valid.add('shader-stall')
         valid.add('feature-startup')
         valid.add('distortion-interactions')
         valid.add('distortion-creative')
@@ -94,7 +108,12 @@ tasks.named('runClientGameTest') {
         valid.add('mob-arrows')
         valid.add('fireball-model')
         valid.add('sleep')
+        valid.add('render-detail')
+        valid.add('terrain-lod-world')
         valid.add('confusion')
+        valid.add('crystal-visual')
+        valid.add('fish-swim')
+        valid.add('zombie-walk')
         valid.add('floating-mob-tilt')
         valid.add('ghast-squash')
         valid.add('ghast-crash')
@@ -144,6 +163,52 @@ tasks.register('writeVanillaRegistrySnapshot', JavaExec) {
     args layout.buildDirectory.file('vanilla-registry-snapshot.json').get().asFile.absolutePath
 }
 
+// Blockbench's old EntityModel API is ignored; its geometry method remains authoritative.
+def generateEntityGeometry = { taskName, exportName, className, partNames, aliases -> tasks.register(taskName) {
+    def exportFile = layout.projectDirectory.file('resources/entity models/' + exportName + '.java')
+    inputs.file(exportFile)
+    def generatedDir = layout.buildDirectory.dir('generated/sources/' + exportName)
+    outputs.dir(generatedDir)
+    doLast {
+        def source = exportFile.asFile.getText('UTF-8')
+        def signature = source =~ /public\s+static\s+LayerDefinition\s+createBodyLayer\s*\(\s*\)\s*\{/
+        if (!signature.find()) throw new GradleException(exportName + ' export must contain public static LayerDefinition createBodyLayer().')
+        int start = signature.start()
+        int cursor = signature.end()
+        int depth = 1
+        while (cursor < source.length() && depth > 0) {
+            char character = source.charAt(cursor++)
+            if (character == '{' as char) depth++
+            if (character == '}' as char) depth--
+        }
+        if (depth != 0) throw new GradleException('Unbalanced createBodyLayer() in ' + exportName + ' export.')
+        def geometry = source.substring(start, cursor)
+        partNames.each { name ->
+            if (!geometry.contains('"' + name + '"'))
+                throw new GradleException(exportName + ' export must retain animated part name: ' + name)
+        }
+        aliases.each { original, mapped -> geometry = geometry.replace('"' + original + '"', '"' + mapped + '"') }
+        if (!aliases.isEmpty()) {
+            geometry = geometry.replace('return LayerDefinition.create',
+                'partdefinition.getChild("head").addOrReplaceChild("hat", CubeListBuilder.create(), PartPose.ZERO);\nreturn LayerDefinition.create')
+        }
+        def output = new File(generatedDir.get().asFile, 'naturality/client/entity/' + className + '.java')
+        output.parentFile.mkdirs()
+        output.setText('''package naturality.client.entity;
+import net.minecraft.client.model.geom.PartPose;
+import net.minecraft.client.model.geom.builders.*;
+/** Generated from the artist entity export. Do not edit. */
+''' + 'public final class ' + className + ' {\nprivate ' + className + '() {}\n' + geometry + '\n}\n', 'UTF-8')
+    }
+} }
+def generateMaddenedCreeperModel = generateEntityGeometry('generateMaddenedCreeperModel', 'maddened_creeper',
+    'MaddenedCreeperGeometry', ['Body', 'Head', 'leg0', 'leg1', 'leg2', 'leg3'], [:])
+sourceSets.client.java.srcDir(generateMaddenedCreeperModel)
+def generateMaddenedZombieModel = generateEntityGeometry('generateMaddenedZombieModel', 'maddened_zombie',
+    'MaddenedZombieGeometry', ['Body', 'Head', 'RightArm', 'LeftArm', 'RightLeg', 'LeftLeg'],
+    [Body:'body', Head:'head', RightArm:'right_arm', LeftArm:'left_arm', RightLeg:'right_leg', LeftLeg:'left_leg'])
+sourceSets.client.java.srcDir(generateMaddenedZombieModel)
+
 def generateChorusFlowerModel = tasks.register('generateChorusFlowerModel') {
 	description = 'Converts both artist chorus flower exports into game-ready models.'
 	inputs.files('resources/block models/chorus_flower.json', 'resources/block models/chorus_flower_bloom.json')
@@ -181,7 +246,7 @@ processResources {
 	// Artist-facing resources keep Minecraft's layout beneath the mod namespace.
 	from('resources') {
 		into 'assets/naturality'
-		exclude '**/README.txt', '**/.gitkeep', 'block models/**'
+		exclude '**/README.txt', '**/.gitkeep', 'block models/**', 'entity models/**'
 	}
 
 	def version = project.version
@@ -206,8 +271,8 @@ tasks.withType(JavaCompile).configureEach {
 tasks.register('writeJavaAuditClasspath') {
 	group = 'verification'
 	description = 'Exports the production classpath for scripts/check-java-warnings.ps1.'
-	dependsOn tasks.named('classes')
-	inputs.files(sourceSets.client.compileClasspath)
+	dependsOn tasks.named('clientClasses')
+	inputs.files(sourceSets.client.compileClasspath, sourceSets.client.output)
 	outputs.file(layout.buildDirectory.file('java-audit/classpath.txt'))
 	doLast {
 		def output = outputs.files.singleFile

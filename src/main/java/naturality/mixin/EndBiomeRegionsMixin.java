@@ -16,12 +16,12 @@ import org.spongepowered.asm.mixin.Unique;
 
 @Mixin(TheEndBiomeSource.class)
 public abstract class EndBiomeRegionsMixin {
-    @Shadow @Final private Holder<Biome> highlands;
-    @Shadow @Final private Holder<Biome> midlands;
-    @Shadow @Final private Holder<Biome> islands;
-    @Shadow @Final private Holder<Biome> barrens;
-    @Unique private volatile Holder<Biome> naturality$wilds;
-    @Unique private volatile Holder<Biome> naturality$crags;
+    @SuppressWarnings("null") @Shadow @Final private Holder<Biome> highlands;
+    @SuppressWarnings("null") @Shadow @Final private Holder<Biome> midlands;
+    @SuppressWarnings("null") @Shadow @Final private Holder<Biome> islands;
+    @SuppressWarnings("null") @Shadow @Final private Holder<Biome> barrens;
+    @Unique private volatile @org.jspecify.annotations.Nullable Holder<Biome> naturality$wilds;
+    @Unique private volatile @org.jspecify.annotations.Nullable Holder<Biome> naturality$crags;
 
     @WrapMethod(method="getNoiseBiome")
     private Holder<Biome> naturality$regions(int x,int y,int z,Climate.Sampler sampler,Operation<Holder<Biome>> original) {

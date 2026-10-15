@@ -47,6 +47,7 @@ public abstract class EndFogCompositeMixin {
             boolean sky, boolean consistentDepth, CallbackInfo ci) {
         EndFogComposite.beginFrame(fogColor);
         naturality.client.weather.WindRendering.beginFrame();
+        naturality.client.menu.MenuFog.prepare();
         naturality.client.fluid.WaterComposite.beginFrame();
         naturality.client.fluid.WaterVisuals.prepareFrame();
         naturality$fog = fog;

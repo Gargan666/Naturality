@@ -28,7 +28,7 @@ public final class ProceduralFire {
     public static final BindGroupLayout SODIUM_LAYOUT = BindGroupLayout.builder()
         .withUniform("NaturalityFire", UniformType.UNIFORM_BUFFER)
         .withUniform("NaturalityFirePalette", UniformType.COMBINED_IMAGE_SAMPLER).build();
-    private static ByteBuffer boundsData;
+    private static @org.jspecify.annotations.Nullable ByteBuffer boundsData;
     private static final String[] SPRITES = {"fire_0", "fire_1", "soul_fire_0", "soul_fire_1"};
     private static long animationTicks;
     private static double animationRemainder;
@@ -102,10 +102,11 @@ public final class ProceduralFire {
         var image = ProceduralFire.image;
         var heat = ProceduralFire.heat;
         if (image == null || heat == null) return;
-        if (boundsData != null) {
-            boundsData.putInt(72, (int) (animationTicks % 32));
+        var spriteData = boundsData;
+        if (spriteData != null) {
+            spriteData.putInt(72, (int) (animationTicks % 32));
             if (bounds != null) bounds.close();
-            bounds = RenderSystem.getDevice().createBuffer(() -> "Naturality fire sprites", 128, boundsData);
+            bounds = RenderSystem.getDevice().createBuffer(() -> "Naturality fire sprites", 128, spriteData);
         }
         image.setPixel(0, 0, 0xFF000000 | (int) (animationTicks % 32));
         for (int i = 0; i < frameTops.length; i++) image.setPixel(i + 1, 0, 0xFF000000 | frameTops[i]);
@@ -120,6 +121,7 @@ public final class ProceduralFire {
         pass.setUniform("NaturalityFirePalette", paletteView, RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
     }
     public static void bindSodium(RenderPass pass) {
+        var bounds = ProceduralFire.bounds;
         if (bounds == null || paletteView == null) throw new IllegalStateException("Fire atlas not loaded");
         pass.setUniform("NaturalityFire", bounds);
         pass.setUniform("NaturalityFirePalette", paletteView, RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));

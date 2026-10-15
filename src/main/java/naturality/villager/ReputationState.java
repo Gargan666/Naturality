@@ -12,6 +12,7 @@ public final class ReputationState {
     public long wakeUntil = -1;
     public long lastSleep = -1, recoveryUntil = -1;
     public boolean seekingBed;
+    public boolean sleepCoreOnly;
     public net.minecraft.core.BlockPos sleepBed;
     public int bedSearchTick = -1;
     public int nodStart = -100;

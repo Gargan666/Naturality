@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(LivingEntity.class)
 public abstract class WindClimbingMixin {
-    @Shadow private Optional<BlockPos> lastClimbablePos;
+    @SuppressWarnings("null") @Shadow private Optional<BlockPos> lastClimbablePos;
     @Inject(method="onClimbable",at=@At("RETURN"),cancellable=true)
     private void naturality$movingVines(CallbackInfoReturnable<Boolean> cir) {
         var entity=(LivingEntity)(Object)this;

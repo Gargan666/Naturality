@@ -9,6 +9,27 @@ import net.minecraft.world.level.Level;
 public final class SkyEventsGameTest implements FabricClientGameTest {
     private static void check(boolean value, String message) { if (!value) throw new AssertionError(message); }
     @Override public void runTest(ClientGameTestContext context) {
+        var moderate = new SkyEventCycle(91);
+        var fixture = new java.util.HashMap<>(moderate.snapshot());
+        fixture.put("active", 1L); fixture.put("remaining", 3000000L);
+        moderate.restore(fixture);
+        int boosts = 0;
+        for (int tick = 1; tick <= 2400000; tick++) {
+            moderate.tick(true, true);
+            if (tick % 100 == 0) {
+                var saved = moderate.snapshot();
+                float target = naturality.weather.EnvironmentWorldData.number(saved, "target");
+                check(saved.get("boostRemaining") > 0 ? target >= 10 && target <= 20 : target >= 5 && target <= 10,
+                    "Meteor targets stay at 5-10 except during rare stronger windows");
+                if (tick % 1200 == 0 && saved.get("boostRemaining") == 1200L) boosts++;
+            }
+        }
+        check(boosts > 50 && boosts < 150, "About 5% of active minutes allow stronger meteor showers");
+        var copy = new SkyEventCycle(1); copy.restore(moderate.snapshot());
+        for (int i = 0; i < 2500; i++) {
+            moderate.tick(true); copy.tick(true);
+            check(moderate.snapshot().equals(copy.snapshot()), "Escalation clocks resume the same saved sequence");
+        }
         var cycle = new SkyEventCycle(17);
         check(!cycle.active() && cycle.strength() == 0, "Starts quiet");
         check(Math.abs(1 - Math.pow(1 - SkyEventCycle.START_CHANCE_PER_TICK, 1200) - .1) < .00001,

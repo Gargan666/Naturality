@@ -20,14 +20,16 @@ public abstract class ConfusionHudMixin {
         String path=sprite.getPath();
         if(ConfusionSlots.visible() && path.contains("hotbar_offhand")) {
             var player=net.minecraft.client.Minecraft.getInstance().player;
-            if(!player.getInventory().getItem(ConfusionSlots.storageSlot(9)).isEmpty())
+            if(player != null && !player.getInventory().getItem(ConfusionSlots.storageSlot(9)).isEmpty())
                 original.call(graphics,pipeline,sprite,x,y,width,height);
             return;
         }
         if(ConfusionSlots.visible() && path.contains("hotbar_selection")) {
             var client=net.minecraft.client.Minecraft.getInstance();
-            boolean right=client.player.getMainArm()==net.minecraft.world.entity.HumanoidArm.LEFT;
-            int cell=ConfusionSlots.visual(client.player.getInventory().getSelectedSlot());
+            var player = client.player;
+            if (player == null) { original.call(graphics,pipeline,sprite,x,y,width,height); return; }
+            boolean right=player.getMainArm()==net.minecraft.world.entity.HumanoidArm.LEFT;
+            int cell=ConfusionSlots.visual(player.getInventory().getSelectedSlot());
             float target=cell==9?(right?189:-29):cell*20;
             float dx=graphics.guiWidth()/2-92+target-x, dy=0;
             graphics.pose().pushMatrix(); graphics.pose().translate(dx,dy);
@@ -45,7 +47,6 @@ public abstract class ConfusionHudMixin {
             int i = seed - 1;
             graphics.pose().pushMatrix();
             boolean right=player.getMainArm()==net.minecraft.world.entity.HumanoidArm.LEFT;
-            var view=ConfusionSlots.hud(right);
             float targetX=i==9?(right?189:-29):ConfusionSlots.hotbar.coordinate(i,partial,9,false,20);
             float targetY=i==9?0:ConfusionSlots.hotbar.coordinate(i,partial,9,true,20);
             int storage=i==9?40:i;

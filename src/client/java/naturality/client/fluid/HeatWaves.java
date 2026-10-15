@@ -20,6 +20,8 @@ import org.joml.Vector4f;
 
 /** Loaded, nearby heat volumes; one scene copy and a depth-clipped row warp. */
 public final class HeatWaves {
+    /** Register the heat pipeline during startup, before chunks can occupy the workers. */
+    public static void initialize() { }
     // Scan beyond the visible range so the five-tick/four-block scan cadence
     // discovers sources while their strength is still zero.
     private static final int LIMIT = 64, RADIUS = 28;
@@ -42,11 +44,11 @@ public final class HeatWaves {
     private static final List<AABB> boxes = new ArrayList<>();
     private static final Set<AABB> fireBoxes = new HashSet<>();
     private static final ByteBuffer data = ByteBuffer.allocateDirect(32 + LIMIT * 32).order(ByteOrder.nativeOrder());
-    private static net.minecraft.client.multiplayer.ClientLevel world;
+    private static net.minecraft.client.multiplayer.@org.jspecify.annotations.Nullable ClientLevel world;
     private static long scanned = Long.MIN_VALUE;
     private static BlockPos origin = BlockPos.ZERO;
-    private static TextureTarget scene;
-    private static MappableRingBuffer uniforms;
+    private static @org.jspecify.annotations.Nullable TextureTarget scene;
+    private static @org.jspecify.annotations.Nullable MappableRingBuffer uniforms;
     private static float proximityStrength(AABB volume, net.minecraft.world.phys.Vec3 camera) {
         double distanceSquared = volume.distanceToSqr(camera);
         if (distanceSquared >= FADE_START * FADE_START) return 0;
@@ -58,6 +60,7 @@ public final class HeatWaves {
 
     private static void scan(Minecraft client) {
         var level = client.level;
+        if (level == null) { boxes.clear(); fireBoxes.clear(); return; }
         var center = BlockPos.containing(client.gameRenderer.mainCamera().position());
         if (world == level && level.getGameTime() - scanned < 5 && center.distSqr(origin) < 16) return;
         world = level; scanned = level.getGameTime(); origin = center; boxes.clear(); fireBoxes.clear();
@@ -129,7 +132,9 @@ public final class HeatWaves {
         int power = Math.clamp(NaturalityConfig.get().liquids.heatWavePower, 0, 200);
         if (power == 0) { world = null; return; }
         scan(client);
-        if (boxes.isEmpty() || target.getColorTextureView() == null || target.getDepthTextureView() == null) return;
+        var colorView = target.getColorTextureView();
+        var depthView = target.getDepthTextureView();
+        if (boxes.isEmpty() || colorView == null || depthView == null) return;
         var p = client.gameRenderer.mainCamera().position();
         data.clear();
         // Absolute world Y anchors the row lattice even while the camera moves/turns.
@@ -152,26 +157,31 @@ public final class HeatWaves {
         data.putFloat((float)(p.x - Math.floor(p.x / 512) * 512))
             .putFloat((float)(p.z - Math.floor(p.z / 512) * 512)).putFloat(0).putFloat(0);
         data.flip();
-        if (scene == null || scene.width != target.width || scene.height != target.height) {
-            if (scene != null) scene.destroyBuffers();
-            scene = new TextureTarget("Naturality heat scene", target.width, target.height, GpuFormat.RGBA8_UNORM, null);
+        var capturedScene = scene;
+        if (capturedScene == null || capturedScene.width != target.width || capturedScene.height != target.height) {
+            if (capturedScene != null) capturedScene.destroyBuffers();
+            capturedScene = new TextureTarget("Naturality heat scene", target.width, target.height, GpuFormat.RGBA8_UNORM, null);
+            scene = capturedScene;
         }
-        scene.copyColorFrom(target);
-        if (uniforms == null) uniforms = new MappableRingBuffer(() -> "Naturality heat volumes", 130, data.capacity());
-        var uniform = uniforms.currentBuffer();
+        capturedScene.copyColorFrom(target);
+        var sceneView = capturedScene.getColorTextureView();
+        if (sceneView == null) return;
+        var ring = uniforms;
+        if (ring == null) { ring = new MappableRingBuffer(() -> "Naturality heat volumes", 130, data.capacity()); uniforms = ring; }
+        var uniform = ring.currentBuffer();
         try (var mapped = uniform.map(false, true)) { mapped.data().put(data); }
         data.rewind();
         try (var pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
-                 () -> "Naturality pixel heat waves", target.getColorTextureView(), Optional.empty())) {
+                 () -> "Naturality pixel heat waves", colorView, Optional.empty())) {
             pass.setPipeline(RenderSystem.getCompiledPipeline(PIPELINE));
             RenderSystem.bindDefaultUniforms(pass);
             pass.setUniform("DynamicTransforms", RenderSystem.getDynamicUniforms().writeTransform(RenderSystem.getModelViewMatrixCopy(), new Vector4f(1)));
             pass.setUniform("HeatVolumes", uniform);
             var sampler = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST);
-            pass.setUniform("Sampler0", scene.getColorTextureView(), sampler);
-            pass.setUniform("Sampler1", target.getDepthTextureView(), sampler);
+            pass.setUniform("Sampler0", sceneView, sampler);
+            pass.setUniform("Sampler1", depthView, sampler);
             pass.draw(6,1,0,0);
-        } finally { uniforms.rotate(); }
+        } finally { ring.rotate(); }
     }
     public static void close() {
         if (scene != null) { scene.destroyBuffers(); scene = null; }

@@ -34,7 +34,7 @@ public final class SkyEventCommand {
                 int strength = IntegerArgumentType.getInteger(context, "strength");
                 if (strength > type.maxStrength()) throw new SimpleCommandExceptionType(
                     Component.literal(type.label + " strength must be between 0 and " + type.maxStrength())).create();
-                SkyEventWorldData.get(level.getServer()).override(level, type, true, strength);
+                SkyEventWorldData.get(java.util.Objects.requireNonNull(level.getServer())).override(level, type, true, strength);
                 String visibility = "";
                 if (type == SkyEventType.PROXIMITY && strength > 0) {
                     visibility = " Planet: " + ProximityCycle.PLANETS[strength - 1] + "."
@@ -48,14 +48,26 @@ public final class SkyEventCommand {
                     if (SkyEvents.isNight(level)) visibility += " Currently hidden at night.";
                 }
                 String reply = "Sky event " + type.label + " in " + id(level)
-                    + " set to strength " + strength + " (override)." + visibility;
+                    + (type == SkyEventType.BLOOD_MOON ? " set " + (strength > 0 ? "on" : "off")
+                        : " set to strength " + strength) + " (override)." + visibility;
                 context.getSource().sendSuccess(() -> Component.literal(reply), true);
                 return Command.SINGLE_SUCCESS;
             }));
+            for (String toggle : java.util.List.of("on", "off")) {
+                event.then(Commands.literal(toggle).executes(context -> {
+                    var level = DimensionArgument.getDimension(context, "dimension");
+                    var type = find(level, StringArgumentType.getString(context, "event"));
+                    if (type != SkyEventType.BLOOD_MOON) throw new SimpleCommandExceptionType(
+                        Component.literal("Use a numeric strength for " + type.label + ".")).create();
+                    SkyEventWorldData.get(java.util.Objects.requireNonNull(level.getServer())).override(level, type, true, toggle.equals("on") ? 1 : 0);
+                    context.getSource().sendSuccess(() -> Component.literal("Blood Moon " + toggle + " (override)."), true);
+                    return Command.SINGLE_SUCCESS;
+                }));
+            }
             event.then(Commands.literal("auto").executes(context -> {
                 var level = DimensionArgument.getDimension(context, "dimension");
                 var type = find(level, StringArgumentType.getString(context, "event"));
-                var data = SkyEventWorldData.get(level.getServer());
+                var data = SkyEventWorldData.get(java.util.Objects.requireNonNull(level.getServer()));
                 data.override(level, type, false, data.settings(level, type).strength);
                 context.getSource().sendSuccess(() -> Component.literal("Sky event " + type.label + " in " + id(level)
                     + " returned to automatic scheduling."), true);
@@ -72,113 +84,88 @@ public final class SkyEventCommand {
         String dimension = id(level);
         var pool = SkyEventType.pool(dimension);
         if (pool.isEmpty()) {
-            source.sendSuccess(() -> Component.literal("Sky Events in " + dimension + ": none configured."), false);
+            source.sendSuccess(() -> Component.literal("Sky Events: " + dimension + " — none."), false);
             return Command.SINGLE_SUCCESS;
         }
         ServerPlayer observer = source.getEntity() instanceof ServerPlayer player && player.level() == level
             ? player : level.players().isEmpty() ? null : level.players().getFirst();
         var happening = new ArrayList<String>();
-        var lines = new StringBuilder("Sky Events in " + dimension);
-        if (observer != null && (pool.contains(SkyEventType.AURORA_BOREALIS) || pool.contains(SkyEventType.END_AURORA)))
-            lines.append(" (local aurora near ").append(observer.getName().getString()).append(')');
-        lines.append(':');
-        boolean advance = level.getGameRules().get(net.minecraft.world.level.gamerules.GameRules.ADVANCE_WEATHER);
+        var lines = new StringBuilder("Sky Events: ").append(dimension);
+        boolean night = SkyEvents.isNight(level);
         for (var type : pool) {
-            var settings = SkyEventWorldData.get(level.getServer()).settings(level, type);
+            var settings = SkyEventWorldData.get(java.util.Objects.requireNonNull(level.getServer())).settings(level, type);
             float value = SkyEvents.strength(level, type);
             boolean active;
-            String detail;
+            boolean visible;
+            String extra = "";
+            String chance;
             if (type == SkyEventType.PROXIMITY) {
                 var cycle = SkyEvents.proximityCycle(level);
                 int planet = Math.clamp((int)value, 0, 7);
                 active = planet > 0;
-                if (active && SkyEvents.isNight(level)) happening.add("Proximity (" + ProximityCycle.PLANETS[planet - 1] + ")");
-                lines.append('\n').append("Proximity: ").append(active ? ProximityCycle.PLANETS[planet - 1] : "quiet")
-                    .append(" (strength ").append(planet).append("/7)")
-                    .append(!SkyEvents.isNight(level) ? "; hidden during daytime" : "")
-                    .append(settings.override ? "; override" : cycle == null ? "; initializing"
-                        : "; " + cycle.remaining() + " ticks remaining; fixed planet for this episode");
-                double roll = ProximityCycle.START_CHANCE;
-                lines.append(". Start chance while quiet at night: tick ").append(percent(roll))
-                    .append(", second ").append(percent(1 - Math.pow(1 - roll, 20)))
-                    .append(", minute ").append(percent(1 - Math.pow(1 - roll, 1200))).append('.');
-            } else if (type == SkyEventType.END_FLASHES) {
+                visible = active && night;
+                if (active) extra += "; " + ProximityCycle.PLANETS[planet - 1];
+                if (!settings.override && active && cycle != null) extra += "; " + duration(cycle.remaining()) + " left";
+                if (!night) extra += "; hidden: day";
+                chance = percent(ProximityCycle.START_CHANCE) + "/night";
+            } else if (type == SkyEventType.BLOOD_MOON) {
+                active = value > 0;
+                visible = active && night;
+                if (!night) extra += "; hidden: day";
+                else if (active && !settings.override) extra += "; until dawn";
+                chance = percent(BloodMoonCycle.START_CHANCE) + "/night";
+            } else if (type == SkyEventType.METEOR_SHOWER || type == SkyEventType.END_FLASHES) {
                 var cycle = SkyEvents.cycle(level, type);
                 active = settings.override ? settings.strength > 0 : cycle != null && cycle.active();
-                if (active || value > .01F) happening.add(type.label);
-                lines.append('\n').append(type.label).append(": ").append(state(active, value, settings.override))
-                    .append(settings.override ? "; override; automatic starts suppressed" : cycle == null
-                        ? "; scheduler initializing" : cycle.active()
-                        ? "; active for up to " + cycle.remaining() + " more ticks" : "; rolls each quiet tick");
-                double roll = SkyEventCycle.END_FLASH_CHANCE_PER_TICK;
-                lines.append(". Start chance while quiet: tick ").append(percent(roll))
-                    .append(", second ").append(percent(1 - Math.pow(1 - roll, 20)))
-                    .append(", minute ").append(percent(1 - Math.pow(1 - roll, 1200))).append('.');
-            } else if (type == SkyEventType.METEOR_SHOWER) {
-                var cycle = SkyEvents.cycle(level, type);
-                active = settings.override ? settings.strength > 0 : cycle != null && cycle.active();
-                boolean visible = (active || value > .01F) && SkyEvents.isNight(level);
-                if (visible) happening.add(type.label);
-                detail = settings.override ? "override; automatic starts suppressed"
-                    : cycle == null ? "scheduler initializing"
-                    : cycle.active() ? "active for up to " + cycle.remaining() + " more ticks"
-                    : "rolls each eligible night tick";
-                lines.append('\n').append(type.label).append(": ").append(state(active, value, settings.override))
-                    .append(!SkyEvents.isNight(level) ? " (hidden during day)" : "")
-                    .append("; ").append(detail).append('.');
-                double meteorRoll = SkyEventCycle.START_CHANCE_PER_TICK;
-                lines.append(" Start chance while quiet at night: tick ")
-                    .append(percent(meteorRoll)).append(", second ")
-                    .append(percent(1 - Math.pow(1 - meteorRoll, 20))).append(", minute ")
-                    .append(percent(1 - Math.pow(1 - meteorRoll, 1200))).append('.');
+                visible = (active || value > .01F) && (type == SkyEventType.END_FLASHES || night);
+                if (!settings.override && active && cycle != null) extra += "; " + duration(cycle.remaining()) + " left";
+                if (type == SkyEventType.METEOR_SHOWER && !night) extra += "; hidden: day";
+                double roll = type == SkyEventType.END_FLASHES ? SkyEventCycle.END_FLASH_CHANCE_PER_TICK : SkyEventCycle.START_CHANCE_PER_TICK;
+                chance = percent(1 - Math.pow(1 - roll, 1200)) + "/min" + (type == SkyEventType.METEOR_SHOWER ? " (night)" : "");
+                if (type == SkyEventType.METEOR_SHOWER) extra += "; boost " + percent(SkyEventCycle.METEOR_BOOST_CHANCE) + "/min";
             } else if (type == SkyEventType.RAINBOW) {
                 var cycle = SkyEvents.rainbowCycle(level);
                 float rain = SkyEvents.rainfall(level);
-                boolean eligible = !SkyEvents.isNight(level) && RainbowCycle.validRain(rain);
-                active = settings.override ? value > 0 : cycle != null && cycle.active() && eligible;
-                if (value > .01F) happening.add(type.label);
-                double roll = RainbowCycle.startChance(rain);
-                lines.append('\n').append(type.label).append(": ").append(state(active, value, settings.override))
-                    .append(String.format(Locale.ROOT, "; rain %.1f/100", rain));
-                if (SkyEvents.isNight(level)) lines.append("; hidden at night");
-                if (!RainbowCycle.validRain(rain)) lines.append("; rain must be between 1 and 20");
-                if (settings.override) lines.append("; automatic starts suppressed");
-                else if (cycle != null && cycle.active()) lines.append("; active for up to ").append(cycle.remaining()).append(" more ticks");
-                lines.append(". Start chance while quiet in daylight: tick ")
-                    .append(percent(roll)).append(", second ")
-                    .append(percent(1 - Math.pow(1 - roll, 20))).append(", minute ")
-                    .append(percent(1 - Math.pow(1 - roll, 1200))).append('.');
+                active = settings.override ? value > 0 : cycle != null && cycle.active() && !night && RainbowCycle.validRain(rain);
+                visible = value > .01F;
+                extra += "; rain " + number(rain) + "/100";
+                if (night) extra += "; hidden: night";
+                if (!RainbowCycle.validRain(rain)) extra += "; needs rain 1–20";
+                if (!settings.override && active && cycle != null) extra += "; " + duration(cycle.remaining()) + " left";
+                chance = percent(1 - Math.pow(1 - RainbowCycle.startChance(rain), 1200)) + "/min (day)";
             } else {
                 var local = observer == null ? null : AuroraEvents.status(level, observer.blockPosition());
                 value = settings.override ? settings.strength : local == null ? 0 : local.strength();
                 active = settings.override ? settings.strength > 0 : local != null && local.active();
-                if (active || value > .01F) happening.add(type.label);
-                lines.append('\n').append(type.label).append(": ").append(state(active, value, settings.override));
-                if (settings.override) lines.append("; automatic starts suppressed.");
-                else if (local == null) lines.append("; no occupied local region; start chance 0% until a player enters.");
-                else {
-                    double roll = Math.clamp(local.chance(), 0F, 1F);
-                    lines.append("; ").append(local.active() ? "active" : "next roll in " + local.nextAttempt() + " ticks")
-                        .append(type == SkyEventType.END_AURORA ? ". Fixed End roll: " : ". Climate-adjusted roll: ").append(percent(roll))
-                        .append(" every 600 ticks; estimated while idle: tick ").append(percent(roll / 600))
-                        .append(", second ").append(percent(roll / 30))
-                        .append(", minute ").append(percent(1 - Math.pow(1 - roll, 2))).append('.');
-                }
+                visible = active || value > .01F;
+                if (local == null) extra += "; no local players";
+                double roll = local == null ? 0 : Math.clamp(local.chance(), 0F, 1F);
+                chance = percent(1 - Math.pow(1 - roll, 2)) + "/min";
             }
+            if (visible) happening.add(type.label);
+            lines.append('\n').append(type.label).append(": ")
+                .append(type == SkyEventType.BLOOD_MOON ? (active ? "on" : "off")
+                    : (active ? "active" : value > .01F ? "fading" : "quiet")
+                        + " " + number(Math.round(value * 10) / 10.0) + "/" + type.maxStrength())
+                .append(settings.override ? " [override]" : "")
+                .append("; ").append(chance).append(extra);
         }
-        lines.append("\nCurrently happening here: ").append(happening.isEmpty() ? "none" : String.join(", ", happening));
-        if (!advance && !level.dimension().equals(net.minecraft.world.level.Level.END))
-            lines.append(". Automatic sky event timers are paused by the weather gamerule");
+        lines.append("\nCurrent: ").append(happening.isEmpty() ? "none" : String.join(", ", happening));
+        if (!level.getGameRules().get(net.minecraft.world.level.gamerules.GameRules.ADVANCE_WEATHER)
+                && !level.dimension().equals(net.minecraft.world.level.Level.END))
+            lines.append("\nTimers: paused (weather)");
         String message = lines.toString();
         source.sendSuccess(() -> Component.literal(message), false);
         return Command.SINGLE_SUCCESS;
     }
-    private static String state(boolean active, float strength, boolean override) {
-        return (active ? "active" : strength > .01F ? "fading" : "quiet")
-            + String.format(Locale.ROOT, " (strength %.1f/20%s)", strength, override ? ", override" : "");
+    private static String number(double value) {
+        return new java.text.DecimalFormat("0.##", java.text.DecimalFormatSymbols.getInstance(Locale.ROOT)).format(value);
     }
     private static String percent(double chance) {
-        return String.format(Locale.ROOT, "%.5f%%", chance * 100);
+        return chance > 0 && chance < .0001 ? "<0.01%" : number(chance * 100) + "%";
+    }
+    private static String duration(int ticks) {
+        return ticks < 1200 ? number(ticks / 20.0) + "s" : number(ticks / 1200.0) + "m";
     }
     private static SkyEventType find(ServerLevel level, String name) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
         String dimension = id(level);

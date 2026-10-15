@@ -11,11 +11,25 @@ public final class ProximityGameTest implements FabricClientGameTest {
         var cycle = new ProximityCycle(17);
         for (int i = 0; i < 100000; i++) cycle.tick(true, false);
         check(cycle.strength() == 0, "Proximity cannot start during day");
-        for (int i = 0; i < 200000 && cycle.strength() == 0; i++) cycle.tick(true, true);
+        check(ProximityCycle.START_CHANCE == .05, "Proximity has a 5% chance at nightfall");
+        cycle.tick(true, true);
+        var firstNight = cycle.snapshot();
+        check(cycle.strength() == 0, "Fixture's first nightfall roll is unsuccessful");
+        for (int i = 0; i < 10000; i++) cycle.tick(true, true);
+        check(cycle.snapshot().equals(firstNight), "A failed nightfall roll never retries during that night");
+        for (int i = 0; i < 2000 && cycle.strength() == 0; i++) {
+            cycle.tick(true, false); cycle.tick(true, true);
+        }
         int selected = cycle.strength(); long appearance = cycle.appearance();
         check(selected >= 1 && selected <= 7 && cycle.remaining() >= 48000,
             "A random valid planet lasts at least two days");
         var restored = new ProximityCycle(1); restored.restore(cycle.snapshot());
+        var ending = new ProximityCycle(1);
+        var nearEnd = new java.util.HashMap<>(cycle.snapshot()); nearEnd.put("remaining", 1L);
+        ending.restore(nearEnd); ending.tick(true, true);
+        var finished = ending.snapshot();
+        for (int i = 0; i < 10000; i++) ending.tick(true, true);
+        check(ending.snapshot().equals(finished), "An event ending during night waits until another nightfall to roll");
         for (int i = 0; i < 24000; i++) {
             cycle.tick(true, i % 24000 > 13000); restored.tick(true, i % 24000 > 13000);
             check(cycle.strength() == selected && cycle.appearance() == appearance,
@@ -25,7 +39,9 @@ public final class ProximityGameTest implements FabricClientGameTest {
         for (int seed = 0; seed < 1000; seed++) for (int time = 0; time <= 120000; time += 10000) {
             var direction = ProximityRenderer.direction(seed, time);
             check(direction.y > .2F && Math.abs(direction.z) > .4F,
-                "Independent drift stays above the horizon and clear of the moon's entire orbit");
+                "Small X-axis drift preserves horizon clearance");
+            check(direction.x == ProximityRenderer.direction(seed, 0).x,
+                "Independent motion rotates about X without changing the X component");
         }
         net.fabricmc.fabric.api.client.gametest.v1.world.TestWorldSave save;
         var expected = cycle.snapshot();
@@ -38,6 +54,9 @@ public final class ProximityGameTest implements FabricClientGameTest {
             server.runOnServer(s -> s.setWeatherParameters(24000, 0, false, false));
             for (int planet = 1; planet <= 7; planet++) {
                 server.runCommand("skyevent minecraft:overworld proximity " + planet);
+                context.waitTicks(12);
+                context.runOnClient(client -> check(ProximityRenderer.opacity() > 0 && ProximityRenderer.opacity() < .8F,
+                    "Newly selected planets fade in from zero opacity"));
                 context.waitTicks(20);
                 final int index = planet;
                 float[] heading = new float[2];
@@ -57,7 +76,12 @@ public final class ProximityGameTest implements FabricClientGameTest {
                 context.takeScreenshot("proximity-" + ProximityCycle.PLANETS[planet - 1]);
             }
             server.runCommand("skyevent minecraft:overworld status");
-            server.runCommand("time set noon"); context.waitTicks(15);
+            float[] nightOpacity = new float[1];
+            context.runOnClient(client -> nightOpacity[0] = ProximityRenderer.opacity());
+            server.runCommand("time set noon"); context.waitTicks(5);
+            context.runOnClient(client -> check(ProximityRenderer.opacity() > 0 && ProximityRenderer.opacity() < nightOpacity[0],
+                "Planet fades gradually when daytime arrives instead of disappearing"));
+            context.waitTicks(45);
             context.runOnClient(client -> check(ProximityRenderer.drawn() == 0,
                 "Daylight hides the planet without changing its selection"));
             server.runCommand("time set midnight"); context.waitTicks(15);

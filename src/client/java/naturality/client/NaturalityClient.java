@@ -9,6 +9,14 @@ import static naturality.config.Feature.*;
 public class NaturalityClient implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
+        net.fabricmc.fabric.api.client.rendering.v1.BlockColorRegistry.register(
+            java.util.List.of(net.minecraft.client.color.block.BlockTintSources.foliage(),
+                net.minecraft.client.color.block.BlockTintSources.foliage()), naturality.NaturalityBlocks.CLOVERS);
+        naturality.client.menu.MenuWorld.initialize();
+        naturality.client.navigation.NavigationClient.initialize();
+        if (VISUAL_OVERHAUL.enabled()) naturality.client.particle.CrystalTextParticle.initialize();
+        if (VISUAL_OVERHAUL.enabled()) naturality.client.entity.FishSwim.initialize();
+        if (VISUAL_OVERHAUL.enabled()) naturality.client.entity.ZombieWalk.initialize();
         naturality.client.sleep.SleepVisuals.initialize();
         naturality.client.config.EpilepsyWarning.initialize();
         naturality.client.weather.LightningFlashes.initialize();
@@ -35,6 +43,11 @@ public class NaturalityClient implements ClientModInitializer {
         }
         if (CONTENT.enabled()) {
             net.minecraft.client.renderer.entity.EntityRenderers.register(
+                naturality.entity.MaddenedZombies.TYPE, naturality.client.entity.MaddenedZombieRenderer::new);
+            naturality.client.insanity.Insanity.initialize();
+            net.minecraft.client.renderer.entity.EntityRenderers.register(
+                naturality.entity.MaddenedCreepers.TYPE, naturality.client.entity.MaddenedCreeperRenderer::new);
+            net.minecraft.client.renderer.entity.EntityRenderers.register(
                 naturality.villager.VillagerBobbers.TYPE, naturality.client.villager.VillagerBobberRenderer::new);
             net.minecraft.client.renderer.entity.EntityRenderers.register(
                 naturality.villager.VillagerBobbers.PLAYER_RETURN, naturality.client.villager.PlayerFishingReturnRenderer::new);
@@ -53,20 +66,27 @@ public class NaturalityClient implements ClientModInitializer {
         naturality.client.portal.PortalOpeningClient.initialize();
         // Registered content still has its necessary renderers and effect UI in content-only play.
         if (!VISUAL_OVERHAUL.enabled()) return;
+        naturality.client.render.ShaderPreparation.initialize();
+        naturality.client.fluid.WaterComposite.initialize();
+        naturality.client.fluid.HeatWaves.initialize();
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents.CLIENT_STOPPING.register(_ -> naturality.client.breaking.BreakingTextures.reset());
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents.CLIENT_STOPPING.register(_ -> naturality.client.shadow.BlockGridShadow.reset());
         if (END_AMBIENCE.enabled()) naturality.client.sound.EndAmbience.initialize();
         naturality.client.sound.CaveAmbience.initialize();
+        naturality.client.horror.AmbientHorror.initialize();
         naturality.client.sky.MeteorShower.initialize();
         naturality.client.sky.RainbowRenderer.initialize();
         naturality.client.sky.AuroraRenderer.initialize();
+        naturality.client.sky.BloodMoonClient.initialize();
         naturality.client.weather.ParticleWeather.initialize();
         if (RISE_PARTICLES.enabled()) naturality.client.weather.RiseWeather.initialize();
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents.CLIENT_STOPPING.register(_ -> naturality.client.weather.WindRendering.close());
         naturality.client.fire.SurfaceFireModel.initialize();
         naturality.client.snow.SurfaceSnowModel.initialize();
         naturality.client.weather.FoliageWindModel.initialize();
+        naturality.client.render.RenderDetail.initialize();
         naturality.client.lighting.BellLightingModel.initialize();
+        naturality.client.render.DistanceModel.initialize();
         naturality.client.fire.ProceduralFire.initialize();
         naturality.client.fluid.ProceduralFluids.initialize();
         naturality.client.fluid.WaterVisuals.initialize();
@@ -81,10 +101,12 @@ public class NaturalityClient implements ClientModInitializer {
         naturality.client.sleep.SleepVisuals.register(naturality.client.fluid.WaterRipples::tick);
         naturality.client.particle.WaterfallParticle.initialize();
         naturality.client.particle.WaterParticleTint.initialize();
+        naturality.client.particle.UnderwaterMoteParticle.initialize();
         naturality.client.particle.RainParticleTint.initialize();
         naturality.client.sleep.SleepVisuals.register(naturality.client.fluid.WaterfallSplash::tick);
         naturality.client.sleep.SleepVisuals.register(naturality.client.fluid.WaterEntrySplash::tick);
         naturality.client.particle.SmokeParticle.initialize();
+        naturality.client.particle.FlatPotionSmokeParticle.initialize();
         if (DEATH_SMOKE.enabled()) naturality.client.particle.DeathSmokeParticle.initialize();
         naturality.client.particle.AnimatedFlameParticle.initialize();
         if (EXPLOSION_PARTICLES.enabled()) naturality.client.particle.FlatExplosionParticle.initialize();

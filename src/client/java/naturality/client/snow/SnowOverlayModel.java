@@ -26,7 +26,8 @@ public final class SnowOverlayModel extends WrapperBlockStateModel {
     }
     public SnowOverlayModel(BlockStateModel wrapped) { super(wrapped); }
     @Override public @org.jspecify.annotations.Nullable Object createGeometryKey(BlockAndTintGetter l,BlockPos p,BlockState s,RandomSource r) {
-        return l instanceof SnowRenderRegion region && !region.naturality$mayHaveSnow()
+        return naturality.client.render.RenderDetail.reducedDetails(p)
+            || l instanceof SnowRenderRegion region && !region.naturality$mayHaveSnow()
             || !naturality.config.GameplaySettings.clientSnowWrapping()
             || !naturality.config.NaturalityConfig.get().effects.snowOverlays
             || naturality.snow.NoSnowSideOverlay.contains(s) || naturality.snow.SnowSupportOnly.contains(s) || snowOwner(l,p)==null
@@ -48,7 +49,8 @@ public final class SnowOverlayModel extends WrapperBlockStateModel {
     }
     @Override public void emitQuads(QuadEmitter e,BlockAndTintGetter level,BlockPos pos,BlockState state,
             RandomSource random,Predicate<@org.jspecify.annotations.Nullable Direction> cull) {
-        if (level instanceof SnowRenderRegion region && !region.naturality$mayHaveSnow()) {
+        if (naturality.client.render.RenderDetail.reducedDetails(pos)
+                || level instanceof SnowRenderRegion region && !region.naturality$mayHaveSnow()) {
             wrapped.emitQuads(e,level,pos,state,random,cull);
             return;
         }

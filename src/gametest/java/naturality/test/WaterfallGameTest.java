@@ -156,6 +156,20 @@ public final class WaterfallGameTest implements FabricClientGameTest {
                 check(!WaterfallSplash.validBorder(c.level,new WaterfallSplash.Border(foot,Direction.NORTH)),"Flowing-to-sloping transition must not emit");
                 check(!WaterfallSplash.impactColumn(c.level,new BlockPos(0,104,0)),"Slope support must not enable midair spray");
                 check(!WaterfallSplash.validBorder(c.level,new WaterfallSplash.Border(foot.north(),Direction.NORTH)),"Runoff-to-runoff transition must not emit");
+                naturality.client.fluid.WaterSurface runoff=null;
+                for(int offset=1;offset<=8;offset++) {
+                    var candidate=naturality.client.fluid.WaterSurface.at(c.level,foot.north(offset));
+                    if(candidate!=null && candidate.height(.5,.5)<candidate.pos().getY()+.85){runoff=candidate;break;}
+                }
+                var surface=java.util.Objects.requireNonNull(runoff,"Runoff scene needs an exposed shallow water surface");
+                double x=surface.pos().getX()+.5,z=surface.pos().getZ()+.5,h=surface.height(.5,.5);
+                var above=c.particleEngine.createParticle(net.minecraft.core.particles.ParticleTypes.BUBBLE,x,h+.04,z,0,0,0);
+                above.setParticleSpeed(0,0,0);above.tick();
+                check(!above.isAlive(),"Bubble must pop above a sloped surface even inside a water-tagged block");
+                var below=c.particleEngine.createParticle(net.minecraft.core.particles.ParticleTypes.BUBBLE,x,h-.04,z,0,0,0);
+                below.setParticleSpeed(0,0,0);below.tick();
+                check(below.isAlive(),"Bubble just below the rendered runoff surface remains submerged");
+                below.remove();
             });
             counts[0]=counts[1]=0;
             for(int i=0;i<40;i++) {

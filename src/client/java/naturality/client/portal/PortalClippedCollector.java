@@ -10,11 +10,11 @@ public final class PortalClippedCollector {
             return new PortalClippedVertexConsumer(buffer,xAxis,coordinate,side);
         }
     }
-    private static Plane current;
+    private static @org.jspecify.annotations.Nullable Plane current;
     public static void remember(Object submit) {
         if (submit instanceof PortalClippedSubmit clipped) clipped.naturality$clipPlane(current);
     }
-    public static Plane plane(Object submit) {
+    public static @org.jspecify.annotations.Nullable Plane plane(Object submit) {
         return submit instanceof PortalClippedSubmit clipped ? clipped.naturality$clipPlane() : null;
     }
     public static SubmitNodeCollector wrap(SubmitNodeCollector target,boolean xAxis,double plane,int side) {

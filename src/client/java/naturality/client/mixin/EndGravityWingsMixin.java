@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.At;
 
 @Mixin(ElytraAnimationState.class)
 public abstract class EndGravityWingsMixin {
-    @Shadow @Final private LivingEntity entity;
+    @SuppressWarnings("null") @Shadow @Final private LivingEntity entity;
     @ModifyExpressionValue(method="tick",at=@At(value="INVOKE",target="Lnet/minecraft/world/entity/LivingEntity;getDeltaMovement()Lnet/minecraft/world/phys/Vec3;"))
     private Vec3 naturality$localWingMotion(Vec3 movement) {
         return EndGravity.inverted(entity)?new Vec3(movement.x,-movement.y,movement.z):movement;

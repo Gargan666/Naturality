@@ -19,6 +19,7 @@ public abstract class FluidTerrainMixin {
             GpuTextureView atlas, GpuTextureView lightmap, RenderPipeline override,
             RenderPipeline multidrawOverride, CallbackInfo ci) {
         ProceduralFluids.bind(pass);
+        naturality.client.menu.MenuFog.bind(pass);
         naturality.client.weather.WindRendering.bind(pass);
         naturality.client.fire.ProceduralFire.bind(pass);
         naturality.client.fluid.WaterVisuals.bind(pass);

@@ -122,6 +122,41 @@ public final class VillagerGateGameTest implements FabricClientGameTest {
                 check(level.getBlockState(gate).getValue(FenceGateBlock.OPEN), "Villagers leave redstone-powered gates open");
                 leader.discard(); follower.discard();
             });
+            Villager[] crowd = new Villager[2];
+            server.runOnServer(s -> {
+                var level = s.overworld();
+                for (var pos : BlockPos.betweenClosed(-3, 100, -8, 3, 104, 8)) {
+                    boolean wall = pos.getY() > 100 && pos.getZ() >= 0 && (pos.getX() == -1 || pos.getX() == 1);
+                    level.setBlockAndUpdate(pos, pos.getY() == 100 || wall ? Blocks.STONE.defaultBlockState() : Blocks.AIR.defaultBlockState());
+                }
+                var doorState = Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.FACING, Direction.NORTH);
+                level.setBlockAndUpdate(gate, doorState);
+                level.setBlockAndUpdate(gate.above(), doorState.setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER));
+                crowd[0] = villager(level, -2.3); crowd[0].setPos(.1, 101, -2.3);
+                crowd[1] = villager(level, -2.4); crowd[1].setPos(.9, 101, -2.4);
+                for (var body : crowd) {
+                    body.getBrain().setMemory(MemoryModuleType.WALK_TARGET, new WalkTarget(destination, .5F, 0));
+                    body.getNavigation().moveTo(body.getNavigation().createPath(destination, 0), .5);
+                }
+                boolean firstWaits = naturality.villager.DoorwayTraffic.yield(level, crowd[0]);
+                boolean secondWaits = naturality.villager.DoorwayTraffic.yield(level, crowd[1]);
+                check(firstWaits != secondWaits, "Exactly one villager gets doorway priority");
+            });
+            boolean[] bothEntered = {false};
+            for (int attempt = 0; attempt < 60 && !bothEntered[0]; attempt++) {
+                context.waitTicks(4);
+                server.runOnServer(s -> {
+                    bothEntered[0] = crowd[0].getZ() > 2 && crowd[1].getZ() > 2;
+                    for (var body : crowd) {
+                        naturality.villager.Reputation.state(body).conversationPartner = null;
+                        body.getBrain().eraseMemory(MemoryModuleType.INTERACTION_TARGET);
+                        if (body.getZ() <= 2 && !body.getBrain().hasMemoryValue(MemoryModuleType.WALK_TARGET))
+                            body.getBrain().setMemory(MemoryModuleType.WALK_TARGET, new WalkTarget(destination, .5F, 0));
+                    }
+                });
+            }
+            check(bothEntered[0], "Side-by-side villagers take turns and both pass through a real wooden door");
+            server.runOnServer(s -> { crowd[0].discard(); crowd[1].discard(); });
             context.takeScreenshot("villager-fence-gates");
         }
     }

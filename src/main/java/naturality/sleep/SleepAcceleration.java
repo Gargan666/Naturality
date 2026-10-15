@@ -10,13 +10,22 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.stats.Stats;
 import net.minecraft.world.level.gamerules.GameRules;
 
-/** Real simulation ticks, synchronized by vanilla's tick-rate protocol. */
+/** Advance celestial time without multiplying world simulation work. */
 public final class SleepAcceleration {
     private static final Map<MinecraftServer, State> STATES = new WeakHashMap<>();
     private static final Map<ServerPlayer, Rest> REST = new WeakHashMap<>();
-    private static final class State { float baseline, applied; double seconds; }
-    private static final class Rest { int ticks; }
+    private static final class State { double seconds, speed = 1, clockTicks = 1; }
+    private static final class Rest { double ticks; }
     private SleepAcceleration() {}
+    public static boolean active(MinecraftServer server) { return STATES.containsKey(server); }
+    public static double speed(MinecraftServer server) {
+        var state = STATES.get(server);
+        return state == null ? 1 : state.speed;
+    }
+    public static double clockTicks(MinecraftServer server) {
+        var state = STATES.get(server);
+        return state == null ? 1 : state.clockTicks;
+    }
     public static boolean enabled() { return NaturalityServerConfig.get().sleepAcceleration; }
     public static void started(ServerPlayer player) {
         if (!enabled()) return;
@@ -25,8 +34,7 @@ public final class SleepAcceleration {
     public static void stopped(ServerPlayer player) {
         REST.remove(player);
         var server = player.level().getServer();
-        // Wake packets run outside END_SERVER_TICK too. Restore in the wake
-        // operation itself, without waiting for another accelerated tick.
+        // Stop in the wake operation itself, before another world clock update.
         if (!enoughSleeping(server)) restore(server);
     }
     private static boolean enoughSleeping(MinecraftServer server) {
@@ -46,21 +54,29 @@ public final class SleepAcceleration {
     private static void restore(MinecraftServer server) {
         var state = STATES.remove(server);
         if (state == null) return;
-        var manager = server.tickRateManager();
-        if (Math.abs(manager.tickrate() - state.applied) < .01f) manager.setTickRate(state.baseline);
-        sendState(server, false);
+        SleepServerSnapshots.finish(server);
+        sendState(server);
     }
     public static double multiplier(double seconds, int maximum, int rampSeconds) {
         return 1 + (maximum - 1) * Math.clamp(seconds / rampSeconds, 0, 1);
+    }
+    /** Integral of the linear ramp, including intervals crossing its cap. */
+    public static double elapsedTicks(double seconds, double duration, int maximum, int rampSeconds, double tickRate) {
+        if (seconds >= rampSeconds) return duration * maximum * tickRate;
+        double rampStart = Math.min(seconds, rampSeconds), rampEnd = Math.min(seconds + duration, rampSeconds);
+        double rampArea = (rampEnd * rampEnd - rampStart * rampStart) / (2 * rampSeconds);
+        double cappedArea = Math.max(0, seconds + duration - Math.max(seconds, rampSeconds));
+        return tickRate * (duration + (maximum - 1) * (rampArea + cappedArea));
     }
     public static void initialize() {
         net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry.clientboundPlay().register(SleepStatePayload.TYPE, SleepStatePayload.CODEC);
         net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.JOIN.register((handler, _, server) -> {
             if (net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(handler.player, SleepStatePayload.TYPE))
-                net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(handler.player, new SleepStatePayload(STATES.containsKey(server)));
+                net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(handler.player, new SleepStatePayload(active(server), speed(server)));
         });
-        ServerTickEvents.END_SERVER_TICK.register(SleepAcceleration::tick);
-        ServerLifecycleEvents.SERVER_STOPPED.register(server -> { STATES.remove(server); REST.clear(); });
+        ServerTickEvents.START_SERVER_TICK.register(SleepAcceleration::tick);
+        ServerTickEvents.END_SERVER_TICK.register(SleepServerSnapshots::synchronize);
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> { STATES.remove(server); REST.clear(); SleepServerSnapshots.clear(server); });
     }
     public static void tick(MinecraftServer server) {
         var manager = server.tickRateManager();
@@ -74,12 +90,7 @@ public final class SleepAcceleration {
                     if (player.isSpectator()) continue;
                     total++;
                     if (!player.isSleeping()) { REST.remove(player); continue; }
-                    var rest = REST.get(player);
-                    if (rest == null) { started(player); rest = REST.get(player); }
-                    if (rest.ticks < 6001) rest.ticks++;
-                    // Half of a 12,000-tick night must actually elapse asleep.
-                    if (rest.ticks == 6001 && player.getStats().getValue(Stats.CUSTOM.get(Stats.TIME_SINCE_REST)) != 0)
-                        player.resetStat(Stats.CUSTOM.get(Stats.TIME_SINCE_REST));
+                    if (!REST.containsKey(player)) started(player);
                     sleeping++;
                 }
                 int percentage = level.getGameRules().get(GameRules.PLAYERS_SLEEPING_PERCENTAGE);
@@ -89,25 +100,33 @@ public final class SleepAcceleration {
         if (!eligible) {
             restore(server);
             if (!enabled()) REST.clear();
+            else if (!manager.isFrozen() && !manager.isSprinting()) rest(server, 1);
             return;
         }
         if (state == null) {
-            state = new State(); state.baseline = manager.tickrate(); state.applied = state.baseline;
+            state = new State();
             STATES.put(server, state);
-            sendState(server, true);
-        } else if (Math.abs(manager.tickrate() - state.applied) > .01f) {
-            // An administrator's /tick rate change becomes the new baseline.
-            state.baseline = manager.tickrate(); state.seconds = 0;
         }
-        state.seconds += 1.0 / manager.tickrate();
-        float rate = (float)Math.min(10000, state.baseline * multiplier(state.seconds, Math.clamp(config.sleepMaxSpeed, 1, 1000), Math.clamp(config.sleepRampSeconds, 1, 120)));
-        if (Math.abs(rate - state.applied) >= .1f || (state.seconds >= config.sleepRampSeconds && rate != state.applied)) {
-            manager.setTickRate(rate); state.applied = rate;
+        double duration = 1.0 / manager.tickrate();
+        int maximum = Math.clamp(config.sleepMaxSpeed, 1, 1000), ramp = Math.clamp(config.sleepRampSeconds, 1, 120);
+        state.clockTicks = elapsedTicks(state.seconds, duration, maximum, ramp, manager.tickrate());
+        state.seconds += duration;
+        state.speed = multiplier(state.seconds, maximum, ramp);
+        rest(server, state.clockTicks);
+    }
+    private static void rest(MinecraftServer server, double ticks) {
+        for (var entry : REST.entrySet()) {
+            var player = entry.getKey();
+            if (player.level().getServer() != server || !player.isSleeping()) continue;
+            var rest = entry.getValue();
+            rest.ticks = Math.min(6001, rest.ticks + ticks);
+            if (rest.ticks > 6000 && player.getStats().getValue(Stats.CUSTOM.get(Stats.TIME_SINCE_REST)) != 0)
+                player.resetStat(Stats.CUSTOM.get(Stats.TIME_SINCE_REST));
         }
     }
-    private static void sendState(MinecraftServer server, boolean active) {
+    static void sendState(MinecraftServer server) {
         for (var player : server.getPlayerList().getPlayers())
             if (net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend(player, SleepStatePayload.TYPE))
-                net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player, new SleepStatePayload(active));
+                net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.send(player, new SleepStatePayload(active(server), speed(server)));
     }
 }

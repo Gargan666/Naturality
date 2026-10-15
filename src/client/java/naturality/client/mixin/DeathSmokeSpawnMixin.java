@@ -17,7 +17,15 @@ public abstract class DeathSmokeSpawnMixin {
         int index = DeathSmoke.index;
         DeathSmoke.spawning = entity;
         DeathSmoke.index = 0;
-        try { original.call(); }
+        try {
+            original.call();
+            if (naturality.ghast.GhastMotion.supported(entity)) {
+                var random = entity.getRandom();
+                for (int i=0;i<10;i++) entity.level().addParticle(net.minecraft.core.particles.ParticleTypes.POOF,
+                    entity.getRandomX(1),entity.getRandomY(),entity.getRandomZ(1),
+                    random.nextGaussian()*.02,random.nextGaussian()*.02,random.nextGaussian()*.02);
+            }
+        }
         finally { DeathSmoke.spawning = previous; DeathSmoke.index = index; }
     }
 }

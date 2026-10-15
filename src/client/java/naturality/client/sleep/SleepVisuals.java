@@ -10,6 +10,7 @@ import naturality.sleep.SleepStatePayload;
 /** Sleep animation clocks; visual callbacks and particle spawning keep normal cadence. */
 public final class SleepVisuals {
     private static boolean accelerating;
+    private static double animationSpeed = 1;
     private static double animationSeconds;
     private static double animationBoostSeconds;
     private static long lastAnimationNanos;
@@ -19,7 +20,7 @@ public final class SleepVisuals {
     public static double speed() {
         var client = Minecraft.getInstance();
         return accelerating && client.level != null && client.level.tickRateManager().runsNormally()
-            ? Math.max(1, client.level.tickRateManager().tickrate() / 20.0) : 1;
+            ? animationSpeed : 1;
     }
     /** Smooth world animation clock for effects simulated during rendering. */
     public static double seconds() {
@@ -41,10 +42,17 @@ public final class SleepVisuals {
     public static void initialize() {
         ClientPlayConnectionEvents.INIT.register((_, _) -> reset());
         ClientPlayConnectionEvents.DISCONNECT.register((_, _) -> reset());
-        ClientPlayNetworking.registerGlobalReceiver(SleepStatePayload.TYPE, (payload, context) -> accelerating = payload.accelerating());
+        ClientPlayNetworking.registerGlobalReceiver(SleepStatePayload.TYPE, (payload, _) -> accept(payload));
+    }
+    public static void accept(SleepStatePayload payload) {
+        seconds(); // Commit the previous speed before changing it, including wake.
+        accelerating = payload.accelerating();
+        animationSpeed = Double.isFinite(payload.speed()) ? Math.clamp(payload.speed(), 1, 1000) : 1;
     }
     private static void reset() {
         accelerating = false;
+        animationSpeed = 1;
+        SleepSnapshots.reset();
         animationWorld = null; animationSeconds = animationBoostSeconds = 0; lastAnimationNanos = 0;
     }
 }

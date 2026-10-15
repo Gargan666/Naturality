@@ -11,9 +11,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(RandomizableContainerBlockEntity.class)
 public abstract class ReputationChestMixin implements VillageChest {
     @Unique private boolean naturality$villageChest;
-    @Shadow protected ResourceKey<LootTable> lootTable;
+    @Shadow protected @org.jspecify.annotations.Nullable ResourceKey<LootTable> lootTable;
     @Override public boolean naturality$isVillageChest() {
-        if (lootTable != null && lootTable.identifier().getPath().startsWith("chests/village/")) naturality$villageChest = true;
+        var loot = lootTable;
+        if (loot != null && loot.identifier().getPath().startsWith("chests/village/")) naturality$villageChest = true;
         return naturality$villageChest;
     }
     @Unique public void naturality$markVillageChest(boolean marked) { naturality$villageChest |= marked; }

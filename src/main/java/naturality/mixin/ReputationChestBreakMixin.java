@@ -10,8 +10,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(ServerPlayerGameMode.class)
 public abstract class ReputationChestBreakMixin {
-    @Shadow protected ServerLevel level;
-    @Shadow @Final protected ServerPlayer player;
+    @SuppressWarnings("null") @Shadow protected ServerLevel level;
+    @SuppressWarnings("null") @Shadow @Final protected ServerPlayer player;
     @Unique private boolean naturality$breakingVillageLoot;
     @Inject(method = "destroyBlock", at = @At("HEAD"))
     private void naturality$before(BlockPos pos, CallbackInfoReturnable<Boolean> cir) {

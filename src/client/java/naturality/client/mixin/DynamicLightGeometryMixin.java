@@ -15,10 +15,12 @@ public abstract class DynamicLightGeometryMixin {
             net.minecraft.world.level.block.state.BlockState oldState, net.minecraft.world.level.block.state.BlockState newState,
             CallbackInfo ci) {
         DynamicLighting.invalidate();
+        naturality.client.render.OcclusionCulling.changed(pos);
         WaterVisuals.invalidateChunk((ClientLevel)(Object)this, pos.getX() >> 4, pos.getZ() >> 4);
     }
     @Inject(method = "onChunkLoaded", at = @At("HEAD"))
     private void naturality$refreshWater(net.minecraft.world.level.ChunkPos pos, CallbackInfo ci) {
+        naturality.client.render.OcclusionCulling.chunkLoaded((ClientLevel)(Object)this, pos);
         WaterVisuals.invalidateChunkAndNeighbors((ClientLevel)(Object)this, pos.x(), pos.z());
     }
     @Inject(method = "unload", at = @At("HEAD"))

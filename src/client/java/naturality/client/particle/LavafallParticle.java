@@ -13,6 +13,8 @@ public final class LavafallParticle extends SingleQuadParticle implements Border
     private final float initialSize;
     private float borderSizeMultiplier=1;
     private int warmFadeTicks;
+    private naturality.client.fluid.@org.jspecify.annotations.Nullable FallSurfacePath stream;
+    @Override public void naturality$followStream(){stream=new naturality.client.fluid.FallSurfacePath(true);}
     @Override public void naturality$enlargeAtRestingEdge(float fallSize){borderSizeMultiplier=2*fallSize;}
     @Override public int naturality$lifetime(){return lifetime;}
     @Override public void naturality$warmStart(int elapsedTicks) {
@@ -41,7 +43,9 @@ public final class LavafallParticle extends SingleQuadParticle implements Border
     @Override public void tick() {
         xo=x;yo=y;zo=z;
         if(++age>=lifetime) {remove();return;}
-        move(xd,yd,zd);
+        var currentStream = stream;
+        var position=currentStream==null?null:currentStream.step(level,x,y,z,xd,yd,zd);
+        if(position==null)move(xd,yd,zd);else setPos(position.x,position.y,position.z);
         xd*=0.96;zd*=0.96;yd=yd*0.96-0.004;
         var frames=sprites.getSprites();
         if(!frames.isEmpty())setSprite(frames.get(Math.min(frames.size()-1,age/4)));

@@ -16,7 +16,7 @@ import net.minecraft.world.entity.projectile.hurtingprojectile.AbstractHurtingPr
 import naturality.Naturality;
 
 /** The supplied Blockbench cubes, split into a solid core and scrolling shell. */
-public final class FireballModelRenderer<T extends AbstractHurtingProjectile> extends EntityRenderer<T, FireballModelRenderer.State> {
+public final class FireballModelRenderer<T extends @org.jspecify.annotations.NonNull AbstractHurtingProjectile> extends EntityRenderer<T, FireballModelRenderer.State> {
     private static final ModelPart CORE = core();
     private final float scale;
     private final boolean fireShell;

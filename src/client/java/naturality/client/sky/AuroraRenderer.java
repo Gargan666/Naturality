@@ -22,8 +22,13 @@ import org.joml.Vector4f;
 
 /** Emissive world-space curtains, drawn after terrain fog and before the cloud overlay. */
 public final class AuroraRenderer {
+    private static net.minecraft.client.renderer.@org.jspecify.annotations.Nullable ProjectionMatrixBuffer menuProjection;
     private static final Identifier PALETTE = Naturality.id("textures/sky/aurora.png");
     private static final Identifier END_PALETTE = Naturality.id("textures/sky/aurora_end.png");
+    private static final Identifier EVIL_PALETTE = Naturality.id("textures/sky/aurora_evil.png");
+    public static float paletteBlend(Level level, float partial) {
+        return level.dimension().equals(Level.OVERWORLD) ? BloodMoonClient.sample(partial) : 0;
+    }
     public static Identifier palette(Level level) {
         return level.dimension().equals(Level.END) ? END_PALETTE : PALETTE;
     }
@@ -36,7 +41,7 @@ public final class AuroraRenderer {
         .withFragmentShader(Naturality.id("core/aurora"))
         .withBindGroupLayout(BindGroupLayouts.PROJECTION)
         .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
-        .withBindGroupLayout(BindGroupLayouts.SAMPLER0)
+        .withBindGroupLayout(BindGroupLayouts.SAMPLER0_SAMPLER1)
         .withVertexBinding(0, DefaultVertexFormat.POSITION_TEX_COLOR)
         .withPrimitiveTopology(PrimitiveTopology.QUADS).withCull(false)
         .withDepthStencilState(new DepthStencilState(CompareOp.GREATER_THAN_OR_EQUAL, false))
@@ -91,6 +96,17 @@ public final class AuroraRenderer {
             .setColor(panel.family()*85, Math.round(panel.height()), Math.round(panel.palette()*255), 255);
     }
     public static void render(RenderTarget target) {
+        if (!naturality.client.menu.MenuPreview.active()) { renderScene(target); return; }
+        var projection = menuProjection;
+        if (projection == null) { projection = new net.minecraft.client.renderer.ProjectionMatrixBuffer("Menu aurora sky"); menuProjection = projection; }
+        RenderSystem.backupProjectionMatrix();
+        try {
+            RenderSystem.setProjectionMatrix(projection.getBuffer(naturality.client.menu.MenuPreview.skyProjection()),
+                    com.mojang.blaze3d.ProjectionType.PERSPECTIVE);
+            renderScene(target);
+        } finally { RenderSystem.restoreProjectionMatrix(); }
+    }
+    private static void renderScene(RenderTarget target) {
         drawnPanels = 0;
         var client = Minecraft.getInstance();
         var world = AuroraRenderer.world;
@@ -122,6 +138,7 @@ public final class AuroraRenderer {
             TILES.computeIfAbsent(new Key(x,z), AuroraRenderer::build);
         // Texture reload/upload must finish before opening the draw pass.
         var palette = client.getTextureManager().getTexture(palette(world));
+        var evilPalette = client.getTextureManager().getTexture(EVIL_PALETTE);
         float partial = client.getDeltaTracker().getGameTimeDeltaPartialTick(false);
         float value = previousStrength + (strength-previousStrength)*partial;
         float rain = world.dimension().equals(Level.END) ? 1 : 1 - world.getRainLevel(partial);
@@ -133,13 +150,14 @@ public final class AuroraRenderer {
             pass.setPipeline(RenderSystem.getCompiledPipeline(PIPELINE));
             RenderSystem.bindDefaultUniforms(pass);
             pass.setUniform("Sampler0", palette.getTextureView(), palette.getSampler());
+            pass.setUniform("Sampler1", evilPalette.getTextureView(), evilPalette.getSampler());
             for (var entry : TILES.entrySet()) {
                 var tile = entry.getValue();
                 var transform = RenderSystem.getModelViewMatrixCopy().translate(
                     (float)(entry.getKey().x*(double)AuroraGeometry.TILE-eye.x), (float)-eye.y,
                     (float)(entry.getKey().z*(double)AuroraGeometry.TILE-eye.z));
                 pass.setUniform("DynamicTransforms", RenderSystem.getDynamicUniforms().writeTransform(transform,
-                    new Vector4f(value/20F, phase, rain, .9F)));
+                    new Vector4f(value/20F, phase, rain, paletteBlend(world, partial))));
                 pass.setVertexBuffer(0, tile.vertices.slice());
                 pass.setIndexBuffer(indices.getBuffer(tile.indices), indices.type());
                 pass.drawIndexed(tile.indices, 1, 0, 0, 0);
@@ -148,6 +166,7 @@ public final class AuroraRenderer {
         }
     }
     public static void close() {
+        if (menuProjection != null) { menuProjection.close(); menuProjection = null; }
         for (var tile : TILES.values()) tile.vertices.close();
         TILES.clear(); world = null; previousStrength = strength = motionPhase = 0; drawnPanels = 0; tileSegments = -1;
     }

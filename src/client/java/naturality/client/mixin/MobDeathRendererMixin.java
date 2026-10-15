@@ -22,6 +22,9 @@ public abstract class MobDeathRendererMixin {
         int progress = entity instanceof Mob && entity.deathTime > 0 && !ghast
             ? Math.round(Math.clamp((entity.deathTime + partial) / 19F, 0F, 1F) * 2047) : 0;
         ((MobDeathState) state).naturality$deathPixels(progress);
+        if (ghast && entity.isDeadOrDying() && entity instanceof naturality.ghast.GhastCrashBody body
+                && body.naturality$impactTicks() >= 0)
+            ((MobDeathState) state).naturality$deathPixels(Math.round(Math.clamp((body.naturality$impactTicks()+partial)/5F,0F,1F)*2047));
         naturality.client.particle.DeathSmoke.owner(state, entity);
     }
 
@@ -29,5 +32,15 @@ public abstract class MobDeathRendererMixin {
     private static void naturality$encode(LivingEntityRenderState state, float white, CallbackInfoReturnable<Integer> cir) {
         // Overlay U uses only four bits. Keep its tint and V while transporting the mask progress.
         cir.setReturnValue(cir.getReturnValue() | (((MobDeathState) state).naturality$deathPixels() << 4));
+    }
+
+    @Inject(method="setupRotations", at=@At("HEAD"))
+    private void naturality$liftSpider(LivingEntityRenderState state, com.mojang.blaze3d.vertex.PoseStack pose,
+                                      float body, float scale, CallbackInfo ci) {
+        if (!((Object)this instanceof net.minecraft.client.renderer.entity.SpiderRenderer<?>) || state.deathTime <= 0) return;
+        float turn = (float)Math.PI * (float)Math.sqrt(Math.clamp((state.deathTime-1)/20F*1.6F,0F,1F));
+        double lift = state.boundingBoxHeight * (1-Math.cos(turn))*.5
+            + state.boundingBoxWidth * Math.abs(Math.sin(turn))*.5;
+        pose.translate(0,lift/scale,0);
     }
 }

@@ -25,7 +25,7 @@ public final class CeilingPathNavigation extends GroundPathNavigation {
         nodeEvaluator = new CeilingNodeEvaluator();
         return new PathFinder(nodeEvaluator, maxVisitedNodes);
     }
-    @Override protected Path createPath(Set<BlockPos> targets, int radiusOffset, boolean above, int range, float maxLength) {
+    @Override protected @org.jspecify.annotations.Nullable Path createPath(Set<BlockPos> targets, int radiusOffset, boolean above, int range, float maxLength) {
         var projected = new java.util.HashSet<BlockPos>();
         for (var target : targets) {
             var surface = surfaceAt(mob, target, 4);
@@ -33,12 +33,12 @@ public final class CeilingPathNavigation extends GroundPathNavigation {
         }
         return super.createPath(projected, radiusOffset, above, range, maxLength);
     }
-    @Override public Path createPath(BlockPos pos, int range) {
+    @Override public @org.jspecify.annotations.Nullable Path createPath(BlockPos pos, int range) {
         // Skip GroundPathNavigation's search down to the island floor.
         return createPath(Set.of(pos), 8, false, range);
     }
-    @Override public Path createPath(Entity target, int range) { return createPath(target.blockPosition(), range); }
-    @Override public boolean moveTo(Path path, double speed) {
+    @Override public @org.jspecify.annotations.Nullable Path createPath(Entity target, int range) { return createPath(target.blockPosition(), range); }
+    @Override public boolean moveTo(@org.jspecify.annotations.Nullable Path path, double speed) {
         if (path != null && path.getNodeCount() > 0 && !(path.getNode(0) instanceof CeilingNodeEvaluator.CeilingNode))
             path = createPath(path.getTarget(), 1);
         return super.moveTo(path, speed);
@@ -46,27 +46,33 @@ public final class CeilingPathNavigation extends GroundPathNavigation {
     @Override protected Vec3 getTempMobPos() { return mob.position(); }
     @Override protected void trimPath() {} // Upright cauldron/sun trimming is inappropriate below a ceiling.
     @Override protected double getGroundY(Vec3 target) {
-        return ((CeilingNodeEvaluator.CeilingNode) path.getNextNode()).surface.position(mob).y;
+        var current = path;
+        if (current == null || current.isDone() || !(current.getNextNode() instanceof CeilingNodeEvaluator.CeilingNode node)) return target.y;
+        return node.surface.position(mob).y;
     }
     @Override public void tick() {
         tick++;
         if (hasDelayedRecomputation) recomputePath();
         if (isDone()) return;
         followThePath();
-        if (!isDone()) {
-            var target = ((CeilingNodeEvaluator.CeilingNode) path.getNextNode()).surface.position(mob);
+        var current = path;
+        if (current != null && !current.isDone() && current.getNextNode() instanceof CeilingNodeEvaluator.CeilingNode node) {
+            var target = node.surface.position(mob);
             mob.getMoveControl().setWantedPosition(target.x, target.y, target.z, speedModifier);
         }
     }
     @Override protected void followThePath() {
-        var target = ((CeilingNodeEvaluator.CeilingNode) path.getNextNode()).surface.position(mob);
+        var current = path;
+        if (current == null || current.isDone()) return;
+        if (!(current.getNextNode() instanceof CeilingNodeEvaluator.CeilingNode node)) { stop(); return; }
+        var target = node.surface.position(mob);
         maxDistanceToWaypoint = Math.min(.35F, mob.getBbWidth() * .5F);
         if (Math.abs(mob.getX() - target.x) < maxDistanceToWaypoint
                 && Math.abs(mob.getZ() - target.z) < maxDistanceToWaypoint && Math.abs(mob.getY() - target.y) < .5)
-            path.advance();
+            current.advance();
         doStuckDetection(mob.position());
     }
-    public static CeilingSurface surfaceAt(Mob mob, BlockPos pos, int radius) {
+    public static @org.jspecify.annotations.Nullable CeilingSurface surfaceAt(Mob mob, BlockPos pos, int radius) {
         double offset = Mth.floor(mob.getBbWidth() + 1) * .5;
         double feet = pos.getY() + mob.getBbHeight();
         return CeilingSurface.find(mob.level(), mob, pos.getX() + offset, pos.getZ() + offset,

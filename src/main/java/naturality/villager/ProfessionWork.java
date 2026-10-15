@@ -318,7 +318,7 @@ public final class ProfessionWork extends Behavior<Villager> {
             .withParameter(LootContextParams.TOOL, body.getMainHandItem())
             .withParameter(LootContextParams.THIS_ENTITY, lootHook)
             .create(LootContextParamSets.FISHING);
-        var items = level.getServer().reloadableRegistries().getLootTable(BuiltInLootTables.FISHING).getRandomItems(params);
+        var items = java.util.Objects.requireNonNull(level.getServer()).reloadableRegistries().getLootTable(BuiltInLootTables.FISHING).getRandomItems(params);
         return items.isEmpty() ? ItemStack.EMPTY : items.get(body.getRandom().nextInt(items.size())).copyWithCount(1);
     }
 

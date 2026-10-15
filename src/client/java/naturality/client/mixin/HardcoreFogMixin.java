@@ -20,5 +20,9 @@ public abstract class HardcoreFogMixin {
         // This color also clears the sky and supplies its horizon gradient.
         // Local cave light belongs to world fog only, encoded during upload.
         color.mul(factor, factor, factor, 1.0F);
+        if (camera.getFluidInCamera() == FogType.NONE) {
+            var red = naturality.client.sky.BloodMoonClient.tint(new org.joml.Vector3f(color.x, color.y, color.z), partial);
+            color.set(red.x, red.y, red.z, color.w);
+        }
     }
 }

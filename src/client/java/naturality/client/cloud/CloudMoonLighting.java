@@ -29,7 +29,8 @@ public final class CloudMoonLighting {
 
     public static Vector4f sample(float partialTicks) {
         var client = Minecraft.getInstance();
-        if (client.level == null || !client.level.dimension().equals(Level.OVERWORLD)) return new Vector4f();
+        var level = client.level;
+        if (level == null || !level.dimension().equals(Level.OVERWORLD)) return new Vector4f();
         var probe = client.gameRenderer.mainCamera().attributeProbe();
         float moon = probe.getValue(EnvironmentAttributes.MOON_ANGLE, partialTicks) * (float)(Math.PI / 180);
         float sun = probe.getValue(EnvironmentAttributes.SUN_ANGLE, partialTicks) * (float)(Math.PI / 180);
@@ -37,7 +38,7 @@ public final class CloudMoonLighting {
         float night = Math.clamp(-(float)Math.cos(sun) * 3, 0, 1);
         night = night * night * (3 - 2 * night);
         float strength = night * phaseStrength(phase) * Math.clamp((float)Math.cos(moon) * 4, 0, 1)
-            * (1 - client.level.getRainLevel(partialTicks) * 0.8F);
+            * (1 - level.getRainLevel(partialTicks) * 0.8F);
         var viewDirection = captured ? new org.joml.Vector3f(renderedDirection)
             : com.mojang.blaze3d.systems.RenderSystem.getModelViewMatrixCopy().transformDirection(direction(moon));
         return new Vector4f(viewDirection, strength);

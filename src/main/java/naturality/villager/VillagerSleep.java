@@ -49,11 +49,12 @@ public final class VillagerSleep {
         if (state.sleepBed == null && (state.bedSearchTick < 0 || body.tickCount - state.bedSearchTick >= 100)) {
             state.bedSearchTick = body.tickCount;
             var center = body.blockPosition();
-            state.sleepBed = BlockPos.betweenClosedStream(center.offset(-32, -8, -32), center.offset(32, 8, 32))
+            var bed = BlockPos.betweenClosedStream(center.offset(-32, -8, -32), center.offset(32, 8, 32))
                 .filter(pos -> naturality.util.LoadedChunks.has(level, pos) && available(level, pos))
                 .map(BlockPos::immutable).sorted(Comparator.comparingDouble(pos -> pos.distSqr(center)))
                 .filter(pos -> { var path = body.getNavigation().createPath(pos, 1); return path != null && path.canReach(); })
-                .findFirst().orElse(null);
+                .findFirst();
+            state.sleepBed = bed.isPresent() ? bed.orElseThrow() : null;
             if (state.sleepBed == null) {
                 var roam = net.minecraft.world.entity.ai.util.DefaultRandomPos.getPos(body, 16, 7);
                 if (roam != null) body.getNavigation().moveTo(roam.x, roam.y, roam.z, .6);
@@ -69,6 +70,8 @@ public final class VillagerSleep {
             } else if (body.getNavigation().isDone() || body.tickCount % 20 == 0)
                 body.getNavigation().moveTo(state.sleepBed.getX() + .5, state.sleepBed.getY(), state.sleepBed.getZ() + .5, .6);
         }
+        var path = body.getNavigation().getPath();
+        if (path != null) body.getBrain().setMemory(MemoryModuleType.PATH, path);
         return true;
     }
     private static boolean available(ServerLevel level, BlockPos pos) {

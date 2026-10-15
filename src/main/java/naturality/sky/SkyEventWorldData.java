@@ -34,9 +34,13 @@ public final class SkyEventWorldData extends SavedData {
     public SkyEventSettings settings(ServerLevel level, SkyEventType type) {
         String dimension = level.dimension().identifier().toString();
         var events = settings.computeIfAbsent(dimension, _ -> new HashMap<>());
-        return events.computeIfAbsent(type.id, _ -> {
-            var event = new SkyEventSettings(); event.strength = Math.min(event.strength, type.maxStrength()); return event;
+        var event = events.computeIfAbsent(type.id, _ -> {
+            var initial = new SkyEventSettings(); initial.strength = Math.min(initial.strength, type.maxStrength()); return initial;
         });
+        if (type == SkyEventType.BLOOD_MOON && event.strength > 1) {
+            event.strength = 1; setDirty();
+        }
+        return event;
     }
 
     public void override(ServerLevel level, SkyEventType type, boolean enabled, int strength) {
@@ -44,6 +48,6 @@ public final class SkyEventWorldData extends SavedData {
         event.override = enabled;
         event.strength = Math.clamp(strength, 0, type.maxStrength());
         setDirty();
-        level.getServer().getDataStorage().scheduleSave();
+        java.util.Objects.requireNonNull(level.getServer()).getDataStorage().scheduleSave();
     }
 }

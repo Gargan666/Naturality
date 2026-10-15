@@ -25,7 +25,12 @@ public final class ParticleWeather {
         WeatherClusterParticle.initialize();
         naturality.client.sleep.SleepVisuals.register(ParticleWeather::tick);
     }
-    public static boolean enabled(ClientLevel level) { return naturality.config.NaturalityConfig.get().effects.weatherParticles && level.canHaveWeather() && WeatherSystem.state(level) != null; }
+    public static boolean enabled(ClientLevel level) { return naturality.config.NaturalityConfig.get().effects.weatherParticles && level.canHaveWeather() && weatherState(level) != null; }
+    public static naturality.weather.@org.jspecify.annotations.Nullable WeatherState weatherState(ClientLevel level) {
+        var state = WeatherSystem.state(level);
+        return state == null && naturality.client.menu.MenuPreview.active()
+                ? new naturality.weather.WeatherState(level.getRainLevel(1) * 25, 0, 50, 0) : state;
+    }
     public static int activeCount() { return ACTIVE.size(); }
     public static long snowCount() { return ACTIVE.stream().filter(WeatherClusterParticle::snow).count(); }
     public static void clear() { for (var p : ACTIVE) p.remove(); ACTIVE.clear(); }
@@ -42,6 +47,7 @@ public final class ParticleWeather {
         var world = ParticleWeather.world;
         if (world == null || !enabled(world)) { clear(); return; }
         if (client.isPaused()) return;
+        if (naturality.client.menu.MenuPreview.active()) { tickPreview(client); return; }
         ACTIVE.removeIf(p -> {
             // Engine eviction/resource reload may stop ticking a still-alive object.
             if (world.getGameTime() - p.lastTickTime() > 10) p.remove();
@@ -76,6 +82,41 @@ public final class ParticleWeather {
                 x, y, z, 0, 0, 0);
             if (particle instanceof WeatherClusterParticle cluster) { ACTIVE.add(cluster); births++; }
         }
+    }
+    /** A bounded foreground sheet: the orbit eye is often outside loaded terrain. */
+    private static void tickPreview(Minecraft client) {
+        var level = client.level;
+        if (level == null) return;
+        var climate = weatherState(level);
+        var kind = WeatherParticleContext.precipitation(level, naturality.client.menu.MenuPreview.spawn());
+        ACTIVE.removeIf(p -> !p.isAlive() || p.snow() != (kind == Biome.Precipitation.SNOW) || !previewContains(p.position()));
+        float quality = switch (client.options.particles().get()) {
+            case MINIMAL -> .25F; case DECREASED -> .5F; default -> 1F;
+        };
+        int target = climate == null || kind == Biome.Precipitation.NONE ? 0
+                : Math.round(Math.min(256, climate.precipitationDensity() * 100) * quality);
+        while (ACTIVE.size() > target) ACTIVE.removeLast().remove();
+        var camera = client.gameRenderer.mainCamera();
+        var projection = naturality.client.menu.MenuPreview.projection();
+        for (int births = 0; births < 24 && ACTIVE.size() < target; births++) {
+            var offset = new org.joml.Vector3f((RANDOM.nextFloat() * 2 - 1) / projection.m00(),
+                    (RANDOM.nextFloat() * 2 - 1) / projection.m11(), -16 - RANDOM.nextFloat() * 32);
+            camera.rotation().transform(offset);
+            var eye = camera.position();
+            var particle = client.particleEngine.createParticle(kind == Biome.Precipitation.SNOW
+                    ? NaturalityParticles.SNOW_CLUSTER : NaturalityParticles.RAIN_CLUSTER,
+                    eye.x + offset.x, eye.y + offset.y, eye.z + offset.z, 0, 0, 0);
+            if (particle instanceof WeatherClusterParticle cluster) ACTIVE.add(cluster);
+        }
+    }
+    public static boolean previewContains(net.minecraft.world.phys.Vec3 position) {
+        var camera = Minecraft.getInstance().gameRenderer.mainCamera();
+        var relative = position.subtract(camera.position());
+        var local = new org.joml.Vector3f((float)relative.x, (float)relative.y, (float)relative.z);
+        new org.joml.Quaternionf(camera.rotation()).conjugate().transform(local);
+        var projection = naturality.client.menu.MenuPreview.projection();
+        return Math.abs(local.x * projection.m00()) < 1.15F && Math.abs(local.y * projection.m11()) < 1.15F
+                && local.z < -4 && local.z > -80;
     }
     /** The rendered layers' highest top edge; no visible clouds means no spawn ceiling. */
     public static double highestActiveCloudTop(Minecraft client) {

@@ -20,9 +20,11 @@ public abstract class EntityFogCullingMixin<T extends Entity> {
     @Inject(method = "shouldRender", at = @At("RETURN"), cancellable = true)
     private void naturality$hiddenInFog(@NonNull T entity, Frustum frustum, double x, double y, double z,
             float partialTick, CallbackInfoReturnable<Boolean> cir) {
-        if (!cir.getReturnValueZ() || !FogCulling.active() || !FogCulling.matches(entity.level())
+        if (!cir.getReturnValueZ() || !FogCulling.matches(entity.level())
                 || !affectedByCulling(entity) || entity.isCurrentlyGlowing()) return;
         AABB bounds = getBoundingBoxForCulling(entity, partialTick);
+        if (naturality.client.render.OcclusionCulling.hidden(entity, bounds)) { cir.setReturnValue(false); return; }
+        if (!FogCulling.active()) return;
         // Leashes and their holders can cross the fog boundary independently of this body.
         if (entity instanceof net.minecraft.world.entity.Leashable leashable) {
             Entity holder = leashable.getLeashHolder();

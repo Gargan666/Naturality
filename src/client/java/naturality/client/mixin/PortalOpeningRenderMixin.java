@@ -22,6 +22,7 @@ public abstract class PortalOpeningRenderMixin {
         naturality.client.fluid.LavaIntersection.extract(state, frustum, camera, partialTick);
         naturality.client.portal.end.EndEyeGlow.extract(state, frustum, camera, partialTick);
         naturality.client.portal.PortalCrossingClient.extract(state, frustum, camera, partialTick);
+        naturality.client.horror.AmbientHorror.extract(state, frustum, camera, partialTick);
     }
 }
 

@@ -9,7 +9,7 @@ import net.minecraft.util.ARGB;
 public final class LightningFlashes {
     private static long start;
     private static double simulationStart;
-    private static Object world;
+    private static @org.jspecify.annotations.Nullable Object world;
     private static double hold=.4;
     private static double decay=1;
     private LightningFlashes() {}

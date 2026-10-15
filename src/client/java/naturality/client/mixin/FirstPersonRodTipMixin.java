@@ -30,6 +30,8 @@ public abstract class FirstPersonRodTipMixin {
             return;
         }
         if (stack.is(Items.FISHING_ROD)) {
+            if ((Object)this instanceof naturality.client.camera.ElasticHandsState elastic)
+                elastic.naturality$easeMeasuredItem(pose, hand);
             var layers = (GlintItemLayersAccess)item;
             if (layers.naturality$activeLayers() > 0) {
                 pose.pushPose();

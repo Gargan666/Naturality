@@ -6,7 +6,7 @@ import naturality.ghast.GhastCrashBody;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
 import com.mojang.blaze3d.vertex.PoseStack;
-import org.joml.Quaternionf;
+
 
 /** Interpolated server angular dynamics, shared with collision support. */
 public record GhastCrashPose(float ticks, Vec3 rotation, float stretch) {
@@ -16,7 +16,7 @@ public record GhastCrashPose(float ticks, Vec3 rotation, float stretch) {
     private static final WeakHashMap<LivingEntity,Motion> MOTIONS=new WeakHashMap<>();
     public static GhastCrashPose extract(LivingEntity entity,float partial) {
         if (!entity.isDeadOrDying() || !(entity instanceof GhastCrashBody)) { MOTIONS.remove(entity); return null; }
-        Motion motion=MOTIONS.computeIfAbsent(entity,e -> new Motion());
+        Motion motion=MOTIONS.computeIfAbsent(entity,_ -> new Motion());
         if (motion.tick!=entity.tickCount) {
             motion.previous=motion.current;
             motion.current=((GhastCrashBody)entity).naturality$crashRotation();

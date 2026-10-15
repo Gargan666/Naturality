@@ -64,6 +64,26 @@ public final class AuroraGameTest implements FabricClientGameTest {
                 check(AuroraRenderer.strength() == 20 && AuroraRenderer.drawnPanels() > 0, "Curtains render");
             });
             context.takeScreenshot("aurora-strength-20");
+            server.runCommand("skyevent minecraft:overworld blood_moon on");
+            context.waitTicks(25);
+            context.runOnClient(client -> {
+                float blend = AuroraRenderer.paletteBlend(client.level, 1);
+                check(blend > 0 && blend < 1, "Aurora palette fades toward evil during Blood Moon onset");
+                check(client.getResourceManager().getResource(naturality.Naturality.id("textures/sky/aurora_evil.png")).isPresent(),
+                    "Supplied evil palette is packaged");
+            });
+            context.takeScreenshot("aurora-blood-moon-transition");
+            context.waitTicks(150);
+            context.runOnClient(client -> check(AuroraRenderer.paletteBlend(client.level, 1) == 1 && AuroraRenderer.drawnPanels() > 0,
+                "Active Blood Moon selects the full evil palette without removing aurora geometry"));
+            context.takeScreenshot("aurora-blood-moon-evil");
+            server.runCommand("skyevent minecraft:overworld blood_moon off");
+            context.waitTicks(25);
+            context.runOnClient(client -> check(AuroraRenderer.paletteBlend(client.level, 1) > 0
+                && AuroraRenderer.paletteBlend(client.level, 1) < 1, "Palette fades back when Blood Moon ends"));
+            context.waitTicks(150);
+            context.runOnClient(client -> check(AuroraRenderer.paletteBlend(client.level, 1) == 0,
+                "Normal aurora palette returns after Blood Moon fades"));
             int[] defaultPanels = new int[1];
             context.runOnClient(client -> {
                 defaultPanels[0] = AuroraRenderer.drawnPanels();
@@ -139,6 +159,7 @@ public final class AuroraGameTest implements FabricClientGameTest {
                     "End Aurora command synchronizes its separate channel");
                 check(AuroraRenderer.strength() == 20 && AuroraRenderer.drawnPanels() > 0,
                     "World-space aurora curtains render in the End");
+                check(AuroraRenderer.paletteBlend(client.level, 1) == 0, "End Aurora retains its End palette");
                 check(AuroraRenderer.palette(client.level).toString().equals("naturality:textures/sky/aurora_end.png")
                     && client.getResourceManager().getResource(AuroraRenderer.palette(client.level)).isPresent(),
                     "End renderer selects the supplied End palette");

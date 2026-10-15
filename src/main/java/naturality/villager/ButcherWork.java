@@ -235,13 +235,14 @@ public final class ButcherWork extends Behavior<Villager> {
         if (farmer == null) {
             if (time < nextAction) return;
             nextAction = time + 60;
-            farmer = level.getEntitiesOfClass(Villager.class, body.getBoundingBox().inflate(48),
+            var availableFarmer = level.getEntitiesOfClass(Villager.class, body.getBoundingBox().inflate(48),
                 v -> !v.isBaby() && !v.isTrading() && v.getBrain().isActive(Activity.WORK)
                     && v.getVillagerData().profession().is(VillagerProfession.FARMER)
                     && FarmerSupplies.available(v, body))
                 .stream().sorted(Comparator.comparingDouble(body::distanceToSqr))
                 .filter(v -> { var path = body.getNavigation().createPath(v, 1); return path != null && path.canReach(); })
-                .findFirst().orElse(null);
+                .findFirst();
+            farmer = availableFarmer.isPresent() ? availableFarmer.orElseThrow() : null;
             deliveries = 0;
         }
         if (farmer == null || !approach(body, farmer, time, 2)) return;

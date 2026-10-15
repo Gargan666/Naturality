@@ -23,9 +23,11 @@ public final class FlatExplosionParticle extends SingleQuadParticle {
     public static void initialize() {
         var registry = ParticleProviderRegistry.getInstance();
         registry.register(ParticleTypes.EXPLOSION, sprites ->
-            (type, level, x, y, z, vx, vy, vz, random) -> create(level, x, y, z, sprites, vx, vy));
+            (_, level, x, y, z, vx, vy, _, _) -> create(level, x, y, z, sprites, vx, vy));
         registry.register(ParticleTypes.EXPLOSION_EMITTER, sprites ->
-            (type, level, x, y, z, vx, vy, vz, random) -> create(level, x, y, z, sprites, vx, vy));
+            (_, level, x, y, z, vx, vy, _, _) -> create(level, x, y, z, sprites, vx, vy));
+        registry.register(naturality.NaturalityParticles.END_EXPLOSION, sprites ->
+            (_, level, x, y, z, vx, vy, _, _) -> create(level, x, y, z, sprites, vx, vy));
     }
 
     private static FlatExplosionParticle create(ClientLevel level, double x, double y, double z,

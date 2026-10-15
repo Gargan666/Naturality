@@ -12,6 +12,7 @@ public abstract class FluidPipelineMixin {
     @Redirect(method = "<clinit>", at = @At(value = "INVOKE", target = "Lcom/mojang/renderpearl/api/pipeline/RenderPipeline$Builder;withFragmentShader(Ljava/lang/String;)Lcom/mojang/renderpearl/api/pipeline/RenderPipeline$Builder;"))
     private static RenderPipeline.Builder naturality$fluidLayout(RenderPipeline.Builder builder, String shader) {
         if (shader.equals("core/terrain")) {
+            builder.withBindGroupLayout(naturality.client.menu.MenuFog.LAYOUT);
             builder.withBindGroupLayout(naturality.client.weather.WindRendering.LAYOUT);
             builder.withBindGroupLayout(ProceduralFluids.LAYOUT);
             builder.withBindGroupLayout(naturality.client.fire.ProceduralFire.LAYOUT);

@@ -25,8 +25,8 @@ public class NaturalityCategoryScreen extends OptionsSubScreen {
         GAMEPLAY(ROOT), VILLAGERS(GAMEPLAY), MOB_GAMEPLAY(GAMEPLAY), WEATHER_RULES(GAMEPLAY),
         TRAVEL_RULES(GAMEPLAY), BLOCK_RULES(GAMEPLAY), AUDIO(ROOT);
 
-        public final Category parent;
-        Category(Category parent) { this.parent = parent; }
+        public final @org.jspecify.annotations.Nullable Category parent;
+        Category(@org.jspecify.annotations.Nullable Category parent) { this.parent = parent; }
         public Category[] children() {
             return java.util.Arrays.stream(values()).filter(child -> child.parent == this).toArray(Category[]::new);
         }
@@ -108,8 +108,9 @@ public class NaturalityCategoryScreen extends OptionsSubScreen {
     }
 
     private static Component categoryPath(Category category) {
-        if (category.parent == null || category.parent == Category.ROOT) return categoryTitle(category);
-        return categoryPath(category.parent).copy().append(" > ").append(categoryTitle(category));
+        var parent = category.parent;
+        if (parent == null || parent == Category.ROOT) return categoryTitle(category);
+        return categoryPath(parent).copy().append(" > ").append(categoryTitle(category));
     }
 
     private void navigation(Category... categories) {
@@ -182,6 +183,14 @@ public class NaturalityCategoryScreen extends OptionsSubScreen {
             return;
         }
         addFeatureOptions(category);
+        if (category == Category.VISUALS) {
+            var c = NaturalityConfig.get().effects;
+            toggle("effects.distantWind", c.distantWind, true, v -> c.distantWind = v);
+            toggle("effects.distantLeaves", c.distantLeaves, true, v -> c.distantLeaves = v);
+            toggle("effects.distantTextures", c.distantTextures, true, v -> c.distantTextures = v);
+            toggle("effects.distantDetails", c.distantDetails, true, v -> c.distantDetails = v);
+            return;
+        }
         if (category == Category.WEATHER) {
             var c = NaturalityConfig.get().effects;
             toggle("effects.rainSplashFade", c.rainSplashFade, true, v -> c.rainSplashFade = v);
@@ -425,8 +434,9 @@ public class NaturalityCategoryScreen extends OptionsSubScreen {
             String label = "naturality.config.feature." + feature.key();
             var tooltip = Component.translatable(label + ".tooltip")
                 .append(" ").append(Component.translatable("naturality.config.restart.tooltip"));
-            if (feature.parent != null) tooltip.append(" ").append(Component.translatable("naturality.config.requires",
-                Component.translatable("naturality.config.feature." + feature.parent.key())));
+            var parent = feature.parent;
+            if (parent != null) tooltip.append(" ").append(Component.translatable("naturality.config.requires",
+                Component.translatable("naturality.config.feature." + parent.key())));
             var option = OptionInstance.createBoolean(label,
                 OptionInstance.cachedConstantTooltip(VisualPerformance.tooltip(label, tooltip)),
                 FeatureConfig.get().get(feature), value -> FeatureConfig.get().set(feature, value));

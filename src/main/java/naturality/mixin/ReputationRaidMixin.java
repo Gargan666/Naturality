@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(Raid.class)
 public abstract class ReputationRaidMixin {
-    @Shadow @Final private Set<UUID> heroesOfTheVillage;
+    @SuppressWarnings("null") @Shadow @Final private Set<UUID> heroesOfTheVillage;
     @Unique private boolean naturality$wasVictory;
 
     @Inject(method = "tick", at = @At("HEAD"))

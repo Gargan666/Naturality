@@ -11,7 +11,7 @@ public final class PortalClippedVertexConsumer implements VertexConsumer {
     private final double plane;
     private final int side;
     private final List<float[]> quad=new ArrayList<>(4);
-    private float[] vertex;
+    private float[] vertex = new float[19];
     public PortalClippedVertexConsumer(VertexConsumer output,boolean xAxis,double plane,int side) {
         this.output=output;this.xAxis=xAxis;this.plane=plane;this.side=side;
     }

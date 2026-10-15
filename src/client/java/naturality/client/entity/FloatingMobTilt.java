@@ -10,8 +10,9 @@ public final class FloatingMobTilt {
     public static void initialize() {
         naturality.config.FloatingMobTiltConfig.get();
         naturality.client.sleep.SleepVisuals.register(client -> {
-            if(client.level==null || client.isPaused()) return;
-            for(var entity:client.level.entitiesForRendering()) if(entity instanceof LivingEntity living && enabled(living)) {
+            var level = client.level;
+            if(level==null || client.isPaused()) return;
+            for(var entity:level.entitiesForRendering()) if(entity instanceof LivingEntity living && enabled(living)) {
                 // Ghast physics already ticks this same smoothing state on both sides.
                 if(GhastMotion.supported(living) && naturality.config.Feature.GHAST_PHYSICS.enabled()) continue;
                 GhastMotion.tick(living);

@@ -11,9 +11,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin({ModelFeatureRenderer.Submit.class,ItemFeatureRenderer.Submit.class})
 public abstract class PortalFeatureSubmitMixin implements PortalClippedSubmit {
-    @Unique private PortalClippedCollector.Plane naturality$clipPlane;
-    @Override public PortalClippedCollector.Plane naturality$clipPlane() { return naturality$clipPlane; }
-    @Override public void naturality$clipPlane(PortalClippedCollector.Plane plane) { naturality$clipPlane=plane; }
+    @Unique private PortalClippedCollector.@org.jspecify.annotations.Nullable Plane naturality$clipPlane;
+    @Override public PortalClippedCollector.@org.jspecify.annotations.Nullable Plane naturality$clipPlane() { return naturality$clipPlane; }
+    @Override public void naturality$clipPlane(PortalClippedCollector.@org.jspecify.annotations.Nullable Plane plane) { naturality$clipPlane=plane; }
     @Inject(method="<init>",at=@At("RETURN"))
     private void naturality$plane(CallbackInfo ci) {PortalClippedCollector.remember(this);}
 }

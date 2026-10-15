@@ -23,6 +23,7 @@ public final class WeatherClusterParticle extends SingleQuadParticle {
     private static final ParticleLimit LIMIT = new ParticleLimit(1600);
     private static final Optional<ParticleLimit> OPTIONAL_LIMIT = Optional.of(LIMIT);
     private final boolean snow;
+    private final boolean menuPreview;
     private final boolean flip;
     private final double fallSpeed;
     private final @org.jspecify.annotations.Nullable WeatherSway sway;
@@ -56,21 +57,25 @@ public final class WeatherClusterParticle extends SingleQuadParticle {
             TextureAtlasSprite sprite, RandomSource random, boolean snow) {
         super(level,x,y,z,sprite);
         this.snow = snow;
+        menuPreview = naturality.client.menu.MenuPreview.active();
         flip = random.nextBoolean();
         double phase=random.nextDouble()*Math.PI*2;
         sway=snow?new WeatherSway(phase):null;
 
         fallSpeed = snow ? .055 + random.nextDouble() * .035 : .6 + random.nextDouble() * .2;
         quadSize = 1.8F + random.nextFloat() * .5F;
+        if (menuPreview) quadSize *= 2;
         lifetime = snow ? 240 : 70;
 
         hasPhysics = false;
         alpha = 0;
+        if (menuPreview) opacity = .5F;
         lastTickTime = level.getGameTime();
         updateVelocity(WeatherParticleContext.state(level),true);
         updateTint();
     }
     public boolean snow() { return snow; }
+    public Vec3 position() { return new Vec3(x,y,z); }
     public long lastTickTime() { return lastTickTime; }
     public Vec3 velocity() { return new Vec3(xd,yd,zd); }
     // These cards do not collide, and vanilla frustum tests use their position.
@@ -124,8 +129,15 @@ public final class WeatherClusterParticle extends SingleQuadParticle {
         var kind = WeatherParticleContext.precipitation(level, queryPos.set(x,y,z));
         if (kind != (snow ? Biome.Precipitation.SNOW : Biome.Precipitation.RAIN)) { remove(); return; }
         updateVelocity(weather,false);
-        double speed = naturality.client.sleep.SleepVisuals.speed();
+        double speed = menuPreview ? 4 : naturality.client.sleep.SleepVisuals.speed();
         double nx=x+xd*speed, ny=y+yd*speed, nz=z+zd*speed;
+        if (menuPreview) {
+            if (!naturality.client.menu.MenuPreview.active() || !ParticleWeather.previewContains(new Vec3(nx,ny,nz))) { remove(); return; }
+            setPos(nx,ny,nz);
+            updateTint();
+            opacity = (snow ? .65F : .5F) * Math.min(1, (lifetime-age)/8F);
+            return;
+        }
         // The weather card may visually overlap the ground while its center is
         // still falling. Remove it only once the center reaches the surface.
         double clearance = ParticleWeather.clearance(level,nx,ny,nz,0);

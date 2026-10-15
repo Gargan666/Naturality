@@ -18,7 +18,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 /** Share the vanilla AI damage stimulus, never damage or recursively call hurt. */
 @Mixin(LivingEntity.class)
 public abstract class CrowdPanicMixin {
-    @Shadow private DamageSource lastDamageSource;
+    @Shadow private @org.jspecify.annotations.Nullable DamageSource lastDamageSource;
     @Shadow private long lastDamageStamp;
 
     @Unique private static final TagKey<EntityType<?>> naturality$CROWD_PANIC =

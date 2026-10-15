@@ -13,8 +13,8 @@ import net.minecraft.world.level.Level;
 /** Sparse, per-listener End ambience, independent of terrain and sky events. */
 public final class EndAmbience {
     private static final RandomSource RANDOM = RandomSource.create();
-    private static ClientLevel world;
-    private static AmbienceSound playing;
+    private static @org.jspecify.annotations.Nullable ClientLevel world;
+    private static @org.jspecify.annotations.Nullable AmbienceSound playing;
     private static int remaining;
     // Retain across dimension changes so returning to the End cannot repeat the last clip.
     private static int lastClip = -1;
@@ -30,17 +30,20 @@ public final class EndAmbience {
     }
 
     private static void tick(Minecraft client) {
-        ClientLevel end = client.level != null && client.level.dimension().equals(Level.END)
-            && client.player != null ? client.level : null;
+        var level = client.level;
+        ClientLevel end = level != null && level.dimension().equals(Level.END)
+            && client.player != null ? level : null;
+        var sound = playing;
         if (world != end) {
-            if (playing != null) client.getSoundManager().stop(playing);
+            if (sound != null) client.getSoundManager().stop(sound);
             playing = null;
+            sound = null;
             world = end;
             remaining = nextDelay();
         }
-        if (world == null || client.isPaused()) return;
-        if (playing != null) {
-            if (client.getSoundManager().isActive(playing)) return;
+        if (end == null || client.isPaused()) return;
+        if (sound != null) {
+            if (client.getSoundManager().isActive(sound)) return;
             playing = null;
         }
         if (--remaining > 0) return;
@@ -48,8 +51,9 @@ public final class EndAmbience {
         int clip = RANDOM.nextInt(lastClip < 0 ? clipCount : clipCount - 1);
         if (lastClip >= 0 && clip >= lastClip) clip++;
         lastClip = clip;
-        playing = new AmbienceSound(world, clip);
-        client.getSoundManager().play(playing);
+        sound = new AmbienceSound(end, clip);
+        playing = sound;
+        client.getSoundManager().play(sound);
         remaining = nextDelay();
     }
 

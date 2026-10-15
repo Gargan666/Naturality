@@ -19,6 +19,10 @@ public abstract class FogCullingCaptureMixin {
     private FogData naturality$capture(Camera camera, int distance, DeltaTracker delta, float darken,
             ClientLevel level, Operation<FogData> original) {
         FogData fog = original.call(camera, distance, delta, darken, level);
+        if (level.dimension().equals(net.minecraft.world.level.Level.OVERWORLD)
+                && naturality.client.fog.EndFogTransparency.isActive(level, camera)) {
+            naturality.client.fog.DistanceFogSpan.apply(fog, distance);
+        }
         FogCulling.capture(level, camera, fog, fogEnabled);
         return fog;
     }

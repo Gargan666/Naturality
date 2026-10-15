@@ -32,6 +32,9 @@ public final class RainbowCycle {
         return PEAK_TICK_CHANCE * t * t * (3 - 2 * t);
     }
     public void tick(boolean advance, boolean daylight, float rain) {
+        tick(advance, daylight, rain, 1);
+    }
+    public void tick(boolean advance, boolean daylight, float rain, int startMultiplier) {
         if (!advance) return;
         if (!daylight || !validRain(rain)) {
             active = false;
@@ -43,7 +46,7 @@ public final class RainbowCycle {
                 remaining = 0;
                 target = 0;
             }
-        } else if (random.nextDouble() < startChance(rain)) {
+        } else if (random.nextDouble() < naturality.weather.PreviewEnvironment.chance(startChance(rain), startMultiplier)) {
             active = true;
             remaining = 1200 + random.nextInt(2401);
             // Keep one chosen size for this rainbow's entire lifetime.

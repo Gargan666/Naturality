@@ -29,24 +29,24 @@ public final class Reputation {
     public static final byte NOD_EVENT = 67;
     public static void initialize() {
         ReputationCommand.initialize();
-        net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
+        net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.JOIN.register((handler, _, server) -> {
             if (ReputationData.get(server).takeHero(handler.player.getUUID()))
                 handler.player.addEffect(new MobEffectInstance(MobEffects.HERO_OF_THE_VILLAGE, 1200, 0));
         });
     }
     public static void credit(ServerLevel level, java.util.UUID donor, int amount) {
-        var player = level.getServer().getPlayerList().getPlayer(donor);
+        var player = java.util.Objects.requireNonNull(level.getServer()).getPlayerList().getPlayer(donor);
         if (player != null) { change(player, amount); return; }
-        var data = ReputationData.get(level.getServer());
+        var data = ReputationData.get(java.util.Objects.requireNonNull(level.getServer()));
         if (amount > 0 && data.score(donor) == 100) data.queueHero(donor);
         data.change(donor, amount);
     }
     public static int score(Player player) {
-        return player.level() instanceof ServerLevel level ? ReputationData.get(level.getServer()).score(player.getUUID()) : 50;
+        return player.level() instanceof ServerLevel level ? ReputationData.get(java.util.Objects.requireNonNull(level.getServer())).score(player.getUUID()) : 50;
     }
     public static void set(Player player, int value) {
         if (!(player.level() instanceof ServerLevel level)) return;
-        var data = ReputationData.get(level.getServer());
+        var data = ReputationData.get(java.util.Objects.requireNonNull(level.getServer()));
         int after = data.change(player.getUUID(), value - data.score(player.getUUID()));
         if (after <= 10 && player instanceof ServerPlayer serverPlayer && player.containerMenu instanceof MerchantMenu)
             serverPlayer.closeContainer();
@@ -66,7 +66,7 @@ public final class Reputation {
     }
     private static void change(Player player, int amount, net.minecraft.world.phys.Vec3 origin, boolean notifyNearby) {
         if (!(player.level() instanceof ServerLevel level)) return;
-        var data = ReputationData.get(level.getServer());
+        var data = ReputationData.get(java.util.Objects.requireNonNull(level.getServer()));
         int before = data.score(player.getUUID()), after = data.change(player.getUUID(), amount);
         if (amount < 0 && notifyNearby) upset(level, origin);
         if (amount > 0 && before == 100) player.addEffect(new MobEffectInstance(MobEffects.HERO_OF_THE_VILLAGE, 1200, 0));
@@ -142,12 +142,13 @@ public final class Reputation {
     }
     public static void react(ServerLevel level, Mob mob) {
         if (mob instanceof Villager body) {
-            if (body.isTrading() && body.getTradingPlayer() != null && tradeBlocked(body, body.getTradingPlayer()))
-                ((ServerPlayer)body.getTradingPlayer()).closeContainer();
+            var tradingPlayer = body.getTradingPlayer();
+            if (body.isTrading() && tradingPlayer instanceof ServerPlayer serverPlayer && tradeBlocked(body, tradingPlayer))
+                serverPlayer.closeContainer();
             var player = level.players().stream()
                 .filter(other -> other.isAlive() && !other.isCreative() && !other.isSpectator()
                     && body.distanceToSqr(other) <= 144 && score(other) == 0)
-                .min(Comparator.comparingDouble(body::distanceToSqr)).orElse(null);
+                .min(Comparator.comparingDouble(body::distanceToSqr)).orElseGet(() -> null);
             var state = state(body);
             if (player != null) {
                 if (body.isSleeping()) body.stopSleeping();
@@ -171,11 +172,11 @@ public final class Reputation {
                 state.fleeing = false;
                 body.getBrain().getMemory(MemoryModuleType.NEAREST_HOSTILE)
                     .filter(threat -> threat.getUUID().equals(state.fearedPlayer))
-                    .ifPresent(threat -> body.getBrain().eraseMemory(MemoryModuleType.NEAREST_HOSTILE));
+                    .ifPresent(_ -> body.getBrain().eraseMemory(MemoryModuleType.NEAREST_HOSTILE));
                 body.getBrain().getMemory(MemoryModuleType.WALK_TARGET)
                     .filter(target -> state.escapeTarget != null && target.getTarget().currentBlockPosition()
                         .equals(net.minecraft.core.BlockPos.containing(state.escapeTarget)))
-                    .ifPresent(target -> { body.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET); body.getNavigation().stop(); });
+                    .ifPresent(_ -> { body.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET); body.getNavigation().stop(); });
                 state.escapeTarget = null;
                 state.fearedPlayer = null;
                 if (!body.getBrain().hasMemoryValue(MemoryModuleType.HURT_BY)
@@ -183,9 +184,10 @@ public final class Reputation {
                     body.getBrain().setActiveActivityIfPossible(Activity.IDLE);
             }
         } else if (mob instanceof IronGolem golem && !golem.isPlayerCreated() && mob.tickCount % 20 == 0) {
-            var player = level.getEntitiesOfClass(ServerPlayer.class, mob.getBoundingBox().inflate(32),
+            var candidate = level.getEntitiesOfClass(ServerPlayer.class, mob.getBoundingBox().inflate(32),
                 other -> other.isAlive() && !other.isCreative() && !other.isSpectator() && score(other) == 0 && golem.canAttack(other))
-                .stream().min(Comparator.comparingDouble(mob::distanceToSqr)).orElse(null);
+                .stream().min(Comparator.comparingDouble(mob::distanceToSqr));
+            var player = candidate.isPresent() ? candidate.orElseThrow() : null;
             var state = state(golem);
             if (player != null) { golem.setTarget(player); state.reputationTarget = player.getUUID(); }
             else if (golem.getTarget() instanceof Player current && current.getUUID().equals(state.reputationTarget) && score(current) > 0) {

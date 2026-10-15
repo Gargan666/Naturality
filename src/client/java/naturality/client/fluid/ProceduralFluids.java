@@ -166,9 +166,11 @@ public final class ProceduralFluids {
         int mask = 0;
         for (int i = 0; i < 4; i++) if (config.includes(i)) mask |= 1 << i;
         if (mask == enabledMask) return;
-        ByteBuffer data = ByteBuffer.allocateDirect(80).order(ByteOrder.nativeOrder());
+        ByteBuffer data = ByteBuffer.allocateDirect(96).order(ByteOrder.nativeOrder());
         for (int i = 0; i < 16; i++) data.putFloat(spriteBounds[i]);
         data.putInt(paletteCounts[0]).putInt(paletteCounts[1]).putInt(paletteStride).putInt(mask);
+        // Reuse the existing terrain binding: no additional sampler or draw pass.
+        naturality.client.snow.SnowTextureAtlas.writeLodBounds(data);
         data.flip();
         if (bounds != null) bounds.close();
         bounds = RenderSystem.getDevice().createBuffer(() -> "Naturality fluid sprite bounds", 128, data);

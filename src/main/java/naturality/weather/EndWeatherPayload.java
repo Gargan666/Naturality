@@ -7,6 +7,7 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 
 public record EndWeatherPayload(long session, EndWeatherState state) implements CustomPacketPayload {
     public static final Type<EndWeatherPayload> TYPE = new Type<>(Naturality.id("end_weather"));
+    @SuppressWarnings("null") // StreamCodec predates null contracts; network buffers/payloads are required.
     public static final StreamCodec<RegistryFriendlyByteBuf, EndWeatherPayload> CODEC = new StreamCodec<>() {
         public EndWeatherPayload decode(RegistryFriendlyByteBuf b) {
             return new EndWeatherPayload(b.readLong(),new EndWeatherState(b.readFloat(),b.readVarInt(),b.readFloat()));

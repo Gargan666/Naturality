@@ -17,6 +17,7 @@ public abstract class HardcoreLightmapMixin {
         var client = Minecraft.getInstance();
         var level = client.level;
         if (!state.needsUpdate || level == null) return;
+        state.skyLightColor = naturality.client.sky.BloodMoonClient.lightingTint(state.skyLightColor, partialTicks);
         state.ambientColor = new Vector3f(state.ambientColor).mul(HardcoreDarkness.ambientMultiplier(level));
         state.skyFactor *= HardcoreDarkness.atmosphere(level, client.gameRenderer.mainCamera(), partialTicks);
     }

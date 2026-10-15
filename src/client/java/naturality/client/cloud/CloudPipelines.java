@@ -15,7 +15,7 @@ public final class CloudPipelines {
     public static final OitPipelineSet OIT_FLAT = oit("flat");
 
     private static RenderPipeline.Builder shaders(RenderPipeline.Builder builder) {
-        return builder.withVertexShader(Naturality.id("core/clouds"))
+        return builder.withBindGroupLayout(naturality.client.menu.MenuFog.LAYOUT).withVertexShader(Naturality.id("core/clouds"))
             .withFragmentShader(Naturality.id("core/clouds")).withCull(false);
     }
 

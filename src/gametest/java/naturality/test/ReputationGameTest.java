@@ -394,6 +394,42 @@ public final class ReputationGameTest implements FabricClientGameTest {
                     "Next morning wakes rested villager and restores trade");
                 exhausted[0].discard();
             });
+            Villager[] doorSleeper = new Villager[1];
+            var escapeDoor = new BlockPos(-10, 101, 0);
+            server.runOnServer(s -> {
+                var level = s.overworld();
+                for (var pos : BlockPos.betweenClosed(-11, 100, -5, -9, 104, 7)) {
+                    boolean wall = pos.getX() != -10 || pos.getZ() == -5 || pos.getZ() == 7 || pos.getY() == 104;
+                    level.setBlockAndUpdate(pos, pos.getY() == 100 || wall ? Blocks.STONE.defaultBlockState() : Blocks.AIR.defaultBlockState());
+                }
+                var door = Blocks.OAK_DOOR.defaultBlockState().setValue(net.minecraft.world.level.block.DoorBlock.FACING, Direction.NORTH);
+                level.setBlockAndUpdate(escapeDoor, door);
+                level.setBlockAndUpdate(escapeDoor.above(), door.setValue(net.minecraft.world.level.block.DoorBlock.HALF,
+                    net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER));
+                var bed = new BlockPos(-10, 101, 5);
+                level.setBlockAndUpdate(bed, Blocks.BED.pick(DyeColor.RED).defaultBlockState()
+                    .setValue(net.minecraft.world.level.block.AbstractBedBlock.PART, net.minecraft.world.level.block.state.properties.BedPart.HEAD));
+                level.setBlockAndUpdate(bed.south(), Blocks.BED.pick(DyeColor.RED).defaultBlockState());
+                var body = villager(level, VillagerProfession.FARMER, -9.5);
+                body.setPos(-9.5, 101, -3.5);
+                Reputation.state(body).lastSleep = 0;
+                Reputation.state(body).sleepBed = bed;
+                doorSleeper[0] = body;
+            });
+            context.waitTicks(100);
+            server.runOnServer(s -> {
+                check(doorSleeper[0].isSleeping(), "Exhausted villager opens wooden door and reaches recovery bed through real AI");
+                var zombie = EntityTypes.ZOMBIE.create(s.overworld(), EntitySpawnReason.COMMAND);
+                zombie.setNoAi(true); zombie.setPos(-9.5, 101, 3.5);
+                s.overworld().addFreshEntity(zombie);
+            });
+            boolean[] noticedZombie = {false};
+            for (int attempt = 0; attempt < 20 && !noticedZombie[0]; attempt++) {
+                context.waitTicks(2);
+                server.runOnServer(s -> noticedZombie[0] = !doorSleeper[0].isSleeping()
+                    && doorSleeper[0].getBrain().isActive(net.minecraft.world.entity.schedule.Activity.PANIC));
+            }
+            check(noticedZombie[0], "Recovery sleeper senses zombie, wakes and prioritizes panic without being hit");
             world.getServer().runOnServer(s -> {
                 var data = ReputationData.get(s);
                 check(data.score(playerId[0]) == 73, "Shared reputation survives world reopen");

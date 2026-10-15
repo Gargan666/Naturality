@@ -16,7 +16,7 @@ public final class ThunderAudio {
     private record Pending(Vec3 position, SoundEvent sound, SoundSource source,
                            float volume, float pitch, long due) {}
     private static final ArrayList<Pending> pending = new ArrayList<>();
-    private static ClientLevel world;
+    private static @org.jspecify.annotations.Nullable ClientLevel world;
     private static long ticks;
     private static final class ThunderSound extends AbstractTickableSoundInstance {
         private final ClientLevel level;
@@ -39,7 +39,8 @@ public final class ThunderAudio {
     public static boolean audible() {
         var c = Minecraft.getInstance();
         var entity = c.getCameraEntity();
-        return c.level != null && entity != null && !WeatherShelter.underground(c.level,
+        var level = c.level;
+        return level != null && entity != null && !WeatherShelter.underground(level,
             c.gameRenderer.mainCamera().position(), entity);
     }
     public static void schedule(ClientLevel level, Vec3 position, SoundEvent sound, SoundSource source,
@@ -52,12 +53,13 @@ public final class ThunderAudio {
     }
     public static void initialize() {
         ClientTickEvents.END_CLIENT_TICK.register(c -> {
-            if (world != c.level) { pending.clear(); world = c.level; ticks = 0; }
-            if (c.isPaused() || world == null) return;
+            var level = c.level;
+            if (world != level) { pending.clear(); world = level; ticks = 0; }
+            if (c.isPaused() || level == null) return;
             ticks++;
             pending.removeIf(p -> {
                 if (p.due > ticks) return false;
-                if (audible()) c.getSoundManager().play(new ThunderSound(world, p));
+                if (audible()) c.getSoundManager().play(new ThunderSound(level, p));
                 return true;
             });
         });

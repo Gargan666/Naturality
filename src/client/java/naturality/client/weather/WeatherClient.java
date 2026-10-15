@@ -16,9 +16,9 @@ public final class WeatherClient {
     private static @org.jspecify.annotations.Nullable Object connection;
     private WeatherClient() {}
     public static void initialize() {
-        ClientPlayNetworking.registerGlobalReceiver(EndWeatherPayload.TYPE, (p,c) -> EndWeatherSystem.receive(p));
-        ClientPlayConnectionEvents.INIT.register((h,c) -> EndWeatherSystem.clearClient());
-        ClientPlayConnectionEvents.DISCONNECT.register((h,c) -> EndWeatherSystem.clearClient());
+        ClientPlayNetworking.registerGlobalReceiver(EndWeatherPayload.TYPE, (p,_) -> EndWeatherSystem.receive(p));
+        ClientPlayConnectionEvents.INIT.register((_,_) -> EndWeatherSystem.clearClient());
+        ClientPlayConnectionEvents.DISCONNECT.register((_,_) -> EndWeatherSystem.clearClient());
         DistantLightningClient.initialize();
         ThunderAudio.initialize();
         ClientPlayConnectionEvents.INIT.register((handler, client) -> {
@@ -83,7 +83,6 @@ public final class WeatherClient {
             if (!naturality.config.Feature.VISUAL_OVERHAUL.enabled()
                     || !naturality.config.NaturalityConfig.get().effects.windSounds || s == null) { stop(); return; }
             float exposure = WeatherSoundEnvironment.windExposure();
-            if (WeatherSoundEnvironment.underground()) { volume = 0; return; }
             if (!client.gameRenderer.mainCamera().getFluidInCamera().equals(net.minecraft.world.level.material.FogType.NONE)) exposure *= .15F;
             float target = (strong ? s.strongWindGain() : s.weakWindGain()) * exposure;
             volume += Math.clamp(target - volume, -.025F, .025F);

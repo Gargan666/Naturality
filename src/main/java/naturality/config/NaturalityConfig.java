@@ -34,6 +34,10 @@ public final class NaturalityConfig {
         public boolean snowOverlays = true;
         public boolean weatherParticles = true;
         public boolean foliageWind = true;
+        public boolean distantWind = true;
+        public boolean distantLeaves = true;
+        public boolean distantTextures = true;
+        public boolean distantDetails = true;
         public boolean particleWind = true;
         public boolean windSounds = true;
         public boolean pixelGlint = true;

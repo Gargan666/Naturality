@@ -40,7 +40,8 @@ public final class FallingFluidTail {
         // Lava normally uses the solid layer; this geometry needs true translucency.
         var vertices=output.getBuilder(ChunkSectionLayer.TRANSLUCENT);
         var sprite=model.flowingMaterial().sprite();
-        int tint=model.tintSource()==null?-1:model.tintSource().colorInWorld(block,level,pos);
+        var tintSource = model.tintSource();
+        int tint=tintSource==null?-1:tintSource.colorInWorld(block,level,pos);
         float x=pos.getX()&15,y=pos.getY()&15,z=pos.getZ()&15;
         for(var side:Direction.Plane.HORIZONTAL) {
             if(level.getFluidState(pos.relative(side)).getType().isSame(fluid.getType()))continue;

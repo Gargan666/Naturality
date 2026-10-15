@@ -15,8 +15,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ItemEntity.class)
 public abstract class ReputationGiftDonorMixin implements GiftDonor {
-    @Unique private UUID naturality$donor;
-    @Override public UUID naturality$giftDonor() {
+    @Unique private @org.jspecify.annotations.Nullable UUID naturality$donor;
+    @Override public @org.jspecify.annotations.Nullable UUID naturality$giftDonor() {
         if (naturality$donor == null && ((ItemEntity)(Object)this).getOwner() instanceof Player player) naturality$donor = player.getUUID();
         return naturality$donor;
     }

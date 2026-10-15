@@ -119,7 +119,8 @@ public final class AnimalCareWork extends Behavior<Villager> {
 
                 var sheep = level.getEntitiesOfClass(Sheep.class, area, animal -> animal.isAlive() && animal.readyForShearing() && body.getInventory().canAddItem(new ItemStack(Items.WOOL.pick(animal.getColor()))));
                 sheep.sort(Comparator.comparingDouble(body::distanceToSqr));
-                target = sheep.stream().filter(animal -> reachable(body, animal)).findFirst().orElse(null);
+                var sheepTarget = sheep.stream().filter(animal -> reachable(body, animal)).findFirst();
+                target = sheepTarget.isPresent() ? sheepTarget.orElseThrow() : null;
             } else {
                 REPAIRS.entrySet().removeIf(entry -> {
                     var worker = entry.getValue().worker().get();
@@ -134,8 +135,8 @@ public final class AnimalCareWork extends Behavior<Villager> {
                         worker -> available(level, worker) && smith(worker));
                     workers.removeIf(worker -> REPAIRS.values().stream().anyMatch(claim -> claim.worker().get() == worker));
                     workers.sort(Comparator.<Villager>comparingDouble(golem::distanceToSqr).thenComparingInt(Villager::getId));
-                    var chosen = workers.stream().filter(worker -> reachable(worker, golem)).findFirst().orElse(null);
-                    if (chosen != body) continue;
+                    var chosen = workers.stream().filter(worker -> reachable(worker, golem)).findFirst();
+                    if (chosen.isEmpty() || chosen.orElseThrow() != body) continue;
                     target = golem;
                     REPAIRS.put(golem.getUUID(), new Claim(new WeakReference<>(body), time + 100));
                     break;

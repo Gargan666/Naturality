@@ -14,15 +14,15 @@ import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
 
 /** Samples the actual posed cubes, including death roll, baby scale and limb transforms. */
-public final class DeathSmokeLayer<S extends LivingEntityRenderState, M extends EntityModel<? super S>> extends RenderLayer<S, M> {
+public final class DeathSmokeLayer<S extends @org.jspecify.annotations.NonNull LivingEntityRenderState, M extends @org.jspecify.annotations.NonNull EntityModel<? super S>> extends RenderLayer<S, M> {
     public DeathSmokeLayer(RenderLayerParent<S, M> parent) { super(parent); }
     @Override public void submit(PoseStack stack, SubmitNodeCollector collector, int light, S state, float yaw, float pitch) {
         var entity = DeathSmoke.owner(state);
-        if (!(entity instanceof Mob) || state.isInvisible || state.deathTime <= 0) return;
+        if (!(entity instanceof Mob) || state.isInvisible || entity.deathTime <= 0) return;
         var camera = Minecraft.getInstance().gameRenderer.mainCamera().position();
         var points = new ArrayList<Vec3>();
         var root = getParentModel().root();
-        root.visit(stack, (pose, path, index, cube) -> {
+        root.visit(stack, (pose, path, _, cube) -> {
             var part = root;
             if (!part.visible) return;
             for (String name : path.split("/")) {

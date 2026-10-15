@@ -1,6 +1,7 @@
 package naturality.client.mixin;
 
 import naturality.client.sleep.SleepSky;
+import naturality.client.sleep.SleepSnapshots;
 import naturality.client.sleep.SleepVisuals;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
@@ -15,7 +16,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(SkyRenderer.class)
 public class SleepSkyMixin {
-    @Unique private Object naturality$world;
+    @Unique private @org.jspecify.annotations.Nullable Object naturality$world;
     @Unique private long naturality$lastFrame;
     @Unique private boolean naturality$easing;
     @Unique private SleepSky.Angle naturality$sun = new SleepSky.Angle();
@@ -30,14 +31,17 @@ public class SleepSkyMixin {
         }
         double dt = Minecraft.getInstance().isPaused() ? 0 : Math.min(.25, (now - naturality$lastFrame) / 1e9);
         naturality$lastFrame = now;
-        if (!SleepVisuals.accelerating() && !naturality$easing) return;
+        boolean accelerating = SleepVisuals.accelerating();
+        if (!accelerating && !naturality$easing) return;
         if (!naturality$easing) {
             naturality$sun = new SleepSky.Angle(); naturality$moon = new SleepSky.Angle(); naturality$stars = new SleepSky.Angle();
         }
+        var snapshot = SleepSnapshots.latest(level);
+        if (accelerating && snapshot == null) return;
         naturality$easing = true;
-        state.sunAngle = naturality$sun.sample(state.sunAngle, dt, SleepVisuals.accelerating());
-        state.moonAngle = naturality$moon.sample(state.moonAngle, dt, SleepVisuals.accelerating());
-        state.starAngle = naturality$stars.sample(state.starAngle, dt, SleepVisuals.accelerating());
-        if (!SleepVisuals.accelerating() && naturality$sun.settled()) naturality$easing = false;
+        state.sunAngle = naturality$sun.sample(accelerating && snapshot != null ? snapshot.sun() : state.sunAngle, snapshot == null ? 0 : snapshot.revision(), dt, accelerating);
+        state.moonAngle = naturality$moon.sample(accelerating && snapshot != null ? snapshot.moon() : state.moonAngle, snapshot == null ? 0 : snapshot.revision(), dt, accelerating);
+        state.starAngle = naturality$stars.sample(accelerating && snapshot != null ? snapshot.stars() : state.starAngle, snapshot == null ? 0 : snapshot.revision(), dt, accelerating);
+        if (!accelerating && naturality$sun.settled()) naturality$easing = false;
     }
 }

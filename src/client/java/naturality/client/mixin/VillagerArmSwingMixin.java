@@ -14,8 +14,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(VillagerModel.class)
 public abstract class VillagerArmSwingMixin {
-    @Shadow @Final private ModelPart arms;
-    @Shadow @Final private ModelPart head;
+    @SuppressWarnings("null") @Shadow @Final private ModelPart arms;
+    @SuppressWarnings("null") @Shadow @Final private ModelPart head;
 
     @Inject(method = "setupAnim", at = @At("TAIL"))
     private void naturality$workSwing(VillagerRenderState state, CallbackInfo ci) {

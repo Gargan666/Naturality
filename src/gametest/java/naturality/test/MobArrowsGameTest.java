@@ -126,6 +126,25 @@ public final class MobArrowsGameTest implements FabricClientGameTest {
             context.takeScreenshot("mob-death-smoke-cover");
             context.waitTicks(7);
             context.takeScreenshot("mob-death-smoke-drift");
+            server.runCommand("summon spider -1 101 0 {NoAI:1b}");
+            server.runCommand("summon cave_spider 1 101 0 {NoAI:1b}");
+            context.waitTicks(5);
+            for (int tick : new int[] {1,7,19}) {
+                context.runOnClient(client -> {
+                    for (var entity : client.level.entitiesForRendering())
+                        if (entity instanceof net.minecraft.world.entity.monster.spider.Spider spider) spider.deathTime=tick;
+                });
+                context.takeScreenshot("spider-death-lift-"+tick);
+                context.runOnClient(client -> {
+                    for (var entity : client.level.entitiesForRendering())
+                        if (entity instanceof net.minecraft.world.entity.monster.spider.Spider spider) {
+                            var shape=naturality.client.particle.DeathSmoke.shape(spider);
+                            if (shape==null) throw new AssertionError("Spider death model must be captured");
+                            for (var point : shape.points()) if (point.y < spider.getY()-.05)
+                                throw new AssertionError("Spider death model entered the ground: "+point);
+                        }
+                });
+            }
         }
     }
 }

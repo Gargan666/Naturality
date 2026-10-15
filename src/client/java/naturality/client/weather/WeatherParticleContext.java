@@ -4,7 +4,7 @@ import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
 import naturality.config.NaturalityConfig;
-import naturality.weather.WeatherSystem;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.BiomeColors;
@@ -48,7 +48,7 @@ public final class WeatherParticleContext {
     public static Wind wind(ClientLevel level) {
         var cached=wind;
         if(world==level && cached!=null)return cached;
-        var weather=WeatherSystem.state(level);
+        var weather=ParticleWeather.weatherState(level);
         var result=new Wind(weather!=null && NaturalityConfig.get().effects.particleWind,
             weather==null?0:weather.windX()*.007,weather==null?0:weather.windZ()*.007,Minecraft.getInstance().getCameraEntity());
         if(world==level)wind=result;
@@ -75,7 +75,7 @@ public final class WeatherParticleContext {
         var cached = state;
         if (world == level && cached != null) return cached;
         var client = Minecraft.getInstance();
-        var weather = WeatherSystem.state(level);
+        var weather = ParticleWeather.weatherState(level);
         // Keep the original double multiplication (weather wind components are floats).
         double windX = weather == null ? 0 : weather.windX();
         double windZ = weather == null ? 0 : weather.windZ();
@@ -89,6 +89,7 @@ public final class WeatherParticleContext {
     }
 
     public static int waterTint(ClientLevel level, BlockPos pos) {
+        if (naturality.client.menu.MenuPreview.active()) pos = naturality.client.menu.MenuPreview.spawn();
         if (world != level) return BiomeColors.getAverageWaterColor(level, pos);
         long key = pos.asLong();
         int cached=TINTS.get(key);
@@ -99,6 +100,7 @@ public final class WeatherParticleContext {
     }
 
     public static Biome.Precipitation precipitation(ClientLevel level, BlockPos pos) {
+        if (naturality.client.menu.MenuPreview.active()) pos = naturality.client.menu.MenuPreview.spawn();
         if (world != level) return level.getPrecipitationAt(pos);
         long key = pos.asLong();
         var cached = PRECIPITATION.get(key);
@@ -110,6 +112,7 @@ public final class WeatherParticleContext {
 
     /** Exact-position light shared for one extraction pass, including dynamic lighting hooks. */
     public static int light(ClientLevel level,BlockPos pos) {
+        if (naturality.client.menu.MenuPreview.active()) pos = naturality.client.menu.MenuPreview.spawn().above(8);
         long key=pos.asLong();
         if(world==level) {
             int cached=LIGHTS.get(key);

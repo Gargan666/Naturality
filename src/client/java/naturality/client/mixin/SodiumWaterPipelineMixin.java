@@ -13,8 +13,8 @@ import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 @Pseudo
 @Mixin(targets="net.caffeinemc.mods.sodium.client.render.chunk.ShaderChunkRenderer", remap=false)
 public abstract class SodiumWaterPipelineMixin {
-    @Shadow @Final protected VertexFormat vertexFormat;
-    @Unique private RenderPipeline naturality$mask;
+    @SuppressWarnings("null") @Shadow @Final protected VertexFormat vertexFormat;
+    @Unique private @org.jspecify.annotations.Nullable RenderPipeline naturality$mask;
 
     @ModifyExpressionValue(method={"createShader", "createOITShader"}, at=@At(value="INVOKE",
         target="Lcom/mojang/renderpearl/api/pipeline/RenderPipeline$Builder;withFragmentShader(Lnet/minecraft/resources/Identifier;)Lcom/mojang/renderpearl/api/pipeline/RenderPipeline$Builder;"))
@@ -24,6 +24,7 @@ public abstract class SodiumWaterPipelineMixin {
 
     @Unique private static RenderPipeline.Builder naturality$shaders(RenderPipeline.Builder builder) {
         return builder.withVertexShader(Naturality.id("core/sodium_water"))
+            .withBindGroupLayout(naturality.client.menu.MenuFog.LAYOUT)
             .withFragmentShader("core/terrain").withShaderDefine("NATURALITY_SODIUM")
             .withBindGroupLayout(net.minecraft.client.renderer.BindGroupLayouts.FOG)
             .withBindGroupLayout(ProceduralFluids.LAYOUT)

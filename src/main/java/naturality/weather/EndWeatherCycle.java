@@ -26,7 +26,8 @@ public final class EndWeatherCycle {
         }
     }
     public EndWeatherState state() { return new EndWeatherState(gravity, Math.round(starfall),rise); }
-    public void tick(boolean advance) {
+    public void tick(boolean advance) { tick(advance, 1); }
+    public void tick(boolean advance, int rate) {
         if (advance) {
             if (quiet > 0) quiet--;
             if(riseRemaining>0) {
@@ -34,22 +35,22 @@ public final class EndWeatherCycle {
                 if(--riseRetarget<=0) {riseTarget=20+random.nextFloat()*80;riseRetarget=400+random.nextInt(800);}
             } else {
                 riseTarget=0;
-                if(quiet==0 && random.nextInt(18000)==0) {riseRemaining=2400+random.nextInt(3600);riseRetarget=0;}
+                if(quiet==0 && random.nextInt(18000)<rate) {riseRemaining=2400+random.nextInt(3600);riseRetarget=0;}
             }
             if (gravityRemaining > 0) {
                 gravityRemaining--;
                 if (--retarget <= 0) { gravityTarget = 20 + random.nextFloat()*80; retarget = 400 + random.nextInt(800); }
             } else {
                 gravityTarget = 0;
-                if (quiet == 0 && random.nextInt(12000) == 0) { gravityRemaining = 2400 + random.nextInt(3600); retarget = 0; }
+                if (quiet == 0 && random.nextInt(12000) < rate) { gravityRemaining = 2400 + random.nextInt(3600); retarget = 0; }
             }
         }
         // Natural starfall is temporarily disabled; auto always returns it to calm.
         starfallRemaining=starfallRetarget=0;starfallTarget=0;
-        if(advance || starfallOverride>=0 || starfall>0) starfall+=Math.clamp((starfallOverride>=0?starfallOverride:0)-starfall,-.5F,.5F);
-        if(advance || riseOverride>=0)rise+=Math.clamp((riseOverride>=0?riseOverride:riseTarget)-rise,-.5F,.5F);
+        if(advance || starfallOverride>=0 || starfall>0) starfall+=Math.clamp((starfallOverride>=0?starfallOverride:0)-starfall,-.5F*rate,.5F*rate);
+        if(advance || riseOverride>=0)rise+=Math.clamp((riseOverride>=0?riseOverride:riseTarget)-rise,-.5F*rate,.5F*rate);
         float target = gravityOverride >= 0 ? gravityOverride : gravityTarget;
-        if (advance || gravityOverride >= 0) gravity += Math.clamp(target - gravity, -.25F, .25F);
+        if (advance || gravityOverride >= 0) gravity += Math.clamp(target - gravity, -.25F*rate, .25F*rate);
     }
     public Map<String,Long> snapshot() {
         var data = new HashMap<String,Long>();

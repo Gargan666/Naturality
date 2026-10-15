@@ -18,7 +18,8 @@ public abstract class SnowSectionCompilerMixin {
             Operation<SectionCompiler.Results> original) {
         SnowSectionVisibility.begin(section);
         naturality.snow.SnowGeometryCache.begin();
+        naturality.client.render.RenderDetail.beginBuild();
         try { return original.call(section, region, sorting, builders); }
-        finally { naturality.snow.SnowGeometryCache.end(); SnowSectionVisibility.finish(); }
+        finally { naturality.client.render.RenderDetail.endBuild(); naturality.snow.SnowGeometryCache.end(); SnowSectionVisibility.finish(); }
     }
 }

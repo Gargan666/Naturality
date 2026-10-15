@@ -56,6 +56,8 @@ public final class WaterComposite {
             .withColorTargetState(new ColorTargetState(Optional.empty(), GpuFormat.RGBA32_FLOAT, 15)).build());
     }
 
+    /** Register every water pipeline before the initial shader resource reload. */
+    public static void initialize() { }
     public static void beginFrame() { captured = false; }
     public static boolean drawingMask() { return drawingMask; }
     public static @org.jspecify.annotations.Nullable GpuTextureView maskView() { return captured && !drawingMask && mask != null ? mask.getColorTextureView() : null; }

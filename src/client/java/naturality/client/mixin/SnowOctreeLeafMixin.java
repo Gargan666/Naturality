@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.Shadow;
 
 @Mixin(targets="net.minecraft.client.renderer.Octree$Leaf")
 public abstract class SnowOctreeLeafMixin {
-    @Shadow @Final private SectionRenderDispatcher.RenderSection section;
+    @SuppressWarnings("null") @Shadow @Final private SectionRenderDispatcher.RenderSection section;
 
     @WrapOperation(method="visitNodes", at=@org.spongepowered.asm.mixin.injection.At(value="INVOKE",
         target="Lnet/minecraft/client/renderer/culling/Frustum;isVisible(Lnet/minecraft/world/phys/AABB;)Z"))

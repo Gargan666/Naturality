@@ -5,6 +5,9 @@
 #include <minecraft:dynamictransforms.glsl>
 #include <minecraft:projection.glsl>
 
+// All depth-only, classic and OIT variants must rasterize the identical surface.
+invariant gl_Position;
+
 const int FLAG_MASK_DIR = 7;
 const int FLAG_INSIDE_FACE = 1 << 4;
 const int FLAG_USE_TOP_COLOR = 1 << 5;
@@ -113,17 +116,18 @@ void main() {
 
     fadePosition = vec2((direction < 4 ? faceVertex.x : faceVertex.z) * CellSize.x / CellSize.y, faceVertex.y);
     fadeRows = direction >= 2 ? FadeSettings.x : 0.0;
-    // Camera height is relative to this layer, independent of player/third-person position.
-    capWeights = vec2(1.0 - smoothstep(-0.25, 0.25, FadeSettings.y),
-                     smoothstep(0.75, 1.25, FadeSettings.y));
+    // Relative camera height in gameplay; angle-relative position around the level orbit in menus.
+    capWeights = vec2(1.0 - smoothstep(-0.25, 0.0, FadeSettings.y),
+                     smoothstep(1.0, 1.25, FadeSettings.y));
     vertexDistance = fog_spherical_distance(pos);
     cloudLocal = faceVertex * CellSize;
     cloudBase = vec3(cellX, 0, cellZ) * CellSize + CloudOffset;
     edgeMask = texelFetch(CloudFaces, index + 3).r & 255;
-    cloudDirection = direction;
+    cloudDirection = useTopColor ? -1 : direction;
     // Gradient clouds have no directional face shading; the live sky/weather tint remains.
     vertexColor = (FadeSettings.x >= 2.0 ? vec4(1.0) : (useTopColor ? faceColors[1] : faceColors[direction])) * CloudColor;
     if (FadeSettings.x >= 2.0 && direction < 2) {
         vertexColor.a *= direction == 0 ? capWeights.x : capWeights.y;
     }
 }
+

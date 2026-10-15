@@ -46,7 +46,7 @@ public final class WeatherCommands {
         target.then(Commands.argument("slider",StringArgumentType.word())
             .suggests((c,b) -> SharedSuggestionProvider.suggest(pool(DimensionArgument.getDimension(c,"dimension")),b))
             .then(Commands.argument("value",StringArgumentType.word())
-                .suggests((c,b) -> SharedSuggestionProvider.suggest(List.of("0","50","100","auto"),b))
+                .suggests((_,b) -> SharedSuggestionProvider.suggest(List.of("0","50","100","auto"),b))
                 .executes(WeatherCommands::set)));
         dispatcher.register(Commands.literal("weather").requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS)).then(target));
     }

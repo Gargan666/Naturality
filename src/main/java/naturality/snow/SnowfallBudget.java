@@ -9,7 +9,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
+
 import net.minecraft.world.level.block.state.BlockState;
 
 /** Server-thread snowfall backpressure. Natural randomized precipitation retries skipped columns. */
@@ -29,7 +29,7 @@ public final class SnowfallBudget {
                 && naturality.weather.WeatherSystem.state(level)!=null;
     }
     private static Budget budget(ServerLevel level) {
-        var budget=LEVELS.computeIfAbsent(level,ignored -> new Budget());
+        var budget=LEVELS.computeIfAbsent(level,_ -> new Budget());
         long tick=level.getGameTime();
         if(budget.tick!=tick) {
             // The chunk tick iterator need not shuffle. Rotate the admitted
@@ -61,7 +61,7 @@ public final class SnowfallBudget {
         var budget=limited?budget(level):null;
         // Let the first admitted change finish even if its preflight exhausted
         // the soft timer, so expensive supports can still accumulate snow.
-        if(limited && (!available(budget,pos) || budget.changes>0 && budget.work>=MAX_WORK_NANOS))return false;
+        if(budget != null && (!available(budget,pos) || budget.changes>0 && budget.work>=MAX_WORK_NANOS))return false;
         long started=System.nanoTime();
         try {
             var old=level.getBlockState(pos);
@@ -69,7 +69,7 @@ public final class SnowfallBudget {
             // Keep collision pushing before the real block update, including fitted snow.
             Block.pushEntitiesUp(old,snow,level,pos);
             boolean changed=level.setBlockAndUpdate(pos,snow);
-            if(changed && limited) {
+            if(changed && budget != null) {
                 budget.changes++;
                 budget.sections.add(SectionPos.asLong(pos));
             }

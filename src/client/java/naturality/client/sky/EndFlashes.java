@@ -58,7 +58,7 @@ public final class EndFlashes {
         public boolean audibleStart() { return gain > .01F && flashStartedThisTick(); }
         @Override public float getIntensity(float partial) { return super.getIntensity(partial) * peak; }
     }
-    private static State current() {
+    private static @org.jspecify.annotations.Nullable State current() {
         var level = Minecraft.getInstance().level;
         return level != null && level.endFlashState() instanceof State state ? state : null;
     }

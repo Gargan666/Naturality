@@ -37,10 +37,10 @@ public final class WaterIntersection extends QuadParticleRenderState {
     private static final SingleQuadParticle.Layer LAYER=new SingleQuadParticle.Layer(true,naturality.client.AtlasLocations.BLOCKS,PIPELINE,OIT);
     private static final DepthStencilState SPLASH_DEPTH=new DepthStencilState(CompareOp.GREATER_THAN_OR_EQUAL,true);
     private static final RenderPipeline SPLASH_PIPELINE=RenderPipelines.register(RenderPipeline.builder(RenderPipelines.PARTICLE_SNIPPET,EFFECT)
-        .withLocation(Naturality.id("pipeline/water_splash_depth")).withDepthStencilState(SPLASH_DEPTH)
+        .withLocation(Naturality.id("pipeline/water_splash_depth")).withDepthStencilState(SPLASH_DEPTH).withCull(false)
         .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT)).build());
     private static final OitPipelineSet SPLASH_OIT=RenderPipelines.register(OitPipelineSet.builder("naturality_water_splash_depth",
-        RenderPipeline.builder(RenderPipelines.OIT_PARTICLE_SNIPPET,EFFECT))
+        RenderPipeline.builder(RenderPipelines.OIT_PARTICLE_SNIPPET,EFFECT).withCull(false))
         .withDepthBoundsModifier(b->b.withDepthStencilState(SPLASH_DEPTH))
         .withTransmittanceModifier(b->b.withDepthStencilState(SPLASH_DEPTH))
         .withAccumulateModifier(b->b.withDepthStencilState(SPLASH_DEPTH)).build());

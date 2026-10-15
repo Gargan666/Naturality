@@ -19,6 +19,9 @@ import org.spongepowered.asm.mixin.injection.callback.*;
 
 @Mixin(LivingEntity.class)
 public abstract class GhastCrashMixin implements GhastCrashBody {
+    @Unique private static final EntityDataAccessor<Integer> IMPACT_TICKS=SynchedEntityData.defineId(LivingEntity.class,EntityDataSerializers.INT);
+    public int naturality$impactTicks() { return ((LivingEntity)(Object)this).getEntityData().get(IMPACT_TICKS); }
+    public void naturality$impactTicks(int ticks) { ((LivingEntity)(Object)this).getEntityData().set(IMPACT_TICKS,ticks); }
     @Unique private static final EntityDataAccessor<Float> KICK_X=SynchedEntityData.defineId(LivingEntity.class,EntityDataSerializers.FLOAT);
     @Unique private static final EntityDataAccessor<Float> KICK_Y=SynchedEntityData.defineId(LivingEntity.class,EntityDataSerializers.FLOAT);
     @Unique private static final EntityDataAccessor<Float> KICK_Z=SynchedEntityData.defineId(LivingEntity.class,EntityDataSerializers.FLOAT);
@@ -41,11 +44,12 @@ public abstract class GhastCrashMixin implements GhastCrashBody {
         var data=((LivingEntity)(Object)this).getEntityData();
         data.set(TURN_X,(float)rotation.x); data.set(TURN_Y,(float)rotation.y); data.set(TURN_Z,(float)rotation.z);
     }
-    @Unique private GhastCrash.Flight naturality$flight;
-    public GhastCrash.Flight naturality$flight() { return naturality$flight; }
-    public void naturality$flight(GhastCrash.Flight flight) { naturality$flight = flight; }
+    @Unique private GhastCrash.@org.jspecify.annotations.Nullable Flight naturality$flight;
+    public GhastCrash.@org.jspecify.annotations.Nullable Flight naturality$flight() { return naturality$flight; }
+    public void naturality$flight(GhastCrash.@org.jspecify.annotations.Nullable Flight flight) { naturality$flight = flight; }
     @Inject(method="defineSynchedData", at=@At("TAIL"))
     private void naturality$data(SynchedEntityData.Builder builder, CallbackInfo ci) {
+        builder.define(IMPACT_TICKS,-1);
         builder.define(TURN_X,0F);builder.define(TURN_Y,0F);builder.define(TURN_Z,0F);
         builder.define(KICK_X,0F);builder.define(KICK_Y,0F);builder.define(KICK_Z,0F);
     }

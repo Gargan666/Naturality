@@ -34,6 +34,7 @@ public final class WindRendering {
     }
     private static boolean connected(BlockState state) {
         return state.getBlock() instanceof SugarCaneBlock || state.getBlock() instanceof VineBlock
+            || state.is(Blocks.PALE_HANGING_MOSS)
             || state.getBlock() instanceof GrowingPlantBlock;
     }
     /** Connected segments sample one continuous world-space field at their shared edges. */
@@ -41,6 +42,17 @@ public final class WindRendering {
             BlockState state, float x, float y, float z) {
         if (tag(state) != 255 && !windExposed(level, pos)) return 255;
         if (connected(state)) {
+            if (hangingFamily(state)!=0) {
+                int depth=0;
+                int family=hangingFamily(state);
+                while(depth<7 && hangingFamily(level.getBlockState(pos.above(depth+1)))==family) depth++;
+                var support=pos.above(depth+1);
+                boolean leaf=level.getBlockState(support).is(BlockTags.LEAVES) && windExposed(level,support);
+                int distance=Math.clamp(depth+Math.round(1-y),0,7);
+                // The leaf contribution reaches zero at seven blocks, so long
+                // strands can continue through bounded render snapshots seamlessly.
+                return leaf ? distance==0 ? 118 : 232+distance : 193+distance;
+            }
             if (state.getBlock() instanceof VineBlock) {
                 // Pin only the upper edge of an attached strand's first block.
                 // Lower joins keep the ordinary shared wind field on both sides.
@@ -72,7 +84,29 @@ public final class WindRendering {
                         for (int dz = z < .001F ? -1 : 0; dz <= (z > .999F ? 1 : 0); dz++)
                             if (dx != 0 || dy != 0 || dz != 0)
                                 mask |= solidVineSupportMask(level,pos.offset(dx,dy,dz),level.getBlockState(pos.offset(dx,dy,dz)));
-                return 102 + mask;
+                if(mask!=0)return 102+mask;
+                // Free strands start at the bottom of the last wall-supported
+                // block, or at the top of a leaf/ceiling-attached root block.
+                int depth=0;
+                var root=pos;
+                while(depth<7) {
+                    var above=root.above();
+                    var aboveState=level.getBlockState(above);
+                    if(!(aboveState.getBlock() instanceof VineBlock)
+                            || solidVineSupportMask(level,above,aboveState)!=0)break;
+                    root=above;depth++;
+                }
+                var rootState=level.getBlockState(root);
+                boolean movingLeaf=false;
+                for(var face:net.minecraft.core.Direction.values()) {
+                    if(face==net.minecraft.core.Direction.DOWN
+                            || !(rootState.getBlock() instanceof VineBlock)
+                            || !rootState.getValue(VineBlock.getPropertyForFace(face)))continue;
+                    var support=root.relative(face);
+                    movingLeaf |= level.getBlockState(support).is(BlockTags.LEAVES) && windExposed(level,support);
+                }
+                int distance=Math.clamp(depth+Math.round(1-y),0,7);
+                return movingLeaf ? distance==0 ? 232 : 232+distance : 193+distance;
             }
             // Mark height above the shared stalk root, including identical
             // markers on both sides of each segment join.
@@ -84,6 +118,13 @@ public final class WindRendering {
             return 100;
         }
         return vertexTag(state,x,y,z);
+    }
+    /** Head and body states belong to the same hanging strand. */
+    public static int hangingFamily(BlockState state) {
+        if(state.is(Blocks.PALE_HANGING_MOSS))return 1;
+        if(state.is(Blocks.WEEPING_VINES) || state.is(Blocks.WEEPING_VINES_PLANT))return 2;
+        if(state.is(Blocks.CAVE_VINES) || state.is(Blocks.CAVE_VINES_PLANT))return 3;
+        return 0;
     }
     public static boolean exposed(net.minecraft.client.renderer.block.BlockAndTintGetter level, net.minecraft.core.BlockPos pos) {
         // Chunk render views may expose only their thread-safe lighting snapshot.
@@ -163,7 +204,7 @@ public final class WindRendering {
     }
     private static boolean framePrepared;
     private static final ByteBuffer frameData = ByteBuffer.allocateDirect(16).order(ByteOrder.nativeOrder());
-    public static void beginFrame() { framePrepared = false; }
+    public static void beginFrame() { framePrepared = false; naturality.client.render.OcclusionCulling.beginFrame(); }
     public static void bind(RenderPass pass) {
         if (!framePrepared || uniform == null) prepareFrame();
         pass.setUniform("NaturalityWind", java.util.Objects.requireNonNull(uniform));

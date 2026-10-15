@@ -79,7 +79,8 @@ public final class SunLensFlare implements AutoCloseable {
     private float sourceVisibility(PoseStack sunPose) {
         var client = Minecraft.getInstance();
         var level = client.level;
-        if (level == null || client.player == null || sourceSamples.isEmpty()) return 0;
+        var player = client.player;
+        if (level == null || player == null || sourceSamples.isEmpty()) return 0;
         // At most 25 visual-shape rays per tick, independent of frame rate.
         if (visibilityLevel.get() != level || visibilityTick != level.getGameTime()) {
             visibilityLevel = new java.lang.ref.WeakReference<>(level);
@@ -105,7 +106,7 @@ public final class SunLensFlare implements AutoCloseable {
             int visible = 0;
             for (var end : ends) {
                 if (level.clip(new ClipContext(eye, end, ClipContext.Block.VISUAL,
-                        ClipContext.Fluid.NONE, client.player)).getType() != HitResult.Type.MISS) continue;
+                        ClipContext.Fluid.NONE, player)).getType() != HitResult.Type.MISS) continue;
                 boolean blocked = false;
                 for (var entity : blockers) {
                     var box = entity.getBoundingBox();

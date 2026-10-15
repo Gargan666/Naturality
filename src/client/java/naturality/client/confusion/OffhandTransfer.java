@@ -16,27 +16,28 @@ public final class OffhandTransfer {
     private static final Random RANDOM=new Random();
     private OffhandTransfer() {}
     public static void tick(Minecraft client) {
-        if(client.player!=owner || client.level==null) {
-            owner=client.player; previousHand=ItemStack.EMPTY; motion=null; target=-1;
+        var player = client.player;
+        if(player!=owner || client.level==null) {
+            owner=player; previousHand=ItemStack.EMPTY; motion=null; target=-1;
             java.util.Arrays.fill(previous,ItemStack.EMPTY);
-            if(client.player==null) return;
+            if(player==null) return;
             remember(client); return;
         }
-        if(client.player==null || client.isPaused()) return;
+        if(player==null || client.isPaused()) return;
         if(motion!=null) { motion.tick(); if(motion.settled()) motion=null; }
-        ItemStack hand=client.player.getOffhandItem();
+        ItemStack hand=player.getOffhandItem();
         if(ConfusionSlots.visible() && !ItemStack.matches(hand,previousHand)) {
             for(int i=0;i<9;i++) {
-                ItemStack stack=client.player.getInventory().getItem(i);
+                ItemStack stack=player.getInventory().getItem(i);
                 if(ItemStack.matches(stack,previousHand) && ItemStack.matches(hand,previous[i])
                     && !ItemStack.matches(stack,previous[i])) {
                     target=i;
-                    handX=client.player.getMainArm()==net.minecraft.world.entity.HumanoidArm.LEFT?9.45F:-1.45F;
+                    handX=player.getMainArm()==net.minecraft.world.entity.HumanoidArm.LEFT?9.45F:-1.45F;
                     slotX=ConfusionSlots.hotbar.coordinate(i,0,9,false,1);
                     slotY=ConfusionSlots.hotbar.coordinate(i,0,9,true,1);
                     motion=new ConfusionLayout(2);
                     hud=motion.view(new float[]{handX,slotX},new float[]{0,slotY},true);
-                    var effect=client.player.getEffect(naturality.NaturalityEffects.CONFUSION);
+                    var effect=player.getEffect(naturality.NaturalityEffects.CONFUSION);
                     motion.swap(RANDOM,2,effect==null?0:effect.getAmplifier());
                     break;
                 }
@@ -45,8 +46,9 @@ public final class OffhandTransfer {
         remember(client);
     }
     private static void remember(Minecraft client) {
-        previousHand=client.player.getOffhandItem().copy();
-        for(int i=0;i<9;i++) previous[i]=client.player.getInventory().getItem(i).copy();
+        var player = client.player; if (player == null) return;
+        previousHand=player.getOffhandItem().copy();
+        for(int i=0;i<9;i++) previous[i]=player.getInventory().getItem(i).copy();
     }
     public static float offset(int inventorySlot,float partial,boolean vertical) {
         if(motion==null || (inventorySlot!=40 && inventorySlot!=target)) return 0;

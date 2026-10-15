@@ -1,5 +1,6 @@
 #version 330
 #extension GL_ARB_separate_shader_objects : require
+#include <naturality:menu_region.glsl>
 
 #include <minecraft:fog.glsl>
 #include <minecraft:oit.glsl>
@@ -35,8 +36,10 @@ vec3 cloud_moon_tint() {
     vec3 relative = cloudBase + local;
     float alignment = dot(mat3(ModelViewMat) * (relative / max(length(relative), 0.0001)), MoonLight.xyz);
     float halo = smoothstep(0.60, 0.99, alignment);
+    // Tops retain the moon-centered angular falloff, but have no edge mask.
+    // This fills surface interiors near the moon without illuminating the whole sky.
     float rim = 1.0;
-    if (cloudDirection < 2) {
+    if (cloudDirection == 0) {
         float inward = 1e6;
         if ((edgeMask & 8) != 0) inward = min(inward, local.z);
         if ((edgeMask & 4) != 0) inward = min(inward, CellSize.x - local.x);
@@ -52,8 +55,16 @@ vec3 cloud_moon_tint() {
         rim = 1.0 - smoothstep(0.0, max(reach, pixelSize), inward);
     }
     vec2 anchored = mod((cloudBase.xz - CloudOffset.xz) / CellSize.x + FadeSettings.zw, CloudTextureSize.xy);
-    float variation = fract(sin(dot(anchored * (CellSize.x / pixelSize) + pixel.xz, vec2(127.1, 311.7))) * 43758.5453);
+    // Integer arithmetic keeps a pixel's tint identical across fragments and GPU
+    // compiler variants; fract(sin(large coordinates)) can introduce fine grain.
+    uvec2 key = uvec2(ivec2(round(anchored * (CellSize.x / pixelSize))) + ivec2(pixel.xz));
+    uint hash = key.x * 1664525u + key.y * 1013904223u + uint(max(pixel.y, 0.0)) * 374761393u;
+    hash ^= hash >> 16;
+    hash *= 2246822519u;
+    hash ^= hash >> 13;
+    float variation = float(hash & 65535u) / 65535.0;
     vec3 tint = mix(vec3(0.32, 0.27, 0.19), vec3(0.55, 0.62, 0.72), smoothstep(0.8, 1.0, alignment));
+    tint = mix(tint, vec3(max(tint.r, max(tint.g, tint.b)), 0.0, 0.0), CloudTextureSize.w);
     return tint * halo * rim * mix(0.85, 1.0, variation) * MoonLight.w;
 }
 
@@ -69,7 +80,13 @@ vec4 calculateFinalColor(vec4 color) {
 }
 
 void main() {
+    // Horizontal caps are outward faces; a two-sided cap exposes cloud tops from below.
+    if (cloudDirection >= 0 && cloudDirection < 2 && !gl_FrontFacing) discard;
+    // Use the same side as the cap blend: physical slab in gameplay, level orbit in menus.
+    if (cloudDirection == 1 && FadeSettings.y < 1.0) discard;
+    if (cloudDirection == 0 && FadeSettings.y > 0.0) discard;
     vec4 color = vertexColor;
+    color.a *= 1.0 - naturality_menu_cloud_edge(cloudLocal + cloudBase + MenuEye.xyz);
     color.rgb = clamp(color.rgb + cloud_moon_tint(), 0.0, 1.0);
     if (fadeRows >= 2.0) {
         // Only gradient side walls are one-sided. Horizontal planes have fadeRows = 0
@@ -92,7 +109,8 @@ void main() {
     }
     if (color.a <= 0.0) discard;
     #ifndef OIT_DEPTH_BOUNDS
-    color.a *= 1.0f - linear_fog_value(vertexDistance, FogCloudsEnd * 0.75, FogCloudsEnd);
+    if (MenuBounds.w == 0.0)
+        color.a *= 1.0f - linear_fog_value(vertexDistance, FogCloudsEnd * 0.75, FogCloudsEnd);
     if (color.a <= 0.0) discard;
     #endif
 

@@ -20,6 +20,7 @@ public abstract class HardcoreCloudMixin {
         int red = (int) (((color >>> 16) & 255) * factor);
         int green = (int) (((color >>> 8) & 255) * factor);
         int blue = (int) ((color & 255) * factor);
-        args.set(0, (color & 0xff000000) | (red << 16) | (green << 8) | blue);
+        args.set(0, naturality.client.sky.BloodMoonClient.tintArgb(
+            (color & 0xff000000) | (red << 16) | (green << 8) | blue, args.<Float>get(6)));
     }
 }

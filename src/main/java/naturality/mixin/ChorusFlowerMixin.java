@@ -48,7 +48,7 @@ public abstract class ChorusFlowerMixin extends Block {
             .setValue(ChorusFlowers.BLOOM, false));
     }
 
-    @Override public BlockState getStateForPlacement(BlockPlaceContext context) {
+    @Override public @org.jspecify.annotations.Nullable BlockState getStateForPlacement(BlockPlaceContext context) {
         return ChorusFlowers.flower(context.getClickedFace(), 0, context.getLevel().getRandom());
     }
 

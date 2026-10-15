@@ -16,7 +16,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(ServerPlayer.class)
 public class SleepPlayerMixin {
-    @Unique private BlockPos naturality$straw;
+    @Unique private @org.jspecify.annotations.Nullable BlockPos naturality$straw;
     @Redirect(method = "startSleepInBed", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerPlayer;isCreative()Z"))
     private boolean naturality$ignoreMonsters(ServerPlayer player) { return SleepAcceleration.enabled() || player.isCreative(); }
     @Redirect(method = "startSleeping", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerPlayer;resetStat(Lnet/minecraft/stats/Stat;)V"))
@@ -37,8 +37,9 @@ public class SleepPlayerMixin {
     private void naturality$wake(boolean immediate, boolean update, CallbackInfo ci) {
         var player = (ServerPlayer)(Object)this;
         SleepAcceleration.stopped(player);
-        if (naturality$straw != null && player.level().getBlockState(naturality$straw).getBlock() instanceof StrawBedBlock)
-            player.level().destroyBlock(naturality$straw, false);
+        var straw = naturality$straw;
+        if (straw != null && player.level().getBlockState(straw).getBlock() instanceof StrawBedBlock)
+            player.level().destroyBlock(straw, false);
         naturality$straw = null;
     }
 }

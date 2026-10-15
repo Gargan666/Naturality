@@ -122,3 +122,17 @@ Find Echo Coral after Brown Mushroom Block in Natural Blocks.
 LYREN HEATH
 textures/block/lyren_heath.png supplies the sides and lyren_heath_top.png the top.
 Bottom uses vanilla End Stone. Uses standard stone sounds. Edit and rebuild/relaunch.
+
+MOSS
+textures/block/moss.png supplies the thin glow-lichen-style surface block and
+inventory sprite for naturality:moss. Uses vanilla moss sounds. Edit and rebuild.
+
+
+CLOVERS
+textures/block/clovers.png and clovers_stem.png supply wildflower-style foliage.
+Both model pieces receive biome foliage tint. Edit and rebuild/relaunch.
+
+
+FOUR LEAF CLOVER
+textures/item/four_leaf_clover.png supplies the rare Clovers drop and Luck brewing ingredient.
+

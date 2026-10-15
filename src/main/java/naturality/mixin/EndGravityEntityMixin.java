@@ -20,7 +20,7 @@ import org.spongepowered.asm.mixin.injection.callback.*;
 @Mixin(Entity.class)
 public abstract class EndGravityEntityMixin {
     @Unique private boolean naturality$wasInverted;
-    @Shadow public java.util.Optional<BlockPos> mainSupportingBlockPos;
+    @SuppressWarnings("null") @Shadow public java.util.Optional<BlockPos> mainSupportingBlockPos;
     @Unique private Entity naturality$self() { return (Entity)(Object)this; }
     @WrapMethod(method="refreshDimensions")
     private void naturality$keepCeilingFeet(Operation<Void> original) {

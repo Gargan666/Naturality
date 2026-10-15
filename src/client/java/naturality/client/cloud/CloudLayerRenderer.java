@@ -69,19 +69,25 @@ public final class CloudLayerRenderer implements AutoCloseable {
         final int color,
         final CloudStatus cloudStatus,
         final float bottomY,
-        final int range,
+        int range,
         final Vec3 cameraPosition,
         final long gameTime,
         final float partialTicks, final CloudLayer settings
     ) {
         this.settings = settings;
+        if (naturality.client.menu.MenuPreview.active())
+            range = Math.max(range * 4, (int)Math.ceil((naturality.client.menu.MenuPreview.radius() * 4 + 180) / 16));
         if (!settings.enabled || settings.opacityPercent == 0) { quadCount = 0; needsRebuild = true; return; }
         float relativeBottomY = (float)(bottomY + settings.heightOffset - cameraPosition.y);
         float cameraHeight = -relativeBottomY / settings.thickness;
+        // The menu's level orbit is the shared middle for both cloud layers.
+        // Playable worlds retain their actual camera-height transitions.
+        if (naturality.client.menu.MenuPreview.active())
+            cameraHeight = naturality.client.menu.MenuWorld.camera().cloudLayerPosition();
         boolean gradient = settings.fadingSides && settings.style != 2 && settings.fadePixels >= 2;
         // The fragment shader discards these caps at exactly zero opacity. Keep
         // a small margin at the transition so rounding can never hide a visible cap.
-        int caps = gradient ? (cameraHeight <= .7499F ? 1 : 0) | (cameraHeight >= .2501F ? 2 : 0) : 0;
+        int caps = gradient ? (cameraHeight <= .9999F ? 1 : 0) | (cameraHeight >= .0001F ? 2 : 0) : 0;
         if (caps != invisibleCaps) { invisibleCaps = caps; needsRebuild = true; }
         int key = 31 * (31 * (31 * (31 * settings.width + settings.thickness) + settings.style)
             + (settings.fadingSides ? 1 : 0)) + range;
@@ -136,9 +142,9 @@ public final class CloudLayerRenderer implements AutoCloseable {
                     // Preserve the live sky tint, replacing vanilla base alpha with the layer opacity.
                     Std140Builder.intoBuffer(view.data()).putVec4(ARGB.vector4fFromARGB32(color).setComponent(3, settings.opacityPercent / 100.0f)).putVec3(-xInCell, relativeBottomY, -zInCell).putVec3(settings.width, settings.thickness, settings.width)
                         .putVec4(settings.fadingSides && settings.style != 2 ? settings.fadePixels : 0,
-                            -relativeBottomY / settings.thickness, cellX, cellZ)
+                            cameraHeight, cellX, cellZ)
                         .putVec4(CloudMoonLighting.sample(partialTicks))
-                        .putVec4(texture.width, texture.height, settings.fadePixels, 0);
+                        .putVec4(texture.width, texture.height, settings.fadePixels, naturality.client.sky.BloodMoonClient.sample(partialTicks));
                 }
             }
         }
@@ -194,6 +200,7 @@ public final class CloudLayerRenderer implements AutoCloseable {
         renderPass.setIndexBuffer(indexBuffer, indices.type());
         renderPass.setVertexBuffer(0, null);
         renderPass.setUniform("CloudInfo", this.ubo.currentBuffer());
+        naturality.client.menu.MenuFog.bind(renderPass);
         renderPass.setUniform("CloudFaces", faces.currentBuffer());
         renderPass.drawIndexed(6 * this.quadCount, 1, 0, 0, 0);
     }
@@ -254,10 +261,6 @@ public final class CloudLayerRenderer implements AutoCloseable {
         }
     }
 
-    private void buildFlatCell(final ByteBuffer faceBuffer, final int x, final int z) {
-        this.encodeFace(faceBuffer, x, z, Direction.DOWN, 32);
-    }
-
     private void encodeFace(final ByteBuffer faceBuffer, final int x, final int z, final Direction direction, final int flags) {
         if (settings.style == 0 && !settings.fadingSides && direction == Direction.UP) return;
         if (settings.fadingSides && settings.style != 2 && settings.fadePixels >= 2) {
@@ -265,8 +268,9 @@ public final class CloudLayerRenderer implements AutoCloseable {
                     || direction == Direction.DOWN && (invisibleCaps & 2) != 0) return;
             // The camera stays inside cell (0,0); gradient walls are already
             // discarded when back-facing. Retain their original draw ordering.
-            if (direction == Direction.NORTH && z <= 0 || direction == Direction.SOUTH && z >= 0
-                    || direction == Direction.WEST && x <= 0 || direction == Direction.EAST && x >= 0) return;
+            if (!naturality.client.menu.MenuPreview.active()
+                    && (direction == Direction.NORTH && z <= 0 || direction == Direction.SOUTH && z >= 0
+                    || direction == Direction.WEST && x <= 0 || direction == Direction.EAST && x >= 0)) return;
         }
         int dirAndFlags = direction.get3DDataValue() | flags;
         dirAndFlags |= (x & 1) << 7;

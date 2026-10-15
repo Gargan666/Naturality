@@ -138,10 +138,11 @@ public final class VillagerBread {
                 }
             }
             if (body.getInventory().countItem(Items.BREAD) > (eatenDay == day ? 0 : 1)) {
-                recipient = villagers.stream().filter(other -> {
+                var candidate = villagers.stream().filter(other -> {
                     var path = body.getNavigation().createPath(other, 2);
                     return path != null && path.canReach();
-                }).findFirst().orElse(null);
+                }).findFirst();
+                recipient = candidate.isPresent() ? candidate.orElseThrow() : null;
                 if (recipient != null) { hold(body, time); return; }
             }
             nextShare = time + 100;

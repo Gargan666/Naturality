@@ -127,7 +127,7 @@ public final class SnowBlockModels {
         var bundled=DATA.getAsJsonObject(kind);
         if(bundled!=null && bundled.has(id))return bundled.getAsJsonObject(id);
         String[] parts=id.split(":",2);
-        return RESOURCES.computeIfAbsent(kind+":"+id,key->read("assets/"+parts[0]+"/"+kind+"/"+parts[1]+".json"));
+        return RESOURCES.computeIfAbsent(kind+":"+id,_->read("assets/"+parts[0]+"/"+kind+"/"+parts[1]+".json"));
     }
     private static JsonObject read(String path) {
         try(var stream=SnowBlockModels.class.getClassLoader().getResourceAsStream(path)) {

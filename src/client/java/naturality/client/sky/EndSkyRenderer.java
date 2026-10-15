@@ -46,12 +46,13 @@ public final class EndSkyRenderer {
 
     public static void renderStars(RenderPass pass, GpuBuffer stars, int indexCount) {
         var client = Minecraft.getInstance();
-        if (client.level == null) return;
+        var level = client.level;
+        if (level == null) return;
         float partial = client.getDeltaTracker().getGameTimeDeltaPartialTick(false);
         float brightness = naturality.client.lighting.HardcoreDarkness.sky(
-            client.level, client.gameRenderer.mainCamera(), partial);
+            level, client.gameRenderer.mainCamera(), partial);
         // One revolution per hour of world time, continuous across the phase wrap.
-        double ticks = (client.level.getGameTime() % 72000L) + partial;
+        double ticks = (level.getGameTime() % 72000L) + partial;
         float angle = (float)(ticks * (Math.PI * 2.0 / 72000.0));
         var transform = RenderSystem.getModelViewMatrixCopy().rotateY(angle);
         var indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
@@ -68,10 +69,11 @@ public final class EndSkyRenderer {
     public static void render(RenderPass pass, GpuBuffer cube,
             net.minecraft.client.renderer.texture.AbstractTexture texture) {
         var client = Minecraft.getInstance();
-        if (client.level == null) return;
+        var level = client.level;
+        if (level == null) return;
         float partial = client.getDeltaTracker().getGameTimeDeltaPartialTick(false);
         float brightness = naturality.client.lighting.HardcoreDarkness.sky(
-            client.level, client.gameRenderer.mainCamera(), partial);
+            level, client.gameRenderer.mainCamera(), partial);
         var indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
         pass.setPipeline(RenderSystem.getCompiledPipeline(PIPELINE));
         RenderSystem.bindDefaultUniforms(pass);

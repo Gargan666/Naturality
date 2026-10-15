@@ -13,6 +13,9 @@ public final class WindShapesGameTest implements FabricClientGameTest {
         var sheltered=new BlockPos(8,120,0);
         check(WindShapes.offset(level,sheltered,level.getBlockState(sheltered)).equals(Vec3.ZERO),"Indoor leaves keep their original hitbox");
         var pos=new BlockPos(0,120,0);var state=level.getBlockState(pos);
+        var wallVine=new BlockPos(4,120,4);
+        var wallShift=WindShapes.offset(level,wallVine,level.getBlockState(wallVine));
+        check(wallShift.length()<.05,"Wall-supported vine hitboxes must stay close to the wall");
         var offset=WindShapes.offset(level,pos,state);
         check(offset.x>.3,"Strong wind must move the leaf hitbox: "+offset+" weather="+WeatherSystem.state(level)+" sky="+level.getBrightness(LightLayer.SKY,pos)+" state="+state);
         var outline=state.getShape(level,pos).bounds();
@@ -69,6 +72,8 @@ public final class WindShapesGameTest implements FabricClientGameTest {
             server.runCommand("setblock 0 120 0 oak_leaves[persistent=true]");
             server.runCommand("setblock 0 121 0 snow[layers=4]");
             server.runCommand("setblock 4 120 0 vine[south=true]");
+            server.runCommand("setblock 4 120 5 stone");
+            server.runCommand("setblock 4 120 4 vine[south=true]");
             server.runCommand("fill 7 119 -1 9 123 1 stone hollow");
             server.runCommand("setblock 8 120 0 oak_leaves[persistent=true]");
             server.runCommand("tp @a 0 125 0");

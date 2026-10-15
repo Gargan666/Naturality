@@ -8,13 +8,14 @@ import net.minecraft.world.entity.monster.Ghast;
 
 /** Scales the whole animated model around its body center, including tentacles. */
 public final class SquashingGhastRenderer extends GhastRenderer {
-    public static final class State extends GhastRenderState { public float squash, leanPitch, leanRoll; public GhastCrashPose crash; }
+    public static final class State extends GhastRenderState implements GhastTentacleState { public float squash, leanPitch, leanRoll; public GhastCrashPose crash; public GhastTentaclePhysics.Pose tentacles; public GhastTentaclePhysics.Pose naturality$tentacles() { return tentacles; } }
     public SquashingGhastRenderer(EntityRendererProvider.Context context) { super(context); }
     @Override public State createRenderState() { return new State(); }
     @Override public void extractRenderState(Ghast entity, GhastRenderState state, float partial) {
         super.extractRenderState(entity, state, partial);
         ((State)state).crash = GhastCrashPose.extract(entity, partial);
-        if (((State)state).crash != null) { state.deathTime = 0; state.hasRedOverlay = false; }
+        ((State)state).tentacles = GhastTentaclePhysics.extract(entity,partial,((State)state).crash);
+        if (((State)state).crash != null) { state.deathTime = 0; state.hasRedOverlay = entity.hurtTime > 0 || ((naturality.ghast.GhastCrashBody)entity).naturality$impactTicks() >= 0; }
         ((State)state).squash = GhastSquash.sample(entity, partial);
         GhastSquash.extractLean(entity, (State)state, partial);
     }

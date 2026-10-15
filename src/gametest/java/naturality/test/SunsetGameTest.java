@@ -11,6 +11,25 @@ public final class SunsetGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
         boolean[] previous = new boolean[2];
         context.runOnClient(client -> {
+            var grayTop = naturality.client.sky.SkyGradientRenderer.zenithTint(new org.joml.Vector3f(.5F));
+            if (Math.abs(grayTop.x - grayTop.z) > .0001F || grayTop.x <= .5F || grayTop.x > .57F)
+                throw new AssertionError("Neutral biome zenith must remain gray and only slightly lighter");
+            var blueTop = naturality.client.sky.SkyGradientRenderer.zenithTint(new org.joml.Vector3f(.48F, .65F, 1));
+            if (!(blueTop.z > blueTop.y && blueTop.y > blueTop.x && blueTop.x < .48F))
+                throw new AssertionError("Blue biome sky must retain its hue with a richer zenith");
+            float previousSpan = 0;
+            for (int chunks : new int[] {5, 8, 16, 32}) {
+                var fog = new net.minecraft.client.renderer.fog.FogData();
+                fog.renderDistanceEnd = chunks * 16;
+                fog.renderDistanceStart = fog.renderDistanceEnd * .9F;
+                naturality.client.fog.DistanceFogSpan.apply(fog, chunks);
+                float span = fog.renderDistanceEnd - fog.renderDistanceStart;
+                if (span <= previousSpan || fog.renderDistanceEnd != chunks * 16 || fog.renderDistanceStart <= 0)
+                    throw new AssertionError("Fog must widen with distance without moving the opaque boundary");
+                if (chunks == 32 && (span < 150 || span > 160))
+                    throw new AssertionError("32-chunk fog should span roughly ten chunks");
+                previousSpan = span;
+            }
             var cloud = new NaturalityConfig.CloudLayer();
             cloud.speedPercent = 0;
             var eye = new net.minecraft.world.phys.Vec3(6, 90, 2);
@@ -105,6 +124,24 @@ public final class SunsetGameTest implements FabricClientGameTest {
             world.getConnection().waitForClientboundPackets();
             context.waitTicks(10);
             context.takeScreenshot("sun-flare-warm-sunrise");
+            server.runCommand("time set noon");
+            server.runCommand("tp @a 0.5 250 0.5 180 -25");
+            world.getConnection().waitForClientboundPackets();
+            context.waitTicks(15);
+            context.takeScreenshot("sky-gradient-clear");
+            server.runCommand("fillbiome -14 236 -14 14 264 14 minecraft:pale_garden");
+            world.getConnection().waitForClientboundPackets();
+            context.waitTicks(40);
+            context.takeScreenshot("sky-gradient-pale-garden");
+            server.runCommand("fillbiome -14 236 -14 14 264 14 minecraft:plains");
+            world.getConnection().waitForClientboundPackets();
+            context.waitTicks(40);
+            server.runCommand("weather minecraft:overworld rain 100");
+            context.waitTicks(35);
+            context.takeScreenshot("sky-gradient-rain-onset");
+            context.waitTicks(80);
+            context.takeScreenshot("sky-gradient-rain");
+
         } finally {
             context.runOnClient(client -> {
                 NaturalityConfig.get().effects.sunBeams = previous[0];

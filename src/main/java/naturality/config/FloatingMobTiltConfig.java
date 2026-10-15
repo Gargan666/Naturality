@@ -12,8 +12,9 @@ import org.slf4j.LoggerFactory;
 /** Shared list keeps happy-ghast rider offsets in sync with body lean. Restart to reload. */
 public final class FloatingMobTiltConfig {
     public List<String> entities=List.of("minecraft:ghast","minecraft:happy_ghast","minecraft:vex","minecraft:allay","minecraft:breeze","minecraft:blaze","minecraft:parrot");
-    private static FloatingMobTiltConfig instance;
-    private static Set<String> ids;
+    private static @org.jspecify.annotations.Nullable FloatingMobTiltConfig instance;
+    private static Set<String> ids = Set.of();
+    @SuppressWarnings({"null", "unused"}) // Gson can violate contracts; keep defensive JSON checks despite static dead-code inference.
     public static FloatingMobTiltConfig get() {
         if(instance!=null) return instance;
         var config=new FloatingMobTiltConfig();
@@ -23,8 +24,10 @@ public final class FloatingMobTiltConfig {
             if(Files.exists(file)) {
                 try(var reader=Files.newBufferedReader(file)) {
                     var loaded=gson.fromJson(reader,FloatingMobTiltConfig.class);
-                    if(loaded==null || loaded.entities==null || loaded.entities.stream().anyMatch(java.util.Objects::isNull))
+                    if(loaded==null || loaded.entities==null)
                         throw new IllegalArgumentException("entities must be an array of entity IDs");
+                    for (@org.jspecify.annotations.Nullable String id : loaded.entities)
+                        if (id == null) throw new IllegalArgumentException("entities must be an array of entity IDs");
                     config=loaded;
                 }
             } else {

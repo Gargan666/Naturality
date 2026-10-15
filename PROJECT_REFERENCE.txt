@@ -1,8 +1,770 @@
+MOUNTAIN LAKES AND PRE-FLOWING WATERFALLS (2026-10-14)
+--------------------------------------------------
+MountainWaterfallFeature runs during the Overworld LAKES decoration step.
+One attempt per 12 chunks is filtered by high terrain (35 blocks above sea
+level), the mountain_waterfalls biome tag, and suitable cliff geometry. The tag
+includes vanilla mountains and windswept hill/forest variants. This is an
+attempt rate, not a guarantee of a waterfall every twelve mountain chunks.
+Irregular lakes have radius 7-10, taper to 1-4 blocks deep, and retain a dry
+bank. Their waterline can recess up to six blocks to fit uneven ledges. A
+3- or 5-block-wide low spillway breaches the rim above an 18-96 block drop.
+In freezing biomes the lake receives an ice lid, with the spillway open below
+it so the later vanilla snow/freeze pass cannot seal the waterfall supply.
+
+WaterfallFlowPlanner uses a private provisional block map to compute downward
+flow, native four-block slope searches, horizontal level attenuation, falling
+states, landing pools/steps, and gamerule-controlled source conversion before
+any terrain is changed. Lake sources and actual flowing-water block levels
+are all saved during generation. Native saved fluid ticks remain enabled for
+later terrain edits; those ticks do not have to build the initial waterfall.
+Plans are limited to a 47x47 footprint, 112 blocks downward, 12,000 edited
+cells and 60,000 queue operations. The full lake, outlet and downstream path
+must respect WorldGenRegion write bounds/build height. Unsupported basins,
+protected blocks, block entities and nearby waterloggable obstacles reject the
+whole plan without partial lakes. No global scans or chunk-load retrofit.
+
+The startup Mountain Waterfalls switch is under Content, inherits the Content
+switch, defaults on, and follows existing preset/restart behavior. Rarity is
+in data/naturality/worldgen/placed_feature/mountain_waterfall.json; eligible
+biomes are in data/naturality/tags/worldgen/biome/mountain_waterfalls.json.
+Only newly generated chunks receive this feature.
+
+Focused mountain-waterfalls integration suite passed with isolated build
+outputs (concurrent normal compiles initially caused unrelated missing-class
+startup failures). Tests exercise actual feature placement, deterministic
+planning, complete lake/fall/landing water before ticks, protected-block and
+deep-path rejection, wide falls over multiple steps, and icy lakes through the
+actual snow/freeze feature. Repeated native fluid ticks preserve every prepared
+water state; warm/stepped tests also check no new water outside the initial
+footprint. A controlled 772-cell plan took about 21 ms on this machine, not a
+whole-world generation benchmark. Log: build/mountain-waterfalls-final.log.
+Assemble and prepareDebugLaunch validation: build/mountain-waterfalls-build-final.log.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply.
+
+INSANITY COVERS NEW SPAWNS AND ALL CROWD SIZES (2026-10-14)
+-------------------------------------------------------
+Removed the old 256-source-mob cache ceiling, which silently skipped additional
+mobs (including newly spawned ones). Insanity now reuses one render-only entity
+template per replacement type (at most eight). Each source mob still chooses
+its stable UUID/episode-based identity and gets a fresh independent render-state
+snapshot. There is no source-mob count limit, no crowd-size cache thrashing, and
+no retained source-entity cache. Templates clear on effect/world changes.
+
+Removed passenger/vehicle exclusions; riders and mounts both receive replacement
+models. Source passenger offsets are retained and humanoid proxy riding posture
+is set per extraction. Render-only proxy creation bypasses spawn eligibility,
+so Peaceful difficulty cannot randomly reject monster appearances. No template
+is ever added to the world or ticked as a gameplay entity.
+
+Insanity render data now lives on EntityRenderState, covering bosses such as the
+Ender Dragon that do not use LivingEntityRenderState. Dragon body/eyes rendering
+gets explicit fading support. Living body fading/tint is applied at submission's
+virtual call results so overriding getRenderType/getModelTint cannot bypass it.
+The 4-8 block proximity reveal remains: close mobs retain their real appearance.
+Dead and invisible mobs retain ordinary visibility; this does not reveal hidden
+entities or turn corpses back into living hallucinations.
+
+Assemble, prepareDebugLaunch and expanded insanity suite passed:
+build/insanity-all-mobs-pool-final.log. Checks cover actual mobs spawned after
+the effect begins, 320 simultaneously retained source mobs, stable identities,
+independent pose snapshots sharing templates, riders/mounts, Peaceful disguises,
+boss extraction and an actual live dragon render, plus existing crossfade,
+close voice/model reveal, clearing and unchanged server identities/counts.
+Native/Fabric tested; Sodium not rerun. Artifact: build/libs/naturality-1.0.0.jar;
+restart Minecraft to apply.
+
+MADDENED EXPLOSION SOUND EXCEPTION (2026-10-13)
+--------------------------------------------
+Explosion sound events (paths ending .explode) are explicitly excluded from
+maddened pitch reduction and the client low-pitch floor exception. Creeper
+explosions retain normal vanilla pitch/speed, while priming and ordinary mob
+noises remain half-pitch. Vanilla world explosion emission was already separate
+from Entity.playSound; the explicit guard also protects entity-emitted blasts.
+Assemble, prepareDebugLaunch and maddened-zombie suite passed:
+build/maddened-explosion-sound.log. Actual Entity.playSound probe confirms
+creeper priming .8 -> .4, explosion .8 -> .8 and ordinary zombie pitch unchanged.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply.
+
+BLOOD MOON DOUBLE NATURAL SPAWNING (2026-10-13)
+--------------------------------------------
+Active server Blood Moon doubles eligible natural spawn passes per category per
+chunk, plus global and per-player population caps. All normally eligible natural
+categories use the multiplier; their normal cadence, biome/placement rules,
+player-distance checks, difficulty and spawn gamerules still apply. The second
+pass rechecks the local cap after the first pass. Two independent attempts do
+not guarantee exactly twice the successful population in blocked/limited space.
+Spawners, explicit summons, eggs and chunk-generation creature placement are not
+multiplied. Existing mobs are not duplicated or removed when the event ends.
+The existing natural enemy-to-maddened replacement remains active alongside this.
+
+Spawn-state creation snapshots the current per-world multiplier into global and
+local calculators. The nested local count lookup scopes that multiplier with
+try/finally, restoring its prior value and avoiding cross-world leakage. Normal
+caps and one-pass spawning return on the next spawn state after event ends.
+Nether/End lack Blood Moon and retain ordinary spawning. Hooks follow
+SKY_EVENT_CYCLES independently of CONTENT and visual settings.
+
+Assemble, prepareDebugLaunch and expanded maddened-spawns suite passed:
+build/blood-moon-spawns-final.log. Deterministic probes verify two versus one
+actual spawnCategoryForChunk calls, both global/local caps allowing the ordinary
+cap during Blood Moon and rejecting it after ending, scoped context restoration,
+and existing maddened replacement/off/unmapped/dimension/summon checks. Probe
+classes are game-test-only. Artifact: build/libs/naturality-1.0.0.jar; restart
+Minecraft to apply.
+
+MADDENED ZOMBIE RAGE SHIVER/LEAPS AND SLOWED MOB SOUNDS (2026-10-13)
+----------------------------------------------------------------
+Maddened Zombie rage now has a synchronized boolean entity-data flag, updated
+when rage starts/ends/restores. Its renderer uses vanilla piglin-style shaking
+plus an additional rapid +/-8-degree yaw twitch while enraged. Adult/baby body,
+armor, held items and emissive detail share that pose. Existing 10-second rage,
+refresh, save/load and double speed/damage behavior remains.
+
+A priority-1 RageLeapGoal reuses vanilla LeapAtTargetGoal (spider-like impulse:
+.4 horizontal toward target plus .2 existing momentum, .4 upward). It runs only
+while enraged and AI-enabled, grounded, unmounted, outside water, with a living
+visible target at vanilla's 2-4 block leap distance. Vanilla random retry and
+in-air goal continuation remain, with velocity sync on launch. Rage expiry stops
+new leap attempts. Existing Zombie targeting/melee behavior stays in place.
+
+MaddenedMob is the shared sound marker for current/future maddened entities.
+Both Zombie and Creeper implement it. MaddenedSoundMixin halves pitch at the
+Entity.playSound event emission boundary, preserving inherited normal sound
+identities, volume and existing random/baby pitch variation. This covers normal
+vocal, step and creeper priming sounds emitted through that method; independent
+world effects such as explosions/door world events retain their own audio.
+A client SoundEngine hook allows sub-.5 pitch for positional entity sounds near
+maddened mobs, bypassing vanilla's pitch floor (needed for .25 creeper priming).
+Attribution uses source positions within 1 block; densely overlapping sounds can
+be attributed to a neighboring maddened mob. Other sounds keep normal clamping.
+Future maddened entities should implement MaddenedMob alongside registering their
+counterpart with MaddenedVariants. Sound hooks follow CONTENT independently of
+visual settings. No new sound assets or extra sound emissions were added.
+
+Assemble, prepareDebugLaunch and maddened-zombie/maddened-creeper suites passed:
+build/maddened-rage-pitch-final.log. Checks cover synced adult/baby rage rendering,
+real sound emission pitch for both mobs versus unchanged ordinary zombie pitch,
+actual SoundEngine acceptance of sub-.5 pitch, targeted upward leap, rage expiry,
+and existing health/combat/persistence/cloud regressions. Native/Fabric tested;
+Sodium not rerun. Artifact: build/libs/naturality-1.0.0.jar; restart to apply.
+
+BLOOD MOON MADDENED NATURAL SPAWNS (2026-10-13)
+--------------------------------------------
+During an active server Blood Moon, natural enemy spawns select their registered
+maddened counterpart: creeper -> maddened_creeper and zombie -> maddened_zombie.
+MaddenedVariants provides the shared mapping; each future maddened mob should
+register its ordinary EntityType and its new EntityType in initialize(). Both
+must be distinct MONSTER-category types. Unmapped enemies remain ordinary.
+
+MaddenedSpawnMixin substitutes only the entity factory in NaturalSpawner's
+getMobForSpawn, after vanilla validates the chosen biome spawn entry. The normal
+spawn selection, original placement rules, group initialization and spawn flow
+remain in place. Variants receive their own constructor/default attributes,
+including the zombie's 40 HP and creeper's shorter fuse. No NBT conversion of
+existing mobs is performed. Spawns return to ordinary types when Blood Moon
+ends, while already spawned maddened mobs remain maddened. Passive mobs,
+explicit summons/eggs, spawners, conversion/loading and existing entities are
+outside this natural-spawn hook. Nether/End lack a Blood Moon and are unchanged.
+Hook follows CONTENT and SKY_EVENT_CYCLES, independently of visual settings.
+
+Validation: assemble, prepareDebugLaunch and maddened-spawns client suite passed:
+build/maddened-spawns-test.log. The suite invokes the actual vanilla natural
+spawn factory to verify both replacements, ordinary night/off state, 40 HP
+variant defaults, unmapped enemy/passive behavior, no recursive replacement,
+explicit summon identity, Nether isolation, event-end restoration and retention
+of already spawned variants. Artifact: build/libs/naturality-1.0.0.jar.
+Restart Minecraft to apply.
+
+CUSTOM INSANITY, CONFUSION AND DISTORTION ICONS (2026-10-13)
+--------------------------------------------------------
+All three status effects now use the supplied resources/textures/mob_effect
+icons through the existing resources-to-assets/naturality packaging. Old client
+Confusion and Insanity placeholders were removed, including their stale generated
+copies, to avoid duplicate JAR entries. Future source icon edits are included by
+normal builds. Assemble and prepareDebugLaunch passed: build/effect-icons-build.log.
+Each packaged icon has exactly one entry and its SHA-256 matches the source.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply.
+
+MADDENED ZOMBIE DOUBLE HEALTH, EGG ART AND EMISSIVE LAYER (2026-10-13)
+-----------------------------------------------------------------
+Maddened Zombie default maximum health is now 40 HP (20 hearts), versus vanilla
+Zombie's 20 HP. Newly spawned adults and babies start at full 40 HP. Rage still
+changes only speed and attack damage; its duration/refresh behavior is unchanged.
+Spawn egg uses resources/textures/item/maddened_zombie_spawn_egg.png through its
+own generated item model. The renderer adds maddened_zombie_emissive.png as a
+full-bright additive eyes layer, following the active adult/baby model and its
+animation. Black/transparent pixels add no glow.
+
+Assemble, prepareDebugLaunch and maddened-zombie suite passed:
+build/maddened-zombie-health-emissive.log. Checks compare normal/custom health,
+verify full-health adult/baby spawn on client, and retain combat/rage/save/expiry
+regressions. Nighttime adult/baby screenshot was inspected. Both new packaged
+textures exactly match source SHA-256 hashes. Initial manifest update failed;
+the build retry succeeded. Artifact: build/libs/naturality-1.0.0.jar.
+Restart Minecraft to apply.
+
+MADDENED ZOMBIE (2026-10-13)
+--------------------------
+Added naturality:maddened_zombie, inheriting normal Zombie AI and behavior.
+Successful melee attacks apply 400 ticks (20 seconds) of Insanity to surviving
+living targets. Rejected/blocked attacks do not apply the effect. Taking actual
+nonfatal damage starts a 200-tick (10-second) rage; additional damaging hits
+refresh this duration. Rage adds one transient ADD_MULTIPLIED_TOTAL +1 modifier
+to movement speed and attack damage, doubling their values without stacking.
+Expiry removes those modifiers and restores the other base values/modifiers.
+Remaining rage time saves in naturality:rage_ticks and restores on loading.
+Baseline attributes remain vanilla Zombie (.23 movement speed, 3 attack damage).
+Rage has no separate visual overlay in this version.
+
+Use /summon naturality:maddened_zombie or the Creative Maddened Zombie Spawn Egg.
+Registration follows CONTENT. No natural spawn placement is added. The egg uses
+vanilla zombie egg artwork until custom egg artwork is supplied. Loot delegates
+to minecraft:entities/zombie. Vanilla entity tags identify it as zombies/undead,
+immune to poison/regeneration, inverted for healing/harming and Smite-sensitive.
+
+The shared build generator now handles both Maddened Creeper and Zombie exports.
+Maddened Zombie geometry comes from resources/entity models/maddened_zombie.java,
+automatically regenerated during assemble and prepareDebugLaunch. Root part names
+Body/Head/RightArm/LeftArm/RightLeg/LeftLeg are mapped to vanilla humanoid names;
+a required empty hat child is added. Geometry/UVs remain from the artist export.
+Rendering uses resources/textures/entity/maddened_zombie.png with vanilla zombie
+head/walking/melee/item/armor animation. Babies use a scaled version of the same
+custom geometry/texture. Normal armor rendering is retained. Rebuild/restart
+is required after model changes; no runtime model-file hot reload. Editing
+instructions: resources/entity models/README.txt.
+
+Validation: assemble, prepareDebugLaunch and maddened-zombie/maddened-creeper
+suites passed in build/maddened-zombie-final.log; final zombie/undead checks
+passed in build/maddened-zombie-undead-final.log. Tests cover adult/baby custom
+rendering, Insanity on successful hits, rejected attacks/damage, exact attribute
+and unarmed melee damage doubling, rage refresh without stacking, saved rage
+restoration, expiry, vanilla undead tags and poison immunity. Adult/baby capture
+was visually inspected. Shared creeper model/cloud/leap/fuse regression passed.
+Native/Fabric tested; Sodium not rerun. Artifact: build/libs/naturality-1.0.0.jar.
+Restart Minecraft to apply.
+
+AURORA BLOOD MOON PALETTE CROSSFADE (2026-10-13)
+----------------------------------------------
+Overworld Aurora Borealis blends its sampled normal aurora.png colors toward
+resources/textures/sky/aurora_evil.png using BloodMoonClient's shared eased
+intensity. This is a per-pixel palette crossfade, preserving the same curtain
+geometry, animation, strength and visibility patterns. Ending Blood Moon or
+reaching daylight fades back to the normal palette. End Aurora retains
+aurora_end.png. Both palettes upload before the draw pass and rebind after
+resource reloads. Each palette samples its own dimensions, so differing
+palette widths/heights are supported. Sampler1 holds the evil palette and
+ColorModulator.w carries the blend; the previous 0.9 opacity multiplier is
+preserved independently in the fragment shader.
+Validation: assemble and aurora client suite passed, including both fade
+directions, full evil palette, End palette isolation and resource reload.
+Transition/full palette captures were inspected. Log: build/aurora-evil-test.log.
+
+INSANITY EFFECT AND MADDENED CREEPER CLOUD (2026-10-13)
+---------------------------------------------------
+Registered harmful effect naturality:insanity (color AE253B). Test with
+/effect give @s naturality:insanity 60 0; remove with /effect clear @s naturality:insanity.
+This first version treats the description as observer-local hallucinations:
+an affected player sees/hears altered mobs. Server mob types, AI, hitboxes and
+physics are not modified. This is a visual distortion (sway/tilt/stretch), not
+the separate gravity-inverting Distortion potion. The status icon temporarily
+reuses the Confusion artwork; the effect has its own translated name.
+
+Far mobs get deterministic randomized appearances chosen from cow, pig, sheep,
+zombie, skeleton, spider, enderman and creeper; the selected type differs from
+the source. Identity stays stable for each mob during one Insanity episode.
+Distance smoothstep reveals the real model from 8 down to 4 blocks, with
+complementary translucent body opacity. Close mobs regain their true shape and
+voice. Render-only proxy models have separate local IDs and never enter the
+world, preserving real targeting/collision. Walking/head pose and source light
+are copied; proxy height is normalized to the actual mob. Original shadow and
+name rendering remain, without duplicate proxy shadows/names. During partial
+fades, opaque secondary layers are suppressed to avoid revealing hidden models.
+Dead/invisible mobs and passenger/vehicle assemblies retain ordinary rendering.
+
+Mob voices randomize locally, including ambient/hurt/death/step/other entity
+sounds in hostile/neutral categories, using a stable per-mob voice choice.
+Original position, category, base volume/pitch and attenuation remain. Close
+mob voices are normal. Unrelated/relative/looping sounds are untouched.
+Positional events are attributed to the nearest mob within 2 blocks; sounds in
+crowded overlapping groups can therefore be attributed to a neighboring mob.
+Sound parameters are read before sample resolution through the dedicated
+AbstractSoundInstance accessor, avoiding premature sound getter access.
+
+Client model cache is weak-keyed, bounded to 256 entries and cleared on effect
+changes/disconnect/world changes. The client feature hooks follow CONTENT and
+work independently of VISUAL_OVERHAUL. No server entity spawns, world scans,
+extra gameplay ticks or resource-pack rewrites are introduced by hallucinations.
+
+Maddened Creeper explosions now leave Insanity instead of placeholder Wither.
+Cloud radius/wait/lifetime/shrink behavior remains; effect application is 400
+ticks (20 seconds) at full duration scale, with normal cloud reapplication.
+Non-player recipients can hold/save the effect, but hallucination perception is
+implemented for the affected local player in this initial version.
+
+Validation: assemble, prepareDebugLaunch and insanity/maddened-creeper client
+suites passed in build/insanity-sound-fixed.log. Checks cover unaffected viewers,
+far model/voice replacement, stable identity, preserved sound mix, actual sound
+play hook, middle complementary crossfade, close identity/voice restoration,
+effect clearing, unchanged server entity type/count, cloud Insanity application,
+and existing Maddened Creeper model/emissive/leap/fuse behavior. Far and middle
+captures were visually inspected. Native/Fabric tested; Sodium not rerun.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply.
+
+MADDENED CREEPER GENERATED MODEL AND EMISSIVE LAYER (2026-10-13)
+------------------------------------------------------------
+generateMaddenedCreeperModel now treats resources/entity models/maddened_creeper.java
+as the geometry source of truth. Gradle tracks that file as an input, extracts
+its createBodyLayer() method into build/generated/sources/maddenedCreeper and
+includes the generated geometry class in client compilation and source JARs.
+assemble and prepareDebugLaunch automatically regenerate after export changes.
+The current revised leg pivots/cubes are included. Old exported animation/render
+methods are ignored; the mod's animation wrapper remains separate. Preserve
+Body -> Head/leg0/leg1/leg2/leg3 hierarchy. Missing methods/names or malformed
+geometry fail the build. Rebuild/restart is required; no running-game hot reload.
+Editing instructions: resources/entity models/README.txt.
+
+MaddenedCreeperRenderer adds the supplied maddened_creeper_emissive.png using
+Minecraft's additive full-bright eyes layer, on the same animated parent model.
+Black/transparent texels add no glow; colored detail remains lit in darkness.
+The layer follows the stronger idle pulse and actual explosion deformation.
+
+Validation: assemble, prepareDebugLaunch and maddened-creeper suite passed in
+build/maddened-creeper-generated-emissive.log; final nighttime render and gameplay
+checks passed in build/maddened-creeper-emissive-front.log (front-facing night capture). Generated geometry
+matches the current artist method exactly; geometry class and emissive texture
+are packaged in build/libs/naturality-1.0.0.jar. Night screenshot inspected.
+Native/Fabric tested; Sodium not rerun. Restart Minecraft to apply the JAR.
+
+MADDENED CREEPER EGG ARTWORK AND STRONGER IDLE PULSE (2026-10-13)
+--------------------------------------------------------------
+Spawn egg now uses the supplied maddened_creeper_spawn_egg.png through its own
+naturality item model. The idle swelling range advances from 6-18% to 22-42%
+of the explosion animation with the same pulse frequency. This strengthens the
+body deformation while leaving the actual fuse and ignition timing unchanged.
+Assemble, prepareDebugLaunch and maddened-creeper client suite passed:
+build/maddened-creeper-egg-pulse.log. JAR contains the item definition, model and
+texture, and the packaged texture's SHA-256 matches the supplied source.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply.
+
+MADDENED CREEPER (2026-10-13)
+--------------------------
+New entity naturality:maddened_creeper inherits regular Creeper AI, targeting,
+cat avoidance, ignition, charging and explosion rules. Movement speed is .35
+instead of .25 (40% faster), with a 16-tick fuse instead of 30. Priming near a
+visible living target triggers a grounded leap toward it (.55 horizontal,
+.42 upward velocity; 30-tick cooldown). The shorter fuse survives entity saves;
+loaded custom Fuse values are bounded to 3-16 ticks. Health and explosion power
+retain vanilla creeper defaults. No natural spawn placement was added.
+
+Use /summon naturality:maddened_creeper or the Maddened Creeper Spawn Egg in
+Creative's Spawn Eggs tab. Registration follows the existing CONTENT switch.
+The egg uses resources/textures/item/maddened_creeper_spawn_egg.png via its own generated item model. Loot delegates to the vanilla
+creeper loot table. The custom mob retains its own red texture, without biome tint.
+
+Explosion creates a 3-block-radius Wither cloud even without existing effects.
+It waits 10 ticks, lasts up to 300 ticks, gradually shrinks and loses .5 radius
+per affected victim. Wither is the temporary stand-in for the future insanity
+cloud. Ordinary creeper clouds remain unchanged.
+
+MaddenedCreeperModel preserves supplied resources/entity models/maddened_creeper.java
+geometry and 64x64 UVs, adapted to 26.3 render states with head/leg animation.
+Renderer uses resources/textures/entity/maddened_creeper.png, vanilla fuse-scale
+behavior and an always-on small early-fuse pulse. The idle visual pulse does not
+advance ignition, and real fuse flashes remain tied to actual priming. Charged
+energy rendering remains supported. Artist entity Java exports are excluded from
+packaged assets by processResources, like artist block-model exports.
+
+Validation: assemble, prepareDebugLaunch and maddened-creeper/creeper-biome client
+suites passed in build/maddened-creeper-final.log. Checks cover summon/rendering,
+idle without ignition, speed, targeted leap, 16-vs-30 tick explosion timing,
+saved fuse restoration, cloud creation and actual Wither application, plus
+ordinary-creeper texture/tint persistence and reload regression. Custom model
+screenshot was visually inspected. Native/Fabric tested; Sodium not rerun.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply.
+
+CREEPER CUSTOM TEXTURE AND SPAWN BIOME TINT (2026-10-13)
+-----------------------------------------------------
+Creepers use resources/textures/entity/creeper.png, packaged under
+assets/naturality/textures/entity/creeper.png. Their body texture is multiplied
+by their spawn biome's foliage color; vanilla lighting, hurt/fuse overlays and
+the charged creeper energy layer remain in the normal renderer.
+
+CreeperBiomeMixin captures the biome identifier before the first server tick's
+movement and AI, synchronizes it through entity data and saves it as
+naturality:spawn_biome. Moving between biomes or reloading saved entity data
+retains that identifier. Existing creepers without it adopt their current biome
+on their first tick after loading. Clients resolve the original biome's foliage
+color against their current foliage colormap, including resource-pack reloads.
+This avoids the uninitialized foliage colormap on dedicated servers. Visual
+hooks follow the existing VISUAL_OVERHAUL mixin gate.
+
+Validation: assemble and prepareDebugLaunch passed. The creeper-biome client
+suite passed spawn biome synchronization, custom texture selection, swamp-to-
+desert movement, saved entity NBT restoration with charging, and resource reload.
+Logs: build/creeper-test.log and build/creeper-final-test.log. The release JAR
+was checked for the custom texture and new rendering/state classes.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply.
+
+RENDER FREEZE: SHADER PREPARATION / CHUNK UPLOAD STARVATION (2026-10-12)
+-------------------------------------------------------------------
+A live recording of the user's persistent freeze identified the render thread
+parked in PipelineCache.get -> CompletableFuture.join, called by
+WaterComposite.fadeOpaqueBackground for the first underwater water_finish pass.
+Every background terrain worker was retrying section-buffer uploads or waiting
+for their copy lock. Those uploads need the render thread to drain them, while
+the shader preparation was queued on that same saturated background executor.
+This circular dependency explains the indefinite freeze and the allocation
+churn in mesh buffer wrappers/upload callbacks. During the recorded minute,
+GC pauses peaked at 6.267 ms; the observed hang was not a long GC pause.
+Evidence: build/freezes-live-before.jfr and build/freezes-jfr-threads.txt.
+
+PipelinePreparationMixin now directs only PipelineCache's cold preparation to
+one shared daemon shader executor. It cannot queue behind terrain uploads.
+Cached lookup, resource-reload parallelism, render-thread GPU finalization,
+pipeline disposal, shader source and rendered output are unchanged. The worker
+is shut down at client stop. WaterComposite and HeatWaves also register their
+pipelines at client startup so the initial resource reload compiles them before
+terrain loading; other late-created pipelines have the same isolation safeguard.
+
+The shader-stall client suite saturates all terrain workers, then requests a
+cold underwater pipeline. A watchdog releases workers after ten seconds so a
+regression fails instead of hanging the test process. Before the fix, the call
+blocked for 10,004 ms until that watchdog fired. With the fix it completed in
+3 ms with all 15 workers still occupied, both before and after resource reload.
+The suite also travels at 32 chunks and repeatedly enters natural water in a
+normal seed-84219871 world. Fabric passed, together with water-occlusion and
+heat-waves rendering regressions (build/shader-stall-fixed-fabric-final.log).
+Sodium also passed cold compilation (4 ms / 3 ms), reload and the same generated
+world travel/water-entry test (build/shader-stall-fixed-sodium.log).
+Release assemble and prepareDebugLaunch passed (build/shader-stall-release-final.log).
+The packaged fix classes match the tested snapshot; artifact: build/libs/naturality-1.0.0.jar.
+This is a reproduced deadlock fix, not a claim to eliminate every possible
+frame-time spike or a before/after gameplay FPS benchmark.
+
+TEXTURE LOD FADE; PHANTOM AND GEOMETRY LODS REMOVED (2026-10-11)
+------------------------------------------------------------
+Phantom chunks and seed-estimated terrain have been removed at the user's
+request, including their worker, caches, render pass, projection/fog extension,
+settings and distance overrides. The 2x2/4x4 terrain approximator and its
+palettes/cell caches are also removed. Every loaded chunk retains its original
+block geometry, at the normal render distance. No distant terrain is generated
+or drawn outside the normal chunk renderer. Earlier phantom/mesh benchmark
+results no longer describe this version.
+
+Distant average textures remain, with a continuous per-fragment smoothstep
+blend from 160 to 224 blocks (10-14 chunks), centered on the earlier 192-block
+cutoff. Approaching reverses the same fade immediately; there is no texture
+hysteresis or texture-driven remesh queue. Opaque faces sample only the original
+texture nearby and only the average far away; both are sampled in the blend
+band. Cutouts retain their ordinary filtered alpha throughout the transition.
+The average uses alpha weighting; transparent masks, biome tint, lighting
+and wind/submerged/bell metadata remain intact. Animated and translucent effects
+retain their normal sprites. No vertex merging or extra draw pass is involved.
+
+Static original/average sprite pairs use padded regions of the existing atlas.
+Snow composites use the upper half of the reserve, and original/average pairs
+use its lower-left/lower-right quarters. A constant UV offset finds the partner;
+one extra vec4 in the existing terrain uniform carries those bounds. No new
+texture sampler is needed. Generation is cached per sprite/material and atlas
+epoch, with native image access protected by the atlas lifetime lock. The near
+image copies the source's exact mipmaps, preserving leaf coverage and filtering.
+Atlas reload/disposal releases both images; allocation failure retains original detail.
+
+Existing distant solid leaves, wind LOD and small-detail hiding remain. Grass,
+ferns and flowers disappear after 192 blocks and return within 160; both halves
+of tall plants share the lower section's decision. Custom snow texture overlays
+are skipped there while snow layer geometry, crops and actual world blocks
+remain. These geometry-affecting detail changes still use the bounded remesh
+queue; section builds freeze their detail decisions to keep boundaries coherent.
+
+Validation: normal seed 84219871 at 32 real chunks passed forest/coast travel,
+snowy terrain and option restoration on native/Fabric and Sodium. GPU readback
+checked 65,792 pixels each for stone, grass side overlays and leaves over 257
+camera distances, before and after resource reload, with unchanged alpha and
+color interpolation within one channel value. Mesh checks verify ordinary
+block geometry at 400/1,000 blocks, texture toggles, source pixels, leaf culling
+and conservative entity occlusion after fresh meshes finish their arrival fade.
+Logs: build/texture-fade-fabric.log, build/texture-fade-sodium-final.log,
+build/texture-fade-fabric-final.log and build/texture-fade-sodium-shader.log.
+These are correctness checks, not new gameplay FPS measurements.
+Release assemble and prepareDebugLaunch passed. Both release/source JARs were
+checked to exclude the removed terrain classes and shaders; stale generated
+shader copies from incremental builds were removed before packaging.
+
+CONSERVATIVE ENTITY OCCLUSION AND DISTANT TERRAIN DETAIL (2026-10-11)
+-----------------------------------------------------------------
+Visuals now exposes three independent, default-on distance-detail controls:
+- Distant wind LOD fades displacement from 64 to 96 horizontal blocks and skips
+  wind evaluation beyond that. Shared X/Z coordinates use identical weights so
+  connected plants and snow-covered leaves retain matching movement.
+- Distant solid leaves enter beyond 160 blocks from the nearest section edge;
+  full detail returns inside 128. Static, ordinary leaf cubes become opaque and
+  use the solid terrain pass. Shared faces between eligible leaves of the same
+  species and LOD are removed. Snow-covered, animated and non-cube leaves remain
+  conservative; faces at detail boundaries are retained.
+- Distant average textures enter beyond 288 blocks and return inside 256.
+  Static opaque faces use their texture's alpha-weighted average color at a
+  single UV coordinate; untagged faces also use a single-sample shader path.
+  Cutout masks, biome tint, shading and lighting remain. Animated/translucent
+  effects, snow composites, special shader metadata and block entities retain
+  their existing paths. Wind metadata is retained if distant wind is disabled.
+These requested LODs visibly simplify distant objects; they are not pixel-identical
+at those distances. Nearby models retain their original geometry and UVs.
+
+RenderDetail tracks only encountered sections, capped at 32,768, with per-worker
+last-section cursors and separate return thresholds to prevent boundary churn.
+It checks movement at four-tick intervals and requests at most 8 coarser / 32
+finer transitions each interval. Only the section and six face neighbors are
+marked dirty. Stationary views without pending work only scan every five seconds.
+No world scan, chunk loading, extra draw pass or per-frame texture generation is
+introduced. Static texture variants share the existing padded atlas allocator.
+
+Native/Fabric entity occlusion requires one verified opaque full cube to cover
+the entire padded render box. The cube must have an uploaded, fully faded-in
+solid mesh in the visible section list. Block edits prevent using that section
+as an occluder until its mesh is replaced. Cached blockers are checked afresh
+each frame; discovery is staggered and bounded to 256 block candidates per frame.
+This deliberately misses uncertain occlusions rather than hiding visible pixels.
+It applies to selected ordinary items/animals/mobs, with exclusions for names,
+glow, leashes, riding, death effects and fishing pose dependencies. Sodium retains
+its own entity visibility path until equivalent mesh-readiness checks are available.
+Terrain visibility traversal, unusual entity renderers, particle spawning and
+particle lifetime are unchanged. This is not universal immediate occlusion of
+every invisible face; native face/frustum/fog culling remains in place.
+
+Validation: Fabric and Sodium render-detail / wind-compat client suites passed.
+A real 3x3x3 leaf model shrank from 162 to 54 quads (108 internal faces removed),
+with exact near-model geometry/tint/light/UV comparison and return-to-detail
+checks. Covered/partly-visible bounds, opaque texture averaging, flat-UV shader
+tags, live stone-to-glass reveal and pending-mesh protection are exercised.
+Near and distant screenshots were inspected; distant leaves and average-color
+stone render in both pipelines. Logs: build/render-detail-final-test.log,
+build/render-detail-sodium-test.log and build/render-detail-sodium-final-test.log.
+These are geometry/regression results, not a measured FPS gain in a live world.
+Assemble, gametest compilation and debug launch preparation passed:
+build/render-detail-build.log. Artifact: build/libs/naturality-1.0.0.jar.
+
+SLEEP TIME ACCELERATION WITHOUT SERVER TICK MULTIPLICATION (2026-10-11)
+---------------------------------------------------------------------
+Sleep now advances celestial clocks arithmetically once per ordinary server
+update. It never changes the server tick-rate manager or replays world/entity
+simulation. The existing linear speed ramp and configured 200x default / 1000x
+maximum are retained; elapsed clock time integrates the ramp across its cap.
+Administrator tick rates, paused clocks, fractional clock rates and ADVANCE_TIME
+remain respected. Simulation gameTime, scheduled work, entity AI, random block
+updates/crop growth and weather simulation stay at their normal cadence.
+This replaces the full-server acceleration described in previous sleep entries.
+
+SleepStatePayload v2 sends visual speed independently of simulation TPS, at the
+same bounded 10 Hz cadence as authoritative sky snapshots. Particle movement and
+fire still accelerate without multiplying particle spawning or lifetime ticks.
+Clouds integrate a frame-time offset shared by both cloud layers and occlusion;
+waking freezes that offset immediately, preserving cloud position. Celestial
+snapshot interpolation carries velocity into the next segment instead of
+restarting from zero at each packet, remains bounded and holds if packets stop.
+
+Losing the sleeping quorum clears acceleration and sends the final clock/state
+inside the wake operation, before another clock update. Daytime sleep, indefinite
+sleep through dawn, audio muffling, straw-bed consumption and the rest threshold
+remain. Rest counts accelerated elapsed time; the removed pending-clock queue
+and command-flush mixin are unnecessary because every clock update commits fully.
+
+Validation: sleep/clouds passed (build/sleep-clock-test.log). Expanded sleep
+regressions passed (build/sleep-clock-cap-test.log), including ramp integral,
+velocity continuity, no extrapolation, clock rates/pause/commands, strict rest
+threshold, administrator rate changes, immediate wake, particles and sound.
+Actual one-second server checks at 200x recorded 20 world ticks, 20 player ticks
+and 4,000 celestial ticks; at 1000x they recorded 20/20/20,000 respectively.
+The server tick-rate setting remained 20 TPS. These are controlled regression
+measurements, not FPS/MSPT measurements from the user's live world.
+Assemble, gametest compilation and debug launch preparation passed
+(build/sleep-clock-build.log). Artifact: build/libs/naturality-1.0.0.jar.
+
+SPIDER DEATH CLEARANCE AND GHAST LANDED FADE (2026-10-11)
+------------------------------------------------------
+Normal and cave spiders lift their rendered model as vanilla's 180-degree death
+roll progresses. The lift follows the roll angle and scaled body dimensions;
+entity position and collision stay unchanged. The final upside-down body remains
+above its supporting surface, and death-smoke samples include the lifted pose.
+Normal/happy ghasts remain untinted with no pixel removal during their death fall.
+A synchronized impact-tick field enables red tint and the existing 80%-removed
+pixel mask during the six-tick landed pause, reaching the final mask by tick five.
+Saved landed corpses restore that phase. The crash rotation and loot timing stay
+unchanged. At removal, the entity's poof event produces 30 puffs rather than 20;
+ten are enlarged 1.75x. Recent model samples position the burst across the rotated
+body, with size based on ghast width. Smoke drifts normally from those positions.
+Ghast smoke retains its initial quad size for its entire lifetime, including the
+enlarged third of the burst. Only the sprite animation changes its silhouette;
+the eight-tick size relaxation still applies to other mobs' death smoke.
+Without a recent rendered model, the burst uses ordinary entity spawn positions.
+Validation: spider/cave-spider posed-model clearance checks passed at the start,
+middle and end of the roll; screenshots inspected. The ghast-crash suite passed
+for both types, including synchronized impact tint/fade and existing flight,
+loot, harness and save/load checks. Impact screenshot inspected. Tests used
+isolated build outputs and a separate Gradle project cache to avoid concurrent
+workspace builds cleaning their classes. Logs: .tools/death-landing-validation.log
+(spider checks passed before an observation-window failure) and
+.tools/death-landing-ghast.log (complete ghast-crash pass).
+Final impact-smoke screenshot shows the larger model-covering burst. Final
+ghast-crash run: .tools/death-landing-final.log. Normal assemble and
+prepareDebugLaunch passed: build/death-landing-package.log.
+Artifact: build/libs/naturality-1.0.0.jar. Restart Minecraft to apply the changes.
+
+LIQUID SPRAY PATHS AND SLOPED SPLASH ROOTS (2026-10-11)
+---------------------------------------------------
+Lengthwise waterfall/lavafall spray now follows a FallSurfacePath after reaching
+an exposed rendered fluid surface. Each tick prefers the fluid's horizontal flow,
+falls back to the local height gradient, and resamples the next surface. Stepped
+ledges descend progressively instead of snapping or accelerating into the floor.
+Water's surface travel speed is 0.18 blocks/tick and lava's 0.045; sprite animation,
+warm-start fades and resting-edge outward burst behavior remain intact.
+Each impact splash wall's pixel column now samples its own fluid surface and
+quantizes its base height to the 1/16-block world grid. Walls over dry tiles are
+omitted; the footprint ring can follow nearby lower steps. Both water and lava
+use consistent outward winding and double-sided splash walls in normal/OIT paths,
+retaining self-occluding depth writes. Water splash light is sampled in actual
+world coordinates (the camera offset was previously applied twice); ring light
+also uses its actual surface height. Emissive lava splash walls use full brightness.
+LiquidSurfaceGeometry shares the rendered water/lava height queries. The
+liquid-slopes client suite exercises stepped paths, floor clearance, varying
+splash roots and face winding, with screenshots in both transparency modes.
+Splash planes render both sides without camera-dependent winding changes.
+Validation: liquid-slopes passed in isolated build
+outputs (.tools/liquid-slopes-init.gradle); log .tools/liquid-slopes-test.log.
+Side, opposite-side and interior screenshots were inspected under
+build/run/clientGameTest/screenshots. Build isolation avoids compiled-class
+deletion during concurrent workspace builds.
+
+VILLAGER DOORWAY TURN-TAKING (2026-10-11)
+DoorwayTraffic reserves each narrow DoorBlock opening for one approaching
+villager. Candidates are villagers whose upcoming navigation path crosses the
+same door, within three blocks. Panic activity wins new allocations, followed
+by proximity and a stable UUID tie-break. The owner keeps its turn until it
+clears the threshold; dead/departed owners and stale reservations are released.
+Others pause their move control, retain their original route/destination, and
+back away slightly when crowded against the opening if block collision permits.
+They automatically resume when the opening becomes available, avoiding repeated
+pushing and priority changes while a villager is crossing. This applies alongside
+native wooden-door opening and uses the villager-gates feature toggle. Claims
+and waiting markers are transient, weakly keyed by world/entity.
+Validation: villager-gates and reputation client suites plus assemble passed.
+A side-by-side real-AI wooden-door test checks exactly one initial priority and
+verifies both villagers eventually enter; existing gates, exhaustion, door and
+zombie-panic checks remain passing. Log: build/doorway-traffic-final.log.
+
+METEOR SHOWER STRENGTH BIAS (2026-10-11)
+--------------------------------------
+Natural meteor targets normally stay in 5-10. Each 1200 active visible-night
+ticks provides one 5% roll to open a 1200-tick stronger phase. During that
+phase targets are 10 + 10*u*u, favoring the lower part of 10-20 and making
+near-20 targets rarer. Normal targets resume immediately at phase expiry,
+with existing strength easing throughout. The active-minute clock and
+remaining boost phase are saved with the cycle and freeze with advance_weather.
+Episode endings reset both. Old saves without boost state return toward
+the normal range. End flash cycles retain their previous 1-20 target behavior;
+command overrides still support any meteor strength from 0 to 20. Compact
+status lists boost 5%/min alongside the independent event start chance.
+Validation: assemble, sky-events and environment-persistence client suites
+passed, including target-range checks over 2000 active minutes, rare boost
+frequency, saved escalation sequence, overrides and real world reload.
+Log: build/meteor-strength-test.log.
+
+COMPACT SKY EVENT STATUS (2026-10-11)
+-----------------------------------
+/skyevent status uses short per-event lines with state, strength, optional
+override/eligibility notes, and only per-minute or per-night start chances.
+Percentages round to two decimals without trailing zeros (very small nonzero
+values show <0.01%). Strength rounds to one decimal. Remaining duration uses
+seconds/minutes instead of raw ticks. The summary is Current:, and weather
+pausing is Timers: paused (weather). Verbose roll descriptions are removed.
+
+BLOOD MOON ATMOSPHERE TINT (2026-10-11)
+--------------------------------------
+The shared Blood Moon easing also blends the general Overworld sky disc,
+air-fog clear color/horizon gradient and cloud body color toward red. Color
+peak brightness is preserved, as are fog/cloud alpha and existing darkness
+factors. The cloud input tint applies to both vanilla and custom layers,
+including classic/OIT rendering. Fluid fog retains its original color.
+All atmosphere colors return to their originals as the event fades away.
+Validation: assemble and blood-moon client suite passed; captured sky and
+cloud bodies are red in both classic/OIT modes. Tests verify cloud-alpha
+preservation and restoration of original colors after fading out.
+Log: build/blood-moon-atmosphere-test.log.
+
+BLOOD MOON SKY EVENT (2026-10-11)
+--------------------------------
+Blood Moon is an Overworld event with one 5% roll per day-to-night transition.
+The saved initialized/previous-night latch prevents reloading or repeated
+night ticks from providing more attempts. A successful natural event toggles
+on for that night and ends at dawn. It shares advance_weather with
+other Overworld events and persists through EnvironmentWorldData.
+/skyevent minecraft:overworld blood_moon <on|off|auto> controls its override;
+numeric 0/1 also work, and higher values are rejected. Status shows on/off
+and the single nightfall roll. Old saved positive strengths migrate to on.
+The Sky startup switch is Blood Moon.
+Toggle validation: assemble and blood-moon client suite passed with isolated
+build outputs, covering on/off and numeric 0/1 commands, rejection above 1,
+old-strength migration, eased effects and half-strength lightmap tint.
+Log: build/blood-moon-toggle-test.log.
+Client intensity eases by 5% of the remaining difference each visual tick,
+with partial-tick interpolation, shared by all effects. At full intensity,
+the original moon sprite is 1.1 times its usual size and its green/blue
+channels are zero. The actual lightmap's skyLightColor blends its existing
+color halfway toward red at the same peak brightness; block/emissive light is unchanged.
+This lightmap tint is 50% as strong as the shared eased visual tint used by
+the moon, sky and clouds.
+Half-strength lighting validation: assemble and blood-moon client suite
+passed, including the actual lightmap color against a 50% blend.
+Log: build/blood-moon-light-strength-test.log.
+Cloud moon rims blend their existing warm/blue gradient toward red with the
+same eased amount, passed in CloudTextureSize.w without changing UBO layout.
+This shader applies to both classic and OIT clouds. Sun-angle night visibility
+fades daytime overrides out, and world changes/disconnect reset client tint.
+Validation: assemble, blood-moon and clouds client suites passed. Checks
+cover the single 5% nightfall attempt, saved cycle continuity, eased on/off
+commands, actual red lightmap data, exact 10% scale, daylight/world cleanup,
+and classic/OIT cloud rendering. Red cloud-rim captures were inspected in
+both transparency modes. Logs: build/blood-moon-test.log and
+build/blood-moon-visual-test.log.
+
+WATER ENTRY PARTICLES FOLLOW SLOPES (2026-10-11)
+---------------------------------------------
+Vanilla Entity.doWaterSplashEffect now places its bubble/splash particles using
+WaterSurface's rendered corner heights at each randomized X/Z spawn position,
+rather than assuming floor(entity Y)+1 is the surface. Bubbles start 0.02 blocks
+below the surface and splashes 0.01 above it. BubbleParticle also expires when
+it rises past the rendered slope, even if its containing block is tagged water.
+Both changes follow the water master switch and only affect client visuals.
+Implementation: WaterEntryParticleHeightMixin and BubbleSurfaceHeightMixin.
+The waterfall client suite checks bubbles above/below shallow runoff surfaces.
+Validation: waterfall client suite passed; build/water-entry-surface-test.log.
+
+EXHAUSTED VILLAGER DOORS AND HOSTILE PANIC FIX (2026-10-11)
+Sleep-debt recovery previously canceled the whole villager brain tick. This
+silenced hostile sensors and core door-opening/panic behaviors while exhausted
+villagers navigated toward beds, allowing them to stall at doors and ignore
+zombies. Recovery now ticks the brain with only CORE and PANIC activities
+permitted, retaining memory expiry, perception, wooden-door and fence-gate
+handling, wake-up and escape logic while blocking scheduled work/social/rest
+packages. Sleep recovery rechecks its override after the core tick so a newly
+sensed hostile takes precedence immediately. Recovery navigation publishes its
+path to PATH memory, which native door interaction requires. Core-only state
+is transient and reset in finally; normal AI remains unchanged otherwise.
+Validation: reputation and villager-gates suites plus assemble passed in
+build/villager-sleep-danger.log. A real-AI regression sends an exhausted villager
+through a closed wooden door to its recovery bed, then introduces a nearby
+zombie and verifies it wakes and enters PANIC without being struck. This and
+existing sleep/fear regressions passed with assemble in
+build/villager-sleep-danger-final.log.
+
 PROXIMITY SKY EVENT (2026-10-11)
 -------------------------------
 Overworld Proximity chooses one planet for a fixed episode of 48000-120000
-server ticks (two to five normal Minecraft days). Quiet night ticks roll at
-1-pow(0.9,1/1200), a default 10% chance per eligible minute. Days hide the
+server ticks (two to five normal Minecraft days). While quiet, it rolls once
+on the day-to-night transition with a 5% chance. Failed rolls never retry
+within that night, and an event ending mid-night waits until a new nightfall.
+The transition latch is saved with the cycle; loading during an existing night
+does not count as another nightfall. Days hide the
 sprite while preserving its planet, position seed and remaining duration.
 The scheduler follows advance_weather, like other Overworld sky events.
 World data saves the random sequence, selected planet, appearance and timer;
@@ -16,8 +778,20 @@ Supplied resources/textures/sky/<planet>.png sprites use the celestial blend,
 with small seeded size variation (0.7-1.0 quad half-size at distance 100).
 The camera-centered sprite is placed randomly above the horizon, clear of
 the moon's entire X/Y orbital plane (absolute Z component initially >=0.45).
-Small sinusoidal independent motion retains that clearance, without inheriting
-the star sphere rotation. Daylight/rain/star visibility govern its opacity.
+Small sinusoidal X-axis rotation retains horizon clearance, without inheriting
+the star sphere rotation or changing its X component. Daylight/rain/star
+visibility govern its opacity, which approaches its target linearly over
+up to 40 ticks. New planet/episode selections reset opacity to zero to fade in.
+The old strict night cutoff is removed, allowing continuous
+dawn fading and a gentle fade after time jumps. Proximity draws before the
+sun/moon/stars, so the moon covers it wherever their sprites overlap.
+Fade/motion revision validation: assemble and proximity client suite passed,
+including gradual daytime fade and invariant X component during motion.
+Log: build/proximity-fade-test.log.
+Nightfall revision validation: assemble and proximity client suite passed.
+Checks include no retries within a night, no mid-night restart after expiry,
+save/reopen continuity and gradual fade-in for all seven planet selections.
+Log: build/proximity-nightfall-test.log.
 The Proximity startup feature appears in the Sky category. Resource reloads
 use fresh texture-manager bindings, and world changes reset client selection.
 Validation: assemble and the proximity + sky-events client suites passed.
@@ -308,7 +1082,8 @@ velocity, collision, lifetime and subsequent drift. The provider is scoped to
 LivingEntity.makePoofParticles; unrelated poofs retain their existing provider.
 Offscreen deaths without a recent model snapshot fall back to ordinary poofs.
 Weak keys avoid retaining entities or worlds; snapshots expire after four ticks.
-The custom ghast crash uses its existing server particle burst.
+The custom ghast crash now uses this model-sampled burst with 30 particles;
+see SPIDER DEATH CLEARANCE AND GHAST LANDED FADE.
 Validation: offline assemble, mob-arrows, smoke and prepareDebugLaunch passed.
 The death tests check posed samples, scoped provider selection, natural drift
 without returning toward an original spawn five blocks above the model, context
@@ -339,8 +1114,8 @@ MobDeathRendererMixin carries interpolated progress in unused overlay-U bits;
 entity.vsh restores the original overlay coordinates and entity.fsh discards
 selected texels before color/lighting and OIT handling. Native tint, movement,
 death rotation, drops and smoke timing remain intact. Players, normal ghasts and
-happy ghasts are excluded. Both ghast types are excluded even without an active
-custom crash target. Layers using the living overlay helper share
+happy ghasts are excluded during the fall. Both ghast types now fade only in the
+synchronized landed phase described above. Layers using the living overlay helper share
 the effect; independently rendered equipment/emissive layers retain their paths.
 Ghast exclusion validation: offline assemble passed; build/mob-death-ghast-exclusion.log.
 This follows the Visual Overhaul feature gate and adds no texture allocations.
@@ -396,6 +1171,48 @@ The final snow-storm/snow-weather/snow-compat run also passed with Sodium
 and synchronized storm heights. The dense snow fixture screenshot was checked.
 Offline assemble and prepareDebugLaunch passed (build/snow-storm-build.log).
 Updated artifact: build/libs/naturality-1.0.0.jar. Restart the game to apply it.
+
+DRAGON RESUMMONING EXPLOSION PALETTE (2026-10-12)
+------------------------------------------------
+DragonRitualExplosionMixin scopes EndExplosionContext around explosions in the
+SUMMONING_PILLARS and SUMMONING_DRAGON ritual stages. EndCrystalExplosionMixin
+uses that context as well as crystal source detection, covering source-less
+pillar-clearing bursts and the final ritual crystal detonations. The scope is
+restored after each synchronous explosion, including on exceptions, so ordinary
+nearby explosions keep their own palette. Gameplay damage and block effects are
+unchanged. Validation: gradlew assemble --offline passed.
+
+UNDERWATER AMBIENT MOTES (2026-10-12)
+------------------------------------
+UnderwaterMoteParticle replaces vanilla UNDERWATER particles during the visual
+overhaul. It accepts 20% of spawn requests to offset longer 100-140-tick lives
+and slightly reduce the standing density. Existing sprites and size variation
+remain, with smooth one-second fades at both ends and 70% peak opacity.
+Independent sinusoidal drift gently changes direction, remains submerged, and
+ignores wind. If its water disappears, the mote fades out over at most 20 ticks.
+The translucent layer preserves the existing water-particle biome tint.
+Validation: gradlew assemble --offline passed.
+
+DRAGON DEATH FLIGHT BURSTS (2026-10-12)
+-------------------------------------
+DragonDeathFlightExplosionMixin also selects naturality:end_explosion in
+DragonDeathPhase.doClientTick. This covers the separate explosion emitters
+created while the dying dragon flies toward the podium, before its final
+tickDeath animation. They use the same explosion_flat_end sequence and existing
+particle size, timing and placement. Validation: gradlew assemble --offline passed.
+
+END EXPLOSION PALETTE (2026-10-12)
+---------------------------------
+EndCrystalExplosionMixin selects naturality:end_explosion for explosions whose
+server-side source is an End crystal. DragonDeathExplosionMixin selects the same
+particle for both the dragon's dying aiStep bursts and tickDeath emitter bursts.
+The particle reuses FlatExplosionParticle with explosion_flat_end_0 through
+explosion_flat_end_6, preserving the surface and camera copies, animation timing,
+wind immunity and packet-strength scaling. The selection follows the
+EXPLOSION_PARTICLES feature. Crystal classification requires Naturality on the
+server; dragon death selection runs directly wherever the dragon spawns its
+particles. Definition: assets/naturality/particles/end_explosion.json.
+Validation: gradlew assemble --offline passed.
 
 FLAT EXPLOSION PARTICLES (2026-10-09)
 -----------------------------------
@@ -8479,3 +9296,1389 @@ only increases strength, reaching the configured maximum when looking directly
 at the sun. Sprite centers still converge smoothly with the projected sun.
 Tooltip and existing sunset regression assertions reflect the new behavior.
 Validation log: build/sun-flare-no-center-fade.log.
+
+MOONLIGHT ABOVE CLOUDS
+Cloud top faces receive direct moonlight across their entire pixelated surface,
+without the underside edge mask, while retaining the moon-centered angular falloff. Phase,
+night, rain and horizon intensity still apply. Underside faces keep the corner-aware
+inward edge falloff. Existing cap easing controls the transition into the top view.
+
+CLOUD RASTER STABILITY
+Cloud vertex shaders declare invariant gl_Position with shared surface position arithmetic
+so depth-only, classic and OIT variants rasterize the same geometry without depth
+bias. Moonlight variation uses an integer surface-pixel hash, replacing the
+large-coordinate fract/sin hash that could produce subpixel grain.
+
+
+
+SLEEP SKY AND CLOUD SERVER SNAPSHOTS (2026-10-11)
+------------------------------------------------
+Sleep rendering now captures immutable cloud game-time and sun/moon/star angle
+snapshots only after ClientPacketListener handles a server time packet and
+invalidates the environment attribute cache. Render frames use the latest
+snapshot revision instead of sampling the native predicted clock every frame.
+Cloud drift and celestial rotation interpolate from the currently displayed
+position to each new snapshot over 120 ms using smoothstep easing. Celestial
+rotation unwraps the short arc through dawn. With no new server packet, the
+animation finishes at its snapshot and holds; it never extrapolates or advances
+sky/cloud time using the requested accelerated tick rate. Both cloud layers and
+sun occlusion retain the shared outer CloudRenderer.prepare clock. World changes
+and disconnects discard stale snapshots. Waking immediately uses ordinary
+rendering. Particle velocity-only acceleration, ordinary particle spawning,
+audio muffling and indefinite daytime sleep are unchanged.
+
+Validation: bounded midpoint/endpoint, holding without new snapshots, continuous
+retargeting, angular dawn wrap, pause and immediate wake checks added to the
+sleep suite, including live server packet snapshot capture. The packaged jar
+includes SleepTimeSnapshotMixin and SleepSnapshots. Build log:
+build/sleep-server-snapshots-build.log. Regression log:
+build/sleep-server-snapshots-test.log. The isolated validation copy temporarily
+allows an unrelated in-progress ghast test cast to compile; repository ghast
+sources are untouched. This supersedes the prior frame-target damping approach.
+Validation result: sleep and clouds suites passed; snapshot test build successful.
+
+MOSS SURFACE BLOCK (2026-10-11)
+-----------------------------
+Registered naturality:moss and BlockItem as Moss, in Natural Blocks after Glow
+Lichen. Reuses GlowLichenBlock with copied properties, vanilla moss block sounds,
+and zero light emission. Same six-face attachment/outline, waterlogging, strength,
+no collision, support removal and bonemeal spreading as glow lichen. Uses the
+artist resources/textures/block/moss.png on the vanilla thin double-sided plane,
+with the same six-direction multipart model. Inventory uses a flat texture sprite.
+Shears collect one item per attached face, matching glow lichen's loot behavior.
+No world generation or recipe added. Obtain with /give @s naturality:moss.
+Validation: sequential assemble and isolated smooth-endstone client suite passed for all six support directions, lichen-matching shape/strength, moss sounds, zero light, shears drops and removal when support is broken. Packaged model/texture/item/blockstate/loot verified. Log: build/moss-block-test.log. Production JAR rebuilt.
+
+PHYSICS-DRIVEN GHAST DEATH TENTACLES (2026-10-11)
+----------------------------------------------
+During custom death falls, ghast and happy-ghast tentacles stop the vanilla sine
+animation and use nine client-side damped pendulums instead. The initial visible
+living angles are sampled once. Unit directions and tangent velocities integrate
+in world space with four substeps/tick and fixed effective lengths. Gravity,
+smoothed linear acceleration, body-anchor rotational acceleration and opposing
+airflow drive the pendulums, so tentacles lag the hit/tumble and trail the fall.
+Their different effective lengths and attachment positions give different inertial
+responses without an autonomous looping motion. Previous/current directions
+interpolate per frame and transform back into the falling model frame for part
+pitch/roll. The existing mesh parts remain rigid; this is pendulum limb physics,
+not a segmented/cloth mesh simulation.
+GhastModel.animateTentacles is intercepted only for render states carrying a death
+physics pose; HappyGhastModel uses that same native helper. Living animation and
+charge squash retain vanilla tentacle motion. The hook follows GHAST_PHYSICS and
+is active even without Visual Overhaul when custom ghast death physics is enabled.
+Validation: assemble and ghast-crash/ghast-squash passed. Tests check pendulums
+settle under gravity, trail airflow, preserve unit length, and produce nine death
+render-state tentacles. Natural short/long death falls, impact drops/harness,
+client state/lifetime, live charge and adult/baby movement checks passed. Fast
+fall capture inspected: tentacles stream behind the head-first body.
+Log: build/ghast-tentacle-test.log. Artifact: build/libs/naturality-1.0.0.jar.
+
+NORMAL KILLING-HIT FLASH DURING GHAST FALL (2026-10-11)
+---------------------------------------------------
+Both custom ghast renderers now preserve red hurt tint while entity.hurtTime is
+positive, including the killing hit. The ordinary hurt timer expires during the
+fall; deathTime still cannot keep the corpse permanently red or trigger vanilla
+death rolling. Existing impact tint/fade remains unchanged.
+Validation: ghast-crash passed, including a new early killing-hit flash assertion,
+hurt-timer-based falling tint, later untinted fall and existing impact tint/fade,
+physics tentacles, natural collision and loot checks. Initial strict build was
+blocked by an unrelated SleepServerSnapshots deprecation warning; test validation
+used a temporary lint override, then normal strict assemble passed after that
+source warning was resolved independently. No sleep code changed by this task.
+Logs: build/ghast-hit-tint-test.log and build/ghast-hit-tint-build.log.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply it.
+
+SERVER-SIDE SLEEP CLOCK BATCHING (2026-10-11)
+-------------------------------------------
+MinecraftServer.tickChildren now accumulates celestial simulation ticks during
+sleep instead of advancing each world clock every accelerated server tick.
+Pending ticks are applied arithmetically roughly every 50 ms of real time,
+respecting paused clocks, fractional clock rates and ADVANCE_TIME. Scheduled
+functions/gameTime and entity AI retain their actual accelerated simulation.
+Vanilla's every-20-simulation-ticks periodic time synchronization is suppressed
+only during sleep acceleration. The sleep controller sends complete authoritative
+clock/game-time snapshots at most every 100 ms of real time (10 Hz). At the
+ordinary 20 TPS baseline and 200x maximum this replaces up to 200 periodic time
+packets per second with at most 10. Clients use the existing snapshot easing.
+Time commands flush pending advancement before editing clock state; full syncs
+and waking also flush immediately. Ordinary tick rates/synchronization are used
+outside sleep. This reduces celestial clock changes and periodic networking;
+accelerated AI/world simulation can still be the dominant server bottleneck.
+
+Validation: sleep and clouds suites passed (build/sleep-batched-server-test.log).
+Additional targeted integrity checks cover exact elapsed simulated ticks,
+fractional clock rates, paused clocks and command ordering. Build log:
+build/sleep-batched-server-build.log. Integrity test log:
+build/sleep-batched-server-integrity-test.log.
+Integrity suite passed after enabling ADVANCE_TIME only for the arithmetic checks (the test world normally disables advancement). All elapsed-tick, fractional-rate, paused-clock and time-command assertions passed.
+
+
+DAYTIME SKY AND SUNSET PALETTE (2026-10-11)
+------------------------------------------
+Clear Overworld daylight now blends toward a richer blue overhead before local
+hardcore darkness and blood-moon tint. The boost eases out with sun elevation
+and is fully removed by 25% vanilla rain intensity, using a smooth rain ramp.
+Sky-to-horizon blending evaluates distance per fragment with a smooth curve.
+The sunset/sunrise fan uses a dedicated shader with gold, coral and rose tones.
+Its fade follows an analytic circular boundary rather than interpolated triangle
+alpha; it reaches zero before the polygon edge to avoid visible mesh segments.
+Rain suppresses sunset alpha. The same shaders render the fog atmosphere capture,
+keeping distance fog and the visible horizon matched. Shared fixed screen-space
+noise adds one 8-bit color step peak-to-peak to reduce gradient banding without
+animated grain; the sky noise fades out near black. Celestial and cloud shading
+are unchanged. SunsetGameTest includes clear, rain-onset and rainy sky captures.
+Validation: isolated sunset and fog client suites passed, including resource reload. Clear/day, rain onset, overcast and sunset captures inspected. Log: .tools/sky-palette-test.log. Normal assemble and prepareDebugLaunch passed; artifact build/libs/naturality-1.0.0.jar.
+
+FOOT-ANCHORED ZOMBIE WALKING POSE (2026-10-11)
+------------------------------------------
+Added a whole-body forward walking lean for Zombie instances and their subclasses,
+plus subtle alternating side sway synchronized to native walkAnimationPos. Lean
+scales with horizontal speed to a ten-degree limit and uses two persistent 25%
+low-pass stages for smooth starts/stops; sway scales with the same eased movement
+amount and is capped at 1.8 degrees. Both render rotations use the living renderer's
+feet origin without translating to a body pivot. Native legs, arms, head tracking
+and equipment layers retain their animation under the whole-body transform.
+Walking pose only applies while alive, on the ground, not riding, and not swimming;
+stopped zombies ease upright. Visual Overhaul gates initialization and both new
+mixins. Other entity types receive zero walk pose.
+Validation: assemble and zombie-walk passed. Checks cover bounded forward lean,
+alternating native-gait sway, upright return and actual AI-driven zombie pursuit
+of a stationary villager. Side-view night-vision screenshot inspected. An initial
+NoAI fixture never moved or acquired ground state; replaced with real pursuit to
+exercise the intended walking path. No movement/AI physics changed by the feature.
+Log: build/zombie-walk-test.log. Artifact: build/libs/naturality-1.0.0.jar.
+
+
+BROAD SKY GRADIENT AND DISTANCE-SCALED FOG (2026-10-11)
+----------------------------------------------------
+The Overworld sky disc now uses elevation across the dome rather than radial
+fan distance. It blends horizon fog color through the original biome/day sky
+color to the richer blue zenith. Lower and upper ramps overlap smoothly across
+roughly the first 33 degrees and 14-90 degrees respectively. The original sky
+color stays in SkyRenderState; a separate SkyPalette uniform supplies the zenith,
+with the existing rain/daylight suppression, darkness and blood-moon tint.
+Palette uploads happen before the sky render pass, and the same buffer is reused
+for the fog atmosphere capture. Fixed subtle dithering remains on the gradient.
+Custom Overworld distance fog widens from 10% at 8 chunks or below to 30% at
+32 chunks, smoothly increasing between them. At 32 chunks its span is 153.6
+blocks instead of 51.2, with the opaque endpoint still at 512 blocks. Larger
+view distances retain the 30% ratio. Underwater/status-effect fog, disabled
+custom fog and the End retain their existing rules. Fog culling captures the
+updated range, and water receives the same uploaded fog distances.
+Validation: sunset and fog client suites passed, including span checks at 5/8/16/32 chunks, shader reload, rain and atmosphere/terrain regressions. Clear sky and sunset screenshots inspected. Log: .tools/sky-gradient-span-final.log. Assemble and prepareDebugLaunch passed (build/sky-gradient-span-package.log). Artifact: build/libs/naturality-1.0.0.jar.
+
+SKY DITHER PIXEL SIZE (2026-10-11)
+Shared sky/sunset dithering now uses fixed 4x4 framebuffer-pixel cells and four 8-bit color steps peak-to-peak, making the pattern more visible. Atmosphere capture uses the same grid; existing near-black suppression remains. Sunset client suite and assemble/prepareDebugLaunch passed; clear-sky capture inspected. Logs: .tools/sky-dither-pixels-test.log and build/sky-dither-pixels-package.log.
+
+GRADIENT-ANCHORED ORDERED SKY DITHER (2026-10-11)
+Replaced screen-space RGB noise with a 4x4 Bayer pattern selecting neighboring gradient levels (32 intervals). Sky cells use spherical direction coordinates with 2048 cells per turn; sunset cells use the fan's local coordinates. Turning the camera moves the pattern with the sky, and zoom magnifies it. Both sky color ramps and sunset color/alpha fades use ordered coverage. No gl_FragCoord-based sky noise remains. Sunset client suite with reload passed; clear-sky capture inspected. Assemble/prepareDebugLaunch passed. Logs: .tools/sky-ordered-dither-test.log and build/sky-ordered-dither-package.log.
+
+MATCHED SUNSET/SKY DITHER GRID (2026-10-11)
+Sunset dithering now uses the regular sky's spherical direction grid (2048 cells per turn), replacing the perspective-skewed fan-local grid. SkyPalette carries the inverse camera view matrix; the sunset vertex shader removes that view from its transformed positions before sampling the shared angular/Bayer grid. This preserves matching resolution and alignment for both the visible sky and atmosphere capture. Palette uploads remain outside render passes. Sunset/reload client tests and assemble/prepareDebugLaunch passed; sunset capture inspected. Logs: .tools/sunset-grid-alignment-test.log and build/sunset-grid-alignment-package.log.
+
+BIOME-AWARE SKY ZENITH (2026-10-11)
+SkyGradientRenderer derives the zenith tint from the camera's blended vanilla SKY_COLOR instead of a fixed blue. Saturated skies preserve their hue while increasing chroma; neutral skies receive a small brightness lift (0.06 before the existing 72% blend). Pale Garden therefore retains its gray/gray-brown atmosphere with a slightly lighter top. Existing daylight, rain, darkness, blood moon, angular dithering and fog-capture behavior remain. Palette assertions cover neutral gray and ordinary blue; the sunset suite includes a Pale Garden biome fixture.
+Validation: sunset client suite passed with the Pale Garden fixture; screenshot confirms neutral gray overhead without blue. Assemble and prepareDebugLaunch passed. Logs: .tools/biome-sky-tint-final.log and build/biome-sky-tint-package.log.
+
+PALE HANGING MOSS WIND (2026-10-11)
+---------------------------------
+Pale hanging moss is now wind foliage. Markers 193-200 encode distance below
+its ceiling anchor, pinning the top edge and keeping segment joins connected.
+All segments share one world-space sway phase, with grass-strength flexibility
+and increasing bend down the strand instead of sugar cane's stiff root response.
+Displacement saturates after seven blocks on unusually long custom strands.
+Existing per-position indoor exposure and underwater protection still apply.
+Both vanilla terrain and Sodium use the shared shader implementation; marker
+192 remains reserved for fitted snow. Assemble and wind-compat client tests
+passed, including moss anchor, segment joins and actual model-emitted tags.
+Log: build/hanging-moss-wind-final.log.
+
+FLOWING HANGING PLANTS (2026-10-11)
+---------------------------------
+Pale hanging moss, weeping vines (head/body), and cave vines (head/body) now
+share a travelling, world-space wind wave. The ceiling edge stays anchored;
+a smooth flexibility envelope increases motion down the strand. After seven
+blocks the envelope saturates, but the travelling wave continues down longer
+strands instead of translating the whole tail as a rigid piece. Shared vertices
+sample identical phase and displacement across block and render-section joins.
+Leaf-supported roots inherit interpolated supporting-leaf corner displacement;
+that contribution tapers smoothly to zero seven blocks below the attachment.
+Markers 193-200 encode fixed-root depths; 118 and 233-239 encode leaf-root depths.
+Ordinary wall vines retain their existing support constraints. Native placement
+rules remain: weeping/cave vines need valid solid support, whereas pale hanging
+moss can attach directly to leaves. Exposure and foliage-wind settings still apply.
+Validation: assemble and wind-compat client suite passed, including fixed/leaf
+root markers, connected head/body joins, actual model tags, and both tested
+transparency modes. Log: build/hanging-flow-final.log.
+
+FLAT LINGERING POTION AND DRAGON BREATH SMOKE (2026-10-11)
+--------------------------------------------------------
+Lingering AreaEffectCloud entity-effect spawns now use a cloud-only smoke provider
+with the synchronized potion RGB, including the waiting phase. Ordinary entity
+potion effects and custom cloud particle types keep their existing providers.
+Dragon breath uses the same twelve smoke_death frames and vanilla randomized
+purple RGB range. Both use horizontal upward-facing quads (with a reverse face),
+35% alpha, a final eight-tick fade and the translucent/OIT particle layer.
+Visual Overhaul gates providers, the cloud mixin and dragon sprite override;
+this artwork does not depend on the separate Mob death smoke toggle.
+Validation: assemble and prepareDebugLaunch passed (build/potion-smoke-build.log).
+Client startup/resource loading and world entry passed
+(build/potion-smoke-startup.log). Appearance has not been visually inspected.
+Artifact: build/libs/naturality-1.0.0.jar. Restart Minecraft to apply.
+
+REGULAR VINE FLOW / WALL FLUTTER (2026-10-11)
+------------------------------------------
+Regular vines without solid face support now use the same travelling-wave
+wind branch as hanging moss and growing hanging vines. Root depth is measured
+from the last supported block or the leaf/ceiling attachment; inherited leaf
+motion tapers along the free strand. Shared boundary masks preserve connected
+joins where a strand transitions from a wall into free air. Solid-supported
+vines retain their inward-motion constraints and upper attachment, with only
+4% of the old flutter amplitude. Their rigid hitbox displacement is reduced
+by the same factor, keeping climbing/picking close to the wall.
+Renderer validation passed: assemble and wind-compat, including regular leaf
+strands and wall-to-free-tail joins. Log: build/regular-vine-flow.log.
+The wind-shapes suite also passed, including supported-vine displacement bounds and existing climbing, picking, and collision checks (build/regular-vine-shapes.log).
+
+POTION CLOUD SMOKE SPACING (2026-10-11)
+-------------------------------------
+Potion and dragon smoke now spawn at random offsets 0.015-0.135 blocks above
+the requested height to separate overlapping horizontal planes. All smoke uses
+the same fixed world rotation. Lingering potion and dragon AreaEffectCloud spawns
+are thinned by 25%; gameplay radius/effects and custom cloud particles are unchanged.
+Validation: assemble and prepareDebugLaunch passed
+(build/potion-smoke-spacing-build.log). In-game appearance not visually rechecked.
+Artifact: build/libs/naturality-1.0.0.jar. Restart Minecraft to apply.
+
+DIRECTIONAL FISH SWIMMING AND EASED IDLE POSES (2026-10-12)
+--------------------------------------------------------
+Cod, salmon, tropical fish and pufferfish (AbstractFish subclasses) now steer in
+three dimensions toward their existing navigation waypoints. A custom move
+controller eases actual velocity toward the normalized desired direction and turns
+yaw/pitch toward that velocity. The fish-specific water travel path applies this
+velocity with collision and water drag, without the former horizontal-only thrust
+or constant downward sink/upward controller nudge. Existing navigation/goals,
+schooling, bucket interactions, puffing and out-of-water flop behavior remain.
+Added FISH_MOVEMENT startup toggle, labeled Directional fish movement in Mob
+Gameplay; disables both the controller replacement and water travel change.
+Visual Overhaul enables client fish orientation/animation smoothing independently.
+Rendered fish face observed movement with smooth yaw/pitch; low speed holds the
+last heading. Native model/tail/fin and renderer swim wobble use a continuous
+animation phase whose playback rate eases with swimming speed, settling to an
+exact pause when stationary. Restarting movement resumes the saved phase without
+snapping. Out-of-water/dead fish retain their native render animation.
+Validation: assemble and fish-swim passed. Tests cover upward/downward pose,
+eased phase deceleration and exact rest, actual ascent toward a water waypoint,
+client direction-facing pose, all four fish renderer phase overrides, and stable
+paused animation after stopping in a source-water tank. Side-view swimming capture
+inspected: cod points upward along its ascent. Log: build/fish-swim-test.log.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply it.
+
+CLOUD-ONLY FLAT SMOKE ORIENTATION (2026-10-12)
+-------------------------------------------
+Stationary lingering potion and dragon AreaEffectCloud smoke uses the explicit
+cloud-only provider: horizontal fixed rotation, randomized heights and 25% thinning.
+Dragon breath outside those clouds now uses native camera-facing quad extraction
+and its requested spawn position/velocity. Orientation follows spawn source rather
+than velocity, so zero-speed non-cloud particles still face the camera.
+Validation: assemble and prepareDebugLaunch passed
+(build/potion-smoke-facing-build.log); appearance not visually rechecked.
+Artifact: build/libs/naturality-1.0.0.jar. Restart Minecraft to apply.
+
+SLOW END CRYSTAL, INWARD EMISSIVE CORE AND ATTACHED GLYPH (2026-10-12)
+------------------------------------------------------------------
+Crystal cube spin is reduced from three to 0.75 degrees/tick; the bob sine frequency
+is reduced from 0.2 to 0.05 radians/tick. Bob range is reduced from 0.8 to 0.44
+blocks and its minimum raised: center height ranges from 0.95 to 1.39 above the
+entity origin. This keeps the spinning outer cube's maximum 0.866-block radius
+above the support surface. Beam endpoints and particle centers use the same bob
+function with the unchanged native age clock, avoiding a separate animation phase.
+Renderer uses artist resources/textures/entity/end_crystal.png via its existing
+assets/naturality mapping. Innermost cube face vertex order and normals are reversed
+once at bake/construction, preserving geometry and UVs. It is hidden in the ordinary
+model pass and rendered separately using an opaque, culled ENTITY_EMISSIVE_SNIPPET
+pipeline with NO_CARDINAL_LIGHTING and NO_OVERLAY and fullbright coordinates.
+Thus only inward faces appear, uniformly unshaded, while glass/base retain their
+normal native material and lighting. Both model passes share identical transforms.
+One persistent billboard glyph per loaded crystal loops end_crystal_text_0..5,
+five ticks/frame. The fullbright glyph has small smoothed random positional shake
+and follows the exact render-interpolated bob center. Particle ownership cleanup
+handles removal/world changes; no particle accumulation over repeated loops.
+All visual hooks follow Visual Overhaul; gameplay/crystal explosions are unchanged.
+Validation: assemble and crystal-visual passed. Checks cover clearance/range/period,
+inward normals, quarter-speed cube transform, split core visibility/material,
+shared beam clock, one live looping glyph, and ownership cleanup. Initial/loop
+captures inspected; core emission and center glyph visibly confirmed.
+Log: build/crystal-visual-test.log. Artifact: build/libs/naturality-1.0.0.jar.
+
+FASTER CRYSTAL MOTION AND LARGER GLYPH (2026-10-12)
+------------------------------------------------
+Doubled the current crystal spin/bob speeds: spin is now 1.5 degrees/tick and bob
+frequency 0.1 radians/tick, both half their original vanilla speed. Reduced bob
+amplitude and minimum clearance stay unchanged. Glyph quad size doubles from
+0.17 to 0.34; positional shake amplitude doubles from +/-0.012 to +/-0.024 blocks
+before smoothing. Letter playback doubles from five ticks/frame to an average
+2.5 ticks/frame (alternating integer tick intervals), looping six frames in 15
+ticks. Inward core faces, emissive/unshaded material and attached bob center stay.
+Validation: assemble and crystal-visual passed with updated speed/period checks;
+particle lifecycle, core/material and clearance checks pass. Larger glyph capture
+inspected. Log: build/crystal-faster-test.log.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply it.
+
+CRYSTAL GLYPH SIZE ADJUSTMENT (2026-10-12)
+---------------------------------------
+Reduced glyph quad size from 0.34 to 0.255, now 1.5x its original 0.17 size.
+Crystal motion, letter cycling and shake amplitude retain their latest settings.
+Validation: assemble passed; build/crystal-glyph-size-build.log.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply it.
+
+FASTER FISH SWIMMING (2026-10-12)
+--------------------------------
+Tripled the directional fish controller's target swimming speed coefficient
+(0.14 to 0.42) and its speed cap (0.18 to 0.54). Velocity easing, drag, direction
+tracking and idle animation pause retain their existing behavior.
+Validation: assemble and fish-swim passed. Ascent fixture now checks more than
+1.5 blocks of travel within eighteen ticks, along with upward-facing rendering
+and all four fish types retaining stable paused animation after stopping.
+Log: build/fish-speed-test.log. Artifact: build/libs/naturality-1.0.0.jar.
+
+FOURFOLD FISH PANIC BOOST (2026-10-12)
+------------------------------------
+Actively panicking fish now multiply their existing target swimming speed by four,
+including a fourfold panic-only cap increase. Uses PathfinderMob.isPanicking so
+ordinary swimming/player avoidance keeps its previous speed and panic returns to
+normal automatically when the goal stops. Native PanicGoal modifier 1.25 remains;
+the boost applies to that existing panic rate, not to regular swimming.
+Raised the visual movement teleport-rejection threshold to four blocks/tick so
+legitimate high-speed panic movement still drives fish facing and animation.
+Validation: assemble and fish-swim passed, including exact panic/normal rate checks
+and an actual hurt-triggered panic that exceeds regular swimming speed. Existing
+ascent, direction-facing and all-fish idle-pause checks pass.
+Log: build/fish-panic-test.log. Artifact: build/libs/naturality-1.0.0.jar.
+
+FISH IDLE DRIFT, LOOKING AND DEPTH RECOVERY (2026-10-12)
+----------------------------------------------------
+With no active navigation or panic, fish now ease toward a small downward idle
+velocity instead of staying suspended. They periodically choose gentle yaw/pitch
+readjustments and ease toward them, giving the impression of looking around.
+Idle reference height is captured when swimming stops. Falling more than 0.45
+blocks below it (or contacting the bottom) triggers a short upward-forward burst,
+followed by a cooldown and return to passive drift. Recovery checks water above
+before starting and suppresses forward thrust where collision would block it.
+Normal waypoint swimming and panic cancel idle recovery and keep their previous
+speed/easing. Client motion treats the very slow drift as idle: native yaw/pitch
+changes ease into the rendered pose while the tail/fin animation remains paused.
+Faster recovery motion resumes direction-facing swimming and animation normally.
+Validation: assemble and fish-swim passed. Tests cover actual slow sinking over
+100 controlled idle ticks, changing looking yaw, a sunken fish rising and moving
+forward in a recovery burst, normal ascent, all four idle animation phases and
+hurt-triggered high-speed panic. Log: build/fish-idle-test.log.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply it.
+
+REDUCED FISH PANIC BOOST (2026-10-12)
+-----------------------------------
+Halved the recent panic-only boost from 4x to 2x its pre-boost panic rate.
+Regular swimming speed and idle drift/looking/depth recovery remain unchanged.
+Validation: assemble and fish-swim passed with updated multiplier/cap checks and
+real hurt-triggered escape, plus direction, idle pause and recovery regressions.
+Log: build/fish-panic-reduced-test.log. Artifact: build/libs/naturality-1.0.0.jar.
+
+CLOCK AND COMPASS NAVIGATION (2026-10-12)
+-----------------------------------------
+Holding a clock in either hand displays the Overworld celestial day count
+(zero-based, matching F3), twelve-hour time with AM/PM and twenty-four-hour time,
+e.g. Day 0 | 06:00 PM (18:00). Uses the synchronized celestial clock rather than
+simulation gameTime, so commands, paused time and sleep acceleration are reflected.
+Holding an ordinary or lodestone compass displays floored block X/Y/Z coordinates;
+holding both instruments combines the readout in one line. It uses the nitwit
+reputation action-bar font, white text/backdrop and exact position above the hotbar.
+Temporary action-bar messages take priority; the readout returns when they expire
+and disappears immediately when neither instrument is held.
+
+Ordinary compass needles point to the player's saved bed/respawn-anchor override
+when it belongs to the current dimension. Otherwise the Overworld uses world spawn,
+and other dimensions use horizontal X=0, Z=0 (height does not affect the needle).
+Lodestone targets, including native invalid/cross-dimension behavior, and recovery
+compasses retain their native paths. Existing needle smoothing is preserved.
+No item components are rewritten and no target chunks are loaded. The server sends
+only changed per-player targets, including spawn changes and dimension travel;
+connection resets clear client state. Saved respawn data follows vanilla's lifecycle.
+Install Naturality on server and client for personal-spawn synchronization.
+
+Startup toggle: Travel Rules > Clocks and compasses (NAVIGATION_INSTRUMENTS),
+default on, independent of Visual Overhaul. Implementation: navigation package,
+NavigationClient, NavigationCompassMixin and NavigationHudMixin.
+Validation: assemble, prepareDebugLaunch and navigation client suite passed.
+Checks cover AM/PM/midnight/day rollover, both held items, negative coordinates,
+world spawn, synchronized bed/Nether anchor targets, actual anchor needle angle,
+lodestone preservation, Nether/End origin fallback and held-item removal.
+Readout and reputation-priority screenshots visually inspected.
+Log: build/navigation-final-test.log. Artifact: build/libs/naturality-1.0.0.jar.
+
+CUSTOM MAIN MENU LOGO (2026-10-12)
+---------------------------------
+TitleScreen uses resources/textures/gui/title/minecraft.png through its existing
+assets/naturality mapping. TitleLogoMixin draws only that main logo, hiding the
+edition texture and bypassing the rare vanilla alternate logo. The artist's
+1024x256 canvas uses vanilla's normalized UV region, centered 256x44 display
+and 30-pixel top offset. Native menu fade and buttons are retained.
+Menu branding applies independently of the Visual Overhaul toggle; other
+screens retain their native logo renderer.
+Validation: assemble and prepareDebugLaunch passed (build/title-logo-build.log).
+Packaged logo and mixin verified. In-game appearance has not been rechecked.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply it.
+
+LARGER UNCROPPED MENU LOGO (2026-10-12)
+-------------------------------------
+Updated artist logo is 271x43. TitleLogoMixin now samples its entire UV range
+and preserves that aspect ratio. Target display width is 1024 GUI pixels (4x
+previous 256); smaller viewports fit it within the screen with 8-pixel side
+margins. Centering, 30-pixel top offset, fade and hidden edition label remain.
+Validation: assemble and prepareDebugLaunch passed; build/title-logo-size-build.log.
+In-game appearance not rechecked. Artifact: build/libs/naturality-1.0.0.jar.
+
+MENU LOGO SIZE REDUCED TO 2X (2026-10-12)
+---------------------------------------
+Target logo width reduced from 1024 to 512 GUI pixels, twice its original
+256-pixel display width. Full texture sampling, aspect ratio, small-screen
+fit, centering, fade and hidden edition label are retained.
+Validation: assemble and prepareDebugLaunch passed; build/title-logo-2x-build.log.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply.
+
+ORTHOGRAPHIC CLOUDS AND SUBMERGED SURFACE SHELL (2026-10-12)
+Preview cloud cap transitions now use the parallel isometric viewing direction,
+rather than treating the camera origin's altitude as the altitude of every ray.
+Perspective-only cell-side face pruning is bypassed in the preview; actual face
+winding still rejects back faces. Normal gameplay retains its height-based path.
+The preview's render/cull orthographic depth volumes both extend from -1024 to
+1024, allowing cloud geometry to cross the view without the old near-plane slice.
+Terrain and clouds share that projection, preserving mutual depth occlusion.
+
+Surface extraction skips transparent fluid when locating the solid surface floor.
+Entire water columns, exposed lake/ocean beds and their two-block support shell
+are retained; caves below the first solid floor remain excluded. Interior column
+queries use the supplied source chunk directly; only boundary queries inspect
+already loaded neighbors. A synthetic deep-lake regression checks bed retention,
+continuous water and exclusion of buried geometry.
+
+Menu fog includes a conservative four-block horizontal surface-height envelope
+(60x60 cells, bounded uniform buffer below 16 KiB), sampled only from loaded
+client chunks. Geometry below that envelope fades earlier toward the horizontal
+edge, capped at 30 percent radius reduction. Fog distance remains X/Z-only; height
+adjusts the horizontal fade envelope and does not produce vertical fog. Cloud
+distance fog retains its separate four-times horizontal footprint.
+
+Validation: menu-world, clouds and fog passed, together with assemble and
+prepareDebugLaunch (build/menu-cloud-surface-tests.log, 2m52s). Positive/negative
+orbit menu captures were inspected; the deep-lake bed/column regression passed.
+Updated artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply.
+
+MENU LOGO SIZE REDUCED TO 1X (2026-10-12)
+---------------------------------------
+Target logo width is now 256 GUI pixels, its original display width. Full
+texture sampling, artist aspect ratio, small-screen fit, centering, fade
+and hidden edition label remain.
+Validation: assemble and prepareDebugLaunch passed; build/title-logo-1x-build.log.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply.
+
+MENU LOGO SIZE SET TO 1.5X (2026-10-12)
+-------------------------------------
+Target logo width is now 384 GUI pixels, 1.5 times its original 256-pixel
+width. Full texture sampling, artist aspect ratio, small-screen fit,
+centering, fade and hidden edition label remain.
+Validation: assemble and prepareDebugLaunch passed; build/title-logo-1.5x-build.log.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply.
+
+RESPONSIVE TITLE LOGO AND SPLASH (2026-10-12)
+-------------------------------------------
+Title logo now occupies 60% of GUI viewport width, matching the user's large
+reference screenshot. Top offset is 9% of viewport height. Full 271x43 image
+and aspect ratio remain; resizing/automatic GUI-scale changes no longer make
+it occupy a larger fraction of the window. Supersedes the fixed 384-pixel cap.
+Splash anchor moves to 72% of screen width and 2.5% of viewport height below
+the logo bottom. Its size scales by viewport width/640, retaining its native
+rotation, pulse, content, visibility setting and fade. Edition remains hidden.
+Validation: assemble and prepareDebugLaunch passed;
+build/title-logo-responsive-build.log. Native call signatures and text pose
+inheritance checked against local Minecraft sources. In-game appearance has
+not been rechecked. Artifact: build/libs/naturality-1.0.0.jar.
+
+INTERACTIVE ISOMETRIC TITLE WORLD (2026-10-12)
+--------------------------------------------
+TitleScreen's panorama is replaced by a real textured voxel diorama with an
+orthographic orbit camera. The deterministic 112x112 island contains layered
+stone/dirt, grassy hills, sandy coasts, a winding inlet/lake, oak trees and a
+finite translucent ocean slab. It is a generated showcase mesh, independent
+of playable ClientLevel/server/saves. Only exposed block faces are uploaded;
+meshes are retained rather than rebuilt per frame. Active block/celestial
+atlases supply textures. Cloud silhouettes use the native environment texture,
+extruded into drifting 3D blocks. A directional skybox renders sky gradients,
+sunset, native sun/full-moon sprites and stable stars, with a six-minute cycle.
+Sky and terrain share orbit orientation and daylight. Other menu screens keep
+their vanilla background. Existing proportional logo and splash remain.
+
+Hold the left mouse button anywhere, including over a button, to pause rotation;
+drag horizontally/vertically to orbit. Sensitivity scales with viewport size.
+Pitch is bounded at -65..85 degrees; yaw wraps. A short click activates its
+ordinary button on release; moving >=4 GUI pixels consumes the gesture without
+activating it. Normal keyboard navigation remains native. Slow automatic orbit
+(3 degrees/second at default panorama speed) resumes 1.5 seconds after release;
+menu departure cancels holding and resets the frame timer. No game camera or
+projection state is rewritten. Separate mesh depth is cleared before GUI drawing.
+Resources rebuild after atlas reload and GPU buffers close at client shutdown.
+
+Menu-only exit exposed an existing shader-worker lifetime edge: Minecraft first
+prepares the final progress-screen blur after CLIENT_STOPPING has shut down the
+shader executor. ShaderPreparation now runs rejected late shutdown preparation
+on its caller. Ordinary cold preparation still uses the independent worker;
+resource-reload preparation and GPU finalization retain their original paths.
+
+Validation: menu-world and shader-stall suites passed together
+(build/menu-world-final-test.log). Cold shader preparation completed in 3 ms
+before/after reload with all 15 terrain workers occupied; normal generated-world
+travel and water entry passed. Menu checks exercise real terrain/cloud draws
+without a server, both drag axes, drag from Options without activation, short
+Options click/return, resource reload, resizing and pitch limits. Day/orbit,
+reload, small-window sky and night captures visually inspected; sun/moon/stars
+confirmed. A separate menu-only run passed clean shutdown with the blur still
+cold (build/menu-world-menu-only-test.log). Release assemble and
+prepareDebugLaunch passed (build/menu-world-release.log); JAR menu classes and
+shaders verified. Preview: build/menu-world-preview.png.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply.
+
+NATIVE SPAWN-REGION MENU WORLD AND INERTIAL ORBIT (2026-10-12)
+------------------------------------------------------------
+Replaces the preset MenuIsland and its separate terrain/sky shaders. MenuPreview
+creates a random-seed normal Overworld in a private temporary storage source,
+finds the native world spawn and streams its actual chunks through the integrated
+server/client connection. It does not appear in the normal saved-world directory.
+Startup loading screens retain the menu; the regular panorama remains until the
+preview is ready. A new preview is generated when returning from gameplay.
+Native server simulation is limited to two chunks and view distance to eight,
+without changing the player's saved options. Native renderer view storage uses
+16 chunks to encompass the external orbit camera; only the loaded 13x13 region's
+surface sections are selected. The lower bound follows minimum surface heights
+so mountainous spawn regions do not lose lower valleys. This is actual world
+generation, block models, biome tint, lightmap, block light, wind, fluids and
+normal enabled mod effects, rather than a color/geometry approximation.
+
+Default yaw rotation is continuously integrated at 3 degrees/sec times the
+panorama-speed option, including during a hold/drag. Manual movement overlays it.
+Recent drag velocity carries forward on release, decaying exponentially at
+2.2/sec with exact time integration. Yaw wraps; pitch remains -65..85 degrees
+and vertical inertia stops at either bound. Grabbing clears prior manual inertia
+but retains automatic rotation. A stationary hold/release does not fling stale
+motion. Existing short-click versus >=4-GUI-pixel drag distinction remains.
+
+The camera orbits the native spawn with an orthographic terrain projection.
+The external camera requires direct bounded surface-section visibility selection:
+the native occlusion walk cannot start from an unloaded camera chunk. Its culling
+frustum uses conventional depth and includes the camera cube; GPU depth remains
+reversed. This avoids an infinite perspective-frustum offset loop. All camera,
+visibility, HUD and option overrides are restricted to the private preview server;
+normal gameplay retains its native camera, HUD, distance and simulation settings.
+
+Spawn-centered distance fog fades outer terrain/clouds, with the existing pixel
+fog settings, and fades the lower cut edge. The radius follows available chunks
+and caps at 96 blocks. Terrain, including water-mask passes, disappears beyond
+that edge. Native environmental/weather fog and lighting remain; camera-distance
+fog does not wash out the model center. Native atmosphere capture supplies the
+edge color. The disabled MenuRegion uniform is explicitly all zero: JOML's
+no-argument Vector4f constructor sets w=1 and is unsuitable for that sentinel.
+
+SkyRenderer uses the normal perspective sky and the user's FOV, while terrain
+stays orthographic. Existing celestial clocks/star rotation, sun beams, lens
+flare, clouds, cloud moonlight/outline and configured sky events run through their
+ordinary native/mod paths. Aurora curtains also use the sky projection. Cloud
+preferences and feature toggles remain respected. Preview HUD/hand are hidden;
+menu buttons remain usable. Private temporary worlds are cleaned at JVM shutdown.
+The former MenuIsland class, MenuWorldRenderMixin and menu_world/menu_sky/menu_scene
+assets are removed. Main-menu logo/splash changes remain.
+
+Validation: menu-world, fog, clouds, hardcore-lighting and shader-stall passed
+in one run (build/menu-native-all-final.log). A separate final menu run synchronizes
+an aurora_borealis override and verifies real aurora panels; capture visually
+confirmed (build/menu-native-sky-final.log). Checks include continuing rotation
+while held, release inertia/decay, native NoiseBasedChunkGenerator/spawn chunks,
+visible real terrain meshes, click/drag distinction, resource reload, cloud/day/
+night/sky-event views and teardown. Gameplay moon factors 1/.75/.5/.25/0 map to
+sky factors .24/.18/.12/.06/0; native fog/cloud regressions passed. Cold shader
+preparation stays at 3 ms with all 15 terrain workers occupied before/after reload;
+normal-world travel/water entry passed. The older combined lighting UI tests
+have unrelated stale root-button/category expectations; the new rendering-only
+hardcore-lighting selection avoids those obsolete UI assumptions.
+Release assemble and prepareDebugLaunch passed (build/menu-native-release.log).
+Previews: build/menu-native-preview.png and build/menu-native-sky-preview.png.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply.
+
+SURFACE-ONLY CLIENT PREVIEW AND STARTUP PREPARATION (2026-10-12)
+--------------------------------------------------------------
+Supersedes the previous menu section-selection and lower-edge fog behavior.
+MenuSurface builds sparse per-column surface shells before the private server's
+chunk packet is serialized. Only exposed terrain, neighboring-column cliff sides,
+surface fluids and above-ground features enter the preview client. Buried block
+palettes and underground block-entity tags are omitted; empty native section slots
+remain for height/biome API compatibility. Vanilla generation still creates full
+temporary source chunks on the private server; this is not a surface-only world
+generator and does not eliminate that generation cost.
+
+MenuSurfaceChunkMixin records each decoded column's retained lower boundary.
+Later native underground block updates are rejected, preventing fluid/post-process
+packets from repopulating discarded sections. Visibility selects only nonempty
+surface sections within the X/Z fog footprint, rather than a global Y floor.
+Terrain and cloud edge fog have no Y component. Preview clouds also skip their
+ordinary spherical camera-distance fade; normal gameplay keeps that fade.
+
+Preparation starts while the initial resource loading overlay is still present.
+Its finish callback runs normally, but fade-out waits for all chunks intersecting
+the model's horizontal radius, compiled visible surface meshes and completed
+section fades. The private connection can proceed behind the overlay and its
+preparation does not pause streaming. Server ownership is claimed only inside the
+private createFreshLevel call, so loading ordinary worlds cannot acquire preview
+hooks. Fabric test initialization retains its separate threading barrier.
+
+Validation: full-region menu-world, gameplay fog and clouds passed together
+(build/menu-surface-final-tests2.log). Checks include empty underground sections
+throughout the model footprint, rejection of late buried writes, native terrain,
+drag/inertia, clouds, resource reload, night and aurora. Final menu-world plus
+assemble/prepareDebugLaunch passed (build/menu-surface-release.log). Isolated
+production startup passed with the real loading overlay held until meshes were
+ready, then released and cleanly shut down (build/menu-surface-startup-final.log).
+Startup smoke check uses -Dnaturality.menu.startupCheck=true and an isolated run
+directory; it is inactive in normal launches.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply.
+
+INERT MENU AND WORLD-SELECTION PREVIEWS; NATIVE PRESET SKY (2026-10-12)
+--------------------------------------------------------------------
+Main-menu day/night time advances at 8x normal speed. World selection and creation
+previews freeze the private server's tick manager and celestial clock. Selection
+is debounced by 650 ms. Selecting a compatible save reads its player respawn point
+(current profile playerdata, then embedded singleplayer data, then world spawn).
+MenuSavedRegion copies only nearby region files plus datapacks and saved data into
+a disposable storage source. Original saves are never opened by the preview server,
+locked, simulated or modified. Player inventories and entity-region files are not
+copied. The private spectator starts at the selected respawn region/dimension.
+Saved vanilla weather, regional mod weather, environment snapshots, sky-event
+settings and world clocks are loaded from the copied data files. In 26.3 vanilla
+weather is data/minecraft/weather.dat, not the old level.dat rain fields.
+
+CreateWorldScreen listens to its native WorldCreationUiState. The preview uses its
+exact WorldOptions and selected dimensions; a blank field previews the random seed
+already chosen by that state, which is also used by actual world creation. Proper
+world loading remains a separate operation against the real save or creation state.
+Returning to the title creates another random main-menu model. Disposable servers
+are never published; their teardown skips only unnecessary LAN-player removal
+synchronization, retaining normal superclass shutdown/save and temporary cleanup.
+
+Mob additions are rejected during terrain population and private ServerLevel
+spawning; spawn_mobs is also disabled in the private world. LocalPlayer.aiStep is
+suppressed, camera immersion always returns NONE, and immediate/delayed/ticking
+world sounds are rejected while GUI clicks and music remain enabled. Preview
+entities outside the horizontal footprint or below the retained surface are culled.
+Ordinary gameplay uses its original input, audio, spawning and immersion paths.
+
+Surface extraction now uses adjacent local boundary columns when neighbors are
+unavailable, instead of incorrectly wrapping to the opposite chunk edge. A bounded
+two-block support shell seals exposed partial-model/fluid cuts without retaining
+caves. Cloud cap faces are one-sided and also constrained by camera height relative
+to their slab (necessary for orthographic rays); cap fading occurs outside the slab,
+so tops cannot appear below the top plane. Preview cloud geometry/fog extends to
+4x the terrain radius, with enough camera-centered mesh range to cover that area.
+Horizontal X/Z-only edge fog remains; the terrain radius is unchanged.
+
+MenuPresetSky uses the real native SkyRenderer and reloaded CloudRenderer (including
+mod cloud layers, celestial atlas and SunBeams hook), with a known first-day state
+and GPU perspective projection. It renders before GUI drawing whenever the menu
+has no renderable world. No panorama, flat illustration or temporary sky world is
+used. The native preview sky takes over when the client world renders. Preset GPU
+resources close on shutdown; its sky meshes are dropped when the world takes over.
+
+Validation: menu-world, clouds, fog and hardcore-lighting passed together
+(build/menu-world-selection-final-tests.log). Final menu-world/clouds plus assemble
+and prepareDebugLaunch passed (build/menu-selection-release.log). Menu tests cover
+native preset rendering, positive/negative orbit, inert audio/immersion, absence of
+mobs, whole-region surface/underground-update checks, creation seed identity/frozen
+clock, saved player spawn, rain/event overrides and unchanged source level.dat.
+Production startup and main-to-creation switching passed outside Fabric's scheduler
+(build/menu-production-selection-check.log). Native preset and selected-save captures
+were visually inspected in build/run/clientGameTest/screenshots. Native generation
+still creates full temporary source chunks before extracting client surface data.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply.
+
+MENU SURFACE VISIBILITY AND CLOUD SLAB TRANSITIONS (2026-10-12)
+-------------------------------------------------------------
+This supersedes the earlier coarse height-dependent fog and pitch-derived cloud
+transition. Edge fog again uses one continuous X/Z radial envelope, with no local
+height-grid modulation. Exact per-column floor heights now control visibility of
+cut support faces instead of creating patches of extra fog. Cliff faces compare
+the surface floors on both sides; partial-height surface blocks and lake beds
+remain visible. Two packed uniform buffers hold 16-bit heights for a 208x208
+loaded-only region, avoiding an extra texture unit in the full OIT pipeline.
+The cached heights invalidate with client chunk packets and block changes.
+
+The model fades away over the last eight degrees above a side view, and terrain,
+entities and block entities are invisible at/below the side view. The sky and
+clouds keep rendering. Buried block entities are removed both from surface packet
+metadata and from extracted render states, including states created again by the
+client from support blocks. Ordinary gameplay is unaffected by these guards.
+
+Cloud transitions use the real orbit camera Y relative to each layer's bottom,
+height offset and thickness. Top caps remain forbidden below the top plane, and
+bottom caps above the bottom plane. Orthographic wall selection and the extended
+near plane remain, so clouds can continue across the view. Camera pitch alone no
+longer enables a top face while the camera is still below/inside the cloud slab.
+
+GPU readback tests the production surface helper on partial blocks, adjacent
+cliffs, buried support, two heights at the same horizontal fog distance and a
+hidden underside. Cloud geometry checks cover camera positions below, within and
+above a layer. Menu captures include +3, 0 and -20 degree views; those captures
+were inspected. The menu-world, clouds and fog suites passed together in
+build/menu-underside-tests.log (2m39s).
+The final menu-world run, including buried-chest packet rejection and block-entity
+render filtering, passed with assemble and prepareDebugLaunch in
+build/menu-underside-release.log (1m5s). Artifact: build/libs/naturality-1.0.0.jar.
+MENU ANGLE-BASED CLOUD STATES AND FOG COVER (2026-10-12)
+------------------------------------------------------
+The requested level orbit is now the shared middle state for both preview cloud
+layers, superseding the physical-slab policy above for menu previews only. Any
+positive pitch selects above, any negative pitch selects below; cap opacity
+finishes its short transition within three degrees. Normal gameplay still uses
+actual camera height relative to each cloud slab.
+
+Fully fogged terrain now extends outward to cover exposed underground/water cuts.
+The vertex extension starts two blocks beyond the complete horizontal fog boundary,
+scales the extra distance by 64 and caps the extension at 768 blocks. Identical
+world vertices receive identical offsets across chunk boundaries. A four-block
+surface coverage margin supplies this hidden geometry; preview section/readiness
+loops cover seven chunks either side. Visible surface textures are not stretched.
+Fully fogged fragments use opaque captured sky color, including water, and bypass
+water refraction. Source coordinates continue to control fog and floor visibility.
+The existing surface-only extraction and side/underside hiding remain in place.
+
+Validation: menu-world, clouds and water-occlusion passed with assemble and
+prepareDebugLaunch in build/menu-fog-cover-tests.log (2m12s). GPU readback covers
+extension thresholds, the maximum extension, retained fully fogged cover and
+hidden underside. Cloud checks cover both layer offsets at negative/zero/positive
+angles independently of camera height. Day, overhead, level and +/-3 degree menu
+captures were inspected. Sodium's shader path was updated but not runtime-tested.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply.
+
+MENU CLIFF RETENTION AT CHUNK BOUNDARIES (2026-10-12)
+-------------------------------------------------
+Surface extraction previously looked up neighboring columns with getChunkNow,
+which only exposes FULL chunks on the server thread. A neighboring cliff foot
+can already have finished terrain/features while still being exposed only through
+the lighting view. Treating that neighbor as absent substituted the tall local
+column height and permanently trimmed the cliff out of the outgoing payload.
+MenuSurface now uses getChunkForLighting, accepting both ordinary chunks and
+native proto/wrapper chunks. This only reads existing terrain; it does not request
+new chunks or retain whole underground sections. The two-block support shell,
+exact surface shader filtering, fog cover and underside hiding are unchanged.
+
+The menu-world regression includes a 50-block cliff across a packet boundary,
+checks the entire exposed wall survives and the buried cliff interior is omitted,
+and compares generated preview cliff blocks against their source terrain.
+Validation passed with assemble and prepareDebugLaunch in build/menu-cliff-tests.log
+(1m5s), including 39,815 exposed-block comparisons plus the existing GPU surface,
+lake-bed, fog-cover, underside, cloud-angle and preview lifecycle checks.
+Day and high-angle captures were inspected. Artifact: build/libs/naturality-1.0.0.jar.
+
+PREVIEW FOG WALL, LIVELIER WEATHER AND FOREGROUND PRECIPITATION (2026-10-12)
+-------------------------------------------------------------------------
+The fully fogged stretched terrain now has a downward skirt: outer support-row
+vertices extend 768 blocks down while the upper geometry remains connected.
+Packets beyond the displayed chunk footprint contain empty sections so outside
+neighbors cannot suppress the wall's side faces. This uses the server's actual
+respawn center even before the client preview is ready. The packed surface grid
+now covers 240x240 columns (two 57,600-byte uniform buffers, still below 64 KiB
+per buffer) to include the whole outer chunk boundary. The wall shares the
+existing opaque captured-sky color, depth handling and hidden-underside rules.
+Native and Sodium terrain shader paths both include the extrusion.
+
+PreviewEnvironment explicitly registers disposable servers. Live previews use
+4x start probabilities, capped at one, for rain/wind, meteor showers, End flashes,
+blood moons, proximity episodes, rainbows, auroras and enabled End weather events.
+Existing eligibility conditions and feature toggles remain. Weather slider changes,
+season/direction clocks and rain/wind target variation advance 4x faster; active
+event durations retain their existing clocks. Ordinary servers retain rate one.
+Saved-world/seed previews register as frozen immediately, before world loading
+finishes, and skip autonomous climate/event changes while still sending their
+saved state to the client. Disabled natural starfall remains disabled.
+
+Preview precipitation uses at most 256 camera-near rain/snow cards distributed
+across the orthographic view. They sample climate, biome tint and lighting at the
+preview spawn region, without requiring loaded chunks around the orbit camera,
+terrain collisions, sound or gameplay interaction. Existing particle quality and
+weather-particle toggles apply. Vanilla saved rain also has a fallback when the
+custom weather profile is disabled. Cold/warm changes replace the card type;
+world transitions and camera rotations discard obsolete cards. Normal gameplay's
+particle volume and behavior remain unchanged.
+
+Validation: menu-world, sky-events, particle-weather and weather-commands passed
+with assemble/prepareDebugLaunch in build/menu-weather-wall-final.log (2m40s).
+GPU readback checks wall depth, no displacement inside visible terrain and no
+underside at/below level. Native tests check empty perimeter neighbors, exposed
+cliffs, a 10,000-seed probability comparison, accelerated rain, near-camera rain
+and snow, and frozen climate/event clocks. Rain, snow and terrain captures were
+visually inspected. Sodium was updated but not runtime-tested in this change.
+The broader weather suite fails its pre-existing 'Weather replaces fire with snow
+at the same position' assertion; it also failed with the unchanged HEAD version
+of WeatherSystem (build/menu-weather-baseline-check.log). That implementation was
+restored byte-for-byte to the new preview version afterward. No snow/fire behavior
+was changed as part of this task.
+The final menu-world release run passed with assemble and prepareDebugLaunch in
+build/menu-weather-wall-release.log (1m23s), including immediate environment freeze
+registration and 23,073 solid-cliff checks. Preview visibility submits the bounded
+surface footprint independently of the original section frustum boxes, so the
+extruded wall cannot disappear just because its top is offscreen. The rain/snow
+fixture covers neighboring biome cells to account for native biome blending;
+the cliff audit checks solid geometry rather than asynchronous fluid states.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply.
+
+CONSERVATIVE PREVIEW SURFACE RETENTION (2026-10-12)
+------------------------------------------------
+The first-solid-column cutoff could classify a roof or thin overhang as ground,
+then remove the terrain beneath it from both packets and fragment rendering.
+MenuSurface now looks for eight supported blocks, looking through thin detached
+surfaces for at most 48 blocks before falling back to the original top surface.
+Fluids, leaves and logs do not establish the ground boundary; water columns still
+extend to their bed. Non-air details within a support run do not turn a buried
+chest into a false lower ground surface.
+
+Trimming now uses a 5x5 neighborhood, including diagonal/recessed cliff feet,
+and retains a conservative 24-block surface band plus two support blocks.
+The same 24-block allowance is passed to the terrain shader through MenuEye.w,
+so retained cliff geometry is not discarded by the former exact-height rule.
+Deep columns remain omitted. Whole-model underside hiding, downward-face hiding,
+horizontal fog and fully fogged perimeter walls remain in place. This supersedes
+the earlier two-block-only surface retention and strict fragment cutoff.
+
+Validation: menu-world, assemble and prepareDebugLaunch passed in
+build/menu-surface-relaxed.log (1m20s). Added wide roof/overhang ground-retention
+fixtures, recessed cliff checks, client/source floor agreement, and expanded
+24-sample GPU checks for the relaxed band and hidden underside. Generated terrain
+passed 12,809 exposed-block comparisons; the sampled spawn chunk retained 3 of
+24 sections. Day/high-angle screenshots were inspected. Native/Fabric runtime
+was tested; the shared shader also serves Sodium, which was not rerun here.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply.
+
+AMBIENT HORROR: UNREGISTERED WALKER AND DARKNESS EYES (2026-10-12)
+---------------------------------------------------------------
+Visual-overhaul clients now keep two rare, local horror impressions. Neither
+creates a Minecraft entity, registry entry, collision object, or debug hitbox.
+The walker is only a position and private 0.6 x 1.8 visibility box. It starts
+7-14 blocks away, outside the camera frustum, walks over loaded solid surfaces
+at 0.085 blocks/tick, and plays the supporting block's positional step sound
+once per 0.8 blocks travelled. Any part of the box in the render frustum freezes
+movement; proposed movement into view is also rejected. Walls do not exempt an
+onscreen box. It expires after 30 seconds or beyond 40 blocks from the camera.
+
+After a one-minute world-entry grace period, each five-second interval has a
+1% walker roll and a separate 1/140 eyes roll, each with bounded placement
+attempts. Only one of each can exist per client. Eyes choose distances of 18-36
+blocks, with 90% of placement attempts biased 28-46 degrees sideways and the
+rest 8-26 degrees. Candidates require loaded, unobstructed, dry air with zero
+sky/block light and zero smooth dynamic light. The white pair uses depth-tested,
+full-bright, camera-facing quads in normal and OIT particle render paths.
+It fades in over one second, and fades out over 1.5 seconds after 1.75 seconds
+of continuous direct attention, an approach within seven blocks, illumination,
+or a 20-second timeout. World changes clear all state; paused gameplay freezes
+clocks. Menu previews, dead/spectator/sleeping players and disabled visual
+overhaul suppress both effects. No server packets, AI or chunk loading are added.
+
+Validation: ambient-horror client suite passed freeze/resume, approach fade,
+sustained-gaze fade and illumination fade; the darkness screenshot was visually
+inspected. Both release assemble and prepareDebugLaunch passed in the final run.
+Log: build/horror-test-final.log. Native/Fabric rendering was tested; Sodium
+was not run for this change. Artifact: build/libs/naturality-1.0.0.jar.
+Restart Minecraft to apply.
+
+CAMERA-FACING PREVIEW FOG COVER (2026-10-12)
+-----------------------------------------
+The stretched fog perimeter and its downward walls now apply only to the half
+of the model on the camera's side. The shared native/Sodium shader projects
+positions onto the horizontal center-to-camera direction. The far half receives
+no extrusion; a two-block smooth transition entirely inside the near half avoids
+snapping at the dividing line as the orbit rotates. Surface retention and fog
+color/distance are unchanged.
+
+Validation: menu-world, assemble and prepareDebugLaunch passed in
+build/menu-facing-cover-final.log (1m6s). GPU readback now covers 32 positions
+from four camera directions, including both halves, the boundary transition,
+wall depth and hidden underside. The preview lifecycle and 15,613 generated
+cliff-block checks passed; the day capture was inspected. A prior run passed
+the GPU checks but encountered a temporarily missing FallingFluidTail$1 class
+during another compilation; the complete rerun passed without source changes.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply.
+
+HORROR EYE TEXELS AND LOCAL TEST COMMANDS (2026-10-12)
+---------------------------------------------------
+The pair uses horror_eyes.png, a 3x1 texture containing white/transparent/white:
+exactly one white texture pixel per eye. Each quad samples its own texel center.
+The existing 0.09-block eye size and 0.28-block center spacing are unchanged;
+this does not lock the eyes to one screen pixel. The old white texture is removed.
+
+Client commands (no operator permission needed):
+  /naturalityhorror eyes   Place eyes 8-24 blocks ahead in loaded clear air.
+                          Bypasses rarity and darkness for testing only;
+                          approach, sustained gaze and lifetime fades still apply.
+  /naturalityhorror walker Place a walker on walkable ground behind the player.
+                          Bypasses rarity; ordinary movement and view freeze apply.
+  /naturalityhorror clear  Remove both impressions and reset their grace period.
+Commands report unsuitable placement; awake, living, non-spectator players and
+visual overhaul are required. Natural eye placement still requires darkness.
+
+Validation: ambient-horror passed command registration/execution for all three
+subcommands plus the existing movement/gaze/approach/lighting regressions.
+The updated darkness screenshot was inspected; eye size and spacing match the
+previous capture. Assemble and prepareDebugLaunch passed.
+Log: build/horror-command-test.log. Artifact: build/libs/naturality-1.0.0.jar.
+
+HORROR NATURAL COMMAND PLACEMENT, APPROACH AND RETREAT (2026-10-12)
+----------------------------------------------------------------
+The eyes command now first shares natural placement predicates and the natural
+18-36-block, peripheral-biased sampler. It additionally searches a bounded grid
+of peripheral/near-center angles and distances before using the previous clear
+forward test fallback. Natural candidates require darkness, loaded dry space,
+body clearance and line of sight, and retain illumination-triggered fading.
+Only the explicit fallback bypasses darkness; command feedback identifies it.
+The sampler now follows camera pitch, allowing placement down cave shafts.
+Eyes start their existing 1.5-second proximity fade at 16 blocks (an approximate
+interpretation of the user's reference screenshot), replacing seven blocks.
+Their quads face the camera POSITION with a stable world-up basis, rather than
+copying camera rotation. Texture pixels, eye size and spacing are unchanged.
+
+Both walker spawning paths prefer offscreen, walkable positions 10-16 blocks
+away. Walkers steer toward the current player position, turn away within three
+blocks, then retreat and disappear once 16 blocks away. Short alternate headings
+avoid blocked steps while preserving progress in the current phase. They do not
+move into view. Watching pauses movement, phase changes, removal and the active
+safety lifetime; looking away resumes the same sequence. A 90-second unwatched
+safety timeout bounds blocked encounters, and world/player cleanup still applies.
+Visibility now uses the actual camera projection. The engine's expanded particle
+frustum falsely included nearby points behind the camera and prevented approach.
+The clear command preserves the current camera visibility snapshot.
+
+Validation: ambient-horror passed natural-rule command preference in darkness,
+explicit fallback in an illuminated room, approach/retreat completion, pause of
+position and lifetime in both phases, and gaze/lighting/proximity fading. The
+proximity fixture is over seven blocks away and within the new 16-block threshold.
+Front and peripheral camera-position-facing screenshots were inspected.
+Assemble and prepareDebugLaunch passed; log: build/horror-sequence-verified.log.
+Native/Fabric tested; Sodium not rerun. Artifact: build/libs/naturality-1.0.0.jar.
+
+DARK EYE BACKDROPS AND STABLE VARIANTS (2026-10-12)
+-------------------------------------------------
+Natural placement and active eyes now check the background behind the pair,
+not just lighting at their own position. Nine sight-line samples around the
+pair trace up to 64 blocks behind it. Loaded, opaque background surfaces must
+have zero sky/block/dynamic lighting and no emission. Unknown/open or translucent
+backgrounds are rejected conservatively. Nonzero configured cave ambience and
+night vision also prevent assuming the backdrop is pitch black. An invalid
+backdrop starts the existing gradual fade, including for test-fallback eyes.
+The command still prefers natural rules and identifies any fallback explicitly.
+These are conservative world-light/geometry checks, not framebuffer readback.
+
+Each appearance selects and keeps one of four variants: normal (50%), vertically
+uneven (20%), crooked/asymmetric (20%), or small/wide (10%). All retain a single
+white texture texel per eye and face the camera position. The small/wide variant
+uses half-size 0.045-block dots. Its center spacing was reduced at the user's
+request from 0.80 to 0.52 blocks (35% less); normal spacing remains 0.28 blocks.
+
+Validation: ambient-horror passed a fixture where the eye location remains at
+zero block light while an illuminated distant background triggers fading, plus
+all previous command, movement, pause, gaze and proximity checks. Variant
+captures were generated; the low-resolution small variant can be subpixel.
+Final backdrop suite: build/horror-backdrop-final.log. The subsequent spacing-only
+adjustment passed assemble and prepareDebugLaunch: build/horror-variants-release.log.
+Native/Fabric tested; Sodium not rerun. Artifact: build/libs/naturality-1.0.0.jar.
+
+SPRINTER AMBIENT WALKER VARIANT (2026-10-13)
+------------------------------------------
+One in five successful natural walker encounters is now a sprinter, retaining
+the same overall encounter rarity and offscreen 10-16-block placement rules.
+The sprinter approaches at 0.34 blocks/tick (four times the ordinary walker,
+6.8 blocks/second at normal TPS). Four separately checked 0.085-block strides
+per tick prevent wall tunnelling or stepping into the actual camera view.
+Footstep cadence follows travelled distance. It disappears immediately when
+its private bounds overlap the player's bounds, with no retreat phase, damage,
+entity registration, debug hitbox or collision response. Watching pauses its
+motion and active-time safety clock just like the normal walker.
+Ground clearance now checks block collisions only, so these impressions never
+let an ordinary entity's collision box obstruct their simulated approach.
+
+Use /naturalityhorror sprinter to test this variant directly. The walker command
+continues to create an ordinary approach/retreat walker; clear removes either.
+
+Validation: ambient-horror passed the sprinter command, fourfold travel speed,
+view pause of position/lifetime, resume and disappearance on arrival without a
+retreat phase, plus all existing walker, eyes, command and backdrop regressions.
+Assemble and prepareDebugLaunch passed. Log: build/horror-sprinter-final.log.
+Native/Fabric tested; Sodium not rerun. Artifact: build/libs/naturality-1.0.0.jar.
+
+SIMPLIFIED HORROR COMMAND FEEDBACK (2026-10-13)
+---------------------------------------------
+Successful eyes spawning now reports exactly "spawned eyes". Successful walker
+and sprinter spawning report exactly "spawned walker". Placement, failure messages
+and clear-command feedback are unchanged. Assemble passed:
+build/horror-command-messages.log. Artifact: build/libs/naturality-1.0.0.jar.
+
+DISTANT SOLID-TERRAIN WALKER AND SPRINTER SPAWNS (2026-10-13)
+---------------------------------------------------------
+Both natural encounters and test commands now require spawn positions 24-36
+horizontal blocks from the player, replacing the 10-16-block band. They remain
+outside the actual camera frustum, with loaded terrain and clear body space.
+All four footprint corners require a dry, sturdy upper support surface at the
+same height; thin edges, plants, fluids and unsupported positions are rejected.
+There is no closer-position fallback. Successful commands retain the exact
+"spawned walker" message; failed commands identify missing distant solid terrain.
+Ordinary approach/retreat, sprinter arrival removal, speed, sounds and view pause
+are unchanged.
+
+Validation: ambient-horror passed explicit 24-36-block distance and solid-support
+checks for both command variants, plus the existing approach/retreat, sprint,
+view-pause, eye and backdrop regressions. The fixture supplies a separate distant
+stone platform rather than relying on terrain near the player. Assemble and
+prepareDebugLaunch passed. Log: build/horror-distant-spawn.log.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply.
+
+STRONGER ZOMBIE WALK LEAN AND MOMENTUM RECOVERY (2026-10-13)
+----------------------------------------------------------
+Zombie forward lean now reaches 28 degrees, with roughly three times the former
+lean at ordinary walking speed. The existing foot anchor and subtle side sway
+remain. Lean follows actual horizontal position changes instead of attempted
+velocity, and horizontal collisions target an upright pose. Two-stage smoothing
+and render interpolation ease the return when stopping or pushing against a wall.
+Removing the grounded-only gate also prevents an abrupt pose reset while jumping.
+
+Validation: assemble and zombie-walk client game tests passed. Checks cover the
+stronger lean, sway bounds, continuous and monotonic stopping recovery, native
+walking, and upright recovery during a blocked jump despite attempted velocity.
+Screenshots captured; blocked-jump screenshot inspected. Log:
+build/zombie-strong-lean-test.log. Artifact: build/libs/naturality-1.0.0.jar.
+
+EASED JUMP AND FALL CAMERA TILT (2026-10-13)
+------------------------------------------
+First-person ordinary jumping and falling now add a small downward camera pitch.
+The target scales with absolute vertical velocity, reaching a maximum 2.5 degrees
+at 0.42 blocks/tick. Each camera tick eases 28% toward the target, and rendering
+interpolates between tick samples. Both ascent and descent tilt downward; landing
+eases back to exact neutral. Player look angles are not rewritten; the offset is
+added during camera alignment before view/frustum preparation, with pitch clamped
+to +/-90 degrees. Existing End-gravity roll remains composed through setRotation.
+Creative/spectator flight, elytra, swimming/lava, climbing, passengers, sleeping,
+death and third-person views skip and clear this effect. Entity/world changes
+clear interpolation history; frozen entities do not advance the easing.
+The change follows Visual Overhaul. Implementation: AirborneTilt and
+AirborneCameraMixin.
+Validation: standalone easing checks passed for jumping, capped fast falling,
+render interpolation, gradual landing recovery, exact rest and reset.
+Assemble passed (build/airborne-camera-final-build.log). In-game validation and
+prepareDebugLaunch were blocked by existing MaddenedZombieGameTest compilation
+errors (removed setInvulnerable API/private invulnerableTime field), recorded in
+build/airborne-camera-build.log. No in-game appearance claim is made.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply.
+
+GENTLER ZOMBIE WALK LEAN (2026-10-13)
+-----------------------------------
+Reduced maximum forward lean from 28 to 10 degrees, close to the original effect.
+Actual horizontal movement, collision handling, two-stage smoothing and smooth
+recovery during stopping or blocked jumps remain intact. Side sway is unchanged.
+Validation: assemble and zombie-walk client tests passed, including lean bounds,
+stopping recovery and blocked-jump recovery. An initial shared build-output
+conflict was resolved by rerunning. Log: build/zombie-reduced-lean-test.log.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply.
+
+JUMP-UP / FALL-DOWN CAMERA TILT (2026-10-13)
+-----------------------------------------
+Airborne camera pitch now follows signed vertical speed: rising tilts up and
+falling tilts down. The 2.5-degree cap, tick easing and render interpolation
+remain. Neutral settling checks absolute pitch so upward tilt also eases back
+properly on landing instead of snapping. Direction/interpolation/landing checks
+passed; assemble passed (build/airborne-camera-direction-build.log).
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply.
+
+MENU UI SOUNDS REMAIN AUDIBLE (2026-10-13)
+---------------------------------------
+Minecraft 26.3 routes interface sounds through SoundSource.UI. The preview
+sound filter previously allowed only MASTER and MUSIC, inadvertently suppressing
+button clicks and other UI feedback. It now also allows UI, through the shared
+filter for immediate, delayed and ticking sounds. World ambience/weather remain
+muted, and normal sound-volume controls still apply.
+
+The menu-world regression now plays a real UI_BUTTON_CLICK through SoundManager
+while the preview is active, requires STARTED, and separately requires preview
+rain ambience to be rejected. Temporary test volume changes are restored.
+The full menu-world run completed in build/menu-ui-sounds-final.log, but its
+parallel JAR task failed to modify the shared manifest during concurrent builds.
+An earlier run encountered a transient missing WeatherSway class, also during
+compilation. A separate release build succeeded in 19s using an isolated output
+folder (build/menu-ui-isolated-release.log), without changing unrelated code.
+Tested sound fix artifact: .tools/menu-ui-build/libs/naturality-1.0.0.jar.
+Restart Minecraft to apply.
+
+ELYTRA POSE CAMERA-TILT EXCLUSION (2026-10-13)
+--------------------------------------------
+Airborne tilt excludes both the active fall-flying flag and FALL_FLYING pose,
+covering gliding pose transitions as well as ordinary active elytra flight.
+The existing tick/render eligibility checks clear both interpolation samples
+immediately while excluded, so no jump/fall tilt is carried into gliding.
+Assemble passed: build/airborne-camera-elytra-build.log. No in-game recheck.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply.
+
+CLOVERS (2026-10-14)
+-------------------
+Registered naturality:clovers and BlockItem as Clovers, after Wildflowers in
+Natural Blocks. Same FlowerBedBlock (height 3) and copied properties as Wildflowers:
+facing, 1-4 segments, placement/support rules, sounds, bonemeal and amount-based
+self drops. Shares Wildflowers' six direct block/item tags for flowers, bee food/
+attraction, fluid washing and step handling. No generation or crafting recipe.
+All four models copy vanilla flowerbed geometry, with clovers.png and
+clovers_stem.png from resources/textures/block. Both flowerbed and stem faces
+have tint indices; both are registered with biome foliage tint sources. Flat
+inventory sprite uses clovers.png. /give @s naturality:clovers obtains it.
+Validation: assemble and isolated smooth-endstone gameplay suite passed for matching Wildflower support/strength/sounds, all four amount shapes/drops and bonemeal increase. Both packaged textures and tint indices on every model face verified. Log: build/clovers-test.log. Production JAR rebuilt.
+
+FOUR LEAF CLOVER AND LUCK BREWING (2026-10-14)
+-------------------------------------------
+Registered naturality:four_leaf_clover as Four Leaf Clover, Ingredients after
+Rabbit Foot; inventory sprite resources/textures/item/four_leaf_clover.png.
+Clovers loot rolls a fixed 1% chance per harvested patch to replace normal drops
+with one Four Leaf Clover. Silk Touch bypasses the rare roll and preserves the
+normal flower_amount drops. Fortune does not alter this fixed chance.
+Five data-driven minecraft:brewing recipes support Four Leaf Clover + Awkward
+Potion -> vanilla Luck (5 minutes, Luck I), also in splash/lingering containers.
+Luck + gunpowder -> Splash Luck; Splash Luck + dragon breath -> Lingering Luck.
+Vanilla crafting_imbue tipped_arrow recipe already accepts any lingering potion:
+eight arrows around Lingering Luck produce eight Luck tipped arrows. No duplicate
+arrow recipe is needed. /give @s naturality:four_leaf_clover obtains the ingredient.
+Validation: assemble and isolated smooth-endstone suite passed, including 5000 rare-drop rolls, Silk Touch amount preservation and actual brewing stand conversion for all three Awkward bottle types, gunpowder and dragon breath. Vanilla ImbueRecipe source confirms tipped arrows retain Luck potion contents. Ingredient texture and five brewing recipes packaged. Log: build/four-leaf-clover-test.log. Production JAR rebuilt.
+
+OVERWORLD CLOVER PATCH GROUPS (2026-10-14)
+---------------------------------------
+CloverPatchesFeature registers clover_patches for all Overworld biomes at vegetal
+decoration, gated by the existing Content feature registration. Placed feature
+attempts one group per four chunks on average; unsuitable terrain may reject it.
+Only valid normal Clovers supports with empty surface space are used. Water,
+existing foliage and blocks remain untouched. No Nether/End generation.
+Each group plans a connected, irregular 12-20-block main patch (minimum eight
+valid positions), plus one to three 3-6-block satellites 6-8 blocks away. Patches
+follow terrain through one-block height changes. A reserved horizontal halo
+keeps patches separated, and every satellite remains smaller than the main.
+If fewer than two valid patches survive, nothing is placed. Thus every successful
+group contains 2-4 patches with one strictly dominant patch. Random facing and
+2-4 flower amounts make individual blocks varied. Surface queries and placement
+stay inside the allowed generation region. Applies only to new chunks.
+Validation: assemble and isolated smooth-endstone suite passed. Actual feature placement across eight seeded flat-ground runs verifies 2-4 disconnected components, a strictly larger main patch, and maximum group size of 38 blocks. Existing Clovers support/loot and Luck brewing checks also passed. Log: build/clover-patches-test.log. Production JAR rebuilt.
+
+TREE AND FOREST FLOOR MOSS (2026-10-14)
+-------------------------------------
+TreeMossFeature registers three vegetal-decoration placements in explicit
+Overworld biome tiers: old growth spruce/pine taigas get two attempts per chunk;
+forest, flower forest, dark forest, regular taiga and windswept forest get one
+attempt per four chunks; birch/old growth birch forests one per sixteen chunks.
+These are attempts, subject to finding a suitable tree and vacant supported faces.
+All other biomes are excluded, including savannas, hot/jungle/desert biomes,
+snowy biomes and Pale Garden. Every actual moss position rechecks eligibility,
+preventing border leakage. Existing Content feature registration gates generation.
+Searches six blocks around the candidate for dirt-rooted log columns, chooses a
+tree, and irregularly coats its bottom 2-4 blocks. A ragged 3-5-block ground mat
+fades outward from that base, follows nearby terrain (up to four blocks elevation
+change), and may coat dirt risers. Uses naturality:moss with directional faces;
+no moss block conversion. Existing foliage, fluid and non-moss blocks are preserved.
+Only allowed world-generation positions are written. Appears in new chunks only.
+Soil eligibility includes grass block, podzol, mycelium and moss block explicitly as well as the current dirt tag (which only includes dirt/coarse/rooted dirt). Validation: assemble and isolated smooth-endstone suite passed for actual trunk and bounded ground moss placement, biome frequency tiers, excluded-biome policy and unlisted-biome rejection. Existing moss attachment, clover groups and Luck brewing regression checks passed. Log: build/tree-moss-test.log. Production JAR rebuilt.
+
+CONNECTED TREE MOSS PATCHES (2026-10-14)
+--------------------------------------
+Replaced independent random ground/trunk placements with one connected ground
+footprint grown from a valid position beside the selected tree. Random neighboring
+columns extend the footprint, aiming for 24-48 blocks inside a 4-5-block radius.
+Each new column touches an existing patch column and follows at most a one-block
+terrain step; dirt riser faces are coated to connect these surface transitions.
+Attempts with fewer than eight valid ground positions produce no moss. Existing
+plants/blocks and excluded biomes still constrain growth rather than being replaced.
+Trunk coatings are uninterrupted 2-4-block strips beginning at ground positions
+already in the patch, preventing disconnected floating speckles. Attachment treats
+an existing matching moss face as successful, allowing connected growth through
+prior moss. Biome frequencies and eligibility retain the previous settings.
+Validation: assemble and isolated smooth-endstone suite passed, including 24-48-block ground coverage plus trunk moss and flood-fill verification that every generated moss block in the forest fixture belongs to one connected component. Biome exclusions and other block/brewing regressions passed. Log: build/tree-moss-connected-test.log. Production JAR rebuilt.
+
+WIND AUDIO SHELTER FADE (2026-10-14)
+----------------------------------
+Removed WindLoop's immediate underground volume reset. Underground exposure
+still targets silence, but now goes through the existing 0.025-per-tick gain
+ramp, just like indoor attenuation and outdoor recovery. Weak/strong loops stay
+alive during the fade; shelter low-pass filtering continues to ease normally.
+Validation: assemble passed (build/wind-audio-fade.log).
+
+RISING-DOWN / FALLING-UP TILT AND CREATIVE FLIGHT (2026-10-14)
+-----------------------------------------------------------
+Camera tilt now points down during ascent and up during descent, for both normal
+jumping/falling and vertical creative flight. Creative flight bypasses the ground
+neutral check while flight is active; hovering eases to neutral. Existing 2.5-degree
+cap, easing, first-person scope and elytra flag/pose exclusions remain.
+Direction/interpolation/landing/creative ascent/descent/hover/reset checks passed.
+Assemble passed: build/airborne-camera-creative-build.log. No in-game recheck.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply.
+
+PROGRESSIVE FALL CAMERA AND ELASTIC HUD HANDS (2026-10-14)
+--------------------------------------------------------
+Upward fall tilt now grows with downward speed and sustained freefall duration.
+The previous 2.5-degree downward jump tilt remains. Fall multiplier is
+min(6, 1 + max(0, speed/0.42 - 1)*0.5 + fallingTicks/40), multiplied by the
+existing speed ramp. Camera easing remains tick-based with render interpolation,
+and maximum fall tilt is 15 degrees upward. Grounding resets duration; creative
+flight keeps speed-based tilt but does not accumulate uncontrolled-fall duration.
+
+HUD hands/items rise by 0.055 view-space units times the exact sampled camera
+fall multiplier. ElasticHandsMixin eases final local first-person arm, held-item
+and map translation/rotation/scale with the actual elasticOut curve over six ticks.
+Superposed step responses preserve continuity when targets change mid-motion,
+rather than repeatedly restarting an easing curve. Rotation is normalized and
+native residual shear is preserved; arm sleeves, map geometry and stretched
+bow/crossbow transforms retain their normal shape at rest. Native camera aiming
+and outer camera/view-bob transforms are not delayed. Swing, equip, use animations,
+local look sway and airborne offsets all pass through the same pose easing.
+Histories are bounded per visible channel; duplicate rod measurement/render
+submissions at the same game time do not advance easing. World/player and gliding
+changes reset histories. Elytra flag/pose exclusion still clears camera tilt and
+its hand-lift target immediately. Visual Overhaul gates both effects.
+Fishing-rod tip measurement explicitly samples the same eased pose, preserving
+the existing first-person line origin through either mixin wrapping order.
+
+Validation: assemble, prepareDebugLaunch and camera-hands client suite passed.
+Checks include fall speed/duration/cap, neutral recovery, controlled flight,
+elasticOut endpoints/overshoot/retarget continuity/exact settling, rigid rotation,
+native shear preservation, actual camera pitch/shared hand-lift multiplier and
+elytra-pose exclusion. In-world sword/shield swing, bow use, fishing rod measurement,
+two-handed map and normal survival freefall paths ran without renderer errors.
+Swing/bow/map/freefall screenshots visually inspected. Native/Fabric tested;
+Sodium not rerun. Log: build/elastic-hands-final-test.log.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply.
+
+FOUR-TIMES-SLOWER ELASTIC HUD MOTION (2026-10-14)
+-----------------------------------------------
+ElasticMotion duration increased from six to 24 game ticks (0.3 to 1.2 seconds
+at 20 TPS). All elastic HUD hand/item/map motions use this slower response.
+History limit increased from 128 to 512 changes to retain the longer response
+window at the same frame rates. Camera fall strength and easing are unchanged.
+Focused suite timing assertions now match the longer duration. Standalone checks
+passed for duration, slower initial response, elastic overshoot and exact settling,
+including execution against the packaged JAR.
+Full assemble/client test attempt was blocked by unrelated PackRepository.close()
+calls in MenuPreviewLoader (build/elastic-hands-slower-test.log). The existing
+build/libs/naturality-1.0.0.jar was updated only with independently JDK-25-compiled
+ElasticMotion and its unchanged Step record; this is not a successful full rebuild
+of the concurrent workspace changes. Restart Minecraft to apply.
+
+UNIFORM HOTBAR PICKUP AND LARGER CURSOR ITEMS (2026-10-14)
+--------------------------------------------------------
+Hotbar pickup pop now scales the icon equally on X and Y, replacing the native
+horizontal squeeze / vertical stretch. It uses the original vertical pop magnitude
+(1 + remainingPop/10), centered on the 16x16 icon at x+8,y+8, with native timing.
+Mouse-carried inventory/container icons scale uniformly to 120%, centered on the
+cursor. Stack counts/durability decorations keep their native size; slot previews,
+click targets and quick-craft behavior are unchanged. Both render hooks follow
+Visual Overhaul and compose with the existing Confusion slot movement.
+Implementation: HotbarPickupScaleMixin and CarriedItemScaleMixin.
+Validation: full assemble and client-startup passed, including world entry.
+Log: build/gui-item-scale-test.log. These specific animations were not visually
+captured. The full build includes the previous 24-tick elastic hand easing;
+prior menu compilation blockers are now resolved in the concurrent workspace.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply.
+
+CANCELLABLE MENU PREVIEWS AND DISPOSABLE SHUTDOWN (2026-10-14)
+-----------------------------------------------------------
+MenuPreviewLoader prepares saved-region copies, registries and datapack resources
+on a daemon worker. Preview startup no longer calls the native blocking world-open
+flow: it starts a private server, polls readiness across client ticks and connects
+without a client-thread loading loop. Global registry tags/components are installed
+only after the current request is accepted. Creation dimensions are rebound through
+their codec to the preview's own registries, including world-clock references.
+
+Navigating away cancels the pending request; superseded results cannot attach or
+replace the user's destination screen. Seed changes cancel in-flight generation
+and request the latest seed. Ordinary menu controls remain interruptible. The old
+startup-overlay hold was removed; native preset sky covers background preparation.
+The startup check now verifies usable navigation rather than a held loading overlay.
+
+Closing a preview detaches it immediately, skips the Saving screen/server-shutdown
+wait and lets native resource cleanup finish on its own server thread. Preview-only
+hooks suppress world/player/chunk/saved-data/POI/entity persistence, including
+unload and close writes. A stopped preview skips initial chunk preparation. These
+hooks identify registered disposable servers or their temporary directories and
+do not disable normal gameplay saving. UI/menu sound allowances remain in place.
+Fabric's registry compatibility index may be created when constructing a server;
+it is not a preview-world save and is not rewritten on close. Saved worlds remain
+read-only sources copied into disposable temporary directories.
+
+Expanded menu-world suite passed: navigation during preparation, stale-result
+rejection, replacing a seed during server generation, immediate detach/navigation
+on close, and no world/player/region/data saves during shutdown (the constructor's
+registry index remains unchanged). Existing surface/cloud/GPU, menu sound, native
+sky/weather, frozen seed preview and unchanged saved-world fixture checks pass.
+Log: build/menu-cancellable-isolated2.log. Build outputs/cache were isolated from
+concurrent work in other chats: .tools/menu-ui-build and .tools/menu-lifecycle-cache.
+Final ordinary-world client-startup regression and assemble also passed; native
+player/world/chunk saves still run for actual gameplay. Log:
+build/menu-cancellable-final.log. Packaged preview classes match compiled output
+and all save guards are registered; the overlay-holding mixin is absent.
+Artifact: .tools/menu-ui-build/libs/naturality-1.0.0.jar; restart Minecraft to apply.
+
+THREE-TIMES-SLOWER, HALF-STRENGTH ELASTIC HUD MOTION (2026-10-14)
+-------------------------------------------------------------
+Elastic easing now spans 18 ticks (0.9 seconds at 20 TPS), three times the original
+six-tick duration. Oscillation/overshoot amplitude is halved. Damping ramps smoothly
+before the first target crossing to preserve a continuous zero starting point;
+all subsequent elastic deviations from the target are exactly half strength.
+Final arm/item positions and fall-lift strength remain unchanged. The response
+history is capped at 384 changes to retain the new duration at the same frame rates.
+Assemble and camera-hands suite passed, including exact half-amplitude verification,
+endpoint/settling, continuity, camera/hand multiplier, rod measurement and native
+item/map rendering checks. Log: build/elastic-hands-three-times-half-test.log.
+Artifact: build/libs/naturality-1.0.0.jar; restart Minecraft to apply.
+
+WORLD-LOADING SAFETY AND PRODUCTION WARNING AUDIT (2026-10-14)
+------------------------------------------------------------
+Completed the production Eclipse Java audit: zero errors and zero warnings,
+down from four audit errors and 479 warnings. The audit now waits for compiler
+stderr/XML completion in Windows PowerShell and includes generated client models.
+Existing Gradle warning-as-error and editor diagnostic policies remain enabled.
+Mixin-injected field initialization and legacy external SPI contracts have narrow
+suppressions; optional state has explicit nullable contracts. Gson validation
+retains its defensive checks against reflectively populated JSON nulls.
+
+World/menu transitions snapshot nullable world, player, camera, connection and GPU
+resources before use. Missing ceiling-navigation paths, ordinary replacement
+nodes, disappearing villager paths/owners and uninitialized sprites are handled
+without dereferencing them. Preview resource closure always releases the save
+access even when WorldStem.close fails. Sodium compatibility mixins are excluded
+before target resolution when Sodium is absent, removing six startup class warnings.
+No feature consolidation or file restructuring was performed.
+
+Selected loading checks passed: client-startup, chunks, end-save,
+environment-persistence, end-mob-ai, insanity, sky-events and confusion. The End
+checkpoint test retains its two-snapshot limit, pending-generation protection and
+save/reopen assertions, but uses a bounded convergence deadline rather than assuming
+all asynchronous disk writes finish within 600 lockstep ticks.
+Snow passed with assertions that distinguish actual snow-overlay atlas variants
+from ordinary distant-texture variants. Weather conversion fixtures explicitly
+admit each attempted precipitation update; the separate snow-performance suite
+still verifies production backpressure. Config's travel-control count includes
+the existing Navigation Instruments switch. No behavioral assertions were removed.
+Config, wind-shapes, navigation, camera-hands, animal-care, butcher, villager-bread,
+villager-gates, sleep and crystal-visual passed. Menu-world passed cancellation,
+stale-result rejection, disposable shutdown and unchanged saved-world checks.
+Native/Fabric tested; Sodium-present compatibility was not rerun.
+
+Validation logs: build/world-loading-final-regression.log (loading suites passed;
+its subsequent obsolete snow assertion was corrected),
+build/world-loading-final-features.log (corrected snow passed),
+build/world-loading-final-features3.log (weather and snow-performance passed),
+build/world-loading-final-features4.log (remaining ten suites passed),
+build/world-loading-final-menu.log, build/world-loading-java-audit-final.log,
+and build/world-loading-final-build.log. Assemble and prepareDebugLaunch passed.
+Minecraft/Windows/development-account messages outside the production Java audit
+remain, including the native anisotropic-option and missing end_of_frame messages.
+Artifact: build/libs/naturality-1.0.0.jar. Restart Minecraft to apply.

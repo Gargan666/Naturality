@@ -15,6 +15,7 @@ public abstract class SodiumWaterUniformMixin {
         naturality.client.fluid.ProceduralFluids.bind(pass);
         naturality.client.fire.ProceduralFire.bindSodium(pass);
         naturality.client.weather.WindRendering.bind(pass);
+        naturality.client.menu.MenuFog.bind(pass);
         naturality.client.fluid.WaterVisuals.bind(pass);
         naturality.client.fluid.WaterVisuals.bindScene(pass);
     }

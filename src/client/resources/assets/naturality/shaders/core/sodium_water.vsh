@@ -8,6 +8,7 @@
 #include <naturality:fire_uniforms.glsl>
 #include <naturality:water.glsl>
 #include <naturality:foliage_wind.glsl>
+#include <naturality:menu_geometry.glsl>
 
 uniform isamplerBuffer u_SectionTimeInfo;
 #ifdef VULKAN
@@ -90,7 +91,11 @@ void main() {
     int windTag=(fluidSprite || naturalityFireKind>=0)?255:int(round(_vert_color.a*255.0));
     // Preserve the bell's lighting-coordinate marker for the shared fragment shader.
     if (windTag == 242) naturalityShade.a = 242.0 / 255.0;
-    position.xz+=naturality_wind_offset(_vert_position,naturalitySectionOrigin,windTag);
+    float windDetail = naturality_wind_detail(position);
+    if (windDetail > 0.0)
+        position.xz+=naturality_wind_offset(_vert_position,naturalitySectionOrigin,windTag) * windDetail;
+    position.xz += naturality_menu_extension(_vert_position + naturalitySectionOrigin);
+    position.y -= naturality_menu_wall_drop(_vert_position + naturalitySectionOrigin);
     gl_Position=u_ProjectionMatrix*u_ModelViewMatrix*vec4(position,1.0);
     bool anchoredCrop=windTag>=120 && windTag<=127;
     if(windTag==192 || (windTag>=128 && windTag<=159 && !anchoredCrop))

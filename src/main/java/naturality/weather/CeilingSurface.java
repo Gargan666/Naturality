@@ -18,7 +18,7 @@ public record CeilingSurface(double x, double feet, double z, float cost) {
         double half = mob.getBbWidth() / 2.0;
         return new AABB(x - half, feet - mob.getBbHeight(), z - half, x + half, feet, z + half).deflate(1e-5);
     }
-    public static CeilingSurface find(CollisionGetter level, Mob mob, double x, double z,
+    public static @org.jspecify.annotations.Nullable CeilingSurface find(CollisionGetter level, Mob mob, double x, double z,
             double preferredFeet, double minFeet, double maxFeet) {
         CeilingSurface best = null;
         var context = new PathfindingContext(level, mob);

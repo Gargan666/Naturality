@@ -12,6 +12,7 @@ public final class SkyEvents {
     private static final Map<ServerLevel, Map<SkyEventType, SkyEventCycle>> STATES = new WeakHashMap<>();
     private static final Map<ServerLevel, RainbowCycle> RAINBOWS = new WeakHashMap<>();
     private static final Map<ServerLevel, ProximityCycle> PROXIMITIES = new WeakHashMap<>();
+    private static final Map<ServerLevel, BloodMoonCycle> BLOOD_MOONS = new WeakHashMap<>();
     public static ProximityCycle proximityCycle(ServerLevel level) { return PROXIMITIES.get(level); }
     private SkyEvents() {}
     public static Map<String, Map<String, SkyEventSettings>> defaults() {
@@ -30,8 +31,11 @@ public final class SkyEvents {
         String id = level.dimension().identifier().toString();
         if (!SkyEventType.pool(id).contains(type)) return 0;
         if (type == SkyEventType.RAINBOW && (isNight(level) || !RainbowCycle.validRain(rainfall(level)))) return 0;
-        var settings = SkyEventWorldData.get(level.getServer()).settings(level, type);
+        var settings = SkyEventWorldData.get(java.util.Objects.requireNonNull(level.getServer())).settings(level, type);
         if (settings.override) return Math.clamp(settings.strength, 0, type.maxStrength());
+        if (type == SkyEventType.BLOOD_MOON) {
+            var cycle = BLOOD_MOONS.get(level); return cycle == null ? 0 : cycle.strength();
+        }
         if (type == SkyEventType.PROXIMITY) {
             var cycle = PROXIMITIES.get(level);
             return cycle == null ? 0 : cycle.strength();
@@ -43,11 +47,11 @@ public final class SkyEvents {
         var cycles = STATES.get(level);
         return cycles == null || !cycles.containsKey(type) ? 0 : cycles.get(type).strength();
     }
-    static SkyEventCycle cycle(ServerLevel level, SkyEventType type) {
+    static @org.jspecify.annotations.Nullable SkyEventCycle cycle(ServerLevel level, SkyEventType type) {
         var cycles = STATES.get(level);
         return cycles == null ? null : cycles.get(type);
     }
-    static RainbowCycle rainbowCycle(ServerLevel level) { return RAINBOWS.get(level); }
+    static @org.jspecify.annotations.Nullable RainbowCycle rainbowCycle(ServerLevel level) { return RAINBOWS.get(level); }
     public static float rainfall(ServerLevel level) {
         var weather = WeatherSystem.state(level);
         return weather == null ? level.getRainLevel(1F) * 10F : weather.rain();
@@ -66,6 +70,9 @@ public final class SkyEvents {
                         long seed = level.getSeed() ^ level.getGameTime() ^ type.id.hashCode();
                         var cycle=type==SkyEventType.END_FLASHES ? SkyEventCycle.endFlashes(seed) : new SkyEventCycle(seed);
                         cycle.restore(saved);cycles.put(type,cycle);
+                    } else if(type==SkyEventType.BLOOD_MOON) {
+                        var cycle = new BloodMoonCycle(level.getSeed() ^ type.id.hashCode());
+                        cycle.restore(saved); BLOOD_MOONS.put(level, cycle);
                     } else if(type==SkyEventType.PROXIMITY) {
                         var cycle = new ProximityCycle(level.getSeed() ^ type.id.hashCode());
                         cycle.restore(saved); PROXIMITIES.put(level, cycle);
@@ -77,30 +84,41 @@ public final class SkyEvents {
                 AuroraEvents.restore(level);
             }
         });
-        ServerLifecycleEvents.SERVER_STOPPED.register(_ -> { STATES.clear(); RAINBOWS.clear(); PROXIMITIES.clear(); AuroraEvents.clear(); });
+        ServerLifecycleEvents.SERVER_STOPPED.register(_ -> { STATES.clear(); RAINBOWS.clear(); PROXIMITIES.clear(); BLOOD_MOONS.clear(); AuroraEvents.clear(); });
         ServerPlayConnectionEvents.JOIN.register((handler, _, server) -> {
             for (var level : server.getAllLevels()) send(handler.player, level);
         });
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             for (var level : server.getAllLevels()) {
+                if (naturality.weather.PreviewEnvironment.frozen(server)) {
+                    if (server.getTickCount() % 10 == 0)
+                        for (var player : server.getPlayerList().getPlayers()) send(player, level);
+                    continue;
+                }
+                int startMultiplier = naturality.weather.PreviewEnvironment.rate(server);
                 var pool = SkyEventType.pool(level.dimension().identifier().toString());
                 if (pool.isEmpty()) continue;
+                if (pool.contains(SkyEventType.BLOOD_MOON)) {
+                    var cycle = BLOOD_MOONS.computeIfAbsent(level, _ -> new BloodMoonCycle(level.getSeed() ^ SkyEventType.BLOOD_MOON.id.hashCode()));
+                    cycle.tick(level.getGameRules().get(GameRules.ADVANCE_WEATHER), isNight(level), startMultiplier);
+                    naturality.weather.EnvironmentWorldData.get(server).write(key(level, SkyEventType.BLOOD_MOON), cycle.snapshot());
+                }
                 if (pool.contains(SkyEventType.PROXIMITY)) {
                     var cycle = PROXIMITIES.computeIfAbsent(level, _ -> new ProximityCycle(level.getSeed()));
-                    cycle.tick(level.getGameRules().get(GameRules.ADVANCE_WEATHER), isNight(level));
+                    cycle.tick(level.getGameRules().get(GameRules.ADVANCE_WEATHER), isNight(level), startMultiplier);
                     naturality.weather.EnvironmentWorldData.get(server).write(key(level, SkyEventType.PROXIMITY), cycle.snapshot());
                 }
                 if (pool.contains(SkyEventType.AURORA_BOREALIS) || pool.contains(SkyEventType.END_AURORA)) AuroraEvents.tick(level);
                 if (pool.contains(SkyEventType.RAINBOW)) RAINBOWS.computeIfAbsent(level, _ -> new RainbowCycle(
                     level.getSeed() ^ level.getGameTime() ^ SkyEventType.RAINBOW.id.hashCode()))
-                    .tick(level.getGameRules().get(GameRules.ADVANCE_WEATHER), !isNight(level), rainfall(level));
+                    .tick(level.getGameRules().get(GameRules.ADVANCE_WEATHER), !isNight(level), rainfall(level), startMultiplier);
                 var cycles = STATES.computeIfAbsent(level, _ -> new EnumMap<>(SkyEventType.class));
                 for (var type : pool) if (type == SkyEventType.METEOR_SHOWER || type == SkyEventType.END_FLASHES) {
                     long seed = level.getSeed() ^ level.getGameTime() ^ type.id.hashCode();
                     cycles.computeIfAbsent(type, _ -> type == SkyEventType.END_FLASHES
                         ? SkyEventCycle.endFlashes(seed) : new SkyEventCycle(seed))
                         .tick(type == SkyEventType.END_FLASHES || level.getGameRules().get(GameRules.ADVANCE_WEATHER),
-                            type == SkyEventType.END_FLASHES || isNight(level));
+                            type == SkyEventType.END_FLASHES || isNight(level), startMultiplier);
                 }
                 if (server.getTickCount() % 10 == 0)
                     for (var player : server.getPlayerList().getPlayers()) send(player, level);
@@ -121,7 +139,7 @@ public final class SkyEvents {
         for (var type : SkyEventType.pool(level.dimension().identifier().toString())) {
             float value = strength(level, type);
             if ((type == SkyEventType.AURORA_BOREALIS || type == SkyEventType.END_AURORA)
-                    && !SkyEventWorldData.get(level.getServer()).settings(level, type).override)
+                    && !SkyEventWorldData.get(java.util.Objects.requireNonNull(level.getServer())).settings(level, type).override)
                 value = player.level() == level ? AuroraEvents.strength(level, player.blockPosition()) : 0;
             var proximity = PROXIMITIES.get(level);
             ServerPlayNetworking.send(player, new SkyEventPayload(level.dimension().identifier(), type.id, value,

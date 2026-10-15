@@ -22,13 +22,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 /** Adds butcher food to vanilla temptation, retaining each animal goal priority and speed. */
 @Mixin(TemptGoal.class)
 public abstract class ButcherTemptGoalMixin {
-    @Shadow protected Mob mob;
+    @SuppressWarnings("null") @Shadow protected Mob mob;
     @Shadow protected double speedModifier;
-    @Shadow private Predicate<ItemStack> items;
+    @SuppressWarnings("null") @Shadow private Predicate<ItemStack> items;
     @Shadow private int calmDown;
     @Shadow private boolean isRunning;
     @Shadow private double stopDistance;
-    @Unique private Villager naturality$butcher;
+    @Unique private @org.jspecify.annotations.Nullable Villager naturality$butcher;
 
     @Inject(method = "canUse", at = @At("RETURN"), cancellable = true)
     private void naturality$findButcher(CallbackInfoReturnable<Boolean> cir) {
@@ -36,13 +36,14 @@ public abstract class ButcherTemptGoalMixin {
         if (cir.getReturnValueZ() || calmDown > 0 || !(mob instanceof Animal animal)
                 || !ButcherWork.isLivestock(animal)) return;
         double range = mob.getAttributeValue(Attributes.TEMPT_RANGE);
-        naturality$butcher = mob.level().getEntitiesOfClass(Villager.class, mob.getBoundingBox().inflate(range),
+        var candidate = mob.level().getEntitiesOfClass(Villager.class, mob.getBoundingBox().inflate(range),
             villager -> villager.isAlive() && !villager.isBaby() && !villager.isTrading()
                 && villager.getVillagerData().profession().is(VillagerProfession.BUTCHER)
                 && !((VillagerWorkVisuals)villager).naturality$isDisplayingTrade()
                 && mob.distanceToSqr(villager) <= range * range && !mob.hasPassenger(villager)
                 && items.test(villager.getMainHandItem()))
-            .stream().min(Comparator.comparingDouble(mob::distanceToSqr)).orElse(null);
+            .stream().min(Comparator.comparingDouble(mob::distanceToSqr));
+        naturality$butcher = candidate.isPresent() ? candidate.orElseThrow() : null;
         if (naturality$butcher != null) cir.setReturnValue(true);
     }
 
@@ -61,10 +62,11 @@ public abstract class ButcherTemptGoalMixin {
 
     @Inject(method = "tick", at = @At("HEAD"), cancellable = true)
     private void naturality$followButcher(CallbackInfo ci) {
-        if (naturality$butcher == null) return;
-        mob.getLookControl().setLookAt(naturality$butcher, mob.getMaxHeadYRot() + 20, mob.getMaxHeadXRot());
-        if (mob.distanceToSqr(naturality$butcher) < stopDistance * stopDistance) mob.getNavigation().stop();
-        else mob.getNavigation().moveTo(naturality$butcher, speedModifier);
+        var butcher = naturality$butcher;
+        if (butcher == null) return;
+        mob.getLookControl().setLookAt(butcher, mob.getMaxHeadYRot() + 20, mob.getMaxHeadXRot());
+        if (mob.distanceToSqr(butcher) < stopDistance * stopDistance) mob.getNavigation().stop();
+        else mob.getNavigation().moveTo(butcher, speedModifier);
         ci.cancel();
     }
 }

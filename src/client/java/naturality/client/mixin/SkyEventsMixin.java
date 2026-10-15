@@ -21,11 +21,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(SkyRenderer.class)
 public abstract class SkyEventsMixin {
     @org.spongepowered.asm.mixin.Shadow @org.spongepowered.asm.mixin.Final
-    private com.mojang.renderpearl.api.buffers.GpuBuffer endSkyBuffer;
+    @SuppressWarnings("null") private com.mojang.renderpearl.api.buffers.GpuBuffer endSkyBuffer;
     @org.spongepowered.asm.mixin.Shadow @org.spongepowered.asm.mixin.Final
-    private net.minecraft.client.renderer.texture.AbstractTexture endSkyTexture;
+    @SuppressWarnings("null") private net.minecraft.client.renderer.texture.AbstractTexture endSkyTexture;
     @org.spongepowered.asm.mixin.Shadow @org.spongepowered.asm.mixin.Final
-    private com.mojang.renderpearl.api.buffers.GpuBuffer starBuffer;
+    @SuppressWarnings("null") private com.mojang.renderpearl.api.buffers.GpuBuffer starBuffer;
     @org.spongepowered.asm.mixin.Shadow private int starIndexCount;
 
     @Inject(method = "renderEndSky", at = @At("HEAD"), cancellable = true)
@@ -50,18 +50,20 @@ public abstract class SkyEventsMixin {
             net.minecraft.client.renderer.state.level.SkyRenderState state, CallbackInfo ci) {
         EndFlashes.beginFrame();
         var client = Minecraft.getInstance();
-        naturality$endEvent = naturality.config.Feature.END_FLASHES.enabled() && state.skybox == DimensionType.Skybox.END && client.level != null
-            && client.level.dimension().equals(net.minecraft.world.level.Level.END);
-        if (naturality$endEvent) {
+        var level = client.level;
+        naturality$endEvent = naturality.config.Feature.END_FLASHES.enabled() && state.skybox == DimensionType.Skybox.END && level != null
+            && level.dimension().equals(net.minecraft.world.level.Level.END);
+        if (naturality$endEvent && level != null) {
             float partial = client.getDeltaTracker().getGameTimeDeltaPartialTick(false);
-            naturality$endDarkness = HardcoreDarkness.sky(client.level,
+            naturality$endDarkness = HardcoreDarkness.sky(level,
                 client.gameRenderer.mainCamera(), partial);
         }
         // Only Overworld sky extraction supplies skyColor; fresh End frames leave it null.
         naturality$rainbowSkyBlend = 0;
         if (state.skybox != DimensionType.Skybox.OVERWORLD) return;
-        if (naturality$proximity == null) naturality$proximity = new naturality.client.sky.ProximityRenderer();
-        naturality$proximity.prepare();
+        var proximity = naturality$proximity;
+        if (proximity == null) { proximity = new ProximityRenderer(); naturality$proximity = proximity; }
+        proximity.prepare();
         var effect = naturality$meteors;
         if (effect == null) { effect = new MeteorShower(); naturality$meteors = effect; }
         effect.prepare();
@@ -87,6 +89,11 @@ public abstract class SkyEventsMixin {
             EndFlashes.flashDrawn();
         }
     }
+    @Inject(method = "renderSunMoonAndStars", at = @At("HEAD"))
+    private void naturality$planetBelowMoon(RenderPass pass, PoseStack pose, float sunAngle, float moonAngle,
+            float starAngle, MoonPhase moonPhase, float rainBrightness, float starBrightness, CallbackInfo ci) {
+        if (naturality$proximity != null) naturality$proximity.render(pass, rainBrightness, starBrightness);
+    }
     @Inject(method = "renderSunMoonAndStars", at = @At("TAIL"))
     private void naturality$events(RenderPass pass, PoseStack pose, float sunAngle, float moonAngle,
             float starAngle, MoonPhase moonPhase, float rainBrightness, float starBrightness, CallbackInfo ci) {
@@ -94,7 +101,6 @@ public abstract class SkyEventsMixin {
         if (effect == null) { effect = new MeteorShower(); naturality$meteors = effect; }
         effect.render(pass, rainBrightness);
         if (naturality$rainbow != null) naturality$rainbow.render(pass, sunAngle, naturality$rainbowSkyBlend);
-        if (naturality$proximity != null) naturality$proximity.render(pass, rainBrightness, starBrightness);
     }
     @Inject(method = "close", at = @At("HEAD"))
     private void naturality$close(CallbackInfo ci) {

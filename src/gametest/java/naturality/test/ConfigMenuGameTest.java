@@ -86,7 +86,7 @@ public final class ConfigMenuGameTest implements FabricClientGameTest {
             if (resets(client.gui.screen()) != 6) throw new AssertionError("Weather rules must include simulation and snow accumulation");
             client.gui.screen().onClose();
             press(client.gui.screen(), "Movement and Portal Travel");
-            if (resets(client.gui.screen()) != 4) throw new AssertionError("Travel rules must include wind, elytra and both portal settings");
+            if (resets(client.gui.screen()) != 5) throw new AssertionError("Travel rules must include wind, elytra, navigation instruments and both portal settings");
             client.gui.screen().onClose();
             client.gui.screen().onClose();
             press(client.gui.screen(), "Audio");

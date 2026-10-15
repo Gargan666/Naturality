@@ -21,8 +21,9 @@ public abstract class VillagerHeldToolPoseMixin {
     private void naturality$workToolPose(HoldingEntityRenderState state, PoseStack poseStack, CallbackInfo ci) {
         if (state instanceof VillagerRenderState villager && ((VillagerVisualState)state).naturality$toolPose()) {
             var visual = (VillagerVisualState)villager;
-            boolean swordPose = visual.naturality$owner() != null
-                && visual.naturality$owner().getMainHandItem().is(net.minecraft.tags.ItemTags.SWORDS);
+            var owner = visual.naturality$owner();
+            boolean swordPose = owner != null
+                && owner.getMainHandItem().is(net.minecraft.tags.ItemTags.SWORDS);
             if (visual.naturality$fishingRodPose() || swordPose) {
                 // Remove the held model's baked 55-degree sprite rotation.
                 // Keep the crossed-arm orientation and the sprite plane
@@ -51,12 +52,12 @@ public abstract class VillagerHeldToolPoseMixin {
                             visual.naturality$setRodTipValid(true);
                         }
                     });
-                    if (visual.naturality$rodTipValid() && visual.naturality$owner() != null) {
+                    if (visual.naturality$rodTipValid() && owner != null) {
                         Vector3f point = visual.naturality$rodTip();
                         // Generated sprite extents include the transparent border
                         // beyond the final rod pixel.
                         point.sub(new Vector3f(alongRod).mul(0.075F));
-                        ((VillagerWorkVisuals)visual.naturality$owner()).naturality$setRenderedRodTip(
+                        ((VillagerWorkVisuals)owner).naturality$setRenderedRodTip(
                             new Vec3(villager.x + point.x, villager.y + point.y, villager.z + point.z));
                     }
                 }

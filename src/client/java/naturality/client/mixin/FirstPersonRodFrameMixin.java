@@ -22,8 +22,9 @@ public abstract class FirstPersonRodFrameMixin {
         FirstPersonRodTip.worldTip = null;
         naturality.client.villager.PlayerRodTips.clear();
         var client = Minecraft.getInstance();
-        if (client.player == null || (!client.player.getMainHandItem().is(net.minecraft.world.item.Items.FISHING_ROD)
-                && !client.player.getOffhandItem().is(net.minecraft.world.item.Items.FISHING_ROD))) return;
+        var localPlayer = client.player;
+        if (localPlayer == null || (!localPlayer.getMainHandItem().is(net.minecraft.world.item.Items.FISHING_ROD)
+                && !localPlayer.getOffhandItem().is(net.minecraft.world.item.Items.FISHING_ROD))) return;
         var renderer = client.gameRenderer;
         var frame = renderer.gameRenderState();
         var player = frame.levelRenderState.playerRenderState;

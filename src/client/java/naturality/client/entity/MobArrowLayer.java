@@ -22,7 +22,7 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
 /** Vanilla arrow placement extended to arbitrary, hierarchically animated mob models. */
-public final class MobArrowLayer<S extends LivingEntityRenderState, M extends EntityModel<? super S>> extends RenderLayer<S, M> {
+public final class MobArrowLayer<S extends @org.jspecify.annotations.NonNull LivingEntityRenderState, M extends @org.jspecify.annotations.NonNull EntityModel<? super S>> extends RenderLayer<S, M> {
     private final ArrowModel arrow;
     private final ArrowRenderState arrowState = new ArrowRenderState();
 

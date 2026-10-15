@@ -100,8 +100,10 @@ public final class FallImpactDroplets {
                     spray.setParticleSpeed(side.getStepX()*spraySpeed,
                         (-.035-random.nextDouble()*.025)*speedScale*(lava?1:3),side.getStepZ()*spraySpeed);
                 }
-                if(elapsedTicks>0 && spray instanceof BorderSplashParticle splash)
-                    splash.naturality$warmStart(elapsedTicks);
+                if(spray instanceof BorderSplashParticle splash) {
+                    splash.naturality$followStream();
+                    if(elapsedTicks>0)splash.naturality$warmStart(elapsedTicks);
+                }
     }
     public static void spawn(Minecraft client,boolean lava,Direction outward,double x,double y,double z) {
         var level = client.level;

@@ -1,0 +1,4 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": { "layer0": "naturality:item/maddened_zombie_spawn_egg" }
+}

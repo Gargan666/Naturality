@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
 
 @Mixin(MoveControl.class)
 public abstract class EndGravityMoveControlMixin {
-    @Shadow @Final protected Mob mob;
+    @SuppressWarnings("null") @Shadow @Final protected Mob mob;
     @ModifyVariable(method="tick",at=@At("STORE"),name="yd")
     private double naturality$jumpAwayFromCeiling(double delta) {
         return mob.getNavigation() instanceof CeilingPathNavigation?-delta:delta;

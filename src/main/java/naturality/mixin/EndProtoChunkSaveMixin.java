@@ -27,10 +27,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 /** Vanilla eagerly saves full chunks, but leaves the generation halo until unload. */
 @Mixin(ChunkMap.class)
 public abstract class EndProtoChunkSaveMixin {
-    @Shadow @Final private ServerLevel level;
-    @Shadow private volatile Long2ObjectLinkedOpenHashMap<ChunkHolder> visibleChunkMap;
-    @Shadow @Final private AtomicInteger activeChunkWrites;
-    @Shadow @Final private Long2LongMap nextChunkSaveTime;
+    @SuppressWarnings("null") @Shadow @Final private ServerLevel level;
+    @SuppressWarnings("null") @Shadow private volatile Long2ObjectLinkedOpenHashMap<ChunkHolder> visibleChunkMap;
+    @SuppressWarnings("null") @Shadow @Final private AtomicInteger activeChunkWrites;
+    @SuppressWarnings("null") @Shadow @Final private Long2LongMap nextChunkSaveTime;
     @Shadow private boolean save(ChunkAccess chunk) { throw new AssertionError(); }
     @Unique private Iterator<ChunkHolder> naturality$saveCandidates = java.util.Collections.emptyIterator();
 
@@ -46,7 +46,8 @@ public abstract class EndProtoChunkSaveMixin {
 
     @Inject(method = "saveChunksEagerly", at = @At("TAIL"))
     private void naturality$checkpointEndHalo(BooleanSupplier haveTime, CallbackInfo ci) {
-        if (!level.dimension().equals(Level.END) || level.noSave() || !level.getServer().isRunning()
+        var server = level.getServer();
+        if (!level.dimension().equals(Level.END) || level.noSave() || server == null || !server.isRunning()
                 || activeChunkWrites.get() >= 16 || !haveTime.getAsBoolean()) return;
         // visibleChunkMap is a published snapshot: retain its iterator across ticks,
         // then reject holders no longer present. No full-map allocation or chunk loads.

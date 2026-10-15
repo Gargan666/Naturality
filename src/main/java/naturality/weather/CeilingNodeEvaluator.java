@@ -20,9 +20,10 @@ public final class CeilingNodeEvaluator extends NodeEvaluator {
         int x = Mth.floor(surface.x() - entityWidth * .5);
         int y = Mth.floor(surface.feet() - mob.getBbHeight() + 1e-5);
         int z = Mth.floor(surface.z() - entityDepth * .5);
-        return (CeilingNode) nodes.computeIfAbsent(Node.createHash(x, y, z), key -> new CeilingNode(x, y, z, surface));
+        return (CeilingNode) nodes.computeIfAbsent(Node.createHash(x, y, z), _ -> new CeilingNode(x, y, z, surface));
     }
-    @Override public Node getStart() {
+    // Native PathFinder explicitly accepts null when no starting footing exists.
+    @SuppressWarnings("null") @Override public @org.jspecify.annotations.Nullable Node getStart() {
         var box = mob.getBoundingBox();
         var actual = new CeilingSurface(mob.getX(), box.maxY, mob.getZ(), 0);
         CeilingSurface best = null;

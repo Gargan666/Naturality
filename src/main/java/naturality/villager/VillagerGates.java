@@ -36,7 +36,7 @@ public final class VillagerGates {
                 Set<GlobalPos> doors = remembered.orElseGet(HashSet::new);
                 Node from = path == null || path.notStarted() ? null : path.getPreviousNode();
                 Node to = path == null || path.isDone() ? null : path.getNextNode();
-                if (path != null && !path.notStarted() && !path.isDone()) {
+                if (from != null && to != null) {
                     boolean touched = open(level, body, from.asBlockPos(), true, doors);
                     touched |= open(level, body, to.asBlockPos(), false, doors);
                     if (touched) body.getBrain().setMemory(MemoryModuleType.DOORS_TO_CLOSE, doors);

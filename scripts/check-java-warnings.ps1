@@ -23,10 +23,14 @@ try {
     & ./gradlew.bat @gradleArgs
     if ($LASTEXITCODE -ne 0) { throw 'Could not prepare the Java audit classpath.' }
     $classpath = Get-Content -Raw 'build/java-audit/classpath.txt'
+    # Windows PowerShell treats compiler stderr as terminating errors under Stop.
+    # Let the compiler finish its XML report, then inspect its exit code and diagnostics.
+    $ErrorActionPreference = 'Continue'
     & $java -jar $CompilerJar -25 -proc:none -d none -classpath $classpath `
         -properties '.settings/org.eclipse.jdt.core.prefs' -log 'build/java-audit/diagnostics.xml' `
         src/main/java src/client/java *> 'build/java-audit/diagnostics.log'
     $compilerExit = $LASTEXITCODE
+    $ErrorActionPreference = 'Stop'
     [xml]$report = Get-Content -Raw 'build/java-audit/diagnostics.xml'
     $problems = @($report.compiler.sources.source.problems.problem | Where-Object { $_ -and $_.severity -in 'ERROR', 'WARNING' })
     if ($compilerExit -ne 0 -or $problems.Count -gt 0) {

@@ -37,7 +37,7 @@ public final class VillagerSnowShelter {
         if (!free || !body.isAlive() || body.isSleeping() || body.isTrading() || !snowing(level, body)) {
             if (destination != null) {
                 brain.getMemory(MemoryModuleType.WALK_TARGET).filter(target ->
-                    target.getTarget().currentBlockPosition().equals(destination)).ifPresent(target -> {
+                    target.getTarget().currentBlockPosition().equals(destination)).ifPresent(_ -> {
                         brain.eraseMemory(MemoryModuleType.WALK_TARGET);
                         body.getNavigation().stop();
                     });
@@ -48,7 +48,7 @@ public final class VillagerSnowShelter {
         if (covered(level, body.blockPosition())) {
             // Indoor social movement is fine; reject a target which leads back into the snow.
             brain.getMemory(MemoryModuleType.WALK_TARGET).filter(target ->
-                !covered(level, target.getTarget().currentBlockPosition())).ifPresent(target -> {
+                !covered(level, target.getTarget().currentBlockPosition())).ifPresent(_ -> {
                     brain.eraseMemory(MemoryModuleType.WALK_TARGET);
                     brain.eraseMemory(MemoryModuleType.PATH);
                     body.getNavigation().stop();
@@ -59,9 +59,10 @@ public final class VillagerSnowShelter {
         if (destination != null && (!covered(level, destination) || time >= nextSearch)) destination = null;
         if (destination == null && time >= nextSearch) {
             nextSearch = time + 100;
-            var home = brain.getMemory(MemoryModuleType.HOME)
+            var rememberedHome = brain.getMemory(MemoryModuleType.HOME)
                 .filter(site -> site.dimension().equals(level.dimension()))
-                .map(site -> site.pos()).orElse(null);
+                .map(site -> site.pos());
+            var home = rememberedHome.isPresent() ? rememberedHome.orElseThrow() : null;
             if (home != null && home.distSqr(body.blockPosition()) <= 48 * 48) {
                 for (var pos : BlockPos.betweenClosed(home.offset(-2, -1, -2), home.offset(2, 1, 2))) {
                     if (reachable(level, body, pos)) { destination = pos.immutable(); break; }

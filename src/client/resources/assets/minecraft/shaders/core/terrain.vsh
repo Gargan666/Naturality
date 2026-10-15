@@ -6,6 +6,7 @@
 #include <minecraft:projection.glsl>
 #include <minecraft:sample_lightmap.glsl>
 #include <minecraft:terrainglobals.glsl>
+#include <naturality:menu_geometry.glsl>
 #include <naturality:fluid_uniforms.glsl>
 #include <naturality:fire_uniforms.glsl>
 #include <naturality:water.glsl>
@@ -59,8 +60,8 @@ void main() {
     bool attachedLeaf = foliageTag >= 160 && foliageTag <= 191;
     bool supportedVine = foliageTag >= 102 && foliageTag <= 117;
     bool connectedPlant = foliageTag == 100 || foliageTag == 101 || supportedVine;
-    bool windFoliage = foliageTag <= 63 || connectedPlant || anchoredPlant || attachedLeaf || snowLeafOverlay
-        || (foliageTag >= 201 && foliageTag <= 240);
+    bool windFoliage = foliageTag == 118 || foliageTag <= 63 || connectedPlant || anchoredPlant || attachedLeaf || snowLeafOverlay
+        || (foliageTag >= 193 && foliageTag <= 240);
     gl_Position = ProjMat * ModelViewMat * vec4(pos, 1.0);
 
     sphericalVertexDistance = fog_spherical_distance(pos);
@@ -116,11 +117,15 @@ void main() {
     }
 
     if (fallingFluidTail) naturalityFlow.z = -1.0;
-    if (windFoliage) {
-        vec2 offset = naturality_wind_offset(Position, ChunkPosition, windTag);
+    float windDetail = naturality_wind_detail(pos);
+    if (windFoliage && windDetail > 0.0) {
+        vec2 offset = naturality_wind_offset(Position, ChunkPosition, windTag) * windDetail;
         pos.xz += offset;
         gl_Position = ProjMat * ModelViewMat * vec4(pos, 1.0);
     }
+    pos.xz += naturality_menu_extension(Position + ChunkPosition);
+    pos.y -= naturality_menu_wall_drop(Position + ChunkPosition);
+    gl_Position = ProjMat * ModelViewMat * vec4(pos, 1.0);
     if (snowSurface) gl_Position.z += gl_Position.w * 0.000001;
     const float chunkFullyVisibleRange = 16.0;
     float dist = length(pos);

@@ -40,7 +40,8 @@ public abstract class TerrainParticlePixelMixin extends SingleQuadParticle imple
         if (naturality$sand) {
             int color = ((net.minecraft.world.level.block.FallingBlock) state.getBlock()).getDustColor(state, level, pos);
             setColor((color >> 16 & 255) / 255F, (color >> 8 & 255) / 255F, (color & 255) / 255F);
-            setSpriteFromAge(naturality.client.particle.SandParticleSprites.sprites);
+            var sprites = naturality.client.particle.SandParticleSprites.sprites;
+            if (sprites != null) setSpriteFromAge(sprites);
             quadSize *= 1.35F;
             naturality$rotationSpeed = (random.nextFloat() - 0.5F) * 0.1F;
             roll = random.nextFloat() * (float) (Math.PI * 2);
@@ -93,7 +94,8 @@ public abstract class TerrainParticlePixelMixin extends SingleQuadParticle imple
     @Override public void tick() {
         super.tick();
         if (naturality$sand) {
-            setSpriteFromAge(naturality.client.particle.SandParticleSprites.sprites);
+            var sprites = naturality.client.particle.SandParticleSprites.sprites;
+            if (sprites != null) setSpriteFromAge(sprites);
             oRoll = roll;
             roll += (float) Math.PI * naturality$rotationSpeed * 2F;
             if (onGround) oRoll = roll = 0;

@@ -8,13 +8,14 @@ import net.minecraft.world.entity.animal.happyghast.HappyGhast;
 
 /** Whole-model movement lean, including the vanilla harness and ropes layers. */
 public final class LeaningHappyGhastRenderer extends HappyGhastRenderer {
-    public static final class State extends HappyGhastRenderState { public float leanPitch, leanRoll; public GhastCrashPose crash; }
+    public static final class State extends HappyGhastRenderState implements GhastTentacleState { public float leanPitch, leanRoll; public GhastCrashPose crash; public GhastTentaclePhysics.Pose tentacles; public GhastTentaclePhysics.Pose naturality$tentacles() { return tentacles; } }
     public LeaningHappyGhastRenderer(EntityRendererProvider.Context context) { super(context); }
     @Override public State createRenderState() { return new State(); }
     @Override public void extractRenderState(HappyGhast entity, HappyGhastRenderState state, float partial) {
         super.extractRenderState(entity, state, partial);
         ((State)state).crash = GhastCrashPose.extract(entity,partial);
-        if (((State)state).crash != null) { state.deathTime = 0; state.hasRedOverlay = false; }
+        ((State)state).tentacles = GhastTentaclePhysics.extract(entity,partial,((State)state).crash);
+        if (((State)state).crash != null) { state.deathTime = 0; state.hasRedOverlay = entity.hurtTime > 0 || ((naturality.ghast.GhastCrashBody)entity).naturality$impactTicks() >= 0; }
         var lean = GhastSquash.lean(entity, state.bodyRot, partial);
         ((State)state).leanPitch = lean.x;
         ((State)state).leanRoll = lean.y;

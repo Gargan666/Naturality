@@ -8,6 +8,7 @@ import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 import static naturality.config.Feature.*;
 
 /** Remove structural changes before vanilla builds block-state and entity-data tables. */
+@SuppressWarnings("null") // Mixin's SPI predates null contracts; null lists select its defaults.
 public final class FeatureMixinPlugin implements IMixinConfigPlugin {
     @Override public void onLoad(String mixinPackage) { FeatureConfig.get(); }
     @Override public String getRefMapperConfig() { return null; }
@@ -18,8 +19,24 @@ public final class FeatureMixinPlugin implements IMixinConfigPlugin {
 
     @Override public boolean shouldApplyMixin(String target, String mixin) {
         String name = mixin.substring(mixin.lastIndexOf('.') + 1);
+        // Optional renderer targets must never be resolved when Sodium is absent.
+        if (name.startsWith("Sodium") && !net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("sodium")) return false;
         boolean client = mixin.startsWith("naturality.client.");
+        if (name.startsWith("MenuPreview")) return true;
+        if (Set.of("TitleLogoMixin", "TitleWorldMixin", "MenuPanoramaMixin", "MenuPreviewScreenMixin",
+                "MenuPreviewCameraMixin", "MenuPreviewHudMixin", "MenuPreviewOptionsMixin", "MenuPreviewVisibilityMixin",
+                "MenuPreviewFogMixin", "MenuPreviewServerMixin", "MenuSkyProjectionMixin",
+                "MenuSurfacePacketMixin", "MenuSurfaceChunkMixin", "MenuStartupConnectionMixin",
+                "MenuPreviewEntityMixin", "MenuWorldSelectionMixin", "MenuCreateWorldMixin", "MenuCreateWorldAccess",
+                "MenuPreviewPlayerMixin", "MenuPreviewSoundMixin", "MenuPreviewMobMixin", "MenuPreviewGenerationMobMixin", "MenuPresetSkyMixin").contains(name)) return true;
+        if (name.equals("NavigationCompassMixin") || name.equals("NavigationHudMixin")) return NAVIGATION_INSTRUMENTS.enabled();
+        if (name.startsWith("Insanity")) return CONTENT.enabled();
+        if (name.equals("MaddenedSpawnMixin")) return CONTENT.enabled() && SKY_EVENT_CYCLES.enabled();
+        if (name.startsWith("BloodMoonSpawn") || name.startsWith("BloodMoonLocal")) return SKY_EVENT_CYCLES.enabled();
+        if (name.equals("MaddenedSoundMixin") || name.equals("MaddenedSoundPitchMixin")) return CONTENT.enabled();
         if (name.startsWith("FloatingMobTilt")) return VISUAL_OVERHAUL.enabled() || GHAST_SQUASH.enabled() || GHAST_PHYSICS.enabled();
+        if (name.equals("GhastTentaclePhysicsMixin")) return GHAST_PHYSICS.enabled();
+        if (name.equals("FishMovementMixin") || name.equals("FishMoveControlAccess")) return FISH_MOVEMENT.enabled();
         if (name.startsWith("GhastCrash")) return GHAST_PHYSICS.enabled();
         if (name.equals("ArrowImpactMixin")) return ARROW_IMPACT_EVENTS.enabled();
         if (name.equals("FireballImpactMixin")) return FIREBALL_IMPACT_EVENTS.enabled();

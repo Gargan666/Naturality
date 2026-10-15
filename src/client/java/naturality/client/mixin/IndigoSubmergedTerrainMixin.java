@@ -20,7 +20,7 @@ public abstract class IndigoSubmergedTerrainMixin {
     @SuppressWarnings("null") @Shadow private BlockState blockState;
 
     @Inject(method = "shouldCullFace", at = @At("HEAD"), cancellable = true)
-    private void naturality$displacedSnowFace(net.minecraft.core.Direction direction, CallbackInfoReturnable<Boolean> cir) {
+    private void naturality$displacedSnowFace(net.minecraft.core.@org.jspecify.annotations.Nullable Direction direction, CallbackInfoReturnable<Boolean> cir) {
         if (direction == null || !naturality.config.GameplaySettings.clientSnowWrapping()) return;
         var neighbor = pos.relative(direction);
         if (level.getBlockState(neighbor).is(net.minecraft.world.level.block.Blocks.SNOW)

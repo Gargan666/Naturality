@@ -26,7 +26,7 @@ public final class AuroraEvents {
     private static String prefix(ServerLevel level) { return "aurora/"+level.dimension().identifier()+"/"; }
     public static void restore(ServerLevel level) {
         var cells=STATES.computeIfAbsent(level,_ -> new HashMap<>());
-        naturality.weather.EnvironmentWorldData.get(level.getServer()).entries().forEach((key,saved) -> {
+        naturality.weather.EnvironmentWorldData.get(java.util.Objects.requireNonNull(level.getServer())).entries().forEach((key,saved) -> {
             if(!key.startsWith(prefix(level)))return;
             var region=new Region(saved.getOrDefault("x",0L).intValue(),saved.getOrDefault("z",0L).intValue());
             var cell=new Cell(0);cell.cycle.restore(saved);
@@ -41,7 +41,7 @@ public final class AuroraEvents {
         return cell == null ? 0 : cell.cycle.strength();
     }
     public record Status(boolean active, float strength, int nextAttempt, float chance) {}
-    public static Status status(ServerLevel level, BlockPos pos) {
+    public static @org.jspecify.annotations.Nullable Status status(ServerLevel level, BlockPos pos) {
         var cells = STATES.get(level);
         var cell = cells == null ? null : cells.get(Region.at(pos));
         return cell == null ? null : new Status(cell.cycle.active(), cell.cycle.strength(),
@@ -68,16 +68,16 @@ public final class AuroraEvents {
                 ^ (region.x * 341873128712L) ^ (region.z * 132897987541L) ^ time));
             cell.lastSeen = time;
             cell.chance = chance;
-            cell.cycle.tick(advance, chance);
+            cell.cycle.tick(advance, (float)naturality.weather.PreviewEnvironment.chance(chance, naturality.weather.PreviewEnvironment.rate(java.util.Objects.requireNonNull(level.getServer()))));
             var saved=new HashMap<>(cell.cycle.snapshot());
             saved.put("x",(long)region.x);saved.put("z",(long)region.z);
             saved.put("lastSeen",cell.lastSeen);saved.put("chance",naturality.weather.EnvironmentWorldData.bits(chance));
-            naturality.weather.EnvironmentWorldData.get(level.getServer()).write(prefix(level)+region.x+","+region.z,saved);
+            naturality.weather.EnvironmentWorldData.get(java.util.Objects.requireNonNull(level.getServer())).write(prefix(level)+region.x+","+region.z,saved);
         });
         // Vacated regions do not accumulate events. Forget them after one minute.
         cells.entrySet().removeIf(entry -> {
             if(time-entry.getValue().lastSeen<=1200)return false;
-            naturality.weather.EnvironmentWorldData.get(level.getServer()).remove(prefix(level)+entry.getKey().x+","+entry.getKey().z);
+            naturality.weather.EnvironmentWorldData.get(java.util.Objects.requireNonNull(level.getServer())).remove(prefix(level)+entry.getKey().x+","+entry.getKey().z);
             return true;
         });
     }

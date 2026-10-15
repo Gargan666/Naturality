@@ -3,6 +3,7 @@ package naturality.config;
 /** Startup features. Presets only edit these ordinary options and the existing settings. */
 public enum Feature {
     CONTENT(Group.CONTENT),
+    MOUNTAIN_WATERFALLS(Group.CONTENT, CONTENT),
     END_TERRAIN(Group.CONTENT, CONTENT),
     END_MATERIALS(Group.CONTENT, CONTENT),
     LIRESTONE_CRAGS(Group.CONTENT, END_MATERIALS),
@@ -30,6 +31,8 @@ public enum Feature {
     SAND_PLACEMENT_EVENTS(Group.GAMEPLAY),
     FIREBALL_FIRE_SUPPRESSION(Group.GAMEPLAY),
     GHAST_PHYSICS(Group.GAMEPLAY),
+    FISH_MOVEMENT(Group.GAMEPLAY),
+    NAVIGATION_INSTRUMENTS(Group.GAMEPLAY),
     ARROW_IMPACT_EVENTS(Group.GAMEPLAY),
     FIREBALL_IMPACT_EVENTS(Group.GAMEPLAY),
     WEATHER_CYCLES(Group.GAMEPLAY),
@@ -45,6 +48,7 @@ public enum Feature {
     SKY_EVENTS(Group.VISUAL, VISUAL_OVERHAUL),
     METEORS(Group.VISUAL, SKY_EVENTS),
     PROXIMITY(Group.VISUAL, SKY_EVENTS),
+    BLOOD_MOON(Group.VISUAL, SKY_EVENTS),
     RAINBOWS(Group.VISUAL, SKY_EVENTS),
     AURORAS(Group.VISUAL, SKY_EVENTS),
     END_FLASHES(Group.VISUAL, SKY_EVENTS),
@@ -70,9 +74,9 @@ public enum Feature {
 
     public enum Group { CONTENT, GAMEPLAY, VISUAL }
     public final Group group;
-    public final Feature parent;
+    public final @org.jspecify.annotations.Nullable Feature parent;
     Feature(Group group) { this(group, null); }
-    Feature(Group group, Feature parent) { this.group = group; this.parent = parent; }
+    Feature(Group group, @org.jspecify.annotations.Nullable Feature parent) { this.group = group; this.parent = parent; }
     public String key() { return name().toLowerCase(java.util.Locale.ROOT); }
     public boolean enabled() { return FeatureConfig.active(this); }
 }

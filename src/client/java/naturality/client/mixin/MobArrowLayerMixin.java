@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(LivingEntityRenderer.class)
-public abstract class MobArrowLayerMixin<T extends LivingEntity, S extends LivingEntityRenderState, M extends EntityModel<? super S>> {
+public abstract class MobArrowLayerMixin<T extends @org.jspecify.annotations.NonNull LivingEntity, S extends @org.jspecify.annotations.NonNull LivingEntityRenderState, M extends @org.jspecify.annotations.NonNull EntityModel<? super S>> {
     @Shadow protected abstract boolean addLayer(RenderLayer<S, M> layer);
 
     @Inject(method = "<init>", at = @At("TAIL"))

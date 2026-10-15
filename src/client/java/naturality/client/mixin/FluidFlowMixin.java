@@ -27,7 +27,7 @@ import org.spongepowered.asm.mixin.injection.invoke.arg.Args;
  */
 @Mixin(FluidRenderer.class)
 public abstract class FluidFlowMixin {
-    @Shadow @Final private FluidStateModelSet fluidModels;
+    @SuppressWarnings("null") @Shadow @Final private FluidStateModelSet fluidModels;
     @Unique private static final ThreadLocal<FlowCorners> naturality$corners = new ThreadLocal<>();
 
     @ModifyArgs(method = "vertex", at = @At(value = "INVOKE",

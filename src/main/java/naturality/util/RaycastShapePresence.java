@@ -15,9 +15,9 @@ public final class RaycastShapePresence {
     private static final ThreadLocal<Scope> CURRENT=new ThreadLocal<>();
     public static final class Scope {
         private final BlockGetter view;
-        private final Scope previous;
+        private final @org.jspecify.annotations.Nullable Scope previous;
         private final Long2ByteOpenHashMap sections=new Long2ByteOpenHashMap();
-        private Scope(BlockGetter view,Scope previous) { this.view=view;this.previous=previous; }
+        private Scope(BlockGetter view,@org.jspecify.annotations.Nullable Scope previous) { this.view=view;this.previous=previous; }
     }
     private RaycastShapePresence() {}
     public static Scope begin(BlockGetter view) {

@@ -35,20 +35,21 @@ public final class RainbowRenderer implements AutoCloseable {
         .withDepthStencilState(Optional.empty())
         .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
         .build());
-    private static ClientLevel world;
+    private static @org.jspecify.annotations.Nullable ClientLevel world;
     private static float previousStrength, strength;
-    private GpuBuffer vertices;
+    private @org.jspecify.annotations.Nullable GpuBuffer vertices;
     public static void initialize() {
         naturality.client.sleep.SleepVisuals.register(RainbowRenderer::tick);
         ClientPlayConnectionEvents.DISCONNECT.register((_, _) -> reset());
     }
     private static void reset() { world = null; previousStrength = strength = 0; }
     private static void tick(Minecraft client) {
-        if (world != client.level) { reset(); world = client.level; }
-        if (world == null || client.isPaused()) return;
+        var level = client.level;
+        if (world != level) { reset(); world = level; }
+        if (level == null || client.isPaused()) return;
         previousStrength = strength;
-        float target = world.dimension().equals(Level.OVERWORLD)
-            ? SkyEventsClient.strength(world, SkyEventType.RAINBOW) : 0;
+        float target = level.dimension().equals(Level.OVERWORLD)
+            ? SkyEventsClient.strength(level, SkyEventType.RAINBOW) : 0;
         strength += Math.clamp(target - strength, -.25F, .25F);
     }
     public static float strength() { return strength; }
@@ -96,11 +97,12 @@ public final class RainbowRenderer implements AutoCloseable {
         }
     }
     public void render(RenderPass pass, float sunAngle, float skyBlend) {
-        if (vertices == null || world == null || !world.dimension().equals(Level.OVERWORLD) || strength <= .001F) return;
+        var buffer = vertices; var level = world;
+        if (buffer == null || level == null || !level.dimension().equals(Level.OVERWORLD) || strength <= .001F) return;
         float partial = Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false);
         float value = previousStrength + (strength - previousStrength) * partial;
         if (value <= .001F) return;
-        float dayFade = daylightFade(world.getOverworldClockTime());
+        float dayFade = daylightFade(level.getOverworldClockTime());
         float cloudFade = altitudeFade(Minecraft.getInstance().gameRenderer.mainCamera().position().y,
             ParticleWeather.highestActiveCloudTop(Minecraft.getInstance()));
         if (dayFade * cloudFade * skyBlend <= .001F) return;
@@ -112,7 +114,7 @@ public final class RainbowRenderer implements AutoCloseable {
         pass.setUniform("DynamicTransforms", RenderSystem.getDynamicUniforms().writeTransform(
             RenderSystem.getModelViewMatrixCopy(), new Vector4f(value / 20F, sunAngle,
                 dayFade * cloudFade * skyBlend, easedSize(value))));
-        pass.setVertexBuffer(0, vertices.slice());
+        pass.setVertexBuffer(0, buffer.slice());
         pass.setIndexBuffer(indices.getBuffer(6), indices.type());
         pass.drawIndexed(6, 1, 0, 0, 0);
     }

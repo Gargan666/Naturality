@@ -39,35 +39,37 @@ public final class ConfusionSlots {
         ORIGINAL.clear();
     }
     public static void tick(Minecraft client) {
-        if (client.player != owner || client.level == null) {
-            restoreCoordinates(); owner = client.player; active = returning = false; elapsed = 0;
+        var player = client.player;
+        if (player != owner || client.level == null) {
+            restoreCoordinates(); owner = player; active = returning = false; elapsed = 0;
             hotbar = new ConfusionLayout(9); inventory = new ConfusionLayout(27);
         }
-        if (client.player == null || client.isPaused()) return;
+        if (player == null || client.isPaused()) return;
         hotbar.tick(); inventory.tick();
-        var effect = client.player.getEffect(NaturalityEffects.CONFUSION);
-        if (effect != null && client.player.isAlive()) {
+        var effect = player.getEffect(NaturalityEffects.CONFUSION);
+        if (effect != null && player.isAlive()) {
             if (!active) { active = true; returning = false; elapsed = 0; }
             int interval = interval(effect.getAmplifier());
             if (++elapsed >= interval) {
-                int selectedCell = visual(client.player.getInventory().getSelectedSlot());
+                int selectedCell = visual(player.getInventory().getSelectedSlot());
                 int[] counts = batch(RANDOM, effect.getAmplifier());
                 hotbar.swap(RANDOM, counts[0], effect.getAmplifier()); inventory.swap(RANDOM, counts[1], effect.getAmplifier()); elapsed = 0;
-                client.player.getInventory().setSelectedSlot(selectable(selectedCell, client.player.getInventory().getSelectedSlot()));
+                player.getInventory().setSelectedSlot(selectable(selectedCell, player.getInventory().getSelectedSlot()));
             }
         } else if (active) {
-            int selectedCell = visual(client.player.getInventory().getSelectedSlot());
+            int selectedCell = visual(player.getInventory().getSelectedSlot());
             hotbar.restore(RANDOM); inventory.restore(RANDOM); active = false; returning = true; elapsed = 0;
-            client.player.getInventory().setSelectedSlot(selectedCell < 9 ? selectedCell : client.player.getInventory().getSelectedSlot());
+            player.getInventory().setSelectedSlot(selectedCell < 9 ? selectedCell : player.getInventory().getSelectedSlot());
         } else if (returning && hotbar.settled() && inventory.settled()) { returning = false; restoreCoordinates(); }
     }
     public static void layout(AbstractContainerMenu menu, float partial) {
         if (!visible()) return;
         var client = Minecraft.getInstance();
-        if (client.player == null) return;
+        var player = client.player;
+        if (player == null) return;
         Slot[] slots = new Slot[36];
         for (Slot slot : menu.slots) {
-            if (slot.container != client.player.getInventory()) continue;
+            if (slot.container != player.getInventory()) continue;
             int index = slot instanceof ConfusionCreativeSlotAccess wrapper
                 ? wrapper.naturality$target().getContainerSlot() : slot.getContainerSlot();
             if(index<0 || index>=36) continue;

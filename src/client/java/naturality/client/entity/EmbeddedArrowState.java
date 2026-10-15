@@ -1,5 +1,6 @@
 package naturality.client.entity;
 
+@org.jspecify.annotations.NullMarked
 public interface EmbeddedArrowState {
     int naturality$arrowCount();
     void naturality$setArrowCount(int count);

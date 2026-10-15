@@ -23,7 +23,7 @@ public abstract class ConfusionContainerMixin {
     }
     @ModifyArg(method = {"checkHotbarKeyPressed", "checkHotbarMouseClicked"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screens/inventory/AbstractContainerScreen;slotClicked(Lnet/minecraft/world/inventory/Slot;IILnet/minecraft/world/inventory/ContainerInput;)V"), index = 2)
     private int naturality$swapKey(int cell) { return cell >= 0 && cell < 9 ? ConfusionSlots.storageSlot(cell) : cell; }
-    @Shadow @Final protected AbstractContainerMenu menu;
+    @SuppressWarnings("null") @Shadow @Final protected AbstractContainerMenu menu;
     @Inject(method = "extractContents", at = @At("HEAD"))
     private void naturality$layout(GuiGraphicsExtractor graphics, int x, int y, float partial, CallbackInfo ci) {
         ConfusionSlots.layout(menu, partial);

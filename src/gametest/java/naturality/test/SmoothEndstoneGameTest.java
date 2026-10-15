@@ -25,6 +25,8 @@ public final class SmoothEndstoneGameTest implements FabricClientGameTest {
             server.runCommand("give @a naturality:smooth_endstone");
             server.runCommand("setblock 2 100 0 naturality:lirestone");
             server.runCommand("give @a naturality:lirestone");
+            server.runOnServer(s -> { for (int cx = 8; cx <= 11; cx++) for (int cz = -2; cz <= 1; cz++) s.getLevel(Level.OVERWORLD).getChunk(cx, cz); });
+            server.runCommand("fillbiome 144 92 -16 176 108 16 minecraft:forest");
             server.runOnServer(s -> {
                 var level = s.getLevel(Level.OVERWORLD);
                 BlockPos pos = new BlockPos(0, 100, 0);
@@ -160,6 +162,150 @@ public final class SmoothEndstoneGameTest implements FabricClientGameTest {
                 check(level.getBlockState(heathPos).is(Blocks.END_STONE), "Fully covered Lyren Heath must decay to End Stone");
                 level.setBlockAndUpdate(heathPos.above(), Blocks.AIR.defaultBlockState());
                 level.setBlockAndUpdate(heathPos, heath);
+                BlockPos treeBase = new BlockPos(160, 100, 0);
+                for (int x = -12; x <= 12; x++) for (int z = -12; z <= 12; z++) {
+                    level.setBlockAndUpdate(treeBase.offset(x, -1, z), Blocks.GRASS_BLOCK.defaultBlockState());
+                    for (int y = 0; y <= 5; y++) level.setBlockAndUpdate(treeBase.offset(x, y, z), Blocks.AIR.defaultBlockState());
+                }
+                for (int y = 0; y < 4; y++) level.setBlockAndUpdate(treeBase.above(y), Blocks.OAK_LOG.defaultBlockState());
+                level.setBlockAndUpdate(treeBase.above(4), Blocks.OAK_LEAVES.defaultBlockState());
+                var mossFeature = new naturality.worldgen.TreeMossFeature();
+                check(mossFeature.place(level, level.getChunkSource().getGenerator(), RandomSource.create(42), treeBase.east(3)), "Tree moss must generate around a supported forest tree");
+                int groundMoss = 0, trunkMoss = 0;
+                for (int x = -6; x <= 6; x++) for (int z = -6; z <= 6; z++) {
+                    var mossGround = level.getBlockState(treeBase.offset(x, 0, z));
+                    if (mossGround.is(NaturalityBlocks.MOSS) && mossGround.getValue(net.minecraft.world.level.block.MultifaceBlock.getFaceProperty(Direction.DOWN))) groundMoss++;
+                }
+                for (int y = 0; y < 4; y++) for (Direction direction : Direction.Plane.HORIZONTAL) {
+                    var coating = level.getBlockState(treeBase.above(y).relative(direction));
+                    if (coating.is(NaturalityBlocks.MOSS) && coating.getValue(net.minecraft.world.level.block.MultifaceBlock.getFaceProperty(direction.getOpposite()))) trunkMoss++;
+                }
+                check(groundMoss >= 24 && groundMoss <= 48 && trunkMoss >= 2, "Tree moss must coat both trunk and a limited ground patch");
+                var mossRemaining = new java.util.HashSet<BlockPos>();
+                for (int x = -6; x <= 6; x++) for (int z = -6; z <= 6; z++) for (int y = 0; y < 4; y++) {
+                    var mossCheck = treeBase.offset(x, y, z);
+                    if (level.getBlockState(mossCheck).is(NaturalityBlocks.MOSS)) mossRemaining.add(mossCheck);
+                }
+                var mossQueue = new java.util.ArrayDeque<BlockPos>();
+                var mossFirst = mossRemaining.iterator().next();
+                mossRemaining.remove(mossFirst); mossQueue.add(mossFirst);
+                while (!mossQueue.isEmpty()) {
+                    var current = mossQueue.removeFirst();
+                    for (Direction direction : Direction.values()) {
+                        var next = current.relative(direction);
+                        if (mossRemaining.remove(next)) mossQueue.add(next);
+                    }
+                }
+                check(mossRemaining.isEmpty(), "Generated moss ground and trunk must form one connected patch");
+                check(naturality.worldgen.TreeMossFeature.rarity(net.minecraft.world.level.biome.Biomes.OLD_GROWTH_SPRUCE_TAIGA) == 1
+                    && naturality.worldgen.TreeMossFeature.rarity(net.minecraft.world.level.biome.Biomes.DARK_FOREST) == 4
+                    && naturality.worldgen.TreeMossFeature.rarity(net.minecraft.world.level.biome.Biomes.BIRCH_FOREST) == 16, "Tree moss biome frequency tiers incorrect");
+                for (var excluded : java.util.List.of(net.minecraft.world.level.biome.Biomes.SAVANNA, net.minecraft.world.level.biome.Biomes.DESERT,
+                        net.minecraft.world.level.biome.Biomes.JUNGLE, net.minecraft.world.level.biome.Biomes.SNOWY_TAIGA, net.minecraft.world.level.biome.Biomes.PALE_GARDEN))
+                    check(naturality.worldgen.TreeMossFeature.rarity(excluded) == 0, "Excluded biome must not generate tree moss");
+                check(!mossFeature.place(level, level.getChunkSource().getGenerator(), RandomSource.create(42), treeBase.offset(32, 0, 0)), "Moss must not generate in an unlisted biome");
+
+                BlockPos mossPos = pos.offset(40, 0, 0);
+                for (Direction face : Direction.values()) {
+                    var faceProperty = net.minecraft.world.level.block.MultifaceBlock.getFaceProperty(face);
+                    var moss = NaturalityBlocks.MOSS.defaultBlockState().setValue(faceProperty, true);
+                    var lichen = Blocks.GLOW_LICHEN.defaultBlockState().setValue(faceProperty, true);
+                    level.setBlockAndUpdate(mossPos.relative(face), Blocks.STONE.defaultBlockState());
+                    check(moss.canSurvive(level, mossPos), "Moss must attach to a solid surface on " + face);
+                    check(moss.getShape(level, mossPos).bounds().equals(lichen.getShape(level, mossPos).bounds()), "Moss shape differs from lichen on " + face);
+                    check(moss.getDestroySpeed(level, mossPos) == lichen.getDestroySpeed(level, mossPos)
+                        && moss.getSoundType() == Blocks.MOSS_BLOCK.defaultBlockState().getSoundType()
+                        && moss.getLightEmission() == 0, "Moss strength/sounds/light incorrect");
+                    level.setBlockAndUpdate(mossPos, moss);
+                    var mossDrops = Block.getDrops(moss, level, mossPos, null, level.players().getFirst(), new ItemStack(Items.SHEARS));
+                    check(mossDrops.size() == 1 && mossDrops.getFirst().is(NaturalityBlocks.MOSS_ITEM) && mossDrops.getFirst().getCount() == 1, "Shears must collect one Moss per face");
+                    level.setBlockAndUpdate(mossPos.relative(face), Blocks.AIR.defaultBlockState());
+                    check(!moss.canSurvive(level, mossPos) && level.getBlockState(mossPos).isAir(), "Unsupported Moss must break");
+                }
+
+                BlockPos cloverPos = pos.offset(50, 0, 0);
+                var clovers = NaturalityBlocks.CLOVERS.defaultBlockState();
+                var wildflowers = Blocks.WILDFLOWERS.defaultBlockState();
+                for (var support : new Block[]{Blocks.DIRT, Blocks.GRASS_BLOCK, Blocks.MOSS_BLOCK, Blocks.END_STONE, Blocks.STONE}) {
+                    level.setBlockAndUpdate(cloverPos.below(), support.defaultBlockState());
+                    check(clovers.canSurvive(level, cloverPos) == wildflowers.canSurvive(level, cloverPos), "Clovers support differs from wildflowers");
+                }
+                level.setBlockAndUpdate(cloverPos.below(), Blocks.DIRT.defaultBlockState());
+                check(clovers.getSoundType() == wildflowers.getSoundType()
+                    && clovers.getDestroySpeed(level, cloverPos) == wildflowers.getDestroySpeed(level, cloverPos), "Clovers properties differ from wildflowers");
+                for (int amount = 1; amount <= 4; amount++) {
+                    var cloverState = clovers.setValue(net.minecraft.world.level.block.FlowerBedBlock.AMOUNT, amount);
+                    var flowerState = wildflowers.setValue(net.minecraft.world.level.block.FlowerBedBlock.AMOUNT, amount);
+                    check(cloverState.getShape(level, cloverPos).bounds().equals(flowerState.getShape(level, cloverPos).bounds()), "Clovers shape differs");
+                    level.setBlockAndUpdate(cloverPos, cloverState);
+                    var cloverDrops = Block.getDrops(cloverState, level, cloverPos, null, level.players().getFirst(), silkTool);
+                    check(cloverDrops.size() == 1 && cloverDrops.getFirst().is(NaturalityBlocks.CLOVERS_ITEM) && cloverDrops.getFirst().getCount() == amount, "Clovers drops must match amount");
+                }
+                BlockPos groupCenter = pos.offset(96, 0, 0);
+                for (int seed = 0; seed < 8; seed++) {
+                    for (int x = -18; x <= 18; x++) for (int z = -18; z <= 18; z++) {
+                        level.setBlockAndUpdate(groupCenter.offset(x, -1, z), Blocks.GRASS_BLOCK.defaultBlockState());
+                        level.setBlockAndUpdate(groupCenter.offset(x, 0, z), Blocks.AIR.defaultBlockState());
+                    }
+                    check(new naturality.worldgen.CloverPatchesFeature().place(level, level.getChunkSource().getGenerator(), RandomSource.create(seed), groupCenter), "Flat supported ground must generate a clover group");
+                    var pendingClovers = new java.util.HashSet<BlockPos>();
+                    for (int x = -18; x <= 18; x++) for (int z = -18; z <= 18; z++) {
+                        var probePos = groupCenter.offset(x, 0, z);
+                        if (level.getBlockState(probePos).is(NaturalityBlocks.CLOVERS)) pendingClovers.add(probePos);
+                    }
+                    var patchSizes = new java.util.ArrayList<Integer>();
+                    while (!pendingClovers.isEmpty()) {
+                        var queue = new java.util.ArrayDeque<BlockPos>();
+                        var first = pendingClovers.iterator().next();
+                        pendingClovers.remove(first); queue.add(first);
+                        int size = 0;
+                        while (!queue.isEmpty()) {
+                            var current = queue.removeFirst(); size++;
+                            for (Direction direction : new Direction[]{Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST}) {
+                                var next = current.relative(direction);
+                                if (pendingClovers.remove(next)) queue.add(next);
+                            }
+                        }
+                        patchSizes.add(size);
+                    }
+                    patchSizes.sort(java.util.Comparator.reverseOrder());
+                    check(patchSizes.size() >= 2 && patchSizes.size() <= 4, "Clovers must generate 2-4 separated patches");
+                    check(patchSizes.getFirst() >= 8 && patchSizes.getFirst() > patchSizes.get(1), "Clovers must have one dominant patch");
+                    check(patchSizes.stream().mapToInt(Integer::intValue).sum() <= 38, "Clovers group must remain small");
+                }
+
+                int rareClovers = 0;
+                level.setBlockAndUpdate(cloverPos, clovers);
+                for (int roll = 0; roll < 5000; roll++) {
+                    var result = Block.getDrops(clovers, level, cloverPos, null, level.players().getFirst(), ItemStack.EMPTY);
+                    check(result.size() == 1, "Clovers must return either normal or rare item");
+                    if (result.getFirst().is(naturality.NaturalityItems.FOUR_LEAF_CLOVER)) rareClovers++;
+                    else check(result.getFirst().is(NaturalityBlocks.CLOVERS_ITEM), "Unexpected Clovers drop");
+                }
+                check(rareClovers > 10 && rareClovers < 100, "Rare Clovers drop rate must be approximately 1%");
+                BlockPos brewingPos = cloverPos.offset(0, 0, 3);
+                level.setBlockAndUpdate(brewingPos, Blocks.BREWING_STAND.defaultBlockState());
+                var brewing = (net.minecraft.world.level.block.entity.BrewingStandBlockEntity)level.getBlockEntity(brewingPos);
+                var bottleItems = new net.minecraft.world.item.Item[]{Items.POTION, Items.SPLASH_POTION, Items.LINGERING_POTION};
+                for (int slot = 0; slot < 3; slot++) brewing.setItem(slot,
+                    net.minecraft.world.item.alchemy.PotionContents.createItemStack(bottleItems[slot], net.minecraft.world.item.alchemy.Potions.AWKWARD));
+                brewing.setItem(3, new ItemStack(naturality.NaturalityItems.FOUR_LEAF_CLOVER));
+                brewing.setItem(4, new ItemStack(Items.BLAZE_POWDER));
+                for (int tick = 0; tick < 405; tick++) net.minecraft.world.level.block.entity.BrewingStandBlockEntity.serverTick(level, brewingPos, level.getBlockState(brewingPos), brewing);
+                for (int slot = 0; slot < 3; slot++) check(brewing.getItem(slot).is(bottleItems[slot])
+                    && brewing.getItem(slot).get(net.minecraft.core.component.DataComponents.POTION_CONTENTS).is(net.minecraft.world.item.alchemy.Potions.LUCK), "Four Leaf Clover must brew Luck in every bottle type");
+                brewing.setItem(3, new ItemStack(Items.GUNPOWDER));
+                for (int tick = 0; tick < 405; tick++) net.minecraft.world.level.block.entity.BrewingStandBlockEntity.serverTick(level, brewingPos, level.getBlockState(brewingPos), brewing);
+                check(brewing.getItem(0).is(Items.SPLASH_POTION), "Gunpowder must turn Luck into splash Luck");
+                brewing.setItem(3, new ItemStack(Items.DRAGON_BREATH));
+                for (int tick = 0; tick < 405; tick++) net.minecraft.world.level.block.entity.BrewingStandBlockEntity.serverTick(level, brewingPos, level.getBlockState(brewingPos), brewing);
+                check(brewing.getItem(0).is(Items.LINGERING_POTION)
+                    && brewing.getItem(0).get(net.minecraft.core.component.DataComponents.POTION_CONTENTS).is(net.minecraft.world.item.alchemy.Potions.LUCK), "Dragon breath must turn splash Luck into lingering Luck");
+
+                level.setBlockAndUpdate(cloverPos, clovers);
+                ((net.minecraft.world.level.block.FlowerBedBlock)NaturalityBlocks.CLOVERS).performBonemeal(level, RandomSource.create(1), cloverPos, clovers, net.minecraft.world.level.block.BonemealSource.INTERACTION);
+                check(level.getBlockState(cloverPos).getValue(net.minecraft.world.level.block.FlowerBedBlock.AMOUNT) == 2, "Bonemeal must increase Clovers amount");
+
                 var sprout = NaturalityBlocks.CHORUS_SPROUT.defaultBlockState();
                 for(var lyrenBlock:java.util.List.of(NaturalityBlocks.LYREN_SPROUT,NaturalityBlocks.LYREN_GROWTH)) {
                     var lyren=lyrenBlock.defaultBlockState();

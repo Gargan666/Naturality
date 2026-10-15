@@ -82,14 +82,14 @@ public final class WaterImpactColumn {
                 float opacity=(edge==0?.72F:edge==-1?.34F:.10F)*ringFade(age);
                 var pos=BlockPos.containing((px+.5)/16,s.y,(pz+.5)/16);
                 WaterSurface surface=null;
-                for(int dy=1;dy>=-1;dy--) {
+                for(int dy=1;dy>=-3;dy--) {
                     var candidate=WaterSurface.at(level,pos.above(dy));
-                    if(candidate!=null && Math.abs(candidate.height(.5,.5)-s.y)<.5){surface=candidate;break;}
+                    if(candidate!=null && Math.abs(candidate.height(.5,.5)-s.y)<3){surface=candidate;break;}
                 }
                 if(surface==null)continue;
                 int lx=Math.floorMod(px,16),lz=Math.floorMod(pz,16);
                 if(!surface.contains((lx+.5)/16,(lz+.5)/16))continue;
-                int light=currentLight(level,(px+.5)/16,s.y,(pz+.5)/16);
+                int light=currentLight(level,(px+.5)/16,surface.height((lx+.5)/16,(lz+.5)/16),(pz+.5)/16);
                 output.ripplePixel(surface,lx,lz,eye,opacity,BiomeColors.getAverageWaterColor(level,surface.pos()),light);
             }
             if(age>=TOTAL_TICKS)continue;
@@ -102,6 +102,11 @@ public final class WaterImpactColumn {
                     float crest=ProceduralFluids.splashWaterHeat(textureX,side*13);
                     int rows=heightPixels(s.height,age,.72+crest*.28);
                     double a=col/(double)columns,b=(col+1)/(double)columns;
+                    double cx=left/16.0+(side%2==0?(a+b)*.5*width:side==1?width-1.0/32:1.0/32);
+                    double cz=north/16.0+(side%2!=0?(a+b)*.5*depth:side==2?depth-1.0/32:1.0/32);
+                    var contact=LiquidSurfaceGeometry.near(level,cx,s.y,cz,false,false);
+                    if(contact==null || Math.abs(contact.height()-s.y)>3)continue;
+                    double baseY=Math.floor(contact.height()*16)/16;
                     for(int row=0;row<rows;row++) {
                         double bottom=row/16.0,upper=(row+1)/16.0,x0=left/16.0,z0=north/16.0;
                         double vertical=(row+.5)/rows;
@@ -114,18 +119,19 @@ public final class WaterImpactColumn {
                         Vec3 p,q,r,t;
                         if(side%2==0) {
                             double z=z0+(side==2?depth:0);
-                            p=new Vec3(x0+a*width,s.y+bottom,z);q=new Vec3(x0+b*width,s.y+bottom,z);
-                            r=new Vec3(x0+b*width,s.y+upper,z);t=new Vec3(x0+a*width,s.y+upper,z);
+                            p=new Vec3(x0+a*width,baseY+bottom,z);q=new Vec3(x0+b*width,baseY+bottom,z);
+                            r=new Vec3(x0+b*width,baseY+upper,z);t=new Vec3(x0+a*width,baseY+upper,z);
                         } else {
                             double x=x0+(side==1?width:0);
-                            p=new Vec3(x,s.y+bottom,z0+a*depth);q=new Vec3(x,s.y+bottom,z0+b*depth);
-                            r=new Vec3(x,s.y+upper,z0+b*depth);t=new Vec3(x,s.y+upper,z0+a*depth);
+                            p=new Vec3(x,baseY+bottom,z0+a*depth);q=new Vec3(x,baseY+bottom,z0+b*depth);
+                            r=new Vec3(x,baseY+upper,z0+b*depth);t=new Vec3(x,baseY+upper,z0+a*depth);
                         }
                         int tint=ARGB.colorFromFloat(alpha,splashChannel(ARGB.red(s.tint),water,blend),splashChannel(ARGB.green(s.tint),water,blend),splashChannel(ARGB.blue(s.tint),water,blend));
-                        double lightX=(p.x+q.x+r.x+t.x)*.25+eye.x;
-                        double lightY=(p.y+q.y+r.y+t.y)*.25+eye.y;
-                        double lightZ=(p.z+q.z+r.z+t.z)*.25+eye.z;
-                        output.splashQuad(p.subtract(eye),q.subtract(eye),r.subtract(eye),t.subtract(eye),tint,
+                        double lightX=(p.x+q.x+r.x+t.x)*.25;
+                        double lightY=(p.y+q.y+r.y+t.y)*.25;
+                        double lightZ=(p.z+q.z+r.z+t.z)*.25;
+                        boolean reversed=side<2;
+                        output.splashQuad(p.subtract(eye),(reversed?t:q).subtract(eye),r.subtract(eye),(reversed?q:t).subtract(eye),tint,
                             currentLight(level,lightX,lightY,lightZ));
                     }
                 }

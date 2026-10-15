@@ -43,7 +43,8 @@ public final class EndFogComposite {
     private static boolean active() {
         var client = Minecraft.getInstance();
         var level = client.level;
-        return level != null && EndFogTransparency.isActive(level, client.gameRenderer.mainCamera());
+        return level != null && (naturality.client.menu.MenuPreview.active()
+                || EndFogTransparency.isActive(level, client.gameRenderer.mainCamera()));
     }
 
     public static boolean ready() { return captured && active(); }

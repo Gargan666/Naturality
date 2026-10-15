@@ -167,6 +167,10 @@ public final class CloudsGameTest implements FabricClientGameTest {
                 world.getConnection().waitForClientboundPackets();
                 context.waitTicks(10);
                 context.takeScreenshot("clouds-moon-moving-" + time);
+                server.runCommand("tp @a 0.5 210 0.5 " + (time == 15000 ? -90 : 90) + " 15");
+                world.getConnection().waitForClientboundPackets();
+                context.waitTicks(10);
+                context.takeScreenshot("clouds-moon-full-top-" + time);
             }
             // A shallow ocean reaches into edge fog while nearby clouds stay above that fade.
             server.runOnServer(s -> {

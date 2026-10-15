@@ -28,6 +28,7 @@ public final class SkyEventsClient {
         if (!naturality.config.Feature.SKY_EVENTS.enabled()) return 0;
         boolean visible = switch (event) {
             case PROXIMITY -> naturality.config.Feature.PROXIMITY.enabled();
+            case BLOOD_MOON -> naturality.config.Feature.BLOOD_MOON.enabled();
             case METEOR_SHOWER -> naturality.config.Feature.METEORS.enabled();
             case RAINBOW -> naturality.config.Feature.RAINBOWS.enabled();
             case AURORA_BOREALIS, END_AURORA -> naturality.config.Feature.AURORAS.enabled();

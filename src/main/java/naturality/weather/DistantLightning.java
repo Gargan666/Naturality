@@ -6,7 +6,7 @@ public final class DistantLightning {
     public static void tick(ServerLevel level) {
         var weather=WeatherSystem.state(level);
         if(weather==null || weather.rain()<=70 || !level.canHaveWeather())return;
-        int near=(level.getServer().getPlayerList().getViewDistance()+2)*16;
+        int near=(java.util.Objects.requireNonNull(level.getServer()).getPlayerList().getViewDistance()+2)*16;
         int far=Math.max(2048,near+512);
         for(var player:level.players()) {
             if(level.getRandom().nextInt(600)!=0)continue;

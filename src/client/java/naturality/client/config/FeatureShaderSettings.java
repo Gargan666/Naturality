@@ -6,6 +6,7 @@ public final class FeatureShaderSettings {
     public static String source() {
         var c = NaturalityConfig.get();
         return "#ifndef NATURALITY_FEATURE_SETTINGS\n#define NATURALITY_FEATURE_SETTINGS\n"
+            + "const bool NATURALITY_DISTANT_WIND = " + c.effects.distantWind + ";\n"
             + "const bool NATURALITY_EMISSIVE_LAVA = " + (c.liquids.lava && c.liquids.emissiveLava) + ";\n"
             + "const bool NATURALITY_PIXEL_GLINT_ENABLED = " + c.effects.pixelGlint + ";\n"
             + "const bool NATURALITY_STAR_PULSES = " + c.effects.starPulses + ";\n"

@@ -38,7 +38,7 @@ public final class GhastMotion {
     public static void tick(LivingEntity entity) {
         if (!naturality.config.FloatingMobTiltConfig.enabled(entity)) return;
         var velocity = entity.isAlive() && !entity.isPassenger() ? entity.getDeltaMovement() : Vec3.ZERO;
-        MOTIONS.computeIfAbsent(entity, ignored -> new Motion()).tickMovement(velocity.x, velocity.z);
+        MOTIONS.computeIfAbsent(entity, _ -> new Motion()).tickMovement(velocity.x, velocity.z);
     }
     public static Vec2 lean(LivingEntity entity, float yawDegrees, float partial) {
         if (!naturality.config.FloatingMobTiltConfig.enabled(entity)) return Vec2.ZERO;

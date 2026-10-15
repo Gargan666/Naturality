@@ -28,11 +28,12 @@ public abstract class TerrainParticleExtractMixin extends Particle {
     @Shadow protected float alpha;
     @Shadow protected float roll;
     @Shadow protected float oRoll;
-    @Shadow protected TextureAtlasSprite sprite;
+    @SuppressWarnings("null") @Shadow protected TextureAtlasSprite sprite;
     @Shadow public abstract SingleQuadParticle.FacingCameraMode getFacingCameraMode();
     @Shadow protected abstract SingleQuadParticle.Layer getLayer();
     @Shadow public abstract float getQuadSize(float partialTick);
 
+    @SuppressWarnings("null") // Mixin injects the shadow sprite from SingleQuadParticle.
     protected TerrainParticleExtractMixin(ClientLevel level, double x, double y, double z) {
         super(level, x, y, z);
     }

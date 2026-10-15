@@ -20,7 +20,7 @@ public abstract class EndGravityServerMovementMixin implements naturality.weathe
     private void naturality$poseBeforeMovement(CallbackInfo ci) {
         if(EndGravity.inverted(player))((naturality.weather.GravityPoseAccess)player).naturality$updateGravityPose();
     }
-    @Shadow public ServerPlayer player;
+    @SuppressWarnings("null") @Shadow public ServerPlayer player;
     @Shadow private boolean clientIsFloating;
     @Inject(method="tick",at=@At("HEAD"))
     private void naturality$allowedGravityFlight(CallbackInfo ci) {

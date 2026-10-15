@@ -27,16 +27,17 @@ public final class WindShapes {
         final Vec3 offset;
         // A small identity cache retains context-specific collision/outline variants.
         // Shapes are immutable; entries already expire with the tick, weather or state.
-        java.util.IdentityHashMap<VoxelShape,VoxelShape> moved;
+        java.util.@org.jspecify.annotations.Nullable IdentityHashMap<VoxelShape,VoxelShape> moved;
         Entry(BlockState state,Vec3 offset) {this.state=state;this.offset=offset;}
         VoxelShape move(VoxelShape shape) {
             if(offset.equals(Vec3.ZERO))return shape;
-            if(moved==null)moved=new java.util.IdentityHashMap<>(4);
-            var result=moved.get(shape);
+            var cache = moved;
+            if(cache==null) { cache=new java.util.IdentityHashMap<>(4); moved=cache; }
+            var result=cache.get(shape);
             if(result==null) {
                 result=shape.move(offset.x,0,offset.z);
-                if(moved.size()>=4)moved.clear();
-                moved.put(shape,result);
+                if(cache.size()>=4)cache.clear();
+                cache.put(shape,result);
             }
             return result;
         }
@@ -70,7 +71,7 @@ public final class WindShapes {
     }
     /** Called under CACHE's lock, shared by offsets and translated shape variants. */
     private static Entry entry(Level level,BlockPos pos,BlockState state,WeatherState weather) {
-        var cache=CACHE.computeIfAbsent(level,ignored -> new Cache());
+        var cache=CACHE.computeIfAbsent(level,_ -> new Cache());
         if(cache.tick!=level.getGameTime() || !cache.weather.equals(weather)) {
             cache.values.clear();cache.tick=level.getGameTime();cache.weather=weather;
         }
@@ -106,6 +107,13 @@ public final class WindShapes {
             }
             if(anchor!=null)shift=shift.add(anchor).scale(.5);
         }
+        boolean wallSupported=false;
+        for(var face:Direction.Plane.HORIZONTAL) {
+            if(!state.getValue(VineBlock.getPropertyForFace(face)))continue;
+            var support=pos.relative(face);var block=level.getBlockState(support);
+            if(!block.is(BlockTags.LEAVES) && block.isFaceSturdy(level,support,face.getOpposite()))wallSupported=true;
+        }
+        if(wallSupported)shift=shift.scale(.04);
         double x=shift.x,z=shift.z;
         for(var face:Direction.Plane.HORIZONTAL) {
             if(!state.getValue(VineBlock.getPropertyForFace(face)))continue;

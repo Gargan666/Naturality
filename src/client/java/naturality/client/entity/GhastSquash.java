@@ -47,7 +47,7 @@ public final class GhastSquash {
             if (world == null || client.isPaused()) return;
             for (var entity : world.entitiesForRendering()) {
                 if (entity instanceof Ghast ghast)
-                    MOTIONS.computeIfAbsent(ghast, ignored -> new Motion()).tick(ghast.isCharging());
+                    MOTIONS.computeIfAbsent(ghast, _ -> new Motion()).tick(ghast.isCharging());
             }
         });
     }

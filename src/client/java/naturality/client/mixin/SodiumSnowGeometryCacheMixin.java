@@ -15,7 +15,8 @@ public abstract class SodiumSnowGeometryCacheMixin {
     @Coerce
     private Object naturality$snowCache(@Coerce Object context, @Coerce Object token, Operation<Object> original) {
         SnowGeometryCache.begin();
+        naturality.client.render.RenderDetail.beginBuild();
         try { return original.call(context,token); }
-        finally { SnowGeometryCache.end(); }
+        finally { naturality.client.render.RenderDetail.endBuild(); SnowGeometryCache.end(); }
     }
 }

@@ -7,8 +7,8 @@ import org.spongepowered.asm.mixin.*;
 
 @Mixin(CompoundContainer.class)
 public abstract class ReputationDoubleChestMixin implements VillageChest {
-    @Shadow @Final private Container container1;
-    @Shadow @Final private Container container2;
+    @SuppressWarnings("null") @Shadow @Final private Container container1;
+    @SuppressWarnings("null") @Shadow @Final private Container container2;
     @Override public boolean naturality$isVillageSlot(int slot) {
         var container = slot < container1.getContainerSize() ? container1 : container2;
         return container instanceof VillageChest chest && chest.naturality$isVillageChest();

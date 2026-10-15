@@ -2,6 +2,7 @@
 #extension GL_ARB_separate_shader_objects : require
 #include <minecraft:dynamictransforms.glsl>
 uniform sampler2D Sampler0;
+uniform sampler2D Sampler1;
 layout(location = 0) in vec2 curtainUv;
 layout(location = 1) flat in vec3 curtainInfo;
 layout(location = 2) in vec3 viewPosition;
@@ -11,6 +12,14 @@ float noise(float x) {
     float cell = floor(x), t = fract(x);
     t = t*t*(3.0-2.0*t);
     return mix(hash(cell), hash(cell+1.0), t);
+}
+vec4 paletteColor(sampler2D palette, float sequence, float v) {
+    ivec2 size = textureSize(palette, 0);
+    float column = sequence * float(size.x);
+    int first = int(mod(floor(column), float(size.x)));
+    int second = (first + 1) % size.x;
+    int row = clamp(int(floor(v * float(size.y))), 0, size.y - 1);
+    return mix(texelFetch(palette, ivec2(first, row), 0), texelFetch(palette, ivec2(second, row), 0), fract(column));
 }
 void main() {
     // Fixed world-sized cells: temporal color motion does not move or blur the pixel grid.
@@ -35,14 +44,10 @@ void main() {
     float density = smoothstep(curtainInfo.r, curtainInfo.r + .24, ColorModulator.x);
     float ends = smoothstep(0.0, 96.0, cell.x) * (1.0-smoothstep(928.0, 1024.0, cell.x));
     float distanceFade = 1.0 - smoothstep(650.0, 1000.0, length(viewPosition));
-    ivec2 paletteSize = textureSize(Sampler0, 0);
-    float column = (cell.x / 420.0 + curtainInfo.b + .12 * sin(pulse*.3)) * float(paletteSize.x);
-    int first = int(mod(floor(column), float(paletteSize.x)));
-    int second = (first+1) % paletteSize.x;
-    int row = clamp(int(floor(v * float(paletteSize.y))), 0, paletteSize.y-1);
-    vec4 color = mix(texelFetch(Sampler0, ivec2(first,row),0), texelFetch(Sampler0, ivec2(second,row),0), fract(column));
+    float sequence = cell.x / 420.0 + curtainInfo.b + .12 * sin(pulse*.3);
+    vec4 color = mix(paletteColor(Sampler0, sequence, v), paletteColor(Sampler1, sequence, v), clamp(ColorModulator.w, 0.0, 1.0));
     float alpha = color.a * vertical * (columnLight + lowerRim * .35) * (.025 + .975 * spots)
-        * density * ends * distanceFade * strength * ColorModulator.z * ColorModulator.w;
+        * density * ends * distanceFade * strength * ColorModulator.z * .9;
     if (alpha < .001) discard;
     fragColor = vec4(color.rgb, alpha);
 }

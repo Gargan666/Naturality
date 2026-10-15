@@ -9,6 +9,27 @@ import net.minecraft.world.level.block.*;
 import net.minecraft.world.phys.Vec3;
 
 public final class SnowloggingGameTest implements FabricClientGameTest {
+    /** The shared atlas also contains ordinary LOD tiles, which are not snow overlays. */
+    private static boolean isSnowOverlayUv(float u, float v) {
+        try {
+            var atlas = naturality.client.snow.SnowTextureAtlas.class;
+            synchronized (atlas) {
+                var current = atlas.getDeclaredField("current"); current.setAccessible(true);
+                var store = current.get(null);
+                if (store == null) return false;
+                var field = store.getClass().getDeclaredField("variants"); field.setAccessible(true);
+                var variants = (java.util.Map<?, ?>)field.get(store);
+                for (var entry : variants.entrySet()) {
+                    if (!entry.getKey().getClass().getName().equals("naturality.client.snow.SnowOverlayModel$CompositeKey")) continue;
+                    var spriteField = entry.getValue().getClass().getDeclaredField("sprite"); spriteField.setAccessible(true);
+                    var sprite = (net.minecraft.client.renderer.texture.TextureAtlasSprite)spriteField.get(entry.getValue());
+                    if (u >= sprite.getU0() && u <= sprite.getU1() && v >= sprite.getV0() && v <= sprite.getV1()) return true;
+                }
+                return false;
+            }
+        } catch (ReflectiveOperationException error) { throw new AssertionError(error); }
+    }
+
     @Override public void runTest(ClientGameTestContext context) {
         try (var world=context.worldBuilder().create()) {
             var server=world.getServer();
@@ -616,11 +637,14 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                     final int index=segment;
                     client.getModelManager().getBlockStateModelSet().get(state).emitQuads(
                         net.fabricmc.fabric.api.client.renderer.v1.Renderer.get().quadEmitter(q->{
-                            if(naturality.client.snow.SnowTextureAtlas.isCompositeUv(q.u(0),q.v(0)))fenceOverlays[index]++;
+                            if(isSnowOverlayUv(q.u(0),q.v(0)))fenceOverlays[index]++;
                         }),client.level,pos,state,net.minecraft.util.RandomSource.create(0),d->false);
                 }
                 check(fenceOverlays[0]==0 && fenceOverlays[1]==0 && fenceOverlays[2]>0,
-                    "Only the top fence segment receives snow overlay quads");
+                    "Only the top fence segment receives snow overlay quads: " + java.util.Arrays.toString(fenceOverlays)
+                        + ", top=" + client.level.getBlockState(new BlockPos(9,102,6))
+                        + ", snow=" + client.level.getBlockState(new BlockPos(9,103,6))
+                        + ", wrapping=" + naturality.config.GameplaySettings.clientSnowWrapping());
                 for(int plantX=8;plantX<=9;plantX++) {
                 int[] grassOverlays={0,0};
                 for(int half=0;half<2;half++) {
@@ -630,7 +654,7 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                     final int index=half;
                     client.getModelManager().getBlockStateModelSet().get(state).emitQuads(
                         net.fabricmc.fabric.api.client.renderer.v1.Renderer.get().quadEmitter(q->{
-                            if(naturality.client.snow.SnowTextureAtlas.isCompositeUv(q.u(0),q.v(0)))grassOverlays[index]++;
+                            if(isSnowOverlayUv(q.u(0),q.v(0)))grassOverlays[index]++;
                         }),client.level,pos,state,net.minecraft.util.RandomSource.create(0),d->false);
                 }
                 check(grassOverlays[0]==0 && grassOverlays[1]>0,
@@ -748,7 +772,7 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                     net.minecraft.resources.Identifier.fromNamespaceAndPath("naturality","block/snow_overlay")));
                 client.getModelManager().getBlockStateModelSet().get(buriedState).emitQuads(
                     net.fabricmc.fabric.api.client.renderer.v1.Renderer.get().quadEmitter(q->{
-                        if(naturality.client.snow.SnowTextureAtlas.isCompositeUv(q.u(0),q.v(0)))buriedOverlay[0]++;
+                        if(isSnowOverlayUv(q.u(0),q.v(0)))buriedOverlay[0]++;
                     }),client.level,buried,buriedState,net.minecraft.util.RandomSource.create(0),d->true);
                 check(buriedOverlay[0]==0,"Culled support faces generate no hidden snow overlay quads");
                 var overhangSupport=new BlockPos(-7,100,10);
@@ -758,7 +782,7 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                 float[] cornerEdges={Float.POSITIVE_INFINITY,Float.POSITIVE_INFINITY};
                 client.getModelManager().getBlockStateModelSet().get(overhangState).emitQuads(
                     net.fabricmc.fabric.api.client.renderer.v1.Renderer.get().quadEmitter(q->{
-                        if(naturality.client.snow.SnowTextureAtlas.isCompositeUv(q.u(0),q.v(0)))
+                        if(isSnowOverlayUv(q.u(0),q.v(0)))
                         {
                             edgeOverlays[q.lightFace().ordinal()]++;
                             for(int vertex=0;vertex<4;vertex++) {
@@ -847,7 +871,7 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                 int[] composed={0};
                 client.getModelManager().getBlockStateModelSet().get(state).emitQuads(
                     net.fabricmc.fabric.api.client.renderer.v1.Renderer.get().quadEmitter(q->{
-                        if(naturality.client.snow.SnowTextureAtlas.isCompositeUv(q.u(0),q.v(0)))composed[0]++;
+                        if(isSnowOverlayUv(q.u(0),q.v(0)))composed[0]++;
                     }),client.level,pos,state,net.minecraft.util.RandomSource.create(0),d->false);
                 check(composed[0]>0,"Snowy sprite variants are rebuilt after resource reload");
             });

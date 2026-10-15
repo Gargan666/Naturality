@@ -17,7 +17,8 @@ public abstract class ExplosionParticleSizeMixin {
     private void naturality$explosionScale(ClientLevel level, ParticleOptions particle,
             double x, double y, double z, double vx, double vy, double vz, ClientboundExplodePacket packet) {
         if (naturality.config.Feature.VISUAL_OVERHAUL.enabled()
-                && (particle.getType() == ParticleTypes.EXPLOSION || particle.getType() == ParticleTypes.EXPLOSION_EMITTER)) {
+                && (particle.getType() == ParticleTypes.EXPLOSION || particle.getType() == ParticleTypes.EXPLOSION_EMITTER
+                    || particle.getType() == naturality.NaturalityParticles.END_EXPLOSION)) {
             double baseScale = packet.radius() / 4.0;
             vx = baseScale < 1 ? Math.min(1, baseScale * 2) : baseScale;
             var impact = naturality.client.particle.FireballImpactClient.consume(level, x, y, z);

@@ -27,8 +27,9 @@ public abstract class HardcoreSkyMixin {
             state.endFlashIntensity *= factor;
         }
         if (state.skybox != DimensionType.Skybox.OVERWORLD) return;
-        state.skyColor = new Vector3f(state.skyColor).mul(factor);
-        state.sunriseAndSunsetColor = new Vector4f(state.sunriseAndSunsetColor).mul(factor, factor, factor, 1.0F);
+        state.skyColor = naturality.client.sky.BloodMoonClient.tint(new Vector3f(state.skyColor).mul(factor), partial);
+        float dry = 1.0F - level.getRainLevel(partial);
+        state.sunriseAndSunsetColor = new Vector4f(state.sunriseAndSunsetColor).mul(factor, factor, factor, dry * dry);
         // Preserve celestial brightness: rainBrightness controls the sun and moon,
         // while starBrightness controls stars. Only the atmosphere darkens.
     }

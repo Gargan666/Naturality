@@ -20,8 +20,8 @@ import net.minecraft.world.phys.Vec3;
 
 /** One streamed loop, fading with the listener's local underground room size. */
 public final class CaveAmbience {
-    private static ClientLevel world;
-    private static CaveLoop loop;
+    private static @org.jspecify.annotations.Nullable ClientLevel world;
+    private static @org.jspecify.annotations.Nullable CaveLoop loop;
     private static boolean large;
     private static int sampleTicks;
     private static float gain;
@@ -66,29 +66,33 @@ public final class CaveAmbience {
     }
 
     private static void tick(Minecraft client) {
-        if (world != client.level) {
-            if (loop != null) client.getSoundManager().stop(loop);
+        var level = client.level;
+        var currentLoop = loop;
+        if (world != level) {
+            if (currentLoop != null) client.getSoundManager().stop(currentLoop);
             loop = null;
-            world = client.level;
+            currentLoop = null;
+            world = level;
             gain = 0;
             large = false;
             sampleTicks = 0;
         }
-        if (world == null || client.isPaused()) return;
+        if (level == null || client.isPaused()) return;
         var listener = client.getCameraEntity();
         if (!Feature.VISUAL_OVERHAUL.enabled() || listener == null
-                || !world.dimension().equals(Level.OVERWORLD)) large = false;
+                || !level.dimension().equals(Level.OVERWORLD)) large = false;
         else if (sampleTicks-- <= 0) {
-            large = isLargeCave(world, listener.getEyePosition(), listener);
+            large = isLargeCave(level, listener.getEyePosition(), listener);
             sampleTicks = 9;
         }
         gain = Math.clamp(gain + (large ? 1F : -1F) / 60F, 0F, 1F);
         if (gain == 0) {
-            if (loop != null) client.getSoundManager().stop(loop);
+            if (currentLoop != null) client.getSoundManager().stop(currentLoop);
             loop = null;
-        } else if (loop == null || !client.getSoundManager().isActive(loop)) {
-            loop = new CaveLoop(world);
-            client.getSoundManager().play(loop);
+        } else if (currentLoop == null || !client.getSoundManager().isActive(currentLoop)) {
+            currentLoop = new CaveLoop(level);
+            loop = currentLoop;
+            client.getSoundManager().play(currentLoop);
         }
     }
 

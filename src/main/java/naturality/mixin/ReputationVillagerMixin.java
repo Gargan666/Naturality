@@ -24,7 +24,15 @@ import org.spongepowered.asm.mixin.injection.callback.*;
 public abstract class ReputationVillagerMixin {
     @Inject(method = "customServerAiStep", at = @At("HEAD"), cancellable = true)
     private void naturality$sleepDebt(ServerLevel level, CallbackInfo ci) {
-        if (VillagerSleep.tick(level, (Villager)(Object)this)) ci.cancel();
+        var body = (Villager)(Object)this;
+        if (VillagerSleep.tick(level, body)) {
+            var state = Reputation.state(body);
+            state.sleepCoreOnly = true;
+            try { body.getBrain().tick(level, body); }
+            finally { state.sleepCoreOnly = false; }
+            VillagerSleep.tick(level, body);
+            ci.cancel();
+        }
     }
     @com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation(method = "gossip", at = @At(value = "INVOKE",
         target = "Lnet/minecraft/world/entity/ai/gossip/GossipContainer;transferFrom(Lnet/minecraft/world/entity/ai/gossip/GossipContainer;Lnet/minecraft/util/RandomSource;I)I"))
@@ -51,7 +59,7 @@ public abstract class ReputationVillagerMixin {
     @Unique private static int naturality$signature(Villager body, Player player) {
         var hero = player.getEffect(MobEffects.HERO_OF_THE_VILLAGE);
         return java.util.Objects.hash(player.getUUID(), Reputation.score(player),
-            body.getGossips().getReputation(player.getUUID(), type -> true), hero == null ? -1 : hero.getAmplifier());
+            body.getGossips().getReputation(player.getUUID(), _ -> true), hero == null ? -1 : hero.getAmplifier());
     }
     @Inject(method = "customServerAiStep", at = @At("TAIL"))
     private void naturality$refreshPrices(ServerLevel level, CallbackInfo ci) {
@@ -75,7 +83,7 @@ public abstract class ReputationVillagerMixin {
         var body = (Villager)(Object)this;
         var hero = player.getEffect(MobEffects.HERO_OF_THE_VILLAGE);
         double discount = hero == null ? 0 : .3F + .0625F * hero.getAmplifier();
-        int gossip = body.getGossips().getReputation(player.getUUID(), type -> true);
+        int gossip = body.getGossips().getReputation(player.getUUID(), _ -> true);
         naturality$priceSignature = naturality$signature(body, player);
         var offers = body.getOffers();
         for (var offer : offers) {
@@ -95,7 +103,8 @@ public abstract class ReputationVillagerMixin {
     @Inject(method = "rewardTradeXp", at = @At("TAIL"))
     private void naturality$trade(MerchantOffer offer, CallbackInfo ci) {
         var body = (Villager)(Object)this;
-        if (body.getTradingPlayer() != null) updateSpecialPrices(body.getTradingPlayer());
+        var player = body.getTradingPlayer();
+        if (player != null) updateSpecialPrices(player);
     }
     @Inject(method = "onReputationEventFrom", at = @At("HEAD"))
     private void naturality$cure(ReputationEventType type, Entity source, CallbackInfo ci) {

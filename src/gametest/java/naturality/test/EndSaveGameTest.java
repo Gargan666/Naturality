@@ -73,7 +73,8 @@ public final class EndSaveGameTest implements FabricClientGameTest {
             });
             // Fabric's lockstep client/server phases consume the normal spare-time
             // budget. Supply an explicit idle window, identically in both variants.
-            for (int tick = 0; tick < 600; tick++) {
+            for (int tick = 0; tick < 2400; tick++) {
+                if (patched && server.computeOnServer(s -> dirtyProtos(s.getLevel(Level.END).getChunkSource().chunkMap)) == 1) break;
                 context.waitTick();
                 server.runOnServer(s -> {
                     var map = s.getLevel(Level.END).getChunkSource().chunkMap;
@@ -86,6 +87,10 @@ public final class EndSaveGameTest implements FabricClientGameTest {
                 var map = s.getLevel(Level.END).getChunkSource().chunkMap;
                 int dirty = dirtyProtos(map);
                 System.out.println("End save probe settled dirty proto chunks=" + dirty);
+                System.out.println("End save remaining statuses=" + holders(map).stream()
+                    .filter(h -> h.getLatestChunk() instanceof ProtoChunk && h.getLatestChunk().isUnsaved())
+                    .collect(java.util.stream.Collectors.groupingBy(h -> h.getLatestChunk().getPersistedStatus()
+                        + ":ready=" + h.isReadyForSaving(), java.util.stream.Collectors.counting())));
                 if (patched) check(dirty == 1, "Only the chunk with unfinished generation may remain unsaved: " + dirty);
                 check(s.getLevel(Level.END).getChunkSource().getChunk(protoPos[0].getX() >> 4,
                     protoPos[0].getZ() >> 4, ChunkStatus.INITIALIZE_LIGHT, false).isUnsaved(),

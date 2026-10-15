@@ -1,5 +1,6 @@
 #version 330
 #extension GL_ARB_separate_shader_objects : require
+#include <naturality:menu_region.glsl>
 
 #include <minecraft:fog.glsl>
 #ifdef NATURALITY_SODIUM
@@ -21,6 +22,7 @@
 #include <minecraft:oit.glsl>
 #include <naturality:pixel_lighting.glsl>
 #include <naturality:cutout_pixels.glsl>
+#include <naturality:texture_lod.glsl>
 #include <naturality:procedural_fluids.glsl>
 #include <naturality:feature_settings.glsl>
 #include <naturality:procedural_fire.glsl>
@@ -109,6 +111,29 @@ void main() {
     // Each sixteenth-block row has constant opacity; the lowest row is invisible.
     float tailOpacity = clamp(floor(fract(naturalityBlockPosition.y) * 16.0) / 15.0, 0.0, 1.0);
     if (fallingFluidTail && tailOpacity <= 0.0) discard;
+    vec3 positionDx = dFdx(naturalityBlockPosition), positionDy = dFdy(naturalityBlockPosition);
+    vec3 derivativeNormal = cross(positionDx, positionDy);
+    vec3 menuPosition = naturalityBlockPosition + naturalitySectionOrigin;
+    vec3 menuNormal = derivativeNormal / max(length(derivativeNormal), 0.000001);
+    if (!naturality_menu_surface_visible(menuPosition, menuNormal)) discard;
+    float menuEdge = naturality_menu_edge(menuPosition, menuNormal);
+    if (MenuBounds.w > 0.0 && length(menuPosition.xz - MenuBounds.xy) >= MenuBounds.w) {
+        // Fully fogged outer faces stay opaque and write depth, covering exposed
+        // terrain/water cuts. Their color is exactly the sky behind this pixel.
+        #ifdef NATURALITY_WATER_MASK
+        discard;
+        #elif defined(OIT_ALPHA_ONLY)
+        executeAlphaOnlyPhase(gl_FragCoord.z, 1.0);
+        #else
+        vec4 cover = vec4(textureLod(NaturalityWaterAtmosphere,
+            gl_FragCoord.xy / vec2(textureSize(NaturalityWaterAtmosphere, 0)), 0.0).rgb, 1.0);
+        #ifdef OIT_ACCUMULATE
+        cover = sampleColorForAccumulation(cover);
+        #endif
+        fragColor = cover;
+        #endif
+        return;
+    }
     #ifdef NATURALITY_WATER_MASK
     if (!waterSprite) discard;
     fragColor = vec4(gl_FragCoord.z, cylindricalVertexDistance, sphericalVertexDistance, 1.0);
@@ -123,7 +148,6 @@ void main() {
     vec3 waterPosition = naturalityBlockPosition + vec3(naturalitySectionOrigin - ivec3(WaterMap.x, 0, WaterMap.y));
     // Offset perpendicular to the visible face, rather than diagonally toward
     // the camera (which selected different columns along cliffs when moving).
-    vec3 positionDx = dFdx(naturalityBlockPosition), positionDy = dFdy(naturalityBlockPosition);
     vec3 surfaceNormal = abs(cross(positionDx, positionDy));
     vec2 shimmerUV = vec2(0.0), shimmerUVDx = vec2(0.0), shimmerUVDy = vec2(0.0);
     if (WaterSwitches.z != 0 && (NaturalityFluidInfo.w & 1) == 0) {
@@ -161,15 +185,29 @@ void main() {
         light.rgb = mix(min(light.rgb, localLight), light.rgb, daylight);
     }
     #endif
+    // Both images live in the existing atlas; geometry, light and metadata stay
+    // unchanged. The blend follows the camera every frame, including while paused.
+    float textureFade = naturality_texture_lod_weight(texCoord0, NaturalityLodBounds, sphericalVertexDistance);
+    vec2 averageUV = naturality_texture_average_uv(texCoord0, NaturalityLodBounds);
+    #ifdef ALPHA_CUTOUT
+    // Keep cutout alpha's ordinary mip coverage across the entire fade, even
+    // when solid-leaf LOD is disabled. Only RGB transitions to the average.
     vec4 sampledColor = UseRgss == 1 ? sampleRGSS(Sampler0, texCoord0, 1.0f / TextureSize)
         : sampleNearest(Sampler0, texCoord0, 1.0f / TextureSize);
-    #ifdef ALPHA_CUTOUT
     if (naturalityFluidKind < 0 && naturalityFireKind < 0 && !waterSprite)
         sampledColor = naturality_cutout_pixels(Sampler0, texCoord0, TextureSize, sampledColor);
     // All derivatives used by ordinary terrain have been captured above. Fluid
     // and fire shaders can replace alpha, so keep those on their original path.
     if (naturalityFluidKind < 0 && naturalityFireKind < 0 && !waterSprite
             && sampledColor.a * (light.a * shade.a) < ALPHA_CUTOUT) discard;
+    if (textureFade > 0.0)
+        sampledColor.rgb = mix(sampledColor.rgb, textureLod(Sampler0, averageUV, 0.0).rgb, textureFade);
+    #else
+    vec2 textureDx = dFdx(texCoord0), textureDy = dFdy(texCoord0);
+    vec4 sampledColor = textureFade >= 1.0 ? textureLod(Sampler0, averageUV, 0.0)
+        : naturality_texture_detail(Sampler0, texCoord0, 1.0f / TextureSize, textureDx, textureDy, UseRgss == 1);
+    if (textureFade > 0.0 && textureFade < 1.0)
+        sampledColor.rgb = mix(sampledColor.rgb, textureLod(Sampler0, averageUV, 0.0).rgb, textureFade);
     #endif
     // Molten surfaces are self-lit. Skip lightmap, ambient occlusion and
     // directional face shading so lava sides keep the same brightness as tops.
@@ -263,6 +301,11 @@ void main() {
         color.rgb = mix(arrivalFog, color.rgb, chunkVisibility);
     }
     if (fallingFluidTail) color.a *= tailOpacity;
+    if (menuEdge > 0.0) {
+        vec3 atmosphere = textureLod(NaturalityWaterAtmosphere,
+                gl_FragCoord.xy / vec2(textureSize(NaturalityWaterAtmosphere, 0)), 0.0).rgb;
+        color.rgb = mix(color.rgb, atmosphere, menuEdge);
+    }
     #ifdef ALPHA_CUTOUT
     if (color.a < ALPHA_CUTOUT) {
         discard;

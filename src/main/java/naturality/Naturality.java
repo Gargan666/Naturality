@@ -17,10 +17,18 @@ public class Naturality implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
+        naturality.navigation.NavigationTargetPayload.initialize();
+        if (naturality.config.Feature.NAVIGATION_INSTRUMENTS.enabled()) naturality.navigation.NavigationInstruments.initialize();
         naturality.entity.ArrowImpactPayload.initialize();
         naturality.config.FeatureConfig.get().save();
         if (naturality.config.Feature.CONTENT.enabled()) {
             NaturalityBlocks.initialize();
+            NaturalityItems.initialize();
+            naturality.worldgen.CloverPatchesFeature.initialize();
+            naturality.worldgen.TreeMossFeature.initialize();
+            naturality.worldgen.MountainWaterfallFeature.initialize();
+            naturality.entity.MaddenedCreepers.initialize();
+            naturality.entity.MaddenedZombies.initialize();
             naturality.worldgen.LirestoneCrags.initialize();
             naturality.worldgen.EndWilds.initialize();
             naturality.worldgen.LirestoneBoulderFeature.initialize();

@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ModelFeatureRenderer.class)
 public abstract class PortalModelClipMixin {
-    @Unique private PortalClippedVertexConsumer naturality$buffer;
+    @Unique private @org.jspecify.annotations.Nullable PortalClippedVertexConsumer naturality$buffer;
     @ModifyExpressionValue(method="prepareModel",at=@At(value="INVOKE",
         target="Lnet/minecraft/client/renderer/feature/ModelFeatureRenderer;getVertexBuilder(Lnet/minecraft/client/renderer/rendertype/RenderType;)Lcom/mojang/blaze3d/vertex/VertexConsumer;"))
     private VertexConsumer naturality$clip(VertexConsumer buffer,@Local(argsOnly=true) ModelFeatureRenderer.Submit<?> submit) {

@@ -18,11 +18,11 @@ public final class EndWeatherSystem {
     public static EndWeatherCycle cycle(ServerLevel level) {
         return cycles.computeIfAbsent(level, l -> {
             var cycle = new EndWeatherCycle(l.getSeed() ^ 0x454e44475241564cL);
-            cycle.restore(EnvironmentWorldData.get(l.getServer()).read(KEY));
+            cycle.restore(EnvironmentWorldData.get(java.util.Objects.requireNonNull(l.getServer())).read(KEY));
             return cycle;
         });
     }
-    public static void save(ServerLevel level) { EnvironmentWorldData.get(level.getServer()).write(KEY,cycle(level).snapshot()); }
+    public static void save(ServerLevel level) { EnvironmentWorldData.get(java.util.Objects.requireNonNull(level.getServer())).write(KEY,cycle(level).snapshot()); }
     public static EndWeatherState state(Level level) {
         if (!naturality.config.Feature.END_WEATHER.enabled()) return EndWeatherState.CLEAR;
         if (!level.dimension().equals(Level.END)) return EndWeatherState.CLEAR;
@@ -50,14 +50,14 @@ public final class EndWeatherSystem {
     public static void initialize() {
         PayloadTypeRegistry.clientboundPlay().register(EndWeatherPayload.TYPE,EndWeatherPayload.CODEC);
         if (!naturality.config.Feature.END_WEATHER.enabled()) return;
-        ServerLifecycleEvents.SERVER_STARTED.register(s -> { session = java.util.UUID.randomUUID().getLeastSignificantBits(); });
-        ServerLifecycleEvents.SERVER_STOPPED.register(s -> cycles.clear());
-        ServerPlayConnectionEvents.JOIN.register((handler,sender,s) -> { var end=s.getLevel(Level.END); if(end!=null)send(handler.player,end); });
+        ServerLifecycleEvents.SERVER_STARTED.register(_ -> { session = java.util.UUID.randomUUID().getLeastSignificantBits(); });
+        ServerLifecycleEvents.SERVER_STOPPED.register(_ -> cycles.clear());
+        ServerPlayConnectionEvents.JOIN.register((handler,_,s) -> { var end=s.getLevel(Level.END); if(end!=null)send(handler.player,end); });
         ServerTickEvents.END_SERVER_TICK.register(s -> {
             var end = s.getLevel(Level.END); if (end == null) return;
             var cycle = cycle(end);
-            cycle.tick(!end.players().isEmpty() && end.getGameRules().get(GameRules.ADVANCE_WEATHER));
-            if (naturality.config.Feature.STARFALL.enabled()) naturality.starfall.StarfallWeather.tick(end,cycle.state().starfall());
+            if (!PreviewEnvironment.frozen(s)) cycle.tick(!end.players().isEmpty() && end.getGameRules().get(GameRules.ADVANCE_WEATHER), PreviewEnvironment.rate(s));
+            if (!PreviewEnvironment.frozen(s) && naturality.config.Feature.STARFALL.enabled()) naturality.starfall.StarfallWeather.tick(end,cycle.state().starfall());
             save(end);
             if (s.getTickCount()%2 == 0) for (var p:s.getPlayerList().getPlayers()) send(p,end);
         });
