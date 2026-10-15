@@ -6,7 +6,7 @@ import net.minecraft.core.particles.ParticleTypes;
 
 public final class RainSplashGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
-        try (var world=context.worldBuilder().create()) {
+        try (var world=TestWorlds.disposable(context).create()) {
             var server=world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runCommand("fill -3 99 -3 3 99 3 stone");
@@ -26,11 +26,7 @@ public final class RainSplashGameTest implements FabricClientGameTest {
                     }
                     if(rain.isAlive()) throw new AssertionError("Rain splash must expire");
                 }
-                for(int i=0;i<20;i++) client.particleEngine.createParticle(ParticleTypes.RAIN,
-                    -1+i*0.1,100.01,0.5,0,0,0);
             });
-            context.waitTicks(2);
-            context.takeScreenshot("rain-splash-fade");
         }
     }
 }

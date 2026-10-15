@@ -9,7 +9,7 @@ import net.minecraft.world.level.Level;
 public final class SkyStateGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
         TestWorldSave save;
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.persistent(context).create()) {
             save = world.getWorldSave();
             var server = world.getServer();
             server.runCommand("gamemode spectator @a");

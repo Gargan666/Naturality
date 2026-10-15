@@ -28,7 +28,7 @@ public final class BellLightingGameTest implements FabricClientGameTest {
             .withDepthStencilState(Optional.empty()).withColorTargetState(ColorTargetState.DEFAULT).build());
 
     @Override public void runTest(ClientGameTestContext context) {
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runCommand("time set noon");

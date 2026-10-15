@@ -37,7 +37,7 @@ public final class EnvironmentPersistenceGameTest implements FabricClientGameTes
         for(int i=0;i<20000;i++) { aurora.tick(true,1);auroraCopy.tick(true,1);check(aurora.snapshot().equals(auroraCopy.snapshot()),"Aurora resumes exactly"); }
         net.fabricmc.fabric.api.client.gametest.v1.world.TestWorldSave save;
         var expected=new HashMap<String,Map<String,Long>>();
-        try(var world=context.worldBuilder().create()) {
+        try(var world=TestWorlds.persistent(context).create()) {
             save=world.getWorldSave();
             world.getServer().runCommand("gamerule minecraft:advance_weather false");
             world.getServer().runOnServer(server -> {
@@ -87,7 +87,7 @@ public final class EnvironmentPersistenceGameTest implements FabricClientGameTes
                 if(!key.startsWith("aurora/"))expected.put(key,value);
             }));
         }
-        try(var other=context.worldBuilder().create()) {
+        try(var other=TestWorlds.disposable(context).create()) {
             other.getServer().runOnServer(server -> check(TestFixtures.require(WeatherSystem.state(server.overworld()), "WeatherSystem.state(server.overworld())").rain()==0 && TestFixtures.require(WeatherSystem.state(server.overworld()), "WeatherSystem.state(server.overworld())").wind()==0,
                 "A different world starts with calm weather"));
         }

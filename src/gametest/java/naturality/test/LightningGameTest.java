@@ -12,7 +12,7 @@ public final class LightningGameTest implements FabricClientGameTest {
         check(naturality.client.weather.ThunderAudio.pitchScale(1500)
             < naturality.client.weather.ThunderAudio.pitchScale(100), "Distant thunder has lower pitch");
         boolean[] original={false};context.runOnClient(c -> original[0]=c.options.improvedTransparency().get());
-        try(var world=context.worldBuilder().create()) {
+        try(var world=TestWorlds.disposable(context).create()) {
             var profile=new WeatherProfile(true);profile.overrideRain=profile.overrideWind=profile.overrideTemperature=true;
             profile.rain=70;profile.wind=0;profile.temperature=50;
             world.getServer().runOnServer(s -> WeatherWorldData.get(s).setProfile("minecraft:overworld",profile));
@@ -33,7 +33,6 @@ public final class LightningGameTest implements FabricClientGameTest {
                     check(state.y==TestFixtures.level(c).getSeaLevel()+1,"Unloaded strikes start one block above sea level");
                     check(TestFixtures.level(c).getChunkSource().getLoadedChunksCount()==loaded,"Distant visual strikes never load terrain");
                 });
-                context.waitTicks(1);context.takeScreenshot("distant-lightning-fog-"+oit);
             }
             context.waitTicks(100);
             context.runOnClient(_ -> {var render=new LevelRenderState();DistantLightningClient.extract(render,1);check(render.entityRenderStates.isEmpty(),"Distant bolts expire normally");});

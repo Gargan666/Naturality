@@ -22,7 +22,7 @@ public final class FishSwimGameTest implements FabricClientGameTest {
         check(motion.sample(1).phase()==previous,"Idle swimming animation settles at a fixed phase");
         for(int i=0;i<40;i++) motion.tick(new Vec3(.04,-.04,0));
         check(Math.abs(motion.sample(1).pitch()-45)<.1,"Fish pitches down when descending");
-        try(var world=context.worldBuilder().create()) {
+        try(var world=TestWorlds.disposable(context).create()) {
             var server=world.getServer();server.runCommand("gamemode spectator @a");
             server.runCommand("fill -8 100 -8 8 112 8 water");
             server.runCommand("tp @a 0 106 -6 0 0");

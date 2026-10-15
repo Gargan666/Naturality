@@ -11,7 +11,7 @@ import naturality.snow.SnowfallBudget;
 /** Dense, changing snow rather than a static snow-mesh benchmark. */
 public final class SnowStormGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
-        try(var world=context.worldBuilder().create()) {
+        try(var world=TestWorlds.disposable(context).create()) {
             var server=world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runCommand("tp @a 8 112 8 0 65");

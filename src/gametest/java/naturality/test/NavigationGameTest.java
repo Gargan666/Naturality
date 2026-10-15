@@ -23,7 +23,7 @@ public final class NavigationGameTest implements FabricClientGameTest {
         check(NavigationInstruments.time(12000).equals("Day 0 | 06:00 PM (18:00)"), "Both twelve and twenty-four hour time");
         check(NavigationInstruments.time(18000).equals("Day 0 | 12:00 AM (00:00)"), "Midnight wraps correctly");
         check(NavigationInstruments.time(24000).equals("Day 1 | 06:00 AM (06:00)"), "Day count follows celestial ticks");
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode creative @a");
             server.runCommand("tp @a -12 100 -24");

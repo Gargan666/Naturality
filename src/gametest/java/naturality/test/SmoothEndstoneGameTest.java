@@ -19,7 +19,7 @@ public final class SmoothEndstoneGameTest implements FabricClientGameTest {
         if (!value) throw new AssertionError(message);
     }
     @Override public void runTest(ClientGameTestContext context) {
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("setblock 0 100 0 naturality:smooth_endstone");
             server.runCommand("give @a naturality:smooth_endstone");

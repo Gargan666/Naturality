@@ -11,7 +11,7 @@ public final class PixelFogGameTest implements FabricClientGameTest {
             savedDistance[0] = client.options.renderDistance().get();
             client.options.renderDistance().set(5);
         });
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode creative @a");
             server.runCommand("time set noon");

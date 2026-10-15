@@ -63,7 +63,7 @@ public final class SunsetGameTest implements FabricClientGameTest {
             NaturalityConfig.get().effects.sunBeams = false;
             if (!previous[1]) client.gui.hud.toggle();
         });
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runCommand("gamerule minecraft:advance_time false");

@@ -48,7 +48,7 @@ public final class PixelAmbientOcclusionGameTest implements FabricClientGameTest
             });
         }
         context.runOnClient(client -> TestFixtures.screen(client).onClose());
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("time set noon");
             server.runOnServer(s -> s.setWeatherParameters(12000, 0, false, false));

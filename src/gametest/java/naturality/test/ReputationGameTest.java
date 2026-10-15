@@ -43,7 +43,7 @@ public final class ReputationGameTest implements FabricClientGameTest {
         net.fabricmc.fabric.api.client.gametest.v1.world.TestWorldSave save;
         UUID[] playerId = new UUID[1], lineage = new UUID[1];
         Villager[] farmer = new Villager[1]; ItemEntity[] gift = new ItemEntity[1];
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.persistent(context).create()) {
             save = world.getWorldSave(); var server = world.getServer();
             server.runCommand("gamemode creative @a"); server.runCommand("tp @a 0 104 -4");
             server.runCommand("time set 1000"); server.runCommand("gamerule minecraft:advance_time false");

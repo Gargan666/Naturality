@@ -9,7 +9,7 @@ public final class DistortionInteractionGameTest implements FabricClientGameTest
     public static volatile double landingY;
     private static void check(boolean value,String message){if(!value)throw new AssertionError(message);}
     @Override public void runTest(ClientGameTestContext context) {
-        try(var world=context.worldBuilder().create()) {
+        try(var world=TestWorlds.disposable(context).create()) {
             var server=world.getServer();
             server.runCommand("gamemode spectator @a");server.runCommand("tp @a 0 141 0");context.waitTicks(30);
             server.runCommand("fill -8 138 -8 8 150 8 air");

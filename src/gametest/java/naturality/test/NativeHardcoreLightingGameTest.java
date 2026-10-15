@@ -11,7 +11,7 @@ import net.minecraft.world.level.MoonPhase;
 /** Rendering-only regression, independent of configuration-screen organization. */
 public final class NativeHardcoreLightingGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamerule minecraft:advance_time false");
             server.runCommand("gamemode spectator @a");

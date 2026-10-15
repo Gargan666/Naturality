@@ -22,7 +22,7 @@ public final class RiseGameTest implements FabricClientGameTest {
         check(cycle.state().rise()==100,"Rise override eases to full strength");
         var copy=new EndWeatherCycle(1);copy.restore(cycle.snapshot());
         for(int i=0;i<30000;i++){cycle.tick(true);copy.tick(true);check(cycle.snapshot().equals(copy.snapshot()),"Rise state and clocks survive save/load");}
-        try(var world=context.worldBuilder().create()) {
+        try(var world=TestWorlds.disposable(context).create()) {
             var server=world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runCommand("execute in minecraft:the_end run tp @a 0 30 -12 0 -15");
@@ -51,12 +51,7 @@ public final class RiseGameTest implements FabricClientGameTest {
                 var pos=new BlockPos(4,25,4);TestFixtures.level(c).setBlock(pos,Blocks.END_STONE.defaultBlockState(),3);
                 var blocked=new RiseParticle(TestFixtures.level(c),4.5,24.99,4.5);blocked.tick();
                 check(!blocked.isAlive(),"Rising particles stop at island terrain");
-                for(int x=-4;x<=4;x++)for(int y=0;y<4;y++) {
-                    var visual=new RiseParticle(TestFixtures.level(c),x,30+y*2,0);
-                    naturality.client.particle.WindParticleControl.mark(visual,true);c.particleEngine.add(visual);
-                }
             });
-            context.waitTicks(20);context.takeScreenshot("rise-aurora-colored-rectangles");
             server.runCommand("weather minecraft:the_end rise 0");context.waitTicks(205);
             context.runOnClient(c->check(EndWeatherSystem.state(TestFixtures.level(c)).rise()==0,"Rise can be disabled by command"));
         }

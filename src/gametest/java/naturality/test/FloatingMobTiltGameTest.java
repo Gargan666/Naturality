@@ -12,7 +12,7 @@ import java.util.Set;
 public final class FloatingMobTiltGameTest implements FabricClientGameTest {
     public void runTest(ClientGameTestContext context) {
         Set<String> ids=Set.of("vex","allay","breeze","blaze","parrot");
-        try(var world=context.worldBuilder().create()) {
+        try(var world=TestWorlds.disposable(context).create()) {
             var server=world.getServer();
             server.runCommand("gamemode spectator @a"); server.runCommand("tp @a 0 103 -12 0 0");
             int x=-4;
@@ -45,7 +45,6 @@ public final class FloatingMobTiltGameTest implements FabricClientGameTest {
                 }
                 if(count!=5) throw new AssertionError("All five floating mob renderers must be covered");
             });
-            context.takeScreenshot("configured-floating-mob-tilt");
         }
     }
 }

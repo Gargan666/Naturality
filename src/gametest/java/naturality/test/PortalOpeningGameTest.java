@@ -29,7 +29,7 @@ public final class PortalOpeningGameTest implements FabricClientGameTest {
         boolean introConfigured = NaturalityServerConfig.get().portalIntroAnimation;
         NaturalityConfig.get().portalChanges.portalBlockChanges = true;
         NaturalityServerConfig.get().portalIntroAnimation = true;
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             world.getConnection().waitForChunksRender();
             context.runOnClient(PortalOpeningGameTest::checkSoundLifecycle);
             var server = world.getServer();

@@ -45,7 +45,7 @@ public final class RenderDetailGameTest implements FabricClientGameTest {
                 image.setPixel(1, 0, 0xFF6080A0);
                 check(DistantTextures.average(image, 2, 1) == 0xFF406080, "Average color matches both opaque texels");
             }
-            try (var world = context.worldBuilder().create()) {
+            try (var world = TestWorlds.disposable(context).create()) {
                 context.runOnClient(TextureLodChecks::verify);
                 var server = world.getServer();
                 server.runCommand("gamemode spectator @a");

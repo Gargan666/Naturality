@@ -26,7 +26,7 @@ public final class StarfallGameTest implements FabricClientGameTest {
         var restored=new EndWeatherCycle(2);restored.restore(cycle.snapshot());
         for(int i=0;i<4000;i++){cycle.tick(true);restored.tick(true);check(cycle.snapshot().equals(restored.snapshot()),"Starfall clocks and random sequence persist exactly");}
         cycle.set("starfall",0);cycle.tick(false);check(cycle.state().starfall()>0,"Shower fades out smoothly");
-        try(var world=context.worldBuilder().create()) {
+        try(var world=TestWorlds.disposable(context).create()) {
             var server=world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runCommand("execute in minecraft:the_end run tp @a 0 132 -8 0 0");

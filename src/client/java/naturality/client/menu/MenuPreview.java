@@ -25,10 +25,6 @@ public final class MenuPreview {
     private static java.util.concurrent.CompletableFuture<MenuPreviewLoader.Prepared> preparation;
     private static Request loading;
     private static boolean connected;
-    public static boolean temporaryPath(Path path) {
-        Path normalized = path.toAbsolutePath().normalize();
-        return temporaryRoots.stream().anyMatch(root -> normalized.startsWith(root.toAbsolutePath().normalize()));
-    }
     public static void cancelPreparation() {
         generation++;
         pending = null; loading = null; starting = ready = false;
@@ -81,7 +77,7 @@ public final class MenuPreview {
     private static volatile net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level> previewDimension = net.minecraft.world.level.Level.OVERWORLD;
     private static boolean dimensionTransferQueued;
     private static long seed;
-    private static final java.util.concurrent.ConcurrentLinkedQueue<Path> temporaryRoots = new java.util.concurrent.ConcurrentLinkedQueue<>();
+    private static final java.util.concurrent.ConcurrentLinkedQueue<naturality.util.DisposableWorlds.Scope> temporaryRoots = new java.util.concurrent.ConcurrentLinkedQueue<>();
     public static boolean owns(IntegratedServer candidate) { return candidate == server; }
     public static void claimServer(IntegratedServer candidate) { if (creating) { server = candidate; privateServers.put(candidate, true); naturality.weather.PreviewEnvironment.register(candidate, selectionPreview); } }
     public static boolean privateServer(@org.jspecify.annotations.Nullable IntegratedServer candidate) { return candidate != null && privateServers.containsKey(candidate); }
@@ -142,7 +138,8 @@ public final class MenuPreview {
         if (stopped) return;
         // Existing non-menu test suites retain their own world ownership.
         String suites = System.getProperty("naturality.test.suites");
-        if (suites != null && !java.util.Arrays.asList(suites.split(",")).contains("menu-world")) return;
+        String activeCheck = System.getProperty("naturality.test.activeCheck", "");
+        if (suites != null && !activeCheck.equals("menu-world") && !activeCheck.equals("menu-no-save")) return;
         // Fabric's test scheduler must finish its own overlay/thread barrier before a test owns a server.
         if (suites != null && !attempted && client.gui.overlay() != null) return;
         if (loading != null && client.gui.screen() != loading.screen) {
@@ -263,7 +260,7 @@ public final class MenuPreview {
         seed = request.context == null ? ThreadLocalRandom.current().nextLong() : request.context.options().seed();
         long token = ++generation;
         try {
-            directory = Files.createTempDirectory("naturality-menu-world-"); temporaryRoots.add(directory);
+            directory = Files.createTempDirectory("naturality-menu-world-"); temporaryRoots.add(naturality.util.DisposableWorlds.open(directory));
             Path saved = null;
             if (request.saved != null) {
                 var base = client.getLevelSource().getBaseDir().toAbsolutePath().normalize();
@@ -315,14 +312,18 @@ public final class MenuPreview {
         discard(client, new TitleScreen());
     }
     private static void cleanFiles() {
-        for (Path root : temporaryRoots) cleanFiles(root);
+        for (var scope : temporaryRoots) {
+            if (cleanFiles(scope.root())) { scope.close(); temporaryRoots.remove(scope); }
+        }
     }
-    private static void cleanFiles(Path root) {
-        if (root == null || !root.getFileName().toString().startsWith("naturality-menu-world-")) return;
+    private static boolean cleanFiles(Path root) {
+        if (root == null || !root.getFileName().toString().startsWith("naturality-menu-world-")) return false;
+        if (!Files.exists(root)) return true;
         try (var paths = Files.walk(root)) {
             for (Path path : paths.sorted(Comparator.reverseOrder()).toList())
                 if (path.toAbsolutePath().normalize().startsWith(root.toAbsolutePath().normalize())) Files.deleteIfExists(path);
-        } catch (IOException error) { Naturality.LOGGER.debug("Menu preview cleanup deferred", error); }
+            return true;
+        } catch (IOException error) { Naturality.LOGGER.debug("Menu preview cleanup deferred", error); return false; }
     }
     private MenuPreview() { }
 }

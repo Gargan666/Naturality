@@ -11,7 +11,7 @@ import net.minecraft.world.entity.monster.Creeper;
 
 public final class CreeperBiomeGameTest implements FabricClientGameTest {
     public void runTest(ClientGameTestContext context) {
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runCommand("tp @a 0 105 -6 0 15");

@@ -34,7 +34,7 @@ public final class VillagerGateGameTest implements FabricClientGameTest {
         return body;
     }
     @Override public void runTest(ClientGameTestContext context) {
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("time set 1000");
             server.runCommand("gamerule minecraft:advance_time false");

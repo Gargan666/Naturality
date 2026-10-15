@@ -25,7 +25,7 @@ public final class WaterFogOcclusionGameTest implements FabricClientGameTest {
             client.options.renderDistance().set(5);
             client.options.setCameraType(CameraType.THIRD_PERSON_BACK);
         });
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             context.runOnClient(client -> client.options.renderDistance().set(4));
             var server = world.getServer();
             server.runCommand("gamemode creative @a");

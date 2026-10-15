@@ -12,7 +12,7 @@ public final class LiquidSlopesGameTest implements FabricClientGameTest {
         var saved=NaturalityConfig.get().liquids;
         boolean[] options=new boolean[2];
         context.runOnClient(c->{NaturalityConfig.get().liquids=new NaturalityConfig.Liquids();options[0]=c.options.improvedTransparency().get();options[1]=c.gui.hud.isHidden();if(!options[1])c.gui.hud.toggle();});
-        try(var world=context.worldBuilder().create()) {
+        try(var world=TestWorlds.disposable(context).create()) {
             var server=world.getServer();
             server.runCommand("gamemode spectator @a");server.runCommand("time set 6000");server.runCommand("tick freeze");
             server.runCommand("fill -2 98 -2 10 99 10 stone");

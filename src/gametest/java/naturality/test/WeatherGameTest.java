@@ -33,7 +33,7 @@ public final class WeatherGameTest implements FabricClientGameTest {
         p.rain = 50; p.wind = 100; p.temperature = 0;
         try {
             checkMath();
-            try (var world = context.worldBuilder().create()) {
+            try (var world = TestWorlds.disposable(context).create()) {
                 var server = world.getServer();
                 server.runOnServer(s -> WeatherWorldData.get(s).setProfile("minecraft:overworld", p));
                 server.runCommand("gamemode spectator @a");

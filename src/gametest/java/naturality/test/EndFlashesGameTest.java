@@ -77,7 +77,7 @@ public final class EndFlashesGameTest implements FabricClientGameTest {
         check(EndFlashes.extraWeight(0, 10) == 0 && EndFlashes.power(10) == 1
             && EndFlashes.extraWeight(4, 20) == 1 && EndFlashes.power(20) > EndFlashes.power(10),
             "High strength adds five pulses and brightens vanilla flashes");
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runOnServer(s -> {
                 for (var level : s.getAllLevels()) level.getGameRules().set(

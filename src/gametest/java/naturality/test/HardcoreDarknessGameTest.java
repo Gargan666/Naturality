@@ -8,7 +8,6 @@ import naturality.client.lighting.HardcoreDarkness;
 
 public final class HardcoreDarknessGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
-        checkConfig();
         context.runOnClient(client -> {
             client.gui.setScreen(new naturality.client.config.NaturalityConfigScreen(new net.minecraft.client.gui.screens.TitleScreen()));
             press(client.gui.screen(), "Lighting and Atmosphere");
@@ -25,7 +24,7 @@ public final class HardcoreDarknessGameTest implements FabricClientGameTest {
             TestFixtures.screen(client).onClose();
             TestFixtures.screen(client).onClose();
         });
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamerule minecraft:advance_time false");
             server.runOnServer(s -> s.setWeatherParameters(12000, 0, false, false));

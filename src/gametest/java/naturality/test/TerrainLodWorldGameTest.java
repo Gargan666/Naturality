@@ -126,7 +126,7 @@ public final class TerrainLodWorldGameTest implements FabricClientGameTest {
         try (var recording=new Recording(Configuration.getConfiguration("profile"))) {
             Files.createDirectories(directory);
             recording.start();
-            try (var world=context.worldBuilder().setUseConsistentSettings(false).adjustSettings(s -> s.setSeed("84219871")).create()) {
+            try (var world=TestWorlds.disposable(context).setUseConsistentSettings(false).adjustSettings(s -> s.setSeed("84219871")).create()) {
                 effects.distantTextures=effects.distantDetails=true;
                 var server=world.getServer();
                 server.runOnServer(s -> {

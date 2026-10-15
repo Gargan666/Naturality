@@ -31,7 +31,7 @@ public final class ButcherWorkGameTest implements FabricClientGameTest {
         boolean[] born = {false}, finished = {false};
         boolean[] swordUsed = {false};
         long[] birthTime = {-1};
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("time set 3000");
             server.runCommand("gamerule minecraft:advance_time false");

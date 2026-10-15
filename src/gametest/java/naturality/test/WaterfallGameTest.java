@@ -31,7 +31,7 @@ public final class WaterfallGameTest implements FabricClientGameTest {
             particleStatus[0]=c.options.particles().get();c.options.particles().set(ParticleStatus.ALL);
             if(!saved[3])c.gui.hud.toggle();
         });
-        try(var world=context.worldBuilder().create()) {
+        try(var world=TestWorlds.disposable(context).create()) {
             var server=world.getServer();
             server.runCommand("gamemode spectator @a");server.runOnServer(s -> s.setWeatherParameters(12000, 0, false, false));server.runCommand("time set 6000");
             server.runCommand("tp @a 4.5 102.5 -5.5 35 12");

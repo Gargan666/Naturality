@@ -18,7 +18,7 @@ public final class ShortDistanceGameTest implements FabricClientGameTest {
             oit[0] = c.options.improvedTransparency().get();
             cloud[0] = c.options.cloudStatus().get();
         });
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             context.runOnClient(c -> {
                 c.options.renderDistance().set(2);

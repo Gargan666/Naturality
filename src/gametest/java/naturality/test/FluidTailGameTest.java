@@ -16,7 +16,7 @@ public final class FluidTailGameTest implements FabricClientGameTest {
             saved[0]=c.options.improvedTransparency().get();saved[1]=c.gui.hud.isHidden();
             if(!saved[1])c.gui.hud.toggle();
         });
-        try(var world=context.worldBuilder().create()) {
+        try(var world=TestWorlds.disposable(context).create()) {
             var server=world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runCommand("time set 6000");

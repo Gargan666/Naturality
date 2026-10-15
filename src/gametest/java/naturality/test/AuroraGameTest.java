@@ -51,7 +51,7 @@ public final class AuroraGameTest implements FabricClientGameTest {
             client.options.cloudStatus().set(CloudStatus.OFF);
             naturality.config.NaturalityConfig.get().effects.auroraSegments = 2;
         });
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runCommand("time set midnight");

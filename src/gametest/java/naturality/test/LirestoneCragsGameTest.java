@@ -24,7 +24,7 @@ public final class LirestoneCragsGameTest implements FabricClientGameTest {
     }
 
     @Override public void runTest(ClientGameTestContext context) {
-        try(var world=context.worldBuilder().create()) {
+        try(var world=TestWorlds.disposable(context).create()) {
             var server=world.getServer();BlockPos[] view={null};
             server.runCommand("gamerule minecraft:random_tick_speed 0");
             server.runOnServer(s -> {

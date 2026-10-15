@@ -37,7 +37,7 @@ public final class MobArrowsGameTest implements FabricClientGameTest {
             || Math.abs(z.length() - 1) > .00001F || Math.abs(x.dot(y)) > .00001F
             || Math.abs(x.dot(z)) > .00001F || Math.abs(y.dot(z)) > .00001F)
             throw new AssertionError("Embedded arrows must retain regular size without model squash");
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runCommand("fill -8 100 -8 8 100 8 sea_lantern");

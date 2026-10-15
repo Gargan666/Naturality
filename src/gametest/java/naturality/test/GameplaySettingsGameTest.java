@@ -24,7 +24,7 @@ public final class GameplaySettingsGameTest implements FabricClientGameTest {
         boolean wrapping = config.fireWrapping, vanilla = config.vanillaPortalEntry;
         boolean snowWrapping = config.snowWrapping, compaction = config.snowCompaction, thaw = config.weatherThaw, depth = config.weatherSnowAccumulation;
         var pos = new BlockPos(0, 101, 0);
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode survival @a");
             server.runCommand("tp @a 0 104 -5");

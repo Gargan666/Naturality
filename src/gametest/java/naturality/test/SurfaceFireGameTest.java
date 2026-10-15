@@ -14,7 +14,7 @@ import net.minecraft.world.level.block.FireBlock;
 public final class SurfaceFireGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
         checkSimulation();
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runCommand("time set 6000");

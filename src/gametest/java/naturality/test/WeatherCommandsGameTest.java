@@ -22,7 +22,7 @@ public final class WeatherCommandsGameTest implements FabricClientGameTest {
         throw new AssertionError("Command must reject: " + command);
     }
     @Override public void runTest(ClientGameTestContext context) {
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runOnServer(s -> {
                 var weatherData = WeatherWorldData.get(s);

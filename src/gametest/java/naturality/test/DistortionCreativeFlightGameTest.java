@@ -8,7 +8,7 @@ import net.minecraft.world.phys.Vec3;
 public final class DistortionCreativeFlightGameTest implements FabricClientGameTest {
     private static void check(boolean value,String message){if(!value)throw new AssertionError(message);}
     @Override public void runTest(ClientGameTestContext context) {
-        try(var world=context.worldBuilder().create()) {
+        try(var world=TestWorlds.disposable(context).create()) {
             var server=world.getServer();server.runCommand("gamemode creative @a");server.runCommand("tp @a 0 180 0");
             server.runOnServer(s->{var p=s.overworld().players().getFirst();p.getAbilities().flying=true;p.onUpdateAbilities();});
             context.waitTicks(20);

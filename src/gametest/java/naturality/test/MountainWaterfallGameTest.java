@@ -14,7 +14,7 @@ import net.minecraft.tags.FluidTags;
 public final class MountainWaterfallGameTest implements FabricClientGameTest {
     private static void check(boolean value,String message) {if(!value)throw new AssertionError(message);}
     @Override public void runTest(ClientGameTestContext context) {
-        try(var world=context.worldBuilder().create()) {
+        try(var world=TestWorlds.disposable(context).create()) {
             var server=world.getServer();
             server.runCommand("gamerule minecraft:random_tick_speed 0");
             for(int y=120;y<180;y+=10)server.runCommand("fill -16 "+y+" -16 31 "+(y+9)+" 31 air");

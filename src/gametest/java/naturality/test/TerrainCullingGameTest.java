@@ -17,7 +17,7 @@ public final class TerrainCullingGameTest implements FabricClientGameTest {
         // Sodium owns a different visibility graph; this reproduces the native renderer report.
         if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("sodium")) return;
         context.runOnClient(client -> client.options.renderDistance().set(10));
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runCommand("weather minecraft:overworld rain 0");

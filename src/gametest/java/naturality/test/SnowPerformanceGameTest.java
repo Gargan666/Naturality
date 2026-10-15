@@ -15,7 +15,7 @@ public final class SnowPerformanceGameTest implements FabricClientGameTest {
     @SuppressWarnings("unused") // Volatile benchmark sink prevents dead-code elimination; deliberately never read.
     private static volatile double sink;
     @Override public void runTest(ClientGameTestContext context) {
-        try (var _ = context.worldBuilder().create()) {
+        try (var _ = TestWorlds.disposable(context).create()) {
             context.runOnClient(client -> {
                 for (var support : new net.minecraft.world.level.block.state.BlockState[]{
                         Blocks.STONE.defaultBlockState(), Blocks.STONE_SLAB.defaultBlockState(),

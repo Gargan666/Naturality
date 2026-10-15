@@ -8,8 +8,6 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 /** Real terrain shader checks, including OIT alpha passes and resource reload. */
 public final class FluidsGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
-        checkSimulation();
-        checkConfig();
         var previousLiquids = naturality.config.NaturalityConfig.get().liquids;
         boolean[] saved = new boolean[2];
         context.runOnClient(client -> {
@@ -18,7 +16,7 @@ public final class FluidsGameTest implements FabricClientGameTest {
             saved[1] = client.gui.hud.isHidden();
             if (!saved[1]) client.gui.hud.toggle();
         });
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             context.runOnClient(client -> {
                 client.gui.setScreen(new naturality.client.config.NaturalityConfigScreen(new net.minecraft.client.gui.screens.TitleScreen()));
                 press(client.gui.screen(), "Blocks and Effects");
@@ -189,7 +187,7 @@ public final class FluidsGameTest implements FabricClientGameTest {
         }
     }
 
-    private static void checkSimulation() {
+    static void checkSimulation() {
         for (boolean lava : new boolean[]{false, true}) for (boolean flow : new boolean[]{false, true}) {
             var simulation = new FluidSimulation(lava, flow, 1234);
             var reference = new FluidSimulation(lava, flow, 1234);
@@ -221,7 +219,7 @@ public final class FluidsGameTest implements FabricClientGameTest {
         }
     }
 
-    private static void checkConfig() {
+    static void checkConfig() {
         var gson = new com.google.gson.Gson();
         var defaults = gson.fromJson("{}", naturality.config.NaturalityConfig.class).liquids;
         if (!defaults.water || !defaults.lava || !defaults.flowingLava) throw new AssertionError("Missing liquid defaults");

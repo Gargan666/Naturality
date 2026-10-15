@@ -24,7 +24,7 @@ public final class ZombieWalkGameTest implements FabricClientGameTest {
             last=current;
         }
         if(motion.pose(1,2).x>.001) throw new AssertionError("Stopped zombie returns upright");
-        try(var world=context.worldBuilder().create()) {
+        try(var world=TestWorlds.disposable(context).create()) {
             var server=world.getServer();
             server.runCommand("gamemode spectator @a"); server.runCommand("time set midnight"); server.runCommand("effect give @a night_vision infinite 0 true");
             server.runCommand("fill -8 100 -8 8 100 16 stone");
@@ -42,9 +42,6 @@ public final class ZombieWalkGameTest implements FabricClientGameTest {
                 }
                 if(count!=1) throw new AssertionError("Zombie fixture missing");
             });
-            server.runCommand("tp @a -6 103 3 -90 10");
-            context.waitTicks(2);
-            context.takeScreenshot("zombie-forward-lean-sway");
             Zombie[] blocked=new Zombie[1];
             server.runOnServer(s -> {
                 for(var e:s.overworld().getAllEntities()) if(e instanceof Zombie zombie) blocked[0]=zombie;
@@ -69,7 +66,6 @@ public final class ZombieWalkGameTest implements FabricClientGameTest {
                     if(lean.x>.1 || Math.abs(lean.y)>.1) throw new AssertionError("Blocked jumping zombie must ease upright despite attempted movement");
                 }
             });
-            context.takeScreenshot("zombie-blocked-jump-upright");
         }
     }
 }

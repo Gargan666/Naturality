@@ -40,7 +40,7 @@ public final class FeatureStartupGameTest implements FabricClientGameTest {
                 check(shader.contains("naturality:") == visuals, "Overhaul shader override must follow visual settings");
             } catch (java.io.IOException error) { throw new AssertionError(error); }
         });
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode creative @a");
             server.runCommand("fill -8 100 -8 8 100 8 stone");

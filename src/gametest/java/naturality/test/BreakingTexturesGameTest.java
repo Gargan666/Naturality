@@ -57,7 +57,7 @@ public final class BreakingTexturesGameTest implements FabricClientGameTest {
         });
         boolean[] previous = new boolean[1];
         context.runOnClient(client -> previous[0] = client.options.improvedTransparency().get());
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runCommand("tp @a 0 101 3 0 12");

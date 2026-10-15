@@ -31,7 +31,7 @@ public final class CrystalVisualGameTest implements FabricClientGameTest {
             var actual=new Quaternionf().rotationZYX(model.outerGlass.zRot,model.outerGlass.yRot,model.outerGlass.xRot);
             check(Math.abs(expected.dot(actual))>.9999,"Cube spin is half vanilla speed");
         });
-        try(var world=context.worldBuilder().create()) {
+        try(var world=TestWorlds.disposable(context).create()) {
             var server=world.getServer();server.runCommand("gamemode spectator @a");
             server.runCommand("setblock 0 100 0 obsidian");
             server.runCommand("summon end_crystal 0.5 101 0.5 {ShowBottom:1b}");

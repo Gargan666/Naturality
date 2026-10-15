@@ -26,7 +26,7 @@ public final class MaddenedCreeperGameTest implements FabricClientGameTest {
             min = Math.min(min, pulse); max = Math.max(max, pulse);
         }
         check(min >= .219F && max <= .421F && max - min > .19F, "Continuous bounded later fuse pulse");
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runCommand("time set noon");

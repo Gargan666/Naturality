@@ -40,7 +40,7 @@ public final class EndFlightGameTest implements FabricClientGameTest {
         } catch(ReflectiveOperationException e) {throw new AssertionError(e);}
     }
     @Override public void runTest(ClientGameTestContext context) {
-        try(var world=context.worldBuilder().create()) {
+        try(var world=TestWorlds.disposable(context).create()) {
             var server=world.getServer();
             server.runOnServer(s -> TestFixtures.disableDragonFight(TestFixtures.require(s.getLevel(Level.END), "End world")));
             server.runCommand("gamerule minecraft:advance_weather false");

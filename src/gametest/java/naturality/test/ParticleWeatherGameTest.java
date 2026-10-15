@@ -36,7 +36,7 @@ public final class ParticleWeatherGameTest implements FabricClientGameTest {
             quality[0]=c.options.particles().get(); radius[0]=c.options.weatherRadius().get(); oit[0]=c.options.improvedTransparency().get();
             c.options.particles().set(ParticleStatus.ALL); c.options.weatherRadius().set(10);
         });
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runOnServer(s -> naturality.weather.WeatherWorldData.get(s).setProfile("minecraft:overworld", profile));
             server.runCommand("gamemode spectator @a");

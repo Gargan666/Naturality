@@ -76,7 +76,7 @@ public final class ConfusionGameTest implements FabricClientGameTest {
         layout.restore(random);
         for(int i=0;i<33;i++) layout.tick();
         for(int i=0;i<9;i++) check(layout.coordinate(i,0,9,false,20)==i*20,"Interrupted animation returns home");
-        try(var world=context.worldBuilder().create()) {
+        try(var world=TestWorlds.disposable(context).create()) {
             var server=world.getServer(); server.runCommand("gamemode survival @a");
             server.runCommand("item replace entity @a hotbar.0 with diamond");
             server.runCommand("item replace entity @a hotbar.4 with emerald");

@@ -25,8 +25,7 @@ public final class ForestPerformanceGameTest implements FabricClientGameTest {
     private static volatile Object sink;
     private static void check(boolean value,String message) {if(!value)throw new AssertionError(message);}
     @Override public void runTest(ClientGameTestContext context) {
-        context.runOnClient(_ -> checkPortalMetadata());
-        try(var world=context.worldBuilder().create()) {
+        try(var world=TestWorlds.disposable(context).create()) {
             var server=world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runCommand("tp @a 0 130 0");

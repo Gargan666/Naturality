@@ -80,7 +80,7 @@ public final class ShaderStallGameTest implements FabricClientGameTest {
         reload.join();
         context.runOnClient(_ -> coldPipeline(1));
         int previous = TestFixtures.require(context.computeOnClient(c -> c.options.renderDistance().get()), "context.computeOnClient(c -> c.options.renderDistance().get())");
-        try (var world = context.worldBuilder().setUseConsistentSettings(false)
+        try (var world = TestWorlds.disposable(context).setUseConsistentSettings(false)
                 .adjustSettings(s -> s.setSeed("84219871")).create()) {
             var server = world.getServer();
             server.runOnServer(s -> check(s.overworld().getChunkSource().getGenerator() instanceof NoiseBasedChunkGenerator,

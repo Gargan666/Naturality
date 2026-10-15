@@ -258,7 +258,6 @@ public final class ConfigMenuGameTest implements FabricClientGameTest {
         context.waitFor(client -> client.gui.overlay() == null);
 
         var gson = new com.google.gson.Gson();
-        ConfigPresetGameTest.checkPresets();
         var defaults = gson.fromJson("{}", NaturalityConfig.class);
         if (!defaults.liquids.heatWaves) throw new AssertionError("Existing configs must keep heat waves enabled");
         if (defaults.liquids.heatWavePower != 50) throw new AssertionError("Old configs must receive reduced heat power");
@@ -278,7 +277,7 @@ public final class ConfigMenuGameTest implements FabricClientGameTest {
         if (restored.effects.leafRestTicks != 0 || restored.fog.borderFullPercent != 100)
             throw new AssertionError("New controls must clamp and survive JSON round trips");
 
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             world.getConnection().waitForClientboundPackets();
             context.runOnClient(client -> {
                 var effects = NaturalityConfig.get().effects;

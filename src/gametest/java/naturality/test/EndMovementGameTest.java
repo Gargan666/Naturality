@@ -84,7 +84,7 @@ public final class EndMovementGameTest implements FabricClientGameTest {
         expect(failures, player.fallDistance == 0 && player.onGround(), "Ceiling landing must clear fall distance and ground the player");
     }
     @Override public void runTest(ClientGameTestContext context) {
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runOnServer(s -> TestFixtures.disableDragonFight(TestFixtures.require(s.getLevel(Level.END), "End world")));
             server.runCommand("gamerule minecraft:advance_weather false");

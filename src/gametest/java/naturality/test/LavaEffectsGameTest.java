@@ -11,7 +11,7 @@ public final class LavaEffectsGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
         boolean[] saved=new boolean[3];
         context.runOnClient(c->{saved[0]=NaturalityConfig.get().liquids.water;saved[1]=NaturalityConfig.get().liquids.lava;saved[2]=c.options.improvedTransparency().get();NaturalityConfig.get().liquids.water=false;NaturalityConfig.get().liquids.lava=true;});
-        try(var world=context.worldBuilder().create()) {
+        try(var world=TestWorlds.disposable(context).create()) {
             var server=world.getServer();
             var weather=new naturality.weather.WeatherProfile(true);
             weather.overrideRain=weather.overrideTemperature=true;

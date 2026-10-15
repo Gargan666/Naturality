@@ -24,7 +24,7 @@ public final class EndEyeGlowGameTest implements FabricClientGameTest {
         context.runOnClient(client -> previousTransparency[0] = client.options.improvedTransparency().get());
         NaturalityConfig.get().portalChanges.glowEffect = false;
         BlockPos pos = new BlockPos(0, 100, 0);
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode creative @a");
             server.runCommand("fill -4 99 -4 4 99 4 smooth_quartz");

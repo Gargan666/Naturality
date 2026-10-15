@@ -10,7 +10,7 @@ import net.minecraft.world.level.block.Blocks;
 /** Snapshot-only lighting must work without accessing a live light engine. */
 public final class SnowRendererCompatibilityGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
-        try(var world=context.worldBuilder().create()) {
+        try(var world=TestWorlds.disposable(context).create()) {
         context.runOnClient(_ -> {
             SnowFaceVisibilityChecks.run();
             for(int brightness : new int[]{0,15}) {

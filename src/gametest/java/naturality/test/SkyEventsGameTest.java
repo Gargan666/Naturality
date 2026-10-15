@@ -55,7 +55,7 @@ public final class SkyEventsGameTest implements FabricClientGameTest {
                 check(MeteorShower.frame(start, 40, 40 + 2 * (f - start - 2)) == f, "Ordered outro");
         }
         check(MeteorShower.opacity(0) == 0 && MeteorShower.opacity(6) == 1 && MeteorShower.opacity(90) == 1, "Fade in only");
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("skyevent minecraft:overworld meteor_shower 20");
             server.runCommand("gamemode spectator @a");
@@ -88,7 +88,7 @@ public final class SkyEventsGameTest implements FabricClientGameTest {
             context.waitTicks(30);
             context.runOnClient(_ -> check(MeteorShower.count() == 0 && MeteorShower.strength() == 0, "Dimension transition clears sprites"));
         }
-        try (var otherWorld = context.worldBuilder().create()) {
+        try (var otherWorld = TestWorlds.disposable(context).create()) {
             var server = otherWorld.getServer();
             server.runCommand("time set midnight");
             server.runOnServer(s -> {

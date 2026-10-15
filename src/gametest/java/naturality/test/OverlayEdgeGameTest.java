@@ -28,19 +28,6 @@ public final class OverlayEdgeGameTest implements FabricClientGameTest {
 
     @Override public void runTest(ClientGameTestContext context) {
         context.runOnClient(_ -> checkGpu());
-        try(var world=context.worldBuilder().create()) {
-            var server=world.getServer();
-            server.runCommand("gamemode spectator @a");server.runCommand("time set midnight");
-            server.runCommand("fill -3 100 -3 3 104 3 grass_block");
-            server.runCommand("fill -1 101 -1 1 103 1 air");
-            server.runCommand("setblock 0 101 0 torch");
-            server.runCommand("tp @a 0 101 0 45 -30");
-            world.getConnection().waitForClientboundPackets();context.waitTicks(15);
-            world.getConnection().waitForChunksRender();context.takeScreenshot("grass-overlay-edge-no-snow");
-            server.runCommand("fill -3 105 -3 3 105 3 snow");
-            world.getConnection().waitForClientboundPackets();context.waitTicks(10);
-            world.getConnection().waitForChunksRender();context.takeScreenshot("grass-overlay-edge-snow");
-        }
     }
 
     private static void checkGpu() {

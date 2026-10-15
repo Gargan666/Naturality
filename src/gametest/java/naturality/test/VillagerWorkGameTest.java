@@ -35,7 +35,7 @@ public final class VillagerWorkGameTest implements FabricClientGameTest {
         CompostFixture[] compostFixture = new CompostFixture[1];
         var crop = new BlockPos(3, 101, 0);
         var compost = new BlockPos(0, 101, 1);
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("time set 3000");
             server.runCommand("gamerule minecraft:advance_time false");

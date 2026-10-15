@@ -29,7 +29,7 @@ public final class WaterLightPerformanceGameTest implements FabricClientGameTest
     @Override public void runTest(ClientGameTestContext context) {
         var original = NaturalityConfig.get().liquids;
         NaturalityConfig.get().liquids = new NaturalityConfig.Liquids();
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runCommand("tp @a 0 112 0 0 60");

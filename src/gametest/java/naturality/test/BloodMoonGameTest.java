@@ -27,7 +27,7 @@ public final class BloodMoonGameTest implements FabricClientGameTest {
         context.runOnClient(client -> {
             oldStatus[0] = client.options.cloudStatus().get(); oldOit[0] = client.options.improvedTransparency().get();
         });
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamerule minecraft:advance_time false");
             server.runCommand("time set midnight");
@@ -102,7 +102,7 @@ public final class BloodMoonGameTest implements FabricClientGameTest {
                 client.options.cloudStatus().set(oldStatus[0]); client.options.improvedTransparency().set(oldOit[0]);
             });
         }
-        try (var _ = context.worldBuilder().create()) {
+        try (var _ = TestWorlds.disposable(context).create()) {
             context.waitTicks(5);
             context.runOnClient(_ -> check(BloodMoonClient.current() == 0, "Another world inherits no blood tint"));
         }

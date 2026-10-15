@@ -18,7 +18,7 @@ public final class FogCullingGameTest implements FabricClientGameTest {
         check(FogCulling.hidden(0,0,0,1000,20,-1,25,-1,1,30,1), "Cylindrical fog includes vertical distance");
         check(!FogCulling.hidden(0,0,0,1000,20,14,-1,14,15,1,15), "Cylinder differs from sphere at diagonal");
         check(!FogCulling.hidden(0,0,0,15,20,Double.NaN,0,0,50,1,1), "Malformed bounds fail open");
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             world.getServer().runCommand("gamemode spectator @a");
             world.getServer().runCommand("tp @a 0 105 0 0 0");
             world.getServer().runCommand("fill -16 96 8 16 102 64 stone");

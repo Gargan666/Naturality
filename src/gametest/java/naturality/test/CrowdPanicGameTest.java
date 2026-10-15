@@ -26,7 +26,7 @@ public final class CrowdPanicGameTest implements FabricClientGameTest {
 
     @Override public void runTest(ClientGameTestContext context) {
         Mob[] crowd = new Mob[3];
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runOnServer(s -> {
                 var level = s.overworld();

@@ -79,7 +79,7 @@ public final class WindRendererGameTest implements FabricClientGameTest {
             old[1]=client.options.improvedTransparency().get();
             NaturalityConfig.get().effects.foliageWind=true;
         });
-        try(var world=context.worldBuilder().create()) {
+        try(var world=TestWorlds.disposable(context).create()) {
             var server=world.getServer();
             server.runOnServer(s -> {
                 var profile=new WeatherProfile(true);

@@ -17,7 +17,7 @@ public final class AmbientHorrorGameTest implements FabricClientGameTest {
     public void runTest(ClientGameTestContext context) {
         if (AmbientHorror.opacity(30, -1, 0) != 1 || AmbientHorror.opacity(30, 30, 0) != 0
                 || AmbientHorror.opacity(30, 15, 0) != .5F) throw new AssertionError("Smooth eye envelope");
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode creative @a");
             server.runCommand("fill -12 100 -12 12 106 32 stone");

@@ -13,7 +13,6 @@ public final class CloudsGameTest implements FabricClientGameTest {
         var oldClouds = new CloudStatus[1];
         boolean[] old = new boolean[2];
         context.runOnClient(client -> {
-            checkGeometry();
             oldClouds[0] = client.options.cloudStatus().get();
             old[0] = client.gui.hud.isHidden();
             old[1] = client.options.improvedTransparency().get();
@@ -23,7 +22,7 @@ public final class CloudsGameTest implements FabricClientGameTest {
             NaturalityConfig.get().clouds.base.speedPercent = 0;
             NaturalityConfig.get().clouds.upper.speedPercent = 0;
         });
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runOnServer(s -> s.setWeatherParameters(12000, 0, false, false));

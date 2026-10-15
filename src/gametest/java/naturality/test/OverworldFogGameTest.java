@@ -10,7 +10,7 @@ public final class OverworldFogGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
         var hideGui = new java.util.concurrent.atomic.AtomicBoolean();
         context.runOnClient(client -> { hideGui.set(client.gui.hud.isHidden()); if (!hideGui.get()) client.gui.hud.toggle(); });
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runOnServer(s -> s.setWeatherParameters(12000, 0, false, false));

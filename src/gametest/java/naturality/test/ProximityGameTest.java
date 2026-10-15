@@ -45,7 +45,7 @@ public final class ProximityGameTest implements FabricClientGameTest {
         }
         net.fabricmc.fabric.api.client.gametest.v1.world.TestWorldSave save;
         var expected = cycle.snapshot();
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.persistent(context).create()) {
             save = world.getWorldSave();
             var server = world.getServer();
             server.runCommand("gamemode spectator @a");
@@ -103,7 +103,7 @@ public final class ProximityGameTest implements FabricClientGameTest {
                     "Strength 8 is rejected without changing the automatic event");
             });
         }
-        try (var other = context.worldBuilder().create()) {
+        try (var other = TestWorlds.disposable(context).create()) {
             other.getServer().runOnServer(s -> check(SkyEvents.strength(s.overworld(), SkyEventType.PROXIMITY) == 0,
                 "Another world does not inherit the active planet"));
         }

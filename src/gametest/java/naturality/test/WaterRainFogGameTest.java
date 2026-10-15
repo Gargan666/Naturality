@@ -26,7 +26,7 @@ public final class WaterRainFogGameTest implements FabricClientGameTest {
             oit[0] = client.options.improvedTransparency().get();
             client.options.renderDistance().set(8);
         });
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runCommand("tp @a 0 105 0 0 16");

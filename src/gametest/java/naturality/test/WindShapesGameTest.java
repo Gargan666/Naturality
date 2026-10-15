@@ -63,7 +63,7 @@ public final class WindShapesGameTest implements FabricClientGameTest {
         check(player.getX()==before,"Nearby players without overlap must not be moved");
     }
     @Override public void runTest(ClientGameTestContext context) {
-        try(var world=context.worldBuilder().create()) {
+        try(var world=TestWorlds.disposable(context).create()) {
             var server=world.getServer();
             server.runCommand("gamemode creative @a");
             server.runCommand("gamerule minecraft:advance_weather true");

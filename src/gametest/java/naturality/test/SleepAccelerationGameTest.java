@@ -60,7 +60,7 @@ public final class SleepAccelerationGameTest implements FabricClientGameTest {
         var config = NaturalityServerConfig.get();
         boolean enabled = config.sleepAcceleration;
         int maximum = config.sleepMaxSpeed, ramp = config.sleepRampSeconds;
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             config.sleepAcceleration = true;
             config.sleepMaxSpeed = 2; config.sleepRampSeconds = 1;

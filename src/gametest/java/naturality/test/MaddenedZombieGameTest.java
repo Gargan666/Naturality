@@ -16,7 +16,7 @@ import net.minecraft.util.ProblemReporter;
 public final class MaddenedZombieGameTest implements FabricClientGameTest {
     private static void check(boolean condition, String message) { if (!condition) throw new AssertionError(message); }
     public void runTest(ClientGameTestContext context) {
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runCommand("time set midnight");

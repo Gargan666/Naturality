@@ -11,7 +11,7 @@ import net.minecraft.world.level.block.SnowLayerBlock;
 /** Focused coverage of the irregular-support precipitation path. */
 public final class SnowAccumulationGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
-        try (var world=context.worldBuilder().create()) {
+        try (var world=TestWorlds.disposable(context).create()) {
             var server=world.getServer();
             var profile=new WeatherProfile(true);
             profile.overrideRain=profile.overrideTemperature=profile.overrideWind=true;

@@ -15,7 +15,7 @@ public final class WaterRipplesGameTest implements FabricClientGameTest {
             NaturalityConfig.get().liquids.water=true;
             if(!saved[2])c.gui.hud.toggle();
         });
-        try(var world=context.worldBuilder().create()) {
+        try(var world=TestWorlds.disposable(context).create()) {
             var server=world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runCommand("time set 6000");

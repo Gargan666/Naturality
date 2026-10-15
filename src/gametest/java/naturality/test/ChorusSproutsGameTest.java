@@ -14,7 +14,7 @@ public final class ChorusSproutsGameTest implements FabricClientGameTest {
     private static void check(boolean value,String message) {if(!value)throw new AssertionError(message);}
 
     @Override public void runTest(ClientGameTestContext context) {
-        try(var world=context.worldBuilder().create()) {
+        try(var world=TestWorlds.disposable(context).create()) {
             var server=world.getServer();
             BlockPos[] view={null};
             server.runCommand("gamerule minecraft:random_tick_speed 0");

@@ -17,7 +17,7 @@ public final class ChunkSafetyGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
         checkSnowSearchBudget();
         net.fabricmc.fabric.api.client.gametest.v1.world.TestWorldSave save;
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.persistent(context).create()) {
             save = world.getWorldSave();
             var server = world.getServer();
             server.runCommand("gamerule minecraft:random_tick_speed 0");

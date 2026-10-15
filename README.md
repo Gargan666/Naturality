@@ -88,10 +88,11 @@ On macOS or Linux, use `./gradlew build`. The first build downloads dependencies
 `build` runs the portal geometry checks as well as compiling and packaging the mod. For a relevant in-game regression suite, use, for example:
 
 ```powershell
-.\gradlew.bat runClientGameTest "-PclientTests=fog,lighting"
+.\gradlew.bat listClientTests
+.\gradlew.bat runClientGameTest "-PclientTests=cloud-geometry,fluid-simulation"
 ```
 
-Choose small checks focused on the changed behavior; see [`AGENTS.md`](AGENTS.md) for testing guidance and [`PORTAL_GLOW.txt`](PORTAL_GLOW.txt) for portal details. The current suite selector does not skip normal content loading; a more selective pipeline is planned.
+Choose small checks focused on the changed behavior; the shared [test catalog](src/gametest/resources/naturality-tests.json) lists their fixture requirements. Agents need explicit user authorization to create game tests or run existing ones; authorization to create a test includes running it, and authorized tests may be rerun freely. Ordinary test worlds and menu previews use the same no-save API; persistence tests opt in explicitly. See [`AGENTS.md`](AGENTS.md) for adding checks and [`PORTAL_GLOW.txt`](PORTAL_GLOW.txt) for portal details. Selected checks load independently, but normal game/content initialization still runs; a more selective content-loading pipeline is planned.
 
 For Java warnings, run **Terminal > Run Task > Fabric: audit Java warnings**, or:
 

@@ -10,15 +10,12 @@ import org.joml.Vector3f;
 
 public final class FlameGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode spectator @a");
-            server.runCommand("fill -3 99 -3 3 99 3 stone");
-            server.runCommand("setblock 0 100 0 torch");
-            server.runCommand("setblock 1 100 0 soul_torch");
             server.runCommand("tp @a 0 101 -2 0 35");
             world.getConnection().waitForClientboundPackets();
-            world.getConnection().waitForChunksRender();
+            context.waitTicks(1); // Let the main camera receive the requested pitch.
             context.runOnClient(client -> {
                 for (var type : new SimpleParticleType[] {ParticleTypes.FLAME, ParticleTypes.SMALL_FLAME,
                         ParticleTypes.SOUL_FIRE_FLAME}) {
@@ -41,8 +38,6 @@ public final class FlameGameTest implements FabricClientGameTest {
                     check(!flame.isAlive(), "Flame must disappear when its animation finishes");
                 }
             });
-            context.waitTicks(10);
-            context.takeScreenshot("flame-world-up");
         }
     }
 

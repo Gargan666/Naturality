@@ -36,7 +36,7 @@ public final class GhastSquashGameTest implements FabricClientGameTest {
         if (motion.sample(1) >= 0) throw new AssertionError("Elastic overshoot");
         for (int i = 0; i < 25; i++) motion.tick(false);
         if (motion.sample(1) != 0) throw new AssertionError("Exact rest after release");
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runCommand("tp @a 0 103 -12 0 0");

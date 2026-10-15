@@ -7,7 +7,7 @@ import net.minecraft.core.particles.SimpleParticleType;
 
 public final class LeavesGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runCommand("fill -5 99 -5 5 99 5 stone");
@@ -58,13 +58,7 @@ public final class LeavesGameTest implements FabricClientGameTest {
                         sliding.remove();
                     }
                 }
-                for (int i = 0; i < 30; i++) {
-                    client.particleEngine.createParticle(ParticleTypes.CHERRY_LEAVES,
-                        (i % 6 - 3) * 0.3, 100.1 + i / 6 * 0.25, 0.3 + i % 3 * 0.3, 0, 0, 0);
-                }
             });
-            context.waitTicks(20);
-            context.takeScreenshot("leaves-tumbling-and-landed");
         }
     }
 

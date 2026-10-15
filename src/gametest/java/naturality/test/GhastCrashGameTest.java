@@ -48,7 +48,7 @@ public final class GhastCrashGameTest implements FabricClientGameTest {
         check(GhastCrash.fallStretch(0)==1 && GhastCrash.fallStretch(-1)==1,"No death deformation without downward speed");
         check(GhastCrash.fallStretch(1)<GhastCrash.fallStretch(2)
             && GhastCrash.fallStretch(20)<=1.06001F,"Subtle speed-dependent deformation limit");
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runCommand("fill -48 90 -48 48 90 48 stone");

@@ -27,7 +27,7 @@ public final class RenderRedundancyGameTest implements FabricClientGameTest {
     @SuppressWarnings("unused") // Volatile benchmark sink prevents dead-code elimination; deliberately never read.
     private static volatile Object sink;
     @Override public void runTest(ClientGameTestContext context) {
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runCommand("tp @a 0 112 0 0 60");

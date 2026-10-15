@@ -335,14 +335,8 @@ public final class MenuWorldGameTest implements FabricClientGameTest {
         context.runOnClient(_ -> check(naturality.client.weather.ParticleWeather.snowCount() > 0, "Cold preview displays near-camera snow"));
         context.takeScreenshot("menu-foreground-snow");
         var retiring = new AtomicReference<net.minecraft.client.server.IntegratedServer>();
-        var registryStamp = new AtomicReference<java.nio.file.attribute.FileTime>();
         context.runOnClient(client -> {
             retiring.set(client.getSingleplayerServer());
-            try {
-                // Fabric writes a registry compatibility index in the server constructor.
-                registryStamp.set(java.nio.file.Files.getLastModifiedTime(retiring.get().getWorldPath(
-                        net.minecraft.world.level.storage.LevelResource.ROOT).resolve("data/fabric/registry_entries.dat")));
-            } catch (java.io.IOException error) { throw new RuntimeException(error); }
             long startClose = System.nanoTime();
             MenuPreview.stop(client);
             check(System.nanoTime() - startClose < 1_000_000_000L, "Closing a preview returns without waiting for shutdown");
@@ -352,11 +346,8 @@ public final class MenuWorldGameTest implements FabricClientGameTest {
         context.waitFor(_ -> retiring.get().isShutdown(), 1200);
         try (var paths = java.nio.file.Files.walk(retiring.get().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT))) {
             var persisted = paths.filter(path -> path.toString().endsWith(".dat") || path.toString().endsWith(".mca"))
-                    .filter(path -> !path.endsWith(java.nio.file.Path.of("data/fabric/registry_entries.dat"))).toList();
+                    .toList();
             check(persisted.isEmpty(), "Preview startup, autosave and shutdown write no world/player/region data: " + persisted);
-            check(registryStamp.get().equals(java.nio.file.Files.getLastModifiedTime(retiring.get().getWorldPath(
-                    net.minecraft.world.level.storage.LevelResource.ROOT).resolve("data/fabric/registry_entries.dat"))),
-                    "Closing the preview does not rewrite even the startup registry index");
         } catch (java.io.IOException error) { throw new RuntimeException(error); }
         context.waitFor(client -> client.level == null && client.getSingleplayerServer() == null && client.gui.screen() instanceof TitleScreen);
         context.waitTicks(20);

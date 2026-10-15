@@ -10,7 +10,7 @@ import net.minecraft.util.RandomSource;
 /** Nighttime lantern beside ordinary and fitted snow in the same ground plane. */
 public final class SnowSurfaceLightingGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runCommand("time set midnight");
@@ -60,8 +60,6 @@ public final class SnowSurfaceLightingGameTest implements FabricClientGameTest {
                     System.out.println("Snow lighting modes at " + pos + ": " + modes);
                 }
             });
-            world.getConnection().waitForChunksRender();
-            context.takeScreenshot("snow-lantern-lighting-fixed");
         }
     }
 }

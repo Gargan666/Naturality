@@ -15,7 +15,7 @@ public final class SnowWorldgenGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
         boolean wrapping=NaturalityServerConfig.get().snowWrapping;
         NaturalityServerConfig.get().snowWrapping=true;
-        try(var world=context.worldBuilder().create()) {
+        try(var world=TestWorlds.disposable(context).create()) {
             var server=world.getServer();
             server.runCommand("gamerule minecraft:random_tick_speed 0");
             server.runCommand("fill 0 100 0 47 100 15 grass_block");

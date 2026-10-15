@@ -42,7 +42,7 @@ public final class CameraHandsGameTest implements FabricClientGameTest {
         var sheared = new Matrix4f().scale(1, 1, 1.2F).rotateY(.7F);
         hand.reset();
         check(hand.sample(sheared, 0).equals(sheared, .00001F), "Native stretched/sheared item transforms are preserved at rest");
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode creative @a");
             server.runCommand("fill -8 99 -8 8 99 8 stone");

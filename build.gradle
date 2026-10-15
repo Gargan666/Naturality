@@ -40,100 +40,30 @@ fabricApi {
 	}
 }
 
+def clientTestCatalog = new groovy.json.JsonSlurper().parseText(providers.fileContents(
+    layout.projectDirectory.file('src/gametest/resources/naturality-tests.json')).asText.get())
+def clientTestNames = clientTestCatalog.checks.collect { it.id } + clientTestCatalog.groups.keySet() + ['all']
+tasks.register('listClientTests') {
+    group = 'verification'
+    description = 'Lists focused client checks, their fixture requirements and compatibility groups without launching Minecraft.'
+    def checks = clientTestCatalog.checks.collect { "${it.id.padRight(28)} ${it.fixture}".toString() }
+    def groups = clientTestCatalog.groups.collect { k, v -> "${k}: ${v.join(', ')}".toString() }
+    doLast { checks.each { println it }; groups.each { println it } }
+}
+
 // Explicit suite selection prevents a small visual change from running every test.
 tasks.named('runClientGameTest') {
     systemProperty 'naturality.test.suites', providers.gradleProperty('clientTests').getOrElse('')
     systemProperty 'naturality.test.vanillaSnapshot', layout.buildDirectory.file('vanilla-registry-snapshot.json').get().asFile.absolutePath
-    if (providers.gradleProperty('clientTests').getOrElse('').split(',').contains('feature-startup')) {
+    if (providers.gradleProperty('clientTests').getOrElse('').split(',').any { it.trim() in ['feature-startup', 'all'] }) {
         dependsOn 'writeVanillaRegistrySnapshot'
     }
 	systemProperty 'naturality.test.muteAudio', 'true'
 	doFirst {
-		def selection = systemProperties['naturality.test.suites'].toString().split(',').collect { it.trim() }
-		def valid = ['wind-compat', 'snow-compat', 'chunks', 'aurora', 'rainbow', 'sky-events', 'end-flashes', 'sunset', 'glint', 'snow', 'rain-splash', 'particle-weather', 'weather-commands', 'weather', 'gameplay', 'config', 'fire', 'water', 'water-rain', 'waterfall', 'lava-effects', 'water-ripples', 'water-occlusion', 'short-distance', 'fluids', 'flame', 'leaves', 'smoke', 'clouds', 'fog', 'lighting', 'dynamic-lighting', 'portal', 'end-portal', 'audio', 'all']
-		valid.add('heat-waves')
-        valid.add('creeper-biome')
-        valid.add('maddened-creeper')
-        valid.add('maddened-zombie')
-        valid.add('maddened-spawns')
-        valid.add('insanity')
-        valid.add('ambient-horror')
-        valid.add('proximity')
-        valid.add('blood-moon')
-        valid.add('bell-lighting')
-        valid.add('snow-surface-lighting')
-        valid.add('overlay-edge')
-        valid.add('breaking')
-		valid.add('entity-shadow')
-		valid.add('snow-weather')
-        valid.add('snow-storm')
-		valid.add('snow-performance')
-		valid.add('fog-culling')
-        valid.add('terrain-culling')
-		valid.add('particle-visibility')
-		valid.add('villagers')
-		valid.add('butcher')
-        valid.add('villager-bread')
-        valid.add('villager-gates')
-        valid.add('villager-shelter')
-        valid.add('animal-care')
-        valid.add('reputation')
-        valid.add('navigation')
-        valid.add('camera-hands')
-        valid.add('menu-world')
-        valid.add('hardcore-lighting')
-		valid.add('crowd-panic')
-		valid.add('wind-shapes')
-		valid.add('fluid-tail')
-		valid.add('liquid-projectiles')
-		valid.add('liquid-slopes')
-		valid.add('environment-persistence')
-		valid.add('snow-worldgen')
-        valid.add('mountain-waterfalls')
-		valid.add('epilepsy-mode')
-        valid.add('lightning')
-		valid.add('client-startup')
-        valid.add('shader-stall')
-        valid.add('feature-startup')
-        valid.add('distortion-interactions')
-        valid.add('distortion-creative')
-        valid.add('distortion')
-        valid.add('rise')
-        valid.add('starfall')
-        valid.add('end-weather')
-        valid.add('end-flight')
-        valid.add('end-movement')
-        valid.add('end-mob-ai')
-		valid.add('sky-state')
-        valid.add('mob-arrows')
-        valid.add('fireball-model')
-        valid.add('sleep')
-        valid.add('render-detail')
-        valid.add('terrain-lod-world')
-        valid.add('confusion')
-        valid.add('crystal-visual')
-        valid.add('fish-swim')
-        valid.add('zombie-walk')
-        valid.add('floating-mob-tilt')
-        valid.add('ghast-squash')
-        valid.add('ghast-crash')
-        valid.add('chorus-flowers')
-        valid.add('chorus-sprouts')
-        valid.add('smooth-endstone')
-        valid.add('lirestone-worldgen')
-        valid.add('lirestone-crags')
-        valid.add('end-wilds')
-        valid.add('end-terrain')
-        valid.add('end-chunk-performance')
-        valid.add('end-save')
-        valid.add('water-light-performance')
-        valid.add('overworld-loading')
-        valid.add('forest-performance')
-        valid.addAll(['cloud-geometry', 'darkness-config', 'portal-metadata'])
-        valid.add('render-redundancy')
-        valid.add('cave-ambience')
+		def selection = systemProperties['naturality.test.suites'].toString().split(',', -1).collect { it.trim() }
+		def valid = clientTestNames
 		if (selection.any { !valid.contains(it) }) {
-			throw new GradleException('Choose relevant suites with -PclientTests=fog,lighting (available: wind-compat, snow-compat, chunks, aurora, rainbow, sky-events, end-flashes, sunset, glint, snow, rain-splash, particle-weather, weather-commands, weather, gameplay, config, fire, water, water-rain, waterfall, lava-effects, water-ripples, water-occlusion, short-distance, fluids, flame, leaves, smoke, clouds, fog, lighting, dynamic-lighting, portal, end-portal, audio; all explicitly runs everything).')
+			throw new GradleException('Choose focused checks with -PclientTests=<id>; run listClientTests for available checks and groups.')
 		}
 	}
 }

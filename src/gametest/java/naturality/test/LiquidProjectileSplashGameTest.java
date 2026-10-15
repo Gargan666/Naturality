@@ -11,7 +11,7 @@ public final class LiquidProjectileSplashGameTest implements FabricClientGameTes
     @Override public void runTest(ClientGameTestContext context) {
         var saved=NaturalityConfig.get().liquids;
         context.runOnClient(_->NaturalityConfig.get().liquids=new NaturalityConfig.Liquids());
-        try(var world=context.worldBuilder().create()) {
+        try(var world=TestWorlds.disposable(context).create()) {
             var server=world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runCommand("time set 6000");

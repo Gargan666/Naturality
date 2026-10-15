@@ -20,7 +20,7 @@ public final class FireballModelGameTest implements FabricClientGameTest {
                     throw new AssertionError("Fire shell face must retain square aligned pixels: " + face);
             }
         }
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runCommand("fill -8 100 -8 8 100 8 sea_lantern");

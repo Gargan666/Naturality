@@ -57,7 +57,7 @@ public final class RainbowGameTest implements FabricClientGameTest {
             previousClouds[0] = client.options.cloudStatus().get();
             client.options.cloudStatus().set(CloudStatus.OFF);
         });
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runCommand("weather minecraft:overworld rain 10");

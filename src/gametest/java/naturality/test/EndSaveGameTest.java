@@ -25,7 +25,7 @@ public final class EndSaveGameTest implements FabricClientGameTest {
     }
 
     private static void checkWorld(ClientGameTestContext context) {
-        var world = context.worldBuilder().create();
+        var world = TestWorlds.persistent(context).create();
         var save = world.getWorldSave();
         var protectedGeneration = new CompletableFuture<Void>();
         var protoPos = new BlockPos[3];

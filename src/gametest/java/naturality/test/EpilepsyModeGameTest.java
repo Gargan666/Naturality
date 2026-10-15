@@ -47,7 +47,7 @@ public final class EpilepsyModeGameTest implements FabricClientGameTest {
             });
         }
         context.runOnClient(_->{NaturalityConfig.get().epilepsyMode=false;NaturalityConfig.get().save();});
-        try(var world=context.worldBuilder().create()) {
+        try(var world=TestWorlds.disposable(context).create()) {
             world.getServer().runCommand("gamemode spectator @a");world.getServer().runCommand("tp @a 0 120 0");
             context.waitTicks(30);
             context.runOnClient(_->{NaturalityConfig.get().epilepsyMode=true;LightningFlashes.strike();});

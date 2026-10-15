@@ -51,7 +51,7 @@ public final class HeatWavesGameTest implements FabricClientGameTest {
             savedPower[0] = naturality.config.NaturalityConfig.get().liquids.heatWavePower;
             naturality.config.NaturalityConfig.get().liquids.heatWavePower = 50;
         });
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runCommand("time set 6000");

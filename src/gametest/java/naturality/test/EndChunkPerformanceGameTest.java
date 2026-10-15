@@ -19,10 +19,9 @@ import net.minecraft.world.level.levelgen.densityfunction.SamplerContext;
 /** Repeatable generation/profile workload; wall times are reported rather than used as flaky assertions. */
 public final class EndChunkPerformanceGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
-        EndTerrainSamplingChecks.run();
         Path directory = Path.of("profiling");
         var report = new StringBuilder();
-        try (var world = context.worldBuilder().create(); var recording = new Recording()) {
+        try (var world = TestWorlds.disposable(context).create(); var recording = new Recording()) {
             Files.createDirectories(directory);
             recording.enable("jdk.ExecutionSample").withPeriod(Duration.ofMillis(5)).withStackTrace();
             recording.enable("jdk.NativeMethodSample").withPeriod(Duration.ofMillis(5)).withStackTrace();

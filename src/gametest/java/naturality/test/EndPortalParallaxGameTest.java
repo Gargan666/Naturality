@@ -6,7 +6,7 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 /** Render the actual portal pipeline from translated and tilted viewpoints. */
 public final class EndPortalParallaxGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runCommand("time set noon");

@@ -24,7 +24,7 @@ public final class WaterVisualsGameTest implements FabricClientGameTest {
             saved[1] = client.gui.hud.isHidden();
             if (!saved[1]) client.gui.hud.toggle();
         });
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runOnServer(s -> s.setWeatherParameters(12000, 0, false, false));

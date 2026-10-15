@@ -72,7 +72,7 @@ public final class EndTerrainGameTest implements FabricClientGameTest {
             + ", average height difference nearby=" + neighboring / pairs + ", distant=" + distant / pairs;
     }
     @Override public void runTest(ClientGameTestContext context) {
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             double[][][] viewpoints = new double[1][][];
             server.runCommand("gamerule minecraft:random_tick_speed 0");

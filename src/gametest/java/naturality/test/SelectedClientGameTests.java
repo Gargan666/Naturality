@@ -1,156 +1,98 @@
 package naturality.test;
 
-import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
-import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
+import com.google.gson.JsonParser;
+import java.io.InputStreamReader;
+import java.lang.reflect.InvocationTargetException;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
-import java.util.Arrays;
+import java.util.List;
+import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
+import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
+import org.jspecify.annotations.NullMarked;
 
-/** Run only explicitly selected suites; preserve order and reject typos. */
+/** One catalog shared with Gradle. Expand groups first; instantiate only selected checks, once each. */
+@NullMarked
 public final class SelectedClientGameTests implements FabricClientGameTest {
-    @Override public void runTest(ClientGameTestContext context) {
-        var suites = new LinkedHashMap<String, FabricClientGameTest>();
-        suites.put("creeper-biome", new CreeperBiomeGameTest());
-        suites.put("maddened-creeper", new MaddenedCreeperGameTest());
-        suites.put("maddened-zombie", new MaddenedZombieGameTest());
-        suites.put("maddened-spawns", new MaddenedSpawnsGameTest());
-        suites.put("insanity", new InsanityGameTest());
-        suites.put("ambient-horror", new AmbientHorrorGameTest());
-        suites.put("client-startup", new ClientStartupGameTest());
-        suites.put("menu-world", new MenuWorldGameTest());
-        suites.put("hardcore-lighting", new NativeHardcoreLightingGameTest());
-        suites.put("shader-stall", new ShaderStallGameTest());
-        suites.put("sleep", new SleepAccelerationGameTest());
-        suites.put("render-detail", new RenderDetailGameTest());
-        suites.put("terrain-lod-world", new TerrainLodWorldGameTest());
-        suites.put("feature-startup", new FeatureStartupGameTest());
-        suites.put("end-terrain", new EndTerrainGameTest());
-        suites.put("end-chunk-performance", new EndChunkPerformanceGameTest());
-        suites.put("end-save", new EndSaveGameTest());
-        suites.put("smooth-endstone", new SmoothEndstoneGameTest());
-        suites.put("lirestone-worldgen", new LirestoneWorldgenGameTest());
-        suites.put("lirestone-crags", new LirestoneCragsGameTest());
-        suites.put("end-wilds", new EndWildsGameTest());
-        suites.put("chorus-flowers", new ChorusFlowersGameTest());
-        suites.put("chorus-sprouts", new ChorusSproutsGameTest());
-        suites.put("fireball-model", new FireballModelGameTest());
-        suites.put("confusion", new ConfusionGameTest());
-        suites.put("crystal-visual", new CrystalVisualGameTest());
-        suites.put("fish-swim", new FishSwimGameTest());
-        suites.put("zombie-walk", new ZombieWalkGameTest());
-        suites.put("floating-mob-tilt", new FloatingMobTiltGameTest());
-        suites.put("ghast-squash", new GhastSquashGameTest());
-        suites.put("ghast-crash", new GhastCrashGameTest());
-        suites.put("mob-arrows", new MobArrowsGameTest());
-        suites.put("epilepsy-mode", new EpilepsyModeGameTest());
-        suites.put("lightning", new LightningGameTest());
-        suites.put("distortion-interactions", new DistortionInteractionGameTest());
-        suites.put("distortion-creative", new DistortionCreativeFlightGameTest());
-        suites.put("distortion", new DistortionGameTest());
-        suites.put("rise", new RiseGameTest());
-        suites.put("starfall", new StarfallGameTest());
-        suites.put("end-weather", new EndWeatherGameTest());
-        suites.put("end-flight", new EndFlightGameTest());
-        suites.put("end-movement", new EndMovementGameTest());
-        suites.put("end-mob-ai", new EndMobAiGameTest());
-        suites.put("sky-state", new SkyStateGameTest());
-        suites.put("snow-worldgen", new SnowWorldgenGameTest());
-        suites.put("mountain-waterfalls", new MountainWaterfallGameTest());
-        suites.put("environment-persistence", new EnvironmentPersistenceGameTest());
-        suites.put("entity-shadow", new EntityShadowGameTest());
-        suites.put("crowd-panic", new CrowdPanicGameTest());
-        suites.put("villagers", new VillagerWorkGameTest());
-        suites.put("butcher", new ButcherWorkGameTest());
-        suites.put("villager-bread", new VillagerBreadGameTest());
-        suites.put("villager-gates", new VillagerGateGameTest());
-        suites.put("villager-shelter", new VillagerShelterGameTest());
-        suites.put("animal-care", new AnimalCareGameTest());
-        suites.put("reputation", new ReputationGameTest());
-        suites.put("navigation", new NavigationGameTest());
-        suites.put("camera-hands", new CameraHandsGameTest());
-        suites.put("breaking", new BreakingTexturesGameTest());
-        suites.put("chunks", new ChunkSafetyGameTest());
-        suites.put("snow-weather", new SnowAccumulationGameTest());
-        suites.put("snow-storm", new SnowStormGameTest());
-        suites.put("snow-performance", new SnowPerformanceGameTest());
-        suites.put("snow-compat", new SnowRendererCompatibilityGameTest());
-        suites.put("wind-compat", new WindRendererGameTest());
-        suites.put("wind-shapes", new WindShapesGameTest());
-        suites.put("sky-events", new SkyEventsGameTest());
-        suites.put("proximity", new ProximityGameTest());
-        suites.put("blood-moon", new BloodMoonGameTest());
-        suites.put("end-flashes", new EndFlashesGameTest());
-        suites.put("cave-ambience", new CaveAmbienceGameTest());
-        suites.put("sunset", new SunsetGameTest());
-        suites.put("aurora", new AuroraGameTest());
-        suites.put("rainbow", new RainbowGameTest());
-        suites.put("config", new ConfigMenuGameTest());
-        suites.put("cloud-geometry", c -> c.runOnClient(_ -> CloudsGameTest.checkGeometry()));
-        suites.put("darkness-config", _ -> HardcoreDarknessGameTest.checkConfig());
-        suites.put("portal-metadata", c -> c.runOnClient(_ -> ForestPerformanceGameTest.checkPortalMetadata()));
-        suites.put("glint", new GlintContourGameTest());
-        suites.put("rain-splash", new RainSplashGameTest());
-        suites.put("weather", new WeatherGameTest());
-        suites.put("particle-weather", new ParticleWeatherGameTest());
-        suites.put("particle-visibility", new ParticleVisibilityGameTest());
-        suites.put("weather-commands", new WeatherCommandsGameTest());
-        suites.put("gameplay", new GameplaySettingsGameTest());
-        suites.put("fluids", new FluidsGameTest());
-        suites.put("fluid-tail", new FluidTailGameTest());
-        suites.put("liquid-projectiles", new LiquidProjectileSplashGameTest());
-        suites.put("liquid-slopes", new LiquidSlopesGameTest());
-        suites.put("water", new WaterVisualsGameTest());
-        suites.put("fog-culling", new FogCullingGameTest());
-        suites.put("terrain-culling", new TerrainCullingGameTest());
-        suites.put("water-rain", new WaterRainFogGameTest());
-        suites.put("waterfall", new WaterfallGameTest());
-        suites.put("lava-effects", new LavaEffectsGameTest());
-        suites.put("heat-waves", new HeatWavesGameTest());
-        suites.put("bell-lighting", new BellLightingGameTest());
-        suites.put("snow-surface-lighting", new SnowSurfaceLightingGameTest());
-        suites.put("overlay-edge", new OverlayEdgeGameTest());
-        suites.put("water-ripples", new WaterRipplesGameTest());
-        suites.put("water-occlusion", new WaterFogOcclusionGameTest());
-        suites.put("short-distance", new ShortDistanceGameTest());
-        suites.put("fog", context1 -> {
-            new PixelFogGameTest().runTest(context1);
-            new OverworldFogGameTest().runTest(context1);
-        });
-        suites.put("clouds", new CloudsGameTest());
-        suites.put("smoke", new SmokeGameTest());
-        suites.put("flame", new FlameGameTest());
-        suites.put("fire", new SurfaceFireGameTest());
-        suites.put("snow", new SnowloggingGameTest());
-        suites.put("leaves", new LeavesGameTest());
-        suites.put("lighting", context1 -> {
-            new PixelAmbientOcclusionGameTest().runTest(context1);
-            new HardcoreDarknessGameTest().runTest(context1);
-        });
-        suites.put("render-redundancy", new RenderRedundancyGameTest());
-        suites.put("forest-performance", new ForestPerformanceGameTest());
-        suites.put("overworld-loading", new OverworldLoadingGameTest());
-        suites.put("water-light-performance", new WaterLightPerformanceGameTest());
-        suites.put("dynamic-lighting", new DynamicLightingGameTest());
-        suites.put("portal", new PortalOpeningGameTest());
-        suites.put("end-portal", context1 -> {
-            new EndPortalParallaxGameTest().runTest(context1);
-            new EndEyeGlowGameTest().runTest(context1);
-        });
-        suites.put("audio", new TestAudioIsolationGameTest());
-        var selected = new LinkedHashSet<>(Arrays.asList(
-            System.getProperty("naturality.test.suites", "").split(",", -1)));
-        var names = new LinkedHashSet<String>();
-        for (String value : selected) {
-            String name = value.trim();
-            if (name.equals("all")) names.addAll(suites.keySet());
-            else if (suites.containsKey(name)) names.add(name);
-            else throw new IllegalArgumentException("Unknown client test suite: " + name);
+    private record Check(String id, String implementation, String invocation, String method, String fixture) {
+        void run(ClientGameTestContext context) throws ReflectiveOperationException {
+            Class<?> type = Class.forName("naturality.test." + implementation);
+            switch (invocation) {
+                case "test" -> type.asSubclass(FabricClientGameTest.class).getDeclaredConstructor().newInstance().runTest(context);
+                case "static" -> invoke(type);
+                case "client" -> context.runOnClient(_ -> invoke(type));
+                case "context" -> invoke(type, ClientGameTestContext.class, context);
+                case "world" -> {
+                    try (var world = TestWorlds.disposable(context).create()) {
+                        world.getConnection().waitForClientboundPackets();
+                        context.runOnClient(client -> invoke(type, net.minecraft.client.Minecraft.class, client));
+                    }
+                }
+                default -> throw new IllegalArgumentException("Unknown invocation mode: " + invocation);
+            }
         }
-        for (String name : names) {
-            System.out.println("Naturality client test suite: " + name);
-            suites.get(name).runTest(context);
+        private void invoke(Class<?> type) { invoke(type, new Class<?>[0], new Object[0]); }
+        private void invoke(Class<?> type, Class<?> parameter, Object argument) {
+            invoke(type, new Class<?>[]{parameter}, new Object[]{argument});
+        }
+        private void invoke(Class<?> type, Class<?>[] parameters, Object[] arguments) {
+            try {
+                var target = type.getDeclaredMethod(method, parameters);
+                target.setAccessible(true);
+                target.invoke(null, arguments);
+            } catch (InvocationTargetException e) {
+                if (e.getCause() instanceof Error error) throw error;
+                if (e.getCause() instanceof RuntimeException error) throw error;
+                throw new AssertionError("Check failed: " + id, e.getCause());
+            } catch (ReflectiveOperationException e) { throw new AssertionError("Invalid test catalog entry: " + id, e); }
+        }
+    }
+
+    @Override public void runTest(ClientGameTestContext context) {
+        var checks = new LinkedHashMap<String, Check>();
+        var groups = new LinkedHashMap<String, List<String>>();
+        try (var input = TestFixtures.require(SelectedClientGameTests.class.getResourceAsStream("/naturality-tests.json"), "test catalog");
+                var reader = new InputStreamReader(input, StandardCharsets.UTF_8)) {
+            var catalog = JsonParser.parseReader(reader).getAsJsonObject();
+            for (var entry : catalog.getAsJsonArray("checks")) {
+                var item = entry.getAsJsonObject();
+                String id = item.get("id").getAsString();
+                if (id.isBlank() || id.equals("all")) throw new IllegalArgumentException("Reserved or empty check ID: " + id);
+                var check = new Check(id, item.get("class").getAsString(), item.has("invoke") ? item.get("invoke").getAsString() : "test",
+                    item.has("method") ? item.get("method").getAsString() : "", item.get("fixture").getAsString());
+                if (checks.putIfAbsent(id, check) != null) throw new IllegalArgumentException("Duplicate check: " + id);
+            }
+            for (var entry : catalog.getAsJsonObject("groups").entrySet()) {
+                if (entry.getKey().isBlank() || entry.getKey().equals("all") || checks.containsKey(entry.getKey()))
+                    throw new IllegalArgumentException("Group conflicts with a check/reserved ID: " + entry.getKey());
+                var members = new ArrayList<String>();
+                for (var member : entry.getValue().getAsJsonArray()) {
+                    String id = member.getAsString();
+                    if (!checks.containsKey(id)) throw new IllegalArgumentException("Unknown group member: " + id);
+                    members.add(id);
+                }
+                groups.put(entry.getKey(), members);
+            }
+        } catch (java.io.IOException e) { throw new AssertionError("Cannot read test catalog", e); }
+
+        var selected = new LinkedHashSet<String>();
+        for (String value : System.getProperty("naturality.test.suites", "").split(",", -1)) {
+            String id = value.trim();
+            if (id.equals("all")) selected.addAll(checks.keySet());
+            else if (groups.containsKey(id)) selected.addAll(TestFixtures.require(groups.get(id), "group"));
+            else if (checks.containsKey(id)) selected.add(id);
+            else throw new IllegalArgumentException("Unknown client check: " + id + "; run gradlew listClientTests");
+        }
+        for (String id : selected) {
+            var check = TestFixtures.require(checks.get(id), "selected check");
+            long start = System.nanoTime();
+            System.out.println("Naturality client check: " + id + " [" + check.fixture + "]");
+            System.setProperty("naturality.test.activeCheck", id);
+            try { check.run(context); }
+            catch (ReflectiveOperationException e) { throw new AssertionError("Cannot load selected check: " + id, e); }
+            finally { System.clearProperty("naturality.test.activeCheck"); }
+            System.out.printf("Naturality check passed: %s (%.2f s)%n", id, (System.nanoTime() - start) / 1e9);
         }
     }
 }
-
-

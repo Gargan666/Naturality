@@ -12,7 +12,7 @@ public final class OverworldLoadingGameTest implements FabricClientGameTest {
         int distance = TestFixtures.require(context.computeOnClient(c -> c.options.renderDistance().get()), "context.computeOnClient(c -> c.options.renderDistance().get())");
         try (var recording = new Recording(Configuration.getConfiguration("profile"))) {
             recording.start();
-            try (var world = context.worldBuilder().setUseConsistentSettings(false)
+            try (var world = TestWorlds.disposable(context).setUseConsistentSettings(false)
                     .adjustSettings(s -> s.setSeed("84219871")).create()) {
                 var server = world.getServer();
                 server.runCommand("gamemode spectator @a");

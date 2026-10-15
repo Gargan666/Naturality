@@ -24,7 +24,7 @@ public final class InsanityGameTest implements FabricClientGameTest {
     public void runTest(ClientGameTestContext context) {
         check(Insanity.distanceWeight(3) == 0 && Insanity.distanceWeight(4) == 0
             && Insanity.distanceWeight(6) == .5F && Insanity.distanceWeight(8) == 1, "Smooth 4-8 block reveal");
-        try (var world = context.worldBuilder().create()) {
+        try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
             server.runCommand("gamemode spectator @a");
             server.runCommand("time set noon");

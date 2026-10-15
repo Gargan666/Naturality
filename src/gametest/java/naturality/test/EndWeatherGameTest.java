@@ -32,7 +32,7 @@ public final class EndWeatherGameTest implements FabricClientGameTest {
         var saved=new java.util.HashMap<String,Long>();
         java.util.UUID[] endermanId={null};
         boolean[] naturalSpawnAllowed={false};
-        try(var world=context.worldBuilder().create()) {
+        try(var world=TestWorlds.persistent(context).create()) {
             save=world.getWorldSave();
             var server=world.getServer();
             server.runOnServer(s -> TestFixtures.disableDragonFight(TestFixtures.require(s.getLevel(Level.END), "End world")));
@@ -173,7 +173,7 @@ check(p.onGround() && Math.abs(p.getBoundingBox().maxY-105)<.05,"Player stands o
             context.runOnClient(EndFootstepParticleChecks::upright);
             server.runOnServer(s -> saved.putAll(EndWeatherSystem.cycle(TestFixtures.require(s.getLevel(Level.END), "s.getLevel(Level.END)")).snapshot()));
         }
-        try(var other=context.worldBuilder().create()) {
+        try(var other=TestWorlds.disposable(context).create()) {
             other.getServer().runOnServer(s -> check(EndWeatherSystem.state(TestFixtures.require(s.getLevel(Level.END), "s.getLevel(Level.END)")).equals(EndWeatherState.CLEAR),
                 "Another world does not inherit End weather"));
         }

@@ -32,7 +32,7 @@ public final class DynamicLightingGameTest implements FabricClientGameTest {
             context.takeScreenshot("dynamic-lighting-settings");
             context.runOnClient(client -> TestFixtures.screen(client).onClose());
             config.droppedItems = false;
-            try (var world = context.worldBuilder().create()) {
+            try (var world = TestWorlds.disposable(context).create()) {
                 var server = world.getServer();
                 server.runCommand("gamemode creative @a");
                 server.runCommand("time set midnight");
