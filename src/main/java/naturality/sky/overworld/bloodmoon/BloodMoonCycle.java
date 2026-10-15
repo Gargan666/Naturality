@@ -10,7 +10,7 @@ import net.minecraft.server.level.ServerLevel;
 /** A single nightfall roll; a successful Blood Moon ends when that night ends. */
 @org.jspecify.annotations.NullMarked
 public final class BloodMoonCycle {
-    public static final double START_CHANCE = .05;
+    public static final double START_CHANCE = .01;
     private final SavedRandom random;
     private boolean initialized, wasNight, active;
     public BloodMoonCycle(long seed) { random = new SavedRandom(seed); }
