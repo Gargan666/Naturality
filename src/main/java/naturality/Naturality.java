@@ -1,4 +1,9 @@
 package naturality;
+import naturality.bootstrap.ContentRegistration.NaturalityBlocks;
+import naturality.bootstrap.ContentRegistration.NaturalityEffects;
+import naturality.bootstrap.ContentRegistration.NaturalityItems;
+import naturality.bootstrap.ContentRegistration.NaturalityParticles;
+import naturality.bootstrap.ContentRegistration.NaturalitySounds;
 
 import net.fabricmc.api.ModInitializer;
 
@@ -17,37 +22,37 @@ public class Naturality implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
-        naturality.navigation.NavigationTargetPayload.initialize();
-        if (naturality.config.Feature.NAVIGATION_INSTRUMENTS.enabled()) naturality.navigation.NavigationInstruments.initialize();
-        naturality.entity.ArrowImpactPayload.initialize();
-        naturality.config.FeatureConfig.get().save();
-        if (naturality.config.Feature.CONTENT.enabled()) {
+        naturality.systems.navigation.NavigationInstruments.NavigationTargetPayload.initialize();
+        if (naturality.config.startup.FeatureConfig.Feature.NAVIGATION_INSTRUMENTS.enabled()) naturality.systems.navigation.NavigationInstruments.initialize();
+        naturality.entities.arrows.ArrowImpactPayload.initialize();
+        naturality.config.startup.FeatureConfig.get().save();
+        if (naturality.config.startup.FeatureConfig.Feature.CONTENT.enabled()) {
             NaturalityBlocks.initialize();
             NaturalityItems.initialize();
-            naturality.worldgen.CloverPatchesFeature.initialize();
-            naturality.worldgen.TreeMossFeature.initialize();
-            naturality.worldgen.MountainWaterfallFeature.initialize();
-            naturality.entity.MaddenedCreepers.initialize();
-            naturality.entity.MaddenedZombies.initialize();
-            naturality.worldgen.LirestoneCrags.initialize();
-            naturality.worldgen.EndWilds.initialize();
-            naturality.worldgen.LirestoneBoulderFeature.initialize();
+            naturality.worldgen.overworld.clover.CloverPatchesFeature.initialize();
+            naturality.worldgen.overworld.moss.TreeMossFeature.initialize();
+            naturality.worldgen.overworld.waterfalls.MountainWaterfallFeature.initialize();
+            naturality.entities.maddened.MaddenedCreepers.initialize();
+            naturality.entities.maddened.MaddenedZombies.initialize();
+            naturality.worldgen.end.lirestonecrags.LirestoneCrags.initialize();
+            naturality.worldgen.end.endwilds.EndWilds.initialize();
+            naturality.worldgen.end.lirestonecrags.LirestoneCrags.LirestoneBoulderFeature.initialize();
             NaturalityEffects.initialize();
-            naturality.starfall.StarfallEntities.initialize();
-            naturality.villager.VillagerBobbers.initialize();
+            naturality.systems.weather.end.starfall.StarfallWeather.StarfallEntities.initialize();
+            naturality.systems.fishing.VillagerBobbers.initialize();
         }
-        naturality.config.GameplaySettings.initialize();
-        naturality.sleep.SleepAcceleration.initialize();
-        naturality.particle.FireballImpactPayload.initialize();
-        naturality.weather.WeatherSystem.initialize();
-        naturality.sky.SkyEvents.initialize();
-        naturality.snow.SnowCompaction.initialize();
-        naturality.snow.SnowLighting.initialize();
+        naturality.config.gameplay.GameplaySettings.initialize();
+        naturality.systems.sleep.SleepAcceleration.initialize();
+        naturality.entities.fireballs.FireballImpactPayload.initialize();
+        naturality.systems.weather.framework.WeatherSystem.initialize();
+        naturality.systems.skyevents.framework.SkyEvents.initialize();
+        naturality.blocks.snow.SnowGeometry.SnowCompaction.initialize();
+        naturality.blocks.snow.SnowGeometry.SnowLighting.initialize();
 		NaturalitySounds.initialize();
         NaturalityParticles.initialize();
-        if (naturality.config.Feature.VILLAGER_WORK.enabled()) naturality.villager.FishingSpots.initialize();
-        if (naturality.config.Feature.REPUTATION.enabled()) naturality.villager.Reputation.initialize();
-		naturality.portal.PortalOpeningManager.initialize();
+        if (naturality.config.startup.FeatureConfig.Feature.VILLAGER_WORK.enabled()) naturality.systems.fishing.VillagerBobbers.FishingSpots.initialize();
+        if (naturality.config.startup.FeatureConfig.Feature.REPUTATION.enabled()) naturality.systems.reputation.Reputation.initialize();
+		naturality.portals.nether.opening.PortalOpeningManager.initialize();
 		// This code runs as soon as Minecraft is in a mod-load-ready state.
 		// However, some things (like resources) may still be uninitialized.
 		// Proceed with mild caution.

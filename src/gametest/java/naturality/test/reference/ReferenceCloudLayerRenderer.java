@@ -1,7 +1,7 @@
 package naturality.test.reference;
-import naturality.client.cloud.CloudPipelines;
+import naturality.client.sky.shared.clouds.CloudPipelines;
 import net.minecraft.client.renderer.*;
-import naturality.config.NaturalityConfig.CloudLayer;
+import naturality.config.live.NaturalityConfig.CloudLayer;
 
 import com.mojang.blaze3d.buffers.Std140Builder;
 import com.mojang.blaze3d.buffers.Std140SizeCalculator;

@@ -2,7 +2,7 @@ package naturality.test;
 
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
-import naturality.client.fluid.HeatWaves;
+import naturality.client.rendering.heatwaves.HeatWaves;
 import net.minecraft.world.phys.AABB;
 import java.util.List;
 
@@ -48,8 +48,8 @@ public final class HeatWavesGameTest implements FabricClientGameTest {
         int[] savedPower = {0};
         context.runOnClient(c -> {
             saved[0] = c.options.improvedTransparency().get();
-            savedPower[0] = naturality.config.NaturalityConfig.get().liquids.heatWavePower;
-            naturality.config.NaturalityConfig.get().liquids.heatWavePower = 50;
+            savedPower[0] = naturality.config.live.NaturalityConfig.get().liquids.heatWavePower;
+            naturality.config.live.NaturalityConfig.get().liquids.heatWavePower = 50;
         });
         try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
@@ -89,14 +89,14 @@ public final class HeatWavesGameTest implements FabricClientGameTest {
             }
             long[] scanAtZero = new long[1];
             context.runOnClient(_ -> {
-                naturality.config.NaturalityConfig.get().liquids.heatWavePower = 0;
+                naturality.config.live.NaturalityConfig.get().liquids.heatWavePower = 0;
                 scanAtZero[0] = (long)HeatWaveOptimizationChecks.field(HeatWaves.class, "scanned");
             });
             context.waitTicks(7);
             context.runOnClient(_ -> check(scanAtZero[0] == (long)HeatWaveOptimizationChecks.field(HeatWaves.class, "scanned"),
                 "Zero power must not scan sources"));
             for (int power : new int[]{0, 200}) {
-                context.runOnClient(_ -> naturality.config.NaturalityConfig.get().liquids.heatWavePower = power);
+                context.runOnClient(_ -> naturality.config.live.NaturalityConfig.get().liquids.heatWavePower = power);
                 context.waitTicks(2); context.takeScreenshot("heat-waves-power-"+power);
             }
             server.runCommand("tp @a 0 104 -10 0 17");
@@ -123,7 +123,7 @@ public final class HeatWavesGameTest implements FabricClientGameTest {
         } finally { context.runOnClient(c -> {
             naturality.test.reference.ReferenceHeatWaves.close();
             c.options.improvedTransparency().set(saved[0]);
-            naturality.config.NaturalityConfig.get().liquids.heatWavePower = savedPower[0];
+            naturality.config.live.NaturalityConfig.get().liquids.heatWavePower = savedPower[0];
         }); }
     }
 }

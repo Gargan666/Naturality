@@ -1,7 +1,7 @@
 package naturality.test;
 
-import naturality.client.entity.EmbeddedArrowState;
-import naturality.client.entity.MobArrowLayer;
+import naturality.client.entities.arrows.MobArrowLayer.EmbeddedArrowState;
+import naturality.client.entities.arrows.MobArrowLayer;
 import com.mojang.blaze3d.vertex.PoseStack;
 import org.joml.Vector3f;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
@@ -84,7 +84,7 @@ public final class MobArrowsGameTest implements FabricClientGameTest {
                             throw new AssertionError("Death mask progress or native overlay changed: " + overlay);
                     }
                     var playerState = client.getEntityRenderDispatcher().getRenderer(client.player).createRenderState(client.player, 0);
-                    if ((TestFixtures.require((naturality.client.entity.MobDeathState) playerState, "(naturality.client.entity.MobDeathState) playerState")).naturality$deathPixels() != 0)
+                    if ((TestFixtures.require((naturality.client.particles.deathsmoke.DeathSmoke.MobDeathState) playerState, "(naturality.client.particles.deathsmoke.DeathSmoke.MobDeathState) playerState")).naturality$deathPixels() != 0)
                         throw new AssertionError("Player must not inherit mob death pixels");
                 });
                 context.takeScreenshot("mob-death-pixels-" + deathTick);
@@ -92,16 +92,16 @@ public final class MobArrowsGameTest implements FabricClientGameTest {
             context.runOnClient(client -> {
                 for (var entity : TestFixtures.level(client).entitiesForRendering()) {
                     if (!(entity instanceof net.minecraft.world.entity.Mob mob)) continue;
-                    var shape = naturality.client.particle.DeathSmoke.shape(mob);
+                    var shape = naturality.client.particles.deathsmoke.DeathSmoke.shape(mob);
                     if (shape == null || shape.points().isEmpty()) throw new AssertionError("Missing posed death model");
                     for (var point : shape.points()) if (point.distanceTo(mob.position()) > 4)
                         throw new AssertionError("Smoke sample outside model: " + point);
-                    naturality.client.particle.DeathSmoke.spawning = mob;
-                    naturality.client.particle.DeathSmoke.index = 0;
+                    naturality.client.particles.deathsmoke.DeathSmoke.spawning = mob;
+                    naturality.client.particles.deathsmoke.DeathSmoke.index = 0;
                     try {
                         var puff = client.particleEngine.createParticle(net.minecraft.core.particles.ParticleTypes.POOF,
                             mob.getX(), mob.getY()+5, mob.getZ(), 0, 0, 0);
-                        if (!(puff instanceof naturality.client.particle.DeathSmokeParticle))
+                        if (!(puff instanceof naturality.client.particles.deathsmoke.DeathSmoke.DeathSmokeParticle))
                             throw new AssertionError("Death smoke must use posed provider");
                         double spawnY = puff.getBoundingBox().minY;
                         for (int tick = 0; tick < 8; tick++) puff.tick();
@@ -110,14 +110,14 @@ public final class MobArrowsGameTest implements FabricClientGameTest {
                         if (Math.abs(puff.getBoundingBox().minY - (mob.getY()+5)) < 3)
                             throw new AssertionError("Smoke moved back toward the original spawn position");
                         puff.remove();
-                    } finally { naturality.client.particle.DeathSmoke.spawning = null; }
+                    } finally { naturality.client.particles.deathsmoke.DeathSmoke.spawning = null; }
                     mob.makePoofParticles();
                     mob.setInvisible(true);
                 }
-                if (naturality.client.particle.DeathSmoke.spawning != null)
+                if (naturality.client.particles.deathsmoke.DeathSmoke.spawning != null)
                     throw new AssertionError("Death spawn context leaked");
                 var ordinary = client.particleEngine.createParticle(net.minecraft.core.particles.ParticleTypes.POOF, 0, 101, 0, 0, 0, 0);
-                if (ordinary instanceof naturality.client.particle.DeathSmokeParticle)
+                if (ordinary instanceof naturality.client.particles.deathsmoke.DeathSmoke.DeathSmokeParticle)
                     throw new AssertionError("Unrelated poof changed");
                 TestFixtures.require(ordinary, "ordinary").remove();
             });
@@ -138,7 +138,7 @@ public final class MobArrowsGameTest implements FabricClientGameTest {
                 context.runOnClient(client -> {
                     for (var entity : TestFixtures.level(client).entitiesForRendering())
                         if (entity instanceof net.minecraft.world.entity.monster.spider.Spider spider) {
-                            var shape=naturality.client.particle.DeathSmoke.shape(spider);
+                            var shape=naturality.client.particles.deathsmoke.DeathSmoke.shape(spider);
                             if (shape==null) throw new AssertionError("Spider death model must be captured");
                             for (var point : shape.points()) if (point.y < spider.getY()-.05)
                                 throw new AssertionError("Spider death model entered the ground: "+point);

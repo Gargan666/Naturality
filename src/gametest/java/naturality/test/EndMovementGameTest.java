@@ -2,7 +2,7 @@ package naturality.test;
 
 import java.util.ArrayList;
 import java.util.List;
-import naturality.weather.EndGravity;
+import naturality.systems.gravity.EndGravity;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.core.BlockPos;

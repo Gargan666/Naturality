@@ -1,6 +1,6 @@
 package naturality.test;
 
-import naturality.NaturalityEffects;
+import naturality.bootstrap.ContentRegistration.NaturalityEffects;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.LivingEntity;

@@ -1,8 +1,13 @@
 package naturality.test;
+import naturality.systems.weather.overworld.snow.WeatherSnow;
+import naturality.systems.weather.overworld.snow.WeatherSnow.WeatherThaw;
+import naturality.systems.weather.framework.WeatherSystem.WeatherProfile;
+import naturality.systems.weather.framework.WeatherSystem.WeatherState;
+import naturality.systems.weather.framework.WeatherSystem;
+import naturality.systems.weather.framework.WeatherSystem.WeatherWorldData;
 
-import naturality.weather.*;
-import naturality.config.NaturalityServerConfig;
-import naturality.client.weather.WindRendering;
+import naturality.config.gameplay.GameplaySettings.NaturalityServerConfig;
+import naturality.client.systems.weather.wind.WindRendering;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.core.BlockPos;
@@ -18,7 +23,7 @@ public final class WeatherGameTest implements FabricClientGameTest {
     /** Test conversion rules with an admitted attempt; snowfall backpressure has its own suite. */
     private static void precipitate(net.minecraft.server.level.ServerLevel level, BlockPos pos) {
         try {
-            var field = naturality.snow.SnowfallBudget.class.getDeclaredField("LEVELS");
+            var field = naturality.systems.weather.overworld.snow.WeatherSnow.SnowfallBudget.class.getDeclaredField("LEVELS");
             field.setAccessible(true);
             ((java.util.Map<?, ?>)field.get(null)).remove(level);
         } catch (ReflectiveOperationException error) { throw new AssertionError(error); }
@@ -101,8 +106,8 @@ public final class WeatherGameTest implements FabricClientGameTest {
                     var state = WeatherSystem.state(TestFixtures.level(client));
                     check(state != null && state.temperature() == 0 && state.wind() == 100, "Client receives independent channels");
                     check(TestFixtures.level(client).getPrecipitationAt(new BlockPos(0, 104, 0)) == Biome.Precipitation.SNOW, "Renderer uses snow climate");
-                    check(client.getSoundManager().getSoundEvent(naturality.NaturalitySounds.WIND_WEAK.location()) != null, "Weak wind registered");
-                    check(client.getSoundManager().getSoundEvent(naturality.NaturalitySounds.WIND_STRONG.location()) != null, "Strong wind registered");
+                    check(client.getSoundManager().getSoundEvent(naturality.bootstrap.ContentRegistration.NaturalitySounds.WIND_WEAK.location()) != null, "Weak wind registered");
+                    check(client.getSoundManager().getSoundEvent(naturality.bootstrap.ContentRegistration.NaturalitySounds.WIND_STRONG.location()) != null, "Strong wind registered");
                     var cane=Blocks.SUGAR_CANE.defaultBlockState();
                     var root=new BlockPos(-8,101,3);
                     check(WindRendering.vertexTag(TestFixtures.level(client),root,cane,.5F,0,.5F)==0,"Only cane root is pinned");

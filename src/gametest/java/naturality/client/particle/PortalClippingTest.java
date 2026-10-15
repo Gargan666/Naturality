@@ -3,7 +3,7 @@ package naturality.client.particle;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
-import naturality.client.portal.PortalClippedVertexConsumer;
+import naturality.client.portals.nether.travel.PortalCrossingClient.PortalClippedVertexConsumer;
 
 public final class PortalClippingTest {
     public static void run() {

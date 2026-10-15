@@ -1,8 +1,18 @@
 package naturality.test;
+import naturality.systems.weather.framework.WeatherSystem.WeatherProfile;
+import naturality.systems.weather.framework.WeatherSystem;
+import naturality.systems.weather.framework.WeatherSystem.WeatherWorldData;
+import naturality.api.worlds.EnvironmentWorldData;
+import naturality.systems.skyevents.framework.SkyEvents.SkyEventCycle;
+import naturality.systems.skyevents.framework.SkyEvents;
+import naturality.systems.skyevents.framework.SkyEvents.SkyEventType;
+import naturality.sky.overworld.rainbow.RainbowCycle;
+
+import naturality.sky.shared.aurora.AuroraEvents;
+import naturality.sky.shared.aurora.AuroraEvents.AuroraCycle;
+
 
 import java.util.*;
-import naturality.weather.*;
-import naturality.sky.*;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.server.level.ServerLevel;

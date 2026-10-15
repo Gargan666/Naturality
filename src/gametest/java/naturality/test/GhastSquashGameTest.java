@@ -1,7 +1,7 @@
 package naturality.test;
 
-import naturality.client.entity.GhastSquash;
-import naturality.client.entity.SquashingGhastRenderer;
+import naturality.client.entities.ghasts.GhastSquash;
+import naturality.client.entities.ghasts.GhastSquash.SquashingGhastRenderer;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.world.entity.monster.Ghast;
@@ -19,7 +19,7 @@ public final class GhastSquashGameTest implements FabricClientGameTest {
         for (int i = 0; i < 60; i++) motion.tickMovement(0, 0);
         if (Math.hypot(motion.leanX(1), motion.leanZ(1)) > .001)
             throw new AssertionError("Stopped ghast returns upright");
-        var noisy=new naturality.ghast.GhastMotion.Motion();
+        var noisy=new naturality.api.motion.GhastMotion.Motion();
         for(int tick=0;tick<80;tick++) {
             float previous=noisy.leanX(1);
             noisy.tickMovement(tick%2==0?.3:-.3,0);
@@ -89,7 +89,7 @@ public final class GhastSquashGameTest implements FabricClientGameTest {
                 for (var e : TestFixtures.level(client).entitiesForRendering())
                     if (e instanceof net.minecraft.world.entity.animal.happyghast.HappyGhast ghast) {
                         var renderer = client.getEntityRenderDispatcher().getRenderer(ghast);
-                        var state = TestFixtures.require((naturality.client.entity.LeaningHappyGhastRenderer.State)renderer.createRenderState(ghast, 1), "state");
+                        var state = TestFixtures.require((naturality.client.entities.ghasts.GhastSquash.LeaningHappyGhastRenderer.State)renderer.createRenderState(ghast, 1), "state");
                         double lean = Math.hypot(state.leanPitch, state.leanRoll);
                         if (lean < .1 || lean > 8) throw new AssertionError("Happy ghast must lean within the shared limit");
                         if (state.isBaby) baby++; else adult++;

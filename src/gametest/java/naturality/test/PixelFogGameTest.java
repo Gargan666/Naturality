@@ -61,7 +61,7 @@ public final class PixelFogGameTest implements FabricClientGameTest {
             context.waitTicks(20);
             world.getConnection().waitForChunksRender();
             context.runOnClient(client -> {
-                if (!naturality.client.fog.EndFogTransparency.isActive(TestFixtures.level(client), client.gameRenderer.mainCamera()))
+                if (!naturality.client.rendering.fog.EndFogComposite.EndFogTransparency.isActive(TestFixtures.level(client), client.gameRenderer.mainCamera()))
                     throw new AssertionError("End atmosphere must use transparent fog");
             });
             // Separate panels reveal near, intermediate and full edge-fog opacity.
@@ -91,14 +91,14 @@ public final class PixelFogGameTest implements FabricClientGameTest {
             context.takeScreenshot("pixel-fog-end-boss-chunk-boundary");
             context.runOnClient(client -> client.options.renderDistance().set(5));
             context.waitTicks(10);
-            var fogConfig = naturality.config.NaturalityConfig.get().fog;
+            var fogConfig = naturality.config.live.NaturalityConfig.get().fog;
             boolean originalEnabled = fogConfig.enabled;
             int originalPixelSize = fogConfig.pixelSize;
             try {
                 fogConfig.enabled = false;
                 reloadFog(context);
                 context.runOnClient(client -> {
-                    if (naturality.client.fog.EndFogTransparency.isActive(TestFixtures.level(client), client.gameRenderer.mainCamera()))
+                    if (naturality.client.rendering.fog.EndFogComposite.EndFogTransparency.isActive(TestFixtures.level(client), client.gameRenderer.mainCamera()))
                         throw new AssertionError("Disabling custom fog must restore colored End fog");
                 });
                 context.takeScreenshot("pixel-fog-end-disabled");
@@ -134,7 +134,7 @@ public final class PixelFogGameTest implements FabricClientGameTest {
             world.getConnection().waitForClientboundPackets();
             context.waitTicks(5);
             context.runOnClient(client -> {
-                if (naturality.client.fog.EndFogTransparency.isActive(TestFixtures.level(client), client.gameRenderer.mainCamera()))
+                if (naturality.client.rendering.fog.EndFogComposite.EndFogTransparency.isActive(TestFixtures.level(client), client.gameRenderer.mainCamera()))
                     throw new AssertionError("End blindness must keep colored fog");
             });
             server.runCommand("effect clear @a");
@@ -142,7 +142,7 @@ public final class PixelFogGameTest implements FabricClientGameTest {
             context.waitFor(client -> client.level != null
                 && client.level.dimension().equals(net.minecraft.world.level.Level.OVERWORLD));
             context.runOnClient(client -> {
-                if (!naturality.client.fog.EndFogTransparency.isActive(TestFixtures.level(client), client.gameRenderer.mainCamera()))
+                if (!naturality.client.rendering.fog.EndFogComposite.EndFogTransparency.isActive(TestFixtures.level(client), client.gameRenderer.mainCamera()))
                     throw new AssertionError("Overworld water must keep the atmosphere composite available");
             });
             server.runCommand("time set 6000");

@@ -1,7 +1,7 @@
 package naturality.test;
 
-import naturality.client.fluid.FallingFluidTail;
-import naturality.config.NaturalityConfig;
+import naturality.client.fluids.shared.FallingFluidTail;
+import naturality.config.live.NaturalityConfig;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.core.BlockPos;

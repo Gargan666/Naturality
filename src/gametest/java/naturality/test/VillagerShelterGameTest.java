@@ -1,8 +1,8 @@
 package naturality.test;
 
-import naturality.villager.VillagerSnowShelter;
-import naturality.weather.WeatherProfile;
-import naturality.weather.WeatherWorldData;
+import naturality.systems.villagerwork.shelter.VillagerSnowShelter;
+import naturality.systems.weather.framework.WeatherSystem.WeatherProfile;
+import naturality.systems.weather.framework.WeatherSystem.WeatherWorldData;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.core.BlockPos;

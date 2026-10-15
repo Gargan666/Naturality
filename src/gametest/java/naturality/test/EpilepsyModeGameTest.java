@@ -1,8 +1,8 @@
 package naturality.test;
 
-import naturality.config.NaturalityConfig;
-import naturality.client.config.EpilepsyWarning;
-import naturality.client.weather.LightningFlashes;
+import naturality.config.live.NaturalityConfig;
+import naturality.client.ui.accessibility.EpilepsyWarning;
+import naturality.client.systems.weather.overworld.lightning.DistantLightningClient.LightningFlashes;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.client.gui.screens.TitleScreen;

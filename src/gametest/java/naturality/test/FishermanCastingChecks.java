@@ -1,7 +1,7 @@
 package naturality.test;
 
-import naturality.villager.ProfessionWork;
-import naturality.villager.VillagerWorkVisuals;
+import naturality.systems.villagerwork.professions.ProfessionWork;
+import naturality.systems.villagerwork.framework.VillagerWork.VillagerWorkVisuals;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.server.level.ServerLevel;
@@ -32,8 +32,8 @@ final class FishermanCastingChecks {
         ProfessionWork work = new ProfessionWork(false);
         long now = level.getGameTime();
         try {
-            var targetType = Class.forName("naturality.villager.ProfessionWork$Target");
-            var taskType = Class.forName("naturality.villager.ProfessionWork$Task");
+            var targetType = Class.forName("naturality.systems.villagerwork.professions.ProfessionWork$Target");
+            var taskType = Class.forName("naturality.systems.villagerwork.professions.ProfessionWork$Task");
             Object fish = java.util.Arrays.stream(taskType.getEnumConstants()).filter(t -> TestFixtures.require(t, "t").toString().equals("FISH")).findFirst().orElseThrow();
             var constructor = targetType.getDeclaredConstructor(BlockPos.class, BlockPos.class, taskType);
             constructor.setAccessible(true);

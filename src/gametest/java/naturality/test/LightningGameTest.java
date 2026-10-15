@@ -1,16 +1,19 @@
 package naturality.test;
-import naturality.weather.*;
-import naturality.client.weather.DistantLightningClient;
+import naturality.systems.weather.overworld.lightning.DistantLightning.DistantLightningPayload;
+import naturality.systems.weather.framework.WeatherSystem.WeatherProfile;
+import naturality.systems.weather.framework.WeatherSystem.WeatherShelter;
+import naturality.systems.weather.framework.WeatherSystem.WeatherWorldData;
+import naturality.client.systems.weather.overworld.lightning.DistantLightningClient;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.client.renderer.state.level.LevelRenderState;
 public final class LightningGameTest implements FabricClientGameTest {
     private static void check(boolean value,String message) { if(!value)throw new AssertionError(message); }
     @Override public void runTest(ClientGameTestContext context) {
-        check(naturality.client.weather.ThunderAudio.delayTicks(343) == 20,
+        check(naturality.client.systems.weather.overworld.lightning.DistantLightningClient.ThunderAudio.delayTicks(343) == 20,
             "Thunder travels 343 blocks per second");
-        check(naturality.client.weather.ThunderAudio.pitchScale(1500)
-            < naturality.client.weather.ThunderAudio.pitchScale(100), "Distant thunder has lower pitch");
+        check(naturality.client.systems.weather.overworld.lightning.DistantLightningClient.ThunderAudio.pitchScale(1500)
+            < naturality.client.systems.weather.overworld.lightning.DistantLightningClient.ThunderAudio.pitchScale(100), "Distant thunder has lower pitch");
         boolean[] original={false};context.runOnClient(c -> original[0]=c.options.improvedTransparency().get());
         try(var world=TestWorlds.disposable(context).create()) {
             var profile=new WeatherProfile(true);profile.overrideRain=profile.overrideWind=profile.overrideTemperature=true;
@@ -47,15 +50,15 @@ public final class LightningGameTest implements FabricClientGameTest {
                     "Natural lightning stops when every player is underground");
             });
             context.runOnClient(c -> {
-                naturality.client.weather.WeatherSoundEnvironment.tick(c);
-                check(naturality.client.weather.WeatherSoundEnvironment.windExposure() == 0,
+                naturality.client.systems.weather.framework.WeatherClient.WeatherSoundEnvironment.tick(c);
+                check(naturality.client.systems.weather.framework.WeatherClient.WeatherSoundEnvironment.windExposure() == 0,
                     "Underground wind is silent");
-                check(!naturality.client.weather.ThunderAudio.audible(),"Underground listener cannot hear thunder");
+                check(!naturality.client.systems.weather.overworld.lightning.DistantLightningClient.ThunderAudio.audible(),"Underground listener cannot hear thunder");
             });
             world.getServer().runCommand("fill 3 110 -12 12 122 12 air");
             world.getConnection().waitForClientboundPackets();
             context.waitTicks(20);
-            context.runOnClient(_ -> check(naturality.client.weather.ThunderAudio.audible(),
+            context.runOnClient(_ -> check(naturality.client.systems.weather.overworld.lightning.DistantLightningClient.ThunderAudio.audible(),
                 "Nearby unobstructed surface exit restores thunder under an overhang"));
         } finally { context.runOnClient(c -> c.options.improvedTransparency().set(original[0])); }
     }

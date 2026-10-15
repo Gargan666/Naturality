@@ -1,6 +1,6 @@
 package naturality.test;
 
-import naturality.worldgen.EndTerrainDensity;
+import naturality.worldgen.end.terrain.EndTerrainDensity;
 import net.minecraft.world.level.levelgen.densityfunction.DensityVolume;
 import net.minecraft.world.level.levelgen.densityfunction.SamplerContext;
 

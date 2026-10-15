@@ -1,6 +1,6 @@
 package naturality.test;
 
-import naturality.client.sound.CaveAmbience;
+import naturality.client.audio.ambience.caves.CaveAmbience;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 

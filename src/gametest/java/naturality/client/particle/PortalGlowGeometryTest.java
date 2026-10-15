@@ -1,4 +1,7 @@
 package naturality.client.particle;
+import naturality.client.portals.nether.glow.PortalGlowGeometry;
+import naturality.client.portals.nether.glow.PortalGlowGeometry.PortalGlowPalette;
+import naturality.client.portals.nether.glow.PortalGlowGeometry.PortalMoteGeometry;
 
 import net.minecraft.core.Direction;
 import net.minecraft.world.phys.Vec3;
@@ -9,7 +12,7 @@ import org.joml.Vector3f;
 public final class PortalGlowGeometryTest {
     public static void main(String[] args) {
         PortalClippingTest.run();
-        naturality.client.villager.RopeSimulationTest.run();
+        naturality.client.api.ropes.RopeSimulationTest.run();
         WeatherParticleMathTest.run();
         EndPortalViewTest.run();
         naturality.portal.PortalOpeningTimingTest.run();
@@ -39,16 +42,16 @@ public final class PortalGlowGeometryTest {
             "Motes grow as their distance to the portal decreases");
         require(PortalMoteGeometry.growth(3, 2) == 0, "Moving farther away cannot create negative size");
         for (Vec3 motion : new Vec3[] {new Vec3(1, 2, 3), new Vec3(0, 0, -1), new Vec3(0, 1, 0)}) {
-            Vector3f facing = new Vector3f(1, 0, 0).rotate(PortalMoteGeometry.orientation(motion, new Vec3(3, 4, 5)));
+            Vector3f facing = new Vector3f(1, 0, 0).rotate(naturality.client.api.geometry.ParticleGeometry.orientation(motion, new Vec3(3, 4, 5)));
             Vec3 expected = motion.normalize();
             require(facing.distance(new Vector3f((float) expected.x, (float) expected.y, (float) expected.z)) < 0.00001,
                 "Texture X axis must follow velocity independently of the camera");
         }
-        require(Float.isFinite(PortalMoteGeometry.orientation(Vec3.ZERO, Vec3.ZERO).w), "Zero velocity must be safe");
+        require(Float.isFinite(naturality.client.api.geometry.ParticleGeometry.orientation(Vec3.ZERO, Vec3.ZERO).w), "Zero velocity must be safe");
         Vec3 travel = new Vec3(0, 0, 1);
-        Vector3f headOn = new Vector3f(0, 0, 1).rotate(PortalMoteGeometry.orientation(travel, travel));
+        Vector3f headOn = new Vector3f(0, 0, 1).rotate(naturality.client.api.geometry.ParticleGeometry.orientation(travel, travel));
         require(Math.abs(headOn.z) < 0.00001, "Head-on view must see the square edge-on");
-        Vector3f sideOn = new Vector3f(0, 0, 1).rotate(PortalMoteGeometry.orientation(travel, new Vec3(1, 0, 0)));
+        Vector3f sideOn = new Vector3f(0, 0, 1).rotate(naturality.client.api.geometry.ParticleGeometry.orientation(travel, new Vec3(1, 0, 0)));
         require(sideOn.distance(new Vector3f(1, 0, 0)) < 0.00001, "Side view must see the full face");
         int[] palette = PortalGlowPalette.create(new int[] {0xFF220044, 0xFFCC66FF, 0xFF661ACC, 0x00FFFFFF});
         require(palette[0] == 0xFFCC66FF, "Palette starts with lightest nontransparent source color");

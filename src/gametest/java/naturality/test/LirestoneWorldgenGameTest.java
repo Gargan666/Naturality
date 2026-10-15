@@ -1,10 +1,10 @@
 package naturality.test;
 
-import naturality.NaturalityBlocks;
-import naturality.worldgen.EndStoneLayers;
-import naturality.worldgen.EndTerrainDensity;
-import naturality.worldgen.LirestoneBoulderFeature;
-import naturality.worldgen.LirestonePatches;
+import naturality.bootstrap.ContentRegistration.NaturalityBlocks;
+import naturality.worldgen.end.materials.EndStoneLayers;
+import naturality.worldgen.end.terrain.EndTerrainDensity;
+import naturality.worldgen.end.lirestonecrags.LirestoneCrags.LirestoneBoulderFeature;
+import naturality.worldgen.end.lirestonecrags.LirestoneCrags.LirestonePatches;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.core.BlockPos;
@@ -120,7 +120,7 @@ public final class LirestoneWorldgenGameTest implements FabricClientGameTest {
                 for(int cz=startZ;cz<startZ+16;cz++)for(int cx=startX;cx<startX+16;cx++) {
                     var chunk=end.getChunk(cx,cz);
                     boolean boulder=false;
-                    var crags=naturality.worldgen.LirestoneCrags.conversionColumns(end.getBiomeManager(),cx*16,cz*16,
+                    var crags=naturality.worldgen.end.lirestonecrags.LirestoneCrags.conversionColumns(end.getBiomeManager(),cx*16,cz*16,
                         random.getOrCreateRandomFactory(naturality.Naturality.id("lirestone_patches")).at(0,0,0).nextLong());
                     for(int dx=0;dx<16;dx++)for(int dz=0;dz<16;dz++) {
                         if(crags[dx+dz*16])continue;
@@ -220,8 +220,8 @@ public final class LirestoneWorldgenGameTest implements FabricClientGameTest {
             });
 
             int[] oldDistance=new int[1];boolean[] hidden=new boolean[1];
-            boolean oldFog=naturality.config.NaturalityConfig.get().fog.enabled;
-            naturality.config.NaturalityConfig.get().fog.enabled=false;
+            boolean oldFog=naturality.config.live.NaturalityConfig.get().fog.enabled;
+            naturality.config.live.NaturalityConfig.get().fog.enabled=false;
             context.runOnClient(client -> {
                 oldDistance[0]=client.options.renderDistance().get();hidden[0]=client.gui.hud.isHidden();
                 if(!hidden[0])client.gui.hud.toggle();
@@ -243,7 +243,7 @@ public final class LirestoneWorldgenGameTest implements FabricClientGameTest {
                     context.takeScreenshot(view==0?"lirestone-patches":view==1?"lirestone-boulder":view==2?"lirestone-free-region":"lirestone-entire-island");
                 }
             } finally {
-                naturality.config.NaturalityConfig.get().fog.enabled=oldFog;
+                naturality.config.live.NaturalityConfig.get().fog.enabled=oldFog;
                 context.runOnClient(client -> {
                     if(client.gui.hud.isHidden()!=hidden[0])client.gui.hud.toggle();
                     client.options.renderDistance().set(oldDistance[0]);client.options.broadcastOptions();

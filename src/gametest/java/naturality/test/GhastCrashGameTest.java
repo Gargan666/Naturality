@@ -1,7 +1,12 @@
 package naturality.test;
+import naturality.client.particles.deathsmoke.DeathSmoke.MobDeathState;
+import naturality.client.entities.ghasts.GhastSquash.GhastTentaclePhysics;
+import naturality.client.entities.ghasts.GhastSquash.LeaningHappyGhastRenderer;
+import naturality.client.entities.ghasts.GhastSquash.SquashingGhastRenderer;
+import naturality.entities.ghasts.GhastCrash;
+import naturality.entities.ghasts.GhastCrash.GhastCrashBody;
+import naturality.api.motion.GhastMotion;
 
-import naturality.ghast.*;
-import naturality.client.entity.*;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.world.entity.*;

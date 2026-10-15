@@ -1,7 +1,7 @@
 package naturality.test;
 
-import naturality.client.particle.BlockFragmentPixels;
-import naturality.client.particle.SandParticleSprites;
+import naturality.client.rendering.breaking.BreakingEffects.BlockFragmentPixels;
+import naturality.client.particles.sand.SandPlacementBurst.SandParticleSprites;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.particle.SingleQuadParticle;
 import net.minecraft.client.particle.TerrainParticle;

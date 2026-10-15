@@ -1,8 +1,10 @@
 package naturality.test;
+import naturality.systems.weather.end.starfall.StarfallWeather.FallingStar;
+import naturality.systems.weather.end.starfall.StarfallWeather.StarfallEntities;
+import naturality.systems.weather.end.starfall.StarfallWeather;
+import naturality.systems.weather.end.framework.EndWeatherSystem.EndWeatherCycle;
 
-import naturality.starfall.*;
-import naturality.weather.*;
-import naturality.client.entity.FallingStarRenderer;
+import naturality.client.systems.weather.end.starfall.FallingStarRenderer;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.core.BlockPos;
@@ -81,13 +83,13 @@ public final class StarfallGameTest implements FabricClientGameTest {
             context.runOnClient(c->{
                 int found=0;
                 try {
-                    var field=naturality.client.particle.StarTrailParticle.class.getDeclaredField("attached");field.setAccessible(true);
+                    var field=naturality.client.systems.weather.end.starfall.FallingStarRenderer.StarTrailParticle.class.getDeclaredField("attached");field.setAccessible(true);
                     var trails=(java.util.Map<?,?>)field.get(null);
                     for(var entity:TestFixtures.level(c).entitiesForRendering())if(entity instanceof FallingStar star) {
                         check(c.getEntityRenderDispatcher().getRenderer(star) instanceof FallingStarRenderer,"Both stars and fizzles use the authored model renderer");
                         var particle=(net.minecraft.client.particle.Particle)trails.get(star);
                         check(particle!=null && particle.isAlive(),"Each tracked star owns a live attached star-trail particle");
-                        check(naturality.client.particle.WindParticleControl.immune(TestFixtures.require(particle, "particle")),"Star trail remains anchored despite weather wind");found++;
+                        check(naturality.client.systems.weather.wind.WindRendering.WindParticleControl.immune(TestFixtures.require(particle, "particle")),"Star trail remains anchored despite weather wind");found++;
                     }
                 }catch(ReflectiveOperationException e){throw new AssertionError(e);}
                 check(found==2,"Both visual variants are tracked and rendered");

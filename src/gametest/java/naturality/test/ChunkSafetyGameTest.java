@@ -29,14 +29,14 @@ public final class ChunkSafetyGameTest implements FabricClientGameTest {
             world.getConnection().waitForChunksRender();
             server.runOnServer(instance -> {
                 var level = instance.overworld();
-                check(naturality.util.LoadedChunks.has(level, new BlockPos(-1, 64, -1)),
+                check(naturality.api.worlds.LoadedChunks.has(level, new BlockPos(-1, 64, -1)),
                     "Server availability recognizes an already loaded chunk");
                 int loaded = level.getChunkSource().getLoadedChunksCount();
-                check(!naturality.util.LoadedChunks.has(level, new BlockPos(1000000, 100, 1000000)),
+                check(!naturality.api.worlds.LoadedChunks.has(level, new BlockPos(1000000, 100, 1000000)),
                     "Server availability does not request absent chunks");
                 check(level.getChunkSource().getLoadedChunksCount() == loaded,
                     "Availability leaves the server loaded-chunk count unchanged");
-                check(naturality.config.GameplaySettings.snowWrapping(level), "Snow wrapping is enabled for reload regression");
+                check(naturality.config.gameplay.GameplaySettings.snowWrapping(level), "Snow wrapping is enabled for reload regression");
                 for (var pos : SAVED_SNOW) {
                     level.setBlockAndUpdate(pos.below(2), Blocks.GRASS_BLOCK.defaultBlockState());
                     level.setBlockAndUpdate(pos.below(), Blocks.FERN.defaultBlockState());
@@ -67,7 +67,7 @@ public final class ChunkSafetyGameTest implements FabricClientGameTest {
                 level.setBlock(new BlockPos(-1, 64, -1), Blocks.STONE.defaultBlockState(), 18);
                 check(region.getBlockState(new BlockPos(-1, 64, -1)).is(Blocks.GOLD_BLOCK),
                     "Worker snapshot remains stable after world edits");
-                check(!naturality.util.LoadedChunks.has(level, new BlockPos(1000000, 100, 1000000)),
+                check(!naturality.api.worlds.LoadedChunks.has(level, new BlockPos(1000000, 100, 1000000)),
                     "Availability check does not load an absent chunk");
             });
         }
@@ -91,7 +91,7 @@ public final class ChunkSafetyGameTest implements FabricClientGameTest {
     }
 
     private static void checkSnowSearchBudget() {
-        int limit = naturality.snow.SnowGeometry.MAX_DEPTH;
+        int limit = naturality.blocks.snow.SnowGeometry.MAX_DEPTH;
         var column = new net.minecraft.world.level.BlockGetter() {
             @Override public net.minecraft.world.level.block.state.BlockState getBlockState(BlockPos pos) {
                 int depth = -pos.getY();
@@ -107,7 +107,7 @@ public final class ChunkSafetyGameTest implements FabricClientGameTest {
             @Override public int getMinY() { return -64; }
             @Override public int getHeight() { return 384; }
         };
-        naturality.snow.SnowGeometry.surfaces(column, BlockPos.ZERO);
+        naturality.blocks.snow.SnowGeometry.surfaces(column, BlockPos.ZERO);
     }
 
     private static void check(boolean condition, String message) {

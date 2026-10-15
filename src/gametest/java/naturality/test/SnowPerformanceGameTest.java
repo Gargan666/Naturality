@@ -1,7 +1,7 @@
 package naturality.test;
 
 import java.lang.management.ManagementFactory;
-import naturality.snow.SnowGeometry;
+import naturality.blocks.snow.SnowGeometry;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;

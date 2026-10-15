@@ -1,7 +1,12 @@
 package naturality.test;
+import naturality.client.fluids.lava.LavaIntersection.LavaImpactColumn;
+import naturality.client.fluids.lava.LavaIntersection;
+import naturality.client.fluids.water.WaterIntersection.WaterImpactColumn;
+import naturality.client.fluids.water.WaterIntersection;
+import naturality.client.fluids.shared.FallingFluidTail.FallSurfacePath;
+import naturality.client.fluids.shared.FluidGeometry.LiquidSurfaceGeometry;
 
-import naturality.client.fluid.*;
-import naturality.config.NaturalityConfig;
+import naturality.config.live.NaturalityConfig;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.world.phys.Vec3;

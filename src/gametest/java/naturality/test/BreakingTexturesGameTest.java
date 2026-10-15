@@ -5,7 +5,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
-import naturality.client.breaking.BreakingTextures;
+import naturality.client.rendering.breaking.BreakingTextures;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.client.resources.model.ModelBakery;
@@ -47,12 +47,12 @@ public final class BreakingTexturesGameTest implements FabricClientGameTest {
                 } catch (java.io.IOException exception) { throw new AssertionError(exception); }
             }
             var fallback = ModelBakery.DESTROY_TYPES.get(5);
-            BreakingTextures.at(new BlockPos(2, 100, 8), () -> {
-                var type = BreakingTextures.current(5, false, fallback);
+            naturality.client.rendering.breaking.BreakingEffects.at(new BlockPos(2, 100, 8), () -> {
+                var type = naturality.client.rendering.breaking.BreakingEffects.current(5, false, fallback);
                 check(type != fallback, "Dynamic texture uploaded");
-                check(type == BreakingTextures.current(5, false, fallback), "Texture cached between frames");
+                check(type == naturality.client.rendering.breaking.BreakingEffects.current(5, false, fallback), "Texture cached between frames");
             });
-            check(BreakingTextures.current(5, false, fallback) == fallback, "Submission context restored");
+            check(naturality.client.rendering.breaking.BreakingEffects.current(5, false, fallback) == fallback, "Submission context restored");
             BreakingTextures.reset();
         });
         boolean[] previous = new boolean[1];

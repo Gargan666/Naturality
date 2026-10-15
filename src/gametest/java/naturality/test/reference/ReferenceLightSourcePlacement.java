@@ -3,7 +3,7 @@ package naturality.test.reference;
 // Frozen pre-optimization behavior: oracle for exact visual-data regression checks.
 import java.util.ArrayList;
 import java.util.List;
-import naturality.util.LoadedChunks;
+import naturality.api.worlds.LoadedChunks;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.ClipContext;

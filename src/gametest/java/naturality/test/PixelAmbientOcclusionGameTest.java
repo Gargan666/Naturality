@@ -6,34 +6,34 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 /** Small isolated scene for shader compilation and block-grid visual regression checks. */
 public final class PixelAmbientOcclusionGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
-        context.runOnClient(client -> client.gui.setScreen(new naturality.client.config.NaturalityConfigScreen(TestFixtures.screen(client))));
+        context.runOnClient(client -> client.gui.setScreen(new naturality.client.ui.settings.NaturalityCategoryScreen.NaturalityConfigScreen(TestFixtures.screen(client))));
         context.waitTicks(2);
         context.takeScreenshot("lighting-settings");
-        for (var category : naturality.client.config.NaturalityCategoryScreen.Category.values()) {
+        for (var category : naturality.client.ui.settings.NaturalityCategoryScreen.Category.values()) {
             context.runOnClient(_ -> {
-                if (category == naturality.client.config.NaturalityCategoryScreen.Category.LIGHTING) {
-                    naturality.config.NaturalityConfig.get().lighting.darkStepPercent = 3;
-                } else if (category == naturality.client.config.NaturalityCategoryScreen.Category.FOG) {
-                    naturality.config.NaturalityConfig.get().fog.pixelSize = 12;
+                if (category == naturality.client.ui.settings.NaturalityCategoryScreen.Category.LIGHTING) {
+                    naturality.config.live.NaturalityConfig.get().lighting.darkStepPercent = 3;
+                } else if (category == naturality.client.ui.settings.NaturalityCategoryScreen.Category.FOG) {
+                    naturality.config.live.NaturalityConfig.get().fog.pixelSize = 12;
                 } else {
-                    naturality.config.NaturalityConfig.get().portalChanges.ambientVolume = 0.3;
+                    naturality.config.live.NaturalityConfig.get().portalChanges.ambientVolume = 0.3;
                 }
             });
             context.runOnClient(client -> client.gui.setScreen(
-                new naturality.client.config.NaturalityCategoryScreen(TestFixtures.screen(client), category)));
+                new naturality.client.ui.settings.NaturalityCategoryScreen(TestFixtures.screen(client), category)));
             context.runOnClient(client -> {
                 int count = pressResets(client.gui.screen());
-                int expected = switch (category) { case LIGHTING -> 7; case DYNAMIC_LIGHTING -> 10 + naturality.config.NaturalityConfig.DynamicLighting.defaultEntityLights().size(); case CAVE_DARKNESS -> 7; case MOON_DARKNESS -> 12; case CLOUDS -> 23; case LIQUIDS -> 25; case FOG -> 5; case PORTAL -> 11; case SKY -> 3; case FIRE -> 2; case PARTICLES -> 7; case GAMEPLAY -> 7; case WEATHER, GLINT -> 5; case SNOW -> 1; default -> 0; };
+                int expected = switch (category) { case LIGHTING -> 7; case DYNAMIC_LIGHTING -> 10 + naturality.config.live.NaturalityConfig.DynamicLighting.defaultEntityLights().size(); case CAVE_DARKNESS -> 7; case MOON_DARKNESS -> 12; case CLOUDS -> 23; case LIQUIDS -> 25; case FOG -> 5; case PORTAL -> 11; case SKY -> 3; case FIRE -> 2; case PARTICLES -> 7; case GAMEPLAY -> 7; case WEATHER, GLINT -> 5; case SNOW -> 1; default -> 0; };
                 if (count != expected) throw new AssertionError("Reset buttons for " + category + ": expected " + expected + ", got " + count);
-                var config = naturality.config.NaturalityConfig.get();
-                if (category == naturality.client.config.NaturalityCategoryScreen.Category.FOG
-                        && config.fog.pixelSize != new naturality.config.NaturalityConfig.Fog().pixelSize)
+                var config = naturality.config.live.NaturalityConfig.get();
+                if (category == naturality.client.ui.settings.NaturalityCategoryScreen.Category.FOG
+                        && config.fog.pixelSize != new naturality.config.live.NaturalityConfig.Fog().pixelSize)
                     throw new AssertionError("Fog reset did not apply");
-                if (category == naturality.client.config.NaturalityCategoryScreen.Category.LIGHTING
-                        && config.lighting.darkStepPercent != new naturality.config.NaturalityConfig.Lighting().darkStepPercent)
+                if (category == naturality.client.ui.settings.NaturalityCategoryScreen.Category.LIGHTING
+                        && config.lighting.darkStepPercent != new naturality.config.live.NaturalityConfig.Lighting().darkStepPercent)
                     throw new AssertionError("Lighting reset did not apply");
-                if (category == naturality.client.config.NaturalityCategoryScreen.Category.PORTAL
-                        && config.portalChanges.ambientVolume != new naturality.config.NaturalityConfig.PortalChanges().ambientVolume)
+                if (category == naturality.client.ui.settings.NaturalityCategoryScreen.Category.PORTAL
+                        && config.portalChanges.ambientVolume != new naturality.config.live.NaturalityConfig.PortalChanges().ambientVolume)
                     throw new AssertionError("Volume reset did not apply");
             });
             context.waitTicks(2);
@@ -41,9 +41,9 @@ public final class PixelAmbientOcclusionGameTest implements FabricClientGameTest
             context.runOnClient(client -> TestFixtures.screen(client).onClose());
             context.waitFor(client -> client.gui.overlay() == null);
             context.runOnClient(_ -> {
-                var config = naturality.config.NaturalityConfig.get();
-                if (category == naturality.client.config.NaturalityCategoryScreen.Category.LIGHTING
-                        && config.lighting.darkStepPercent != new naturality.config.NaturalityConfig.Lighting().darkStepPercent)
+                var config = naturality.config.live.NaturalityConfig.get();
+                if (category == naturality.client.ui.settings.NaturalityCategoryScreen.Category.LIGHTING
+                        && config.lighting.darkStepPercent != new naturality.config.live.NaturalityConfig.Lighting().darkStepPercent)
                     throw new AssertionError("Closing the page overwrote the reset slider value");
             });
         }
@@ -92,10 +92,10 @@ public final class PixelAmbientOcclusionGameTest implements FabricClientGameTest
             context.takeScreenshot("pixel-light-dark");
             // Exercise the equal-endpoint path (no logarithmic division by zero)
             // and resource reload using non-default settings, then restore them.
-            var config = naturality.config.NaturalityConfig.get();
+            var config = naturality.config.live.NaturalityConfig.get();
             var original = config.lighting;
             try {
-                config.lighting = new naturality.config.NaturalityConfig.Lighting();
+                config.lighting = new naturality.config.live.NaturalityConfig.Lighting();
                 config.lighting.darkStepPercent = 2;
                 config.lighting.lightStepPercent = 2;
                 config.lighting.darkSaturationPercent = 60;

@@ -2,8 +2,8 @@ package naturality.test;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import naturality.client.menu.MenuPreview;
-import naturality.util.DisposableWorlds;
+import naturality.client.ui.menus.previews.MenuPreview;
+import naturality.api.worlds.DisposableWorlds;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.core.BlockPos;

@@ -1,8 +1,8 @@
 package naturality.test;
 
-import naturality.NaturalityBlocks;
-import naturality.worldgen.EndTerrainDensity;
-import naturality.worldgen.LirestonePatches;
+import naturality.bootstrap.ContentRegistration.NaturalityBlocks;
+import naturality.worldgen.end.terrain.EndTerrainDensity;
+import naturality.worldgen.end.lirestonecrags.LirestoneCrags.LirestonePatches;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.levelgen.densityfunction.DensityVolume;

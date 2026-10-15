@@ -1,9 +1,9 @@
 package naturality.test;
 
-import naturality.NaturalityEffects;
-import naturality.entity.MaddenedZombie;
-import naturality.entity.MaddenedZombies;
-import naturality.client.entity.MaddenedZombieRenderer;
+import naturality.bootstrap.ContentRegistration.NaturalityEffects;
+import naturality.entities.maddened.MaddenedZombies.MaddenedZombie;
+import naturality.entities.maddened.MaddenedZombies;
+import naturality.client.entities.maddened.MaddenedZombieRenderer;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.world.entity.EntitySpawnReason;
@@ -70,7 +70,7 @@ public final class MaddenedZombieGameTest implements FabricClientGameTest {
                 var ordinary = TestFixtures.require(EntityTypes.ZOMBIE.create(level, EntitySpawnReason.COMMAND), "ordinary");
                 zombie.playSound(net.minecraft.sounds.SoundEvents.ZOMBIE_AMBIENT, 1, 1.4F);
                 check(Math.abs(MaddenedSoundProbe.pitch - .7F) < .0001, "Zombie sound pitch is halved");
-                var creeper = TestFixtures.require(naturality.entity.MaddenedCreepers.TYPE.create(level, EntitySpawnReason.COMMAND), "creeper");
+                var creeper = TestFixtures.require(naturality.entities.maddened.MaddenedCreepers.TYPE.create(level, EntitySpawnReason.COMMAND), "creeper");
                 creeper.playSound(net.minecraft.sounds.SoundEvents.CREEPER_PRIMED, 1, .8F);
                 check(Math.abs(MaddenedSoundProbe.pitch - .4F) < .0001, "Creeper priming sound pitch is halved");
                 creeper.playSound(net.minecraft.sounds.SoundEvents.GENERIC_EXPLODE.value(), 1, .8F);

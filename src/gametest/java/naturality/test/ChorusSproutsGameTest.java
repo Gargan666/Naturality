@@ -1,7 +1,7 @@
 package naturality.test;
 
-import naturality.NaturalityBlocks;
-import naturality.chorus.ChorusSprouts;
+import naturality.bootstrap.ContentRegistration.NaturalityBlocks;
+import naturality.blocks.chorus.ChorusFlowers.ChorusSprouts;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.core.BlockPos;
@@ -89,8 +89,8 @@ public final class ChorusSproutsGameTest implements FabricClientGameTest {
             });
 
             int[] distance={0};boolean[] hidden={false};
-            boolean fog=naturality.config.NaturalityConfig.get().fog.enabled;
-            naturality.config.NaturalityConfig.get().fog.enabled=false;
+            boolean fog=naturality.config.live.NaturalityConfig.get().fog.enabled;
+            naturality.config.live.NaturalityConfig.get().fog.enabled=false;
             context.runOnClient(client -> {
                 distance[0]=client.options.renderDistance().get();hidden[0]=client.gui.hud.isHidden();
                 if(!hidden[0])client.gui.hud.toggle();client.options.renderDistance().set(10);client.options.broadcastOptions();
@@ -104,7 +104,7 @@ public final class ChorusSproutsGameTest implements FabricClientGameTest {
                         net.minecraft.world.level.chunk.status.ChunkStatus.FULL,false)!=null,600);
                 context.waitTicks(100);context.takeScreenshot("chorus-plant-base-sprouts");
             } finally {
-                naturality.config.NaturalityConfig.get().fog.enabled=fog;
+                naturality.config.live.NaturalityConfig.get().fog.enabled=fog;
                 context.runOnClient(client -> {
                     if(client.gui.hud.isHidden()!=hidden[0])client.gui.hud.toggle();
                     client.options.renderDistance().set(distance[0]);client.options.broadcastOptions();

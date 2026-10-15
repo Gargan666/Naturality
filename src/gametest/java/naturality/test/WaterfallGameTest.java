@@ -1,9 +1,9 @@
 package naturality.test;
 
-import naturality.NaturalityParticles;
-import naturality.client.fluid.WaterfallSplash;
-import naturality.client.particle.WaterfallParticle;
-import naturality.config.NaturalityConfig;
+import naturality.bootstrap.ContentRegistration.NaturalityParticles;
+import naturality.client.fluids.water.WaterIntersection.WaterfallSplash;
+import naturality.client.fluids.water.WaterIntersection.WaterfallParticle;
+import naturality.config.live.NaturalityConfig;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.core.BlockPos;
@@ -20,9 +20,9 @@ public final class WaterfallGameTest implements FabricClientGameTest {
             check(mono.size()*original.format().getChannels()==original.size(),"Downmix must preserve splash duration");
             buffers.clear();
         });
-        check(naturality.client.fluid.FallParticleDensity.multiplier(36)==1,"Full spray through nearby distance");
-        check(naturality.client.fluid.FallParticleDensity.multiplier(54)==0.5,"Half spray halfway through fade");
-        check(naturality.client.fluid.FallParticleDensity.multiplier(72)==0,"No spray beyond extended distance");
+        check(naturality.client.fluids.shared.FallingFluidTail.FallParticleDensity.multiplier(36)==1,"Full spray through nearby distance");
+        check(naturality.client.fluids.shared.FallingFluidTail.FallParticleDensity.multiplier(54)==0.5,"Half spray halfway through fade");
+        check(naturality.client.fluids.shared.FallingFluidTail.FallParticleDensity.multiplier(72)==0,"No spray beyond extended distance");
         boolean[] saved=new boolean[4]; ParticleStatus[] particleStatus=new ParticleStatus[1];
         context.runOnClient(c->{
             var cfg=NaturalityConfig.get().liquids;
@@ -48,8 +48,8 @@ public final class WaterfallGameTest implements FabricClientGameTest {
             context.runOnClient(c->{
 
                 var droplet=TestFixtures.require(c.particleEngine.createParticle(net.minecraft.core.particles.ParticleTypes.SPLASH,5,180,5,0,0,0), "droplet");
-                check(droplet instanceof naturality.client.particle.ImpactDroplet,"Impact spray must support landing lifetime");
-                ((naturality.client.particle.ImpactDroplet)droplet).naturality$landBeforeExpiring();
+                check(droplet instanceof naturality.client.fluids.shared.FallingFluidTail.ImpactDroplet,"Impact spray must support landing lifetime");
+                ((naturality.client.fluids.shared.FallingFluidTail.ImpactDroplet)droplet).naturality$landBeforeExpiring();
                 droplet.setParticleSpeed(0,0,0);
                 for(int tick=0;tick<45;tick++)droplet.tick();
                 check(droplet.isAlive(),"Impact droplet must outlive vanilla's maximum airborne lifetime");
@@ -59,9 +59,9 @@ public final class WaterfallGameTest implements FabricClientGameTest {
             server.runCommand("tp @a 4.5 102.5 -5.5 35 12");
             world.getConnection().waitForClientboundPackets();context.waitTicks(3);
             context.runOnClient(c->{
-                check(naturality.client.fluid.FallImpactDroplets.vertical(TestFixtures.level(c),new BlockPos(0,100,0),false),"Vertical water impact emits droplets");
-                check(!naturality.client.fluid.FallImpactDroplets.vertical(TestFixtures.level(c),new BlockPos(5,100,5),false),"Resting pool must not emit droplets");
-                check(!naturality.client.fluid.FallImpactDroplets.vertical(TestFixtures.level(c),new BlockPos(0,100,0),true),"Water fall must not emit lava droplets");
+                check(naturality.client.fluids.shared.FallingFluidTail.FallImpactDroplets.vertical(TestFixtures.level(c),new BlockPos(0,100,0),false),"Vertical water impact emits droplets");
+                check(!naturality.client.fluids.shared.FallingFluidTail.FallImpactDroplets.vertical(TestFixtures.level(c),new BlockPos(5,100,5),false),"Resting pool must not emit droplets");
+                check(!naturality.client.fluids.shared.FallingFluidTail.FallImpactDroplets.vertical(TestFixtures.level(c),new BlockPos(0,100,0),true),"Water fall must not emit lava droplets");
                 check(WaterfallSplash.impactColumn(TestFixtures.level(c),new BlockPos(0,100,0)),"Waterfall must enter a source pool");
                 check(WaterfallSplash.validBorder(TestFixtures.level(c),new WaterfallSplash.Border(new BlockPos(0,100,0),Direction.NORTH)),"Direct waterfall splashes at the adjacent source pool");
                 check(!WaterfallSplash.validBorder(TestFixtures.level(c),new WaterfallSplash.Border(new BlockPos(0,100,-1),Direction.NORTH)),"Source surface smoothing must not move spray one block outward");
@@ -83,23 +83,23 @@ public final class WaterfallGameTest implements FabricClientGameTest {
             });
             server.runCommand("summon pig 5 108 5 {Tags:[\"splash_test\"]}");
             world.getConnection().waitForClientboundPackets();
-            check(naturality.client.fluid.WaterImpactColumn.heightFor(20)>naturality.client.fluid.WaterImpactColumn.heightFor(7),"Higher falls need taller columns");
-            check(naturality.client.fluid.WaterImpactColumn.envelope(1.5)==1 && naturality.client.fluid.WaterImpactColumn.envelope(21.5)==0,"Column rises then fully collapses");
-            check(naturality.client.fluid.WaterImpactColumn.spreadPixels(1.5)==0 && naturality.client.fluid.WaterImpactColumn.spreadPixels(11.5)==6 && naturality.client.fluid.WaterImpactColumn.spreadPixels(21.5)==12,"Footprint expands in whole pixels during collapse");
-            check(naturality.client.fluid.WaterImpactColumn.heightPixels(2,1.5,1)==32 && naturality.client.fluid.WaterImpactColumn.heightPixels(2,21.5,1)==0,"Height uses complete one-sixteenth-block rows");
-            check(naturality.client.fluid.WaterImpactColumn.spreadPixels(4)==1 && naturality.client.fluid.WaterImpactColumn.envelope(4)>.98,"Width advances linearly independently while height eases in");
-            check(Math.abs(naturality.client.fluid.WaterImpactColumn.splashChannel(64,.5F,0)-64/255F*.5F)<.0001,"Splash base must preserve dark biome water palette");
-            check(Math.abs(naturality.client.fluid.WaterImpactColumn.splashChannel(64,.5F,1)-(64/255F*1.25F+.22F))<.0001,"Splash tip must match rain-ring palette");
+            check(naturality.client.fluids.water.WaterIntersection.WaterImpactColumn.heightFor(20)>naturality.client.fluids.water.WaterIntersection.WaterImpactColumn.heightFor(7),"Higher falls need taller columns");
+            check(naturality.client.fluids.water.WaterIntersection.WaterImpactColumn.envelope(1.5)==1 && naturality.client.fluids.water.WaterIntersection.WaterImpactColumn.envelope(21.5)==0,"Column rises then fully collapses");
+            check(naturality.client.fluids.water.WaterIntersection.WaterImpactColumn.spreadPixels(1.5)==0 && naturality.client.fluids.water.WaterIntersection.WaterImpactColumn.spreadPixels(11.5)==6 && naturality.client.fluids.water.WaterIntersection.WaterImpactColumn.spreadPixels(21.5)==12,"Footprint expands in whole pixels during collapse");
+            check(naturality.client.fluids.water.WaterIntersection.WaterImpactColumn.heightPixels(2,1.5,1)==32 && naturality.client.fluids.water.WaterIntersection.WaterImpactColumn.heightPixels(2,21.5,1)==0,"Height uses complete one-sixteenth-block rows");
+            check(naturality.client.fluids.water.WaterIntersection.WaterImpactColumn.spreadPixels(4)==1 && naturality.client.fluids.water.WaterIntersection.WaterImpactColumn.envelope(4)>.98,"Width advances linearly independently while height eases in");
+            check(Math.abs(naturality.client.fluids.water.WaterIntersection.WaterImpactColumn.splashChannel(64,.5F,0)-64/255F*.5F)<.0001,"Splash base must preserve dark biome water palette");
+            check(Math.abs(naturality.client.fluids.water.WaterIntersection.WaterImpactColumn.splashChannel(64,.5F,1)-(64/255F*1.25F+.22F))<.0001,"Splash tip must match rain-ring palette");
             for(double riseAge:new double[]{0,.25,.75,1.49,1.5}) {
-                check(naturality.client.fluid.WaterImpactColumn.spreadPixels(riseAge)==0,"No widening before rise completes");
+                check(naturality.client.fluids.water.WaterIntersection.WaterImpactColumn.spreadPixels(riseAge)==0,"No widening before rise completes");
             }
-            check(naturality.client.fluid.WaterImpactColumn.envelope(.125)<naturality.client.fluid.WaterImpactColumn.envelope(1.5),"Rise reaches its peak before falling begins");
-            check(naturality.client.fluid.WaterImpactColumn.ringSpreadPixels(26.5)>naturality.client.fluid.WaterImpactColumn.ringSpreadPixels(21.5),"Ring continues outward after column collapses");
-            check(naturality.client.fluid.WaterImpactColumn.ringFade(21.5)==1 && naturality.client.fluid.WaterImpactColumn.ringFade(26.5)==.5F && naturality.client.fluid.WaterImpactColumn.ringFade(31.5)==0,"Residual ring fades continuously to zero");
+            check(naturality.client.fluids.water.WaterIntersection.WaterImpactColumn.envelope(.125)<naturality.client.fluids.water.WaterIntersection.WaterImpactColumn.envelope(1.5),"Rise reaches its peak before falling begins");
+            check(naturality.client.fluids.water.WaterIntersection.WaterImpactColumn.ringSpreadPixels(26.5)>naturality.client.fluids.water.WaterIntersection.WaterImpactColumn.ringSpreadPixels(21.5),"Ring continues outward after column collapses");
+            check(naturality.client.fluids.water.WaterIntersection.WaterImpactColumn.ringFade(21.5)==1 && naturality.client.fluids.water.WaterIntersection.WaterImpactColumn.ringFade(26.5)==.5F && naturality.client.fluids.water.WaterIntersection.WaterImpactColumn.ringFade(31.5)==0,"Residual ring fades continuously to zero");
             int[] loud=new int[1];
             for(int i=0;i<50;i++) {
                 context.waitTicks(1);
-                context.runOnClient(_->loud[0]+=naturality.client.fluid.WaterEntrySplash.lastSplashCount);
+                context.runOnClient(_->loud[0]+=naturality.client.fluids.water.WaterIntersection.WaterEntrySplash.lastSplashCount);
                 if(loud[0]==1 && i<30) {
                     context.waitTicks(4);
                     context.takeScreenshot("water-impact-column");
@@ -113,7 +113,7 @@ public final class WaterfallGameTest implements FabricClientGameTest {
             loud[0]=0;
             for(int i=0;i<35;i++) {
                 context.waitTicks(1);
-                context.runOnClient(_->loud[0]+=naturality.client.fluid.WaterEntrySplash.lastSplashCount);
+                context.runOnClient(_->loud[0]+=naturality.client.fluids.water.WaterIntersection.WaterEntrySplash.lastSplashCount);
                 if(loud[0]==1 && i<30) {
                     context.waitTicks(4);
                     context.takeScreenshot("water-impact-column");
@@ -127,7 +127,7 @@ public final class WaterfallGameTest implements FabricClientGameTest {
             loud[0]=0;
             for(int i=0;i<60;i++) {
                 context.waitTicks(1);
-                context.runOnClient(_->loud[0]+=naturality.client.fluid.WaterEntrySplash.lastSplashCount);
+                context.runOnClient(_->loud[0]+=naturality.client.fluids.water.WaterIntersection.WaterEntrySplash.lastSplashCount);
             }
             check(loud[0]==1,"A boat falling into water must produce one large splash");
             server.runCommand("kill @e[tag=boat_splash_test]");
@@ -156,9 +156,9 @@ public final class WaterfallGameTest implements FabricClientGameTest {
                 check(!WaterfallSplash.validBorder(TestFixtures.level(c),new WaterfallSplash.Border(foot,Direction.NORTH)),"Flowing-to-sloping transition must not emit");
                 check(!WaterfallSplash.impactColumn(TestFixtures.level(c),new BlockPos(0,104,0)),"Slope support must not enable midair spray");
                 check(!WaterfallSplash.validBorder(TestFixtures.level(c),new WaterfallSplash.Border(foot.north(),Direction.NORTH)),"Runoff-to-runoff transition must not emit");
-                naturality.client.fluid.WaterSurface runoff=null;
+                naturality.client.fluids.water.WaterShaders.WaterSurface runoff=null;
                 for(int offset=1;offset<=8;offset++) {
-                    var candidate=naturality.client.fluid.WaterSurface.at(TestFixtures.level(c),foot.north(offset));
+                    var candidate=naturality.client.fluids.water.WaterShaders.WaterSurface.at(TestFixtures.level(c),foot.north(offset));
                     if(candidate!=null && candidate.height(.5,.5)<candidate.pos().getY()+.85){runoff=candidate;break;}
                 }
                 var surface=java.util.Objects.requireNonNull(runoff,"Runoff scene needs an exposed shallow water surface");

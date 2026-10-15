@@ -1,8 +1,8 @@
 package naturality.test.reference;
 
 // Frozen pre-optimization behavior: oracle for exact visual-data regression checks.
-import naturality.client.fluid.ProceduralFluids;
-import naturality.client.fluid.WaterComposite;
+import naturality.client.fluids.shared.ProceduralFluids;
+import naturality.client.fluids.water.WaterComposite;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -14,7 +14,7 @@ import com.mojang.renderpearl.api.pipeline.UniformType;
 import com.mojang.renderpearl.api.textures.*;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import naturality.config.NaturalityConfig;
+import naturality.config.live.NaturalityConfig;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -269,7 +269,7 @@ public final class ReferenceWaterVisuals {
             && camera.getFluidInCamera() == FogType.NONE
             && !(camera.entity() instanceof LivingEntity e && (e.hasEffect(MobEffects.BLINDNESS) || e.hasEffect(MobEffects.DARKNESS)))
             && !client.gui.hud.getBossOverlay().shouldCreateWorldFog();
-        var weather = level == null ? null : naturality.weather.WeatherSystem.renderState(level);
+        var weather = level == null ? null : naturality.systems.weather.framework.WeatherSystem.renderState(level);
         float rainFog = atmosphere && weather != null ? weather.heavyRainFog() : 0;
         data.putInt(atmosphere ? 1 : 0).putInt(inWaterfall ? 1 : 0)
             .putInt(Float.floatToRawIntBits(rainFog)).putInt(0);
@@ -297,7 +297,7 @@ public final class ReferenceWaterVisuals {
 
     public static void bindScene(RenderPass pass) {
         var sampler = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST);
-        var atmosphere = naturality.client.fog.EndFogComposite.atmosphereView();
+        var atmosphere = naturality.client.rendering.fog.EndFogComposite.atmosphereView();
         pass.setUniform("NaturalityWaterAtmosphere", atmosphere == null ? view : atmosphere, sampler);
         pass.setUniform("NaturalityWaterMask", WaterComposite.maskView() == null ? view : WaterComposite.maskView(), sampler);
         pass.setUniform("NaturalityWaterOpaqueDepth", WaterComposite.depthView() == null ? view : WaterComposite.depthView(), sampler);

@@ -1,6 +1,9 @@
 package naturality.test;
+import naturality.client.ui.camera.hands.ElasticMotion.ElasticHandPose;
+import naturality.client.ui.camera.hands.ElasticMotion;
+import naturality.client.ui.camera.airborne.AirborneTilt.AirborneCameraState;
+import naturality.client.ui.camera.airborne.AirborneTilt;
 
-import naturality.client.camera.*;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import org.joml.Matrix4f;
@@ -86,7 +89,7 @@ public final class CameraHandsGameTest implements FabricClientGameTest {
             context.runOnClient(client -> client.options.keyUse.setDown(false));
             server.runCommand("item replace entity @a weapon.mainhand with minecraft:fishing_rod");
             context.waitTicks(12);
-            context.runOnClient(_ -> check(naturality.client.villager.FirstPersonRodTip.worldTip != null,
+            context.runOnClient(_ -> check(naturality.client.systems.fishing.FishingLineRendering.FirstPersonRodTip.worldTip != null,
                 "Fishing rod measurement still follows the elastic rendered pose"));
             server.runCommand("item replace entity @a weapon.offhand with minecraft:air");
             server.runCommand("item replace entity @a weapon.mainhand with minecraft:filled_map[minecraft:map_id=0]");

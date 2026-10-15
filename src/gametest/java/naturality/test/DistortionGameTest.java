@@ -1,8 +1,8 @@
 package naturality.test;
 
 import java.util.UUID;
-import naturality.NaturalityEffects;
-import naturality.weather.EndGravity;
+import naturality.bootstrap.ContentRegistration.NaturalityEffects;
+import naturality.systems.gravity.EndGravity;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.util.ProblemReporter;

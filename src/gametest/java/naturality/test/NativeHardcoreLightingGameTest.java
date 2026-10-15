@@ -1,7 +1,7 @@
 package naturality.test;
 
-import naturality.client.lighting.HardcoreDarkness;
-import naturality.config.NaturalityConfig;
+import naturality.client.rendering.lighting.hardcore.HardcoreDarkness;
+import naturality.config.live.NaturalityConfig;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.client.renderer.LightmapRenderStateExtractor;
@@ -32,7 +32,7 @@ public final class NativeHardcoreLightingGameTest implements FabricClientGameTes
                     if (expected == 0 && state.skyFactor != 0) throw new AssertionError("New moon leaves skylight");
                     if (HardcoreDarkness.cavesEnabled(TestFixtures.level(client)) && settings.caves.ambientPercent == 0
                             && state.ambientColor.lengthSquared() != 0) throw new AssertionError("Disabled ambient light remains");
-                    if (naturality.client.menu.MenuPreview.active()) throw new AssertionError("Gameplay inherited the preview camera");
+                    if (naturality.client.ui.menus.previews.MenuPreview.active()) throw new AssertionError("Gameplay inherited the preview camera");
                     System.out.println("NATIVE_LIGHTING phase=" + selected + " multiplier=" + actual + " sky=" + state.skyFactor);
                 });
             }

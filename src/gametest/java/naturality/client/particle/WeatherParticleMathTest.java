@@ -1,4 +1,6 @@
 package naturality.client.particle;
+import naturality.client.api.geometry.ParticleGeometry;
+import naturality.client.systems.weather.overworld.precipitation.ParticleWeather.WeatherSway;
 
 import java.util.Random;
 import net.minecraft.world.phys.Vec3;
@@ -14,8 +16,8 @@ final class WeatherParticleMathTest {
             var velocity=sample%7==0?Vec3.ZERO:new Vec3(random.nextDouble()*2-1,-random.nextDouble(),random.nextDouble()*2-1);
             var camera=sample%11==0?velocity:sample%13==0?Vec3.ZERO
                 :new Vec3(random.nextDouble()*72-36,random.nextDouble()*32-16,random.nextDouble()*72-36);
-            var original=PortalMoteGeometry.orientation(velocity,camera).rotateZ(-(float)Math.PI/2);
-            WeatherCardGeometry.orientation(velocity.x,velocity.y,velocity.z,camera.x,camera.y,camera.z,basis,rotation);
+            var original=naturality.client.api.geometry.ParticleGeometry.orientation(velocity,camera).rotateZ(-(float)Math.PI/2);
+            ParticleGeometry.orientation(velocity.x,velocity.y,velocity.z,camera.x,camera.y,camera.z,basis,rotation);
             if(!Float.isFinite(rotation.w) || Math.abs(original.dot(rotation))<.99998F)
                 throw new AssertionError("Weather orientation changed at sample "+sample);
         }

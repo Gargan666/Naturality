@@ -1,12 +1,15 @@
 package naturality.test;
+import naturality.client.rendering.culling.FogCulling.OcclusionCulling;
+import naturality.client.rendering.distantdetail.DistantTextures;
+import naturality.client.rendering.distantdetail.RenderDetail.DistanceModel;
+import naturality.client.rendering.distantdetail.RenderDetail;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import java.util.ArrayList;
 import java.util.List;
-import naturality.client.render.*;
-import naturality.client.snow.SnowSpritePixels;
-import naturality.client.snow.SnowTextureAtlas;
-import naturality.config.NaturalityConfig;
+import naturality.client.blocks.snow.SnowTextureAtlas.SnowSpritePixels;
+import naturality.client.blocks.snow.SnowTextureAtlas;
+import naturality.config.live.NaturalityConfig;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.model.loading.v1.wrapper.WrapperBlockStateModel;

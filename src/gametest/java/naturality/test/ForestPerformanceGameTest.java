@@ -1,13 +1,16 @@
 package naturality.test;
+import naturality.systems.weather.wind.WindPush.WindShapes;
+import naturality.systems.weather.framework.WeatherSystem.WeatherProfile;
+import naturality.systems.weather.framework.WeatherSystem;
+import naturality.systems.weather.framework.WeatherSystem.WeatherWorldData;
 
 import java.lang.management.ManagementFactory;
 import java.util.*;
-import naturality.client.portal.PortalClippedCollector;
-import naturality.config.GameplaySettings;
-import naturality.fire.FireGeometry;
-import naturality.snow.SnowGeometry;
-import naturality.util.RaycastShapePresence;
-import naturality.weather.*;
+import naturality.client.portals.nether.travel.PortalCrossingClient.PortalClippedCollector;
+import naturality.config.gameplay.GameplaySettings;
+import naturality.blocks.fire.FireGeometry;
+import naturality.blocks.snow.SnowGeometry;
+import naturality.api.geometry.RaycastShapePresence;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.client.renderer.feature.ItemFeatureRenderer;
@@ -76,7 +79,7 @@ public final class ForestPerformanceGameTest implements FabricClientGameTest {
                 current.set(null,b);
                 var second=new ItemFeatureRenderer.Submit(pose,ItemDisplayContext.GUI,0,0,0,tint,quads,ItemStackRenderState.FoilType.NONE);
                 // This record is used only to exercise constructor metadata, never rendered.
-                var renderType=net.minecraft.client.renderer.rendertype.RenderTypes.entitySolid(naturality.client.AtlasLocations.BLOCKS);
+                var renderType=net.minecraft.client.renderer.rendertype.RenderTypes.entitySolid(naturality.client.api.rendering.AtlasLocations.BLOCKS);
                 var emptyModel=new net.minecraft.client.model.Model.Simple(
                     new net.minecraft.client.model.geom.ModelPart(java.util.List.of(),java.util.Map.of()), _ -> renderType);
                 var model=new net.minecraft.client.renderer.feature.ModelFeatureRenderer.Submit<>(renderType,pose,emptyModel,net.minecraft.util.Unit.INSTANCE,0,0,0,null,null);

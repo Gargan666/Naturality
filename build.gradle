@@ -132,9 +132,11 @@ def generateEntityGeometry = { taskName, exportName, className, partNames, alias
             geometry = geometry.replace('return LayerDefinition.create',
                 'partdefinition.getChild("head").addOrReplaceChild("hat", CubeListBuilder.create(), PartPose.ZERO);\nreturn LayerDefinition.create')
         }
-        def output = new File(generatedDir.get().asFile, 'naturality/client/entity/' + className + '.java')
+        def legacyOutput = new File(generatedDir.get().asFile, 'naturality/client/entity/' + className + '.java')
+        if (legacyOutput.exists() && !legacyOutput.delete()) throw new GradleException('Cannot remove obsolete generated geometry: ' + legacyOutput)
+        def output = new File(generatedDir.get().asFile, 'naturality/client/entities/maddened/' + className + '.java')
         output.parentFile.mkdirs()
-        output.setText('''package naturality.client.entity;
+        output.setText('''package naturality.client.entities.maddened;
 import net.minecraft.client.model.geom.PartPose;
 import net.minecraft.client.model.geom.builders.*;
 /** Generated from the artist entity export. Do not edit. */
@@ -176,7 +178,66 @@ def generateChorusFlowerModel = tasks.register('generateChorusFlowerModel') {
 	}
 }
 
+// Feature-owned packages must retain their original relative application order.
+// Mixin sorts equal-priority injections by registration order, so grouping every
+// feature into one configuration can change behavior at shared injection points.
+def mixinRegistryFile = layout.projectDirectory.file('src/main/mixins.json')
+def modTemplateFile = layout.projectDirectory.file('src/main/resources/fabric.mod.json')
+def mixinRegistryText = providers.fileContents(mixinRegistryFile).asText.get()
+def modTemplateText = providers.fileContents(modTemplateFile).asText.get()
+def mixinModVersion = project.version.toString()
+def generateMixinResources = tasks.register('generateMixinResources') {
+    description = 'Emits ordered mixin configurations and mod metadata from the feature registry.'
+    inputs.file(mixinRegistryFile)
+    inputs.file(modTemplateFile)
+    inputs.property('version', mixinModVersion)
+    def destination = layout.buildDirectory.dir('generated/mixinResources')
+    outputs.dir(destination)
+    doLast {
+        def registry = new groovy.json.JsonSlurper().parseText(mixinRegistryText)
+        def metadata = new groovy.json.JsonSlurper().parseText(modTemplateText)
+        def directory = destination.get().asFile
+        directory.mkdirs()
+        // Delete only this generator's named outputs, never arbitrary directories.
+        directory.listFiles().each { output ->
+            if (output.isFile() && (output.name == 'fabric.mod.json'
+                    || output.name.startsWith('naturality.ordered.') && output.name.endsWith('.mixins.json'))) {
+                if (!output.delete()) throw new GradleException("Cannot replace generated mixin resource: $output")
+            }
+        }
+        def configs = []
+        ['main', 'client'].each { side ->
+            def names = registry[side]
+            if (names.toSet().size() != names.size()) throw new GradleException("Duplicate $side mixin registration")
+            def groups = []
+            names.each { name ->
+                def split = name.lastIndexOf('.')
+                def owner = name.substring(0, split)
+                def simple = name.substring(split + 1)
+                if (!owner.endsWith('.mixins') && !owner.contains('.mixins.')) throw new GradleException("Mixin must have a dedicated hook package: $name")
+                if (groups.isEmpty() || groups.last().owner != owner) groups.add([owner: owner, names: []])
+                groups.last().names.add(simple)
+            }
+            groups.eachWithIndex { group, index ->
+                def config = new LinkedHashMap(registry.defaults)
+                config['package'] = group.owner
+                config[side == 'client' ? 'client' : 'mixins'] = group.names
+                def filename = "naturality.ordered.${side}_${index.toString().padLeft(3, '0')}.mixins.json".toString()
+                new File(directory, filename).setText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(config)) + '\n', 'UTF-8')
+                configs.add(side == 'client' ? [config: filename, environment: 'client'] : filename)
+            }
+        }
+        metadata.version = mixinModVersion
+        metadata.mixins = configs
+        new File(directory, 'fabric.mod.json').setText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(metadata)) + '\n', 'UTF-8')
+    }
+}
+// The source descriptor is the template; only the generated descriptor is packaged.
+sourceSets.main.resources.exclude('fabric.mod.json')
+
+
 processResources {
+    from(generateMixinResources)
 	from(generateChorusFlowerModel)
 	// The artist texture also replaces every vanilla chorus-plant sprite reference.
 	from('resources/textures/block') {

@@ -1,6 +1,6 @@
 package naturality.test;
 
-import naturality.weather.EndGravity;
+import naturality.systems.gravity.EndGravity;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.world.phys.Vec3;

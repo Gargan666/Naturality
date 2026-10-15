@@ -4,12 +4,12 @@ import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.client.renderer.state.LightmapRenderState;
 import net.minecraft.client.renderer.LightmapRenderStateExtractor;
-import naturality.client.lighting.HardcoreDarkness;
+import naturality.client.rendering.lighting.hardcore.HardcoreDarkness;
 
 public final class HardcoreDarknessGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
         context.runOnClient(client -> {
-            client.gui.setScreen(new naturality.client.config.NaturalityConfigScreen(new net.minecraft.client.gui.screens.TitleScreen()));
+            client.gui.setScreen(new naturality.client.ui.settings.NaturalityCategoryScreen.NaturalityConfigScreen(new net.minecraft.client.gui.screens.TitleScreen()));
             press(client.gui.screen(), "Lighting and Atmosphere");
             press(client.gui.screen(), "Hardcore Darkness");
         });
@@ -68,11 +68,11 @@ public final class HardcoreDarknessGameTest implements FabricClientGameTest {
                 world.getConnection().waitForClientboundPackets();
                 context.waitFor(client -> client.level != null && client.level.dimension().equals(dimension));
                 context.waitTicks(10);
-                var original = naturality.config.NaturalityConfig.get().hardcoreDarkness;
+                var original = naturality.config.live.NaturalityConfig.get().hardcoreDarkness;
                 try {
                     context.runOnClient(client -> {
-                        var config = naturality.config.NaturalityConfig.get();
-                        config.hardcoreDarkness = new naturality.config.NaturalityConfig.HardcoreDarkness();
+                        var config = naturality.config.live.NaturalityConfig.get();
+                        config.hardcoreDarkness = new naturality.config.live.NaturalityConfig.HardcoreDarkness();
                         var camera = client.gameRenderer.mainCamera();
                         var extractor = new LightmapRenderStateExtractor(client.gameRenderer, client);
                         var state = new LightmapRenderState();
@@ -96,7 +96,7 @@ public final class HardcoreDarknessGameTest implements FabricClientGameTest {
                     context.waitTicks(5);
                     context.takeScreenshot("hardcore-opt-in-" + dimension.identifier().getPath());
                 } finally {
-                    context.runOnClient(_ -> naturality.config.NaturalityConfig.get().hardcoreDarkness = original);
+                    context.runOnClient(_ -> naturality.config.live.NaturalityConfig.get().hardcoreDarkness = original);
                 }
             }
         }
@@ -119,11 +119,11 @@ public final class HardcoreDarknessGameTest implements FabricClientGameTest {
 
     static void checkConfig() {
         var gson = new com.google.gson.Gson();
-        var defaults = gson.fromJson("{}", naturality.config.NaturalityConfig.class);
+        var defaults = gson.fromJson("{}", naturality.config.live.NaturalityConfig.class);
         if (!defaults.hardcoreDarkness.caves.enabled || !defaults.hardcoreDarkness.moon.enabled)
             throw new AssertionError("Old configs must retain darkness defaults");
         var settings = defaults.hardcoreDarkness;
-        for (var dimensions : new naturality.config.NaturalityConfig.DarknessDimensions[] {settings.caves.dimensions, settings.moon.dimensions}) {
+        for (var dimensions : new naturality.config.live.NaturalityConfig.DarknessDimensions[] {settings.caves.dimensions, settings.moon.dimensions}) {
             if (!dimensions.includes(net.minecraft.world.level.Level.OVERWORLD)
                     || dimensions.includes(net.minecraft.world.level.Level.NETHER)
                     || dimensions.includes(net.minecraft.world.level.Level.END))
@@ -145,18 +145,18 @@ public final class HardcoreDarknessGameTest implements FabricClientGameTest {
             throw new AssertionError("Invalid percentages not clamped");
         settings.caves.enabled = false;
         settings.moon.darkenClouds = false;
-        var restored = gson.fromJson(gson.toJson(settings), naturality.config.NaturalityConfig.HardcoreDarkness.class);
+        var restored = gson.fromJson(gson.toJson(settings), naturality.config.live.NaturalityConfig.HardcoreDarkness.class);
         if (restored.caves.enabled || restored.moon.darkenClouds || restored.moon.newPercent != 100)
             throw new AssertionError("Darkness settings did not round-trip");
-        restored = gson.fromJson("{\"caves\":null,\"moon\":null}", naturality.config.NaturalityConfig.HardcoreDarkness.class);
+        restored = gson.fromJson("{\"caves\":null,\"moon\":null}", naturality.config.live.NaturalityConfig.HardcoreDarkness.class);
         restored.sanitize();
         if (restored.caves == null || restored.moon == null) throw new AssertionError("Missing child settings not restored");
     }
 
     private static void checkControls(net.minecraft.client.Minecraft client) {
-        var config = naturality.config.NaturalityConfig.get();
+        var config = naturality.config.live.NaturalityConfig.get();
         var original = config.hardcoreDarkness;
-        config.hardcoreDarkness = new naturality.config.NaturalityConfig.HardcoreDarkness();
+        config.hardcoreDarkness = new naturality.config.live.NaturalityConfig.HardcoreDarkness();
         try {
             var settings = config.hardcoreDarkness;
             var camera = client.gameRenderer.mainCamera();

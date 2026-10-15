@@ -1,7 +1,10 @@
 package naturality.test;
+import naturality.systems.skyevents.framework.SkyEvents;
+import naturality.systems.skyevents.framework.SkyEvents.SkyEventType;
+import naturality.systems.skyevents.framework.SkyEvents.SkyEventWorldData;
+import naturality.client.sky.overworld.bloodmoon.BloodMoonClient;
+import naturality.sky.overworld.bloodmoon.BloodMoonCycle;
 
-import naturality.sky.*;
-import naturality.client.sky.*;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 
@@ -21,7 +24,7 @@ public final class BloodMoonGameTest implements FabricClientGameTest {
         for (int i = 0; i < 1000; i++) { cycle.tick(true, true); restored.tick(true, true); }
         check(cycle.snapshot().equals(restored.snapshot()) && cycle.strength() == 1, "Saved night remains active without a second roll");
         cycle.tick(true, false); check(cycle.strength() == 0, "Natural Blood Moon ends at dawn");
-        var oldClouds = naturality.config.NaturalityConfig.get().clouds;
+        var oldClouds = naturality.config.live.NaturalityConfig.get().clouds;
         var oldStatus = new net.minecraft.client.CloudStatus[1];
         boolean[] oldOit = new boolean[1];
         context.runOnClient(client -> {
@@ -73,7 +76,7 @@ public final class BloodMoonGameTest implements FabricClientGameTest {
             });
             context.takeScreenshot("blood-moon-full");
             context.runOnClient(client -> {
-                naturality.config.NaturalityConfig.get().clouds = new naturality.config.NaturalityConfig.Clouds();
+                naturality.config.live.NaturalityConfig.get().clouds = new naturality.config.live.NaturalityConfig.Clouds();
                 client.options.cloudStatus().set(net.minecraft.client.CloudStatus.FANCY);
             });
             server.runCommand("time set 15000");
@@ -97,7 +100,7 @@ public final class BloodMoonGameTest implements FabricClientGameTest {
             context.runOnClient(_ -> check(BloodMoonClient.current() == 0, "Even an override fades out during daylight"));
             server.runCommand("skyevent minecraft:overworld blood_moon auto");
         } finally {
-            naturality.config.NaturalityConfig.get().clouds = oldClouds;
+            naturality.config.live.NaturalityConfig.get().clouds = oldClouds;
             context.runOnClient(client -> {
                 client.options.cloudStatus().set(oldStatus[0]); client.options.improvedTransparency().set(oldOit[0]);
             });

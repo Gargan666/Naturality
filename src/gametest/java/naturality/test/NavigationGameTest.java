@@ -1,7 +1,7 @@
 package naturality.test;
 
-import naturality.navigation.NavigationInstruments;
-import naturality.client.navigation.NavigationClient;
+import naturality.systems.navigation.NavigationInstruments;
+import naturality.client.systems.navigation.NavigationClient;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.core.BlockPos;

@@ -7,7 +7,7 @@ import com.mojang.renderpearl.api.pipeline.ColorTargetState;
 import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import java.util.*;
 import naturality.Naturality;
-import naturality.client.lighting.BellLightingModel;
+import naturality.client.rendering.lighting.dynamic.DynamicLighting.BellLightingModel;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.model.loading.v1.wrapper.WrapperBlockStateModel;

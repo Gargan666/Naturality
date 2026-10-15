@@ -1,7 +1,7 @@
 package naturality.test;
 
-import naturality.client.entity.CreeperTintState;
-import naturality.entity.CreeperBiome;
+import naturality.client.entities.creepers.CreeperTintState;
+import naturality.entities.creepers.CreeperBiome;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.client.renderer.entity.state.CreeperRenderState;

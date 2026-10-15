@@ -1,7 +1,9 @@
 package naturality.test;
+import naturality.client.fluids.water.WaterIntersection;
+import naturality.client.fluids.water.WaterIntersection.WaterRipples;
+import naturality.client.fluids.water.WaterShaders.WaterSurface;
 
-import naturality.client.fluid.*;
-import naturality.config.NaturalityConfig;
+import naturality.config.live.NaturalityConfig;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.core.BlockPos;

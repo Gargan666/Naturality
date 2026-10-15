@@ -1,8 +1,8 @@
 package naturality.test;
 
-import naturality.client.fluid.LavaEntrySplash;
-import naturality.client.fluid.WaterEntrySplash;
-import naturality.config.NaturalityConfig;
+import naturality.client.fluids.lava.LavaIntersection.LavaEntrySplash;
+import naturality.client.fluids.water.WaterIntersection.WaterEntrySplash;
+import naturality.config.live.NaturalityConfig;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 

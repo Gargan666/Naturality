@@ -1,8 +1,12 @@
 package naturality.test;
+import naturality.config.startup.FeatureConfig.Feature;
+import naturality.config.startup.FeatureConfig;
+import naturality.config.gameplay.GameplaySettings.NaturalityServerConfig;
+import naturality.config.live.NaturalityConfig.ConfigPreset;
+import naturality.config.live.NaturalityConfig;
 
 import com.google.gson.GsonBuilder;
 import java.nio.file.Files;
-import naturality.config.*;
 
 final class ConfigPresetGameTest {
     private ConfigPresetGameTest() {}

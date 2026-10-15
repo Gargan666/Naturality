@@ -1,7 +1,8 @@
 package naturality.test;
+import naturality.config.startup.FeatureConfig.Feature;
+import naturality.config.gameplay.GameplaySettings;
 
 import naturality.Naturality;
-import naturality.config.*;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -60,16 +61,16 @@ public final class FeatureStartupGameTest implements FabricClientGameTest {
             context.waitTicks(30);
             world.getConnection().waitForClientboundPackets();
             context.runOnClient(client -> {
-                check((client.player instanceof naturality.weather.DistortionState) == Feature.DISTORTION.enabled(),
+                check((client.player instanceof naturality.effects.distortion.DistortionState) == Feature.DISTORTION.enabled(),
                     "Tracked entity data must follow Distortion setting");
-                check((client.player instanceof naturality.ghast.GhastCrashBody) == Feature.GHAST_PHYSICS.enabled(),
+                check((client.player instanceof naturality.entities.ghasts.GhastCrash.GhastCrashBody) == Feature.GHAST_PHYSICS.enabled(),
                     "Ghast physics must not add tracked data with Clientside Only or No Visual Overhaul");
                 var ball = TestFixtures.level(client).entitiesForRendering().iterator();
                 boolean found = false;
                 while (ball.hasNext()) {
                     var entity = ball.next();
                     if (entity.getType() != EntityTypes.FIREBALL) continue;
-                    check((client.getEntityRenderDispatcher().getRenderer(entity) instanceof naturality.client.entity.FireballModelRenderer<?>)
+                    check((client.getEntityRenderDispatcher().getRenderer(entity) instanceof naturality.client.entities.fireballs.FireballModelRenderer<?>)
                         == Feature.FIREBALL_MODELS.enabled(), "Fireball renderer must return to vanilla");
                     found = true;
                 }
@@ -78,13 +79,13 @@ public final class FeatureStartupGameTest implements FabricClientGameTest {
                 while (ghast.hasNext()) {
                     var entity = ghast.next();
                     if (!(entity instanceof net.minecraft.world.entity.monster.Ghast mob)) continue;
-                    check((client.getEntityRenderDispatcher().getRenderer(mob) instanceof naturality.client.entity.SquashingGhastRenderer)
+                    check((client.getEntityRenderDispatcher().getRenderer(mob) instanceof naturality.client.entities.ghasts.GhastSquash.SquashingGhastRenderer)
                         == (Feature.GHAST_SQUASH.enabled() || Feature.GHAST_PHYSICS.enabled()), "Ghast renderer must follow optional visuals and required death physics");
                 }
                 for (var type : new net.minecraft.core.particles.SimpleParticleType[] {
                         net.minecraft.core.particles.ParticleTypes.EXPLOSION, net.minecraft.core.particles.ParticleTypes.EXPLOSION_EMITTER}) {
                     var particle = client.particleEngine.createParticle(type, 0, 105, 4, 0, 0, 0);
-                    check((particle instanceof naturality.client.particle.FlatExplosionParticle) == Feature.EXPLOSION_PARTICLES.enabled(),
+                    check((particle instanceof naturality.client.particles.explosions.FlatExplosionParticle) == Feature.EXPLOSION_PARTICLES.enabled(),
                         "Explosion provider and sprite definitions must follow the standalone visual option");
                 }
                 if (!content) {

@@ -8,7 +8,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Optional;
 import naturality.Naturality;
-import naturality.client.menu.MenuFog;
+import naturality.client.ui.menus.previews.MenuSurface.MenuFog;
 import net.minecraft.client.renderer.RenderPipelines;
 
 /** Read back the production surface shader at a cliff, support shell and changing orbit. */
@@ -48,7 +48,7 @@ final class MenuSurfaceChecks {
             var encoder = device.createCommandEncoder();
             for (float visibility : new float[]{1,0}) for (float[] eye : new float[][]{{0,180},{180,0},{0,-180},{-180,0}}) {
                 var data = ByteBuffer.allocateDirect(64).order(ByteOrder.nativeOrder());
-                for(float f:new float[]{0,0,63.36F,96, eye[0],100,eye[1],naturality.client.menu.MenuSurface.SURFACE_DEPTH, -120,-120,-64,240, 0,1,1,visibility})data.putFloat(f);
+                for(float f:new float[]{0,0,63.36F,96, eye[0],100,eye[1],naturality.client.ui.menus.previews.MenuSurface.SURFACE_DEPTH, -120,-120,-64,240, 0,1,1,visibility})data.putFloat(f);
                 data.flip();
                 try(var region = device.createBuffer(() -> "Menu test region",128,data)) {
                     try(var pass = encoder.createRenderPass(() -> "Menu surface test",TestFixtures.require(target.getColorTextureView(), "target.getColorTextureView()"),Optional.empty())) {

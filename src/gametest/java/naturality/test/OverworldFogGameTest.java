@@ -15,10 +15,10 @@ public final class OverworldFogGameTest implements FabricClientGameTest {
             server.runCommand("gamemode spectator @a");
             server.runOnServer(s -> s.setWeatherParameters(12000, 0, false, false));
             // Local shade must not change the open horizon, with either fog path.
-            boolean originalFog = naturality.config.NaturalityConfig.get().fog.enabled;
+            boolean originalFog = naturality.config.live.NaturalityConfig.get().fog.enabled;
             try {
                 for (boolean customFog : new boolean[] {true, false}) {
-                    context.runOnClient(_ -> naturality.config.NaturalityConfig.get().fog.enabled = customFog);
+                    context.runOnClient(_ -> naturality.config.live.NaturalityConfig.get().fog.enabled = customFog);
                     reload(context);
                     server.runCommand("time set 6000");
                     server.runCommand("tp @a 0.5 150 0.5 0 0");
@@ -39,7 +39,7 @@ public final class OverworldFogGameTest implements FabricClientGameTest {
                     context.waitTicks(15);
                     world.getConnection().waitForChunksRender();
                     context.runOnClient(client -> {
-                        float factor = naturality.client.lighting.HardcoreDarkness.caveFog(TestFixtures.level(client), client.gameRenderer.mainCamera());
+                        float factor = naturality.client.rendering.lighting.hardcore.HardcoreDarkness.caveFog(TestFixtures.level(client), client.gameRenderer.mainCamera());
                         if (factor >= 1) throw new AssertionError("Roof did not produce shade: pos=" + client.gameRenderer.mainCamera().blockPosition() + ", sky=" + TestFixtures.level(client).getBrightness(net.minecraft.world.level.LightLayer.SKY, client.gameRenderer.mainCamera().blockPosition()) + ", block=" + TestFixtures.level(client).getBrightness(net.minecraft.world.level.LightLayer.BLOCK, client.gameRenderer.mainCamera().blockPosition()));
                     });
                     Path terrainShaded = context.takeScreenshot("shade-terrain-roof-" + customFog);
@@ -54,7 +54,7 @@ public final class OverworldFogGameTest implements FabricClientGameTest {
                         throw new AssertionError("Local shade changed sky brightness (custom fog=" + customFog + ")");
                 }
             } finally {
-                context.runOnClient(_ -> naturality.config.NaturalityConfig.get().fog.enabled = originalFog);
+                context.runOnClient(_ -> naturality.config.live.NaturalityConfig.get().fog.enabled = originalFog);
                 reload(context);
                 server.runCommand("fill -20 155 -20 20 155 20 air");
             }

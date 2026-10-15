@@ -1,6 +1,6 @@
 package naturality.test;
 
-import naturality.client.fog.FogCulling;
+import naturality.client.rendering.culling.FogCulling;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.client.renderer.culling.Frustum;

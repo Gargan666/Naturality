@@ -2,7 +2,7 @@ package naturality.test;
 
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
-import naturality.weather.WeatherSystem;
+import naturality.systems.weather.framework.WeatherSystem;
 
 /** Water and a dry island must disappear into the same heavy-rain haze. */
 public final class WaterRainFogGameTest implements FabricClientGameTest {
@@ -12,8 +12,8 @@ public final class WaterRainFogGameTest implements FabricClientGameTest {
             var fog = new net.minecraft.client.renderer.fog.FogData();
             fog.environmentalStart = 128;
             fog.environmentalEnd = 192;
-            naturality.client.weather.HeavyRainFog.apply(fog,
-                new naturality.weather.WeatherState(rain, 0, 50, 0), 1, 8);
+            naturality.client.systems.weather.overworld.rain.HeavyRainFog.apply(fog,
+                new naturality.systems.weather.framework.WeatherSystem.WeatherState(rain, 0, 50, 0), 1, 8);
             if (fog.environmentalEnd < previousEnd || fog.environmentalEnd - previousEnd > 5)
                 throw new AssertionError("Rain fog must fade out continuously through its cutoff");
             previousEnd = fog.environmentalEnd;

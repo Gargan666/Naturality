@@ -47,8 +47,10 @@ Both sides render, with normal terrain depth testing and full-bright light.
 Particle settings and distance limits apply; at most 512 motes coexist.
 The frame glow's one-sided geometry and pixel-wave behavior are separate.
 
-Implementation: PortalMoteParticle.java and PortalMoteGeometry.java under
-src/client/java/naturality/client/particle/. NetherPortalBlockMixin replaces
+Implementation: PortalMoteParticle is nested in PortalGlowController.java, and
+PortalMoteGeometry is nested in PortalGlowGeometry.java, under
+src/client/java/naturality/client/portals/nether/glow/. Shared orientation math
+lives in client/api/geometry/ParticleGeometry.java. NetherPortalBlockMixin replaces
 only the PORTAL particle call inside the portal block's animateTick method.
 Automated checks cover zero initial size, proximity growth, and orientation
 for diagonal, vertical, opposite-direction, and zero-velocity cases.
@@ -103,25 +105,20 @@ These are cosmetic limits; they do not affect portal functionality.
 
 CODE
 ----
-src/client/java/naturality/client/particle/PortalGlowController.java
-  Discovery, deduplication, settings, range limits, cleanup, atlas lookup.
-src/client/java/naturality/client/particle/PortalGlowParticle.java
-  Fixed strips, procedural coordinates, full-bright lighting, expoOut,
-  and explicit camera-side rejection during render extraction.
-src/client/java/naturality/client/particle/PortalGlowGeometry.java
-  Portal-axis basis, front-face math, easing, and slice/wave constants.
-src/client/java/naturality/client/particle/PortalGlowRenderLayer.java
-  Coplanar depth bias, transparency blending, and OIT rendering pipelines.
-src/client/java/naturality/client/particle/PortalGlowAppearance.java
-  Samples opacity and uploads a nearest-filtered dynamic palette texture.
-src/client/java/naturality/client/particle/PortalGlowPalette.java
-  Sorts source colors by luminance and builds the light-to-dark lookup table.
+src/client/java/naturality/client/portals/nether/glow/PortalGlowController.java
+  Discovery, settings, cleanup and nested strip/mote particles.
+src/client/java/naturality/client/portals/nether/glow/PortalGlowGeometry.java
+  Geometry, easing and wave constants; nested palette, texture and pipeline data.
+src/client/java/naturality/client/api/geometry/PlanarGeometry.java
+  Shared planar clipping and model section geometry, also used by liquids.
+src/client/java/naturality/client/api/geometry/ParticleGeometry.java
+  Shared particle orientation, retaining the mote's X-aligned basis.
 src/client/resources/assets/naturality/shaders/core/portal_glow.fsh
   Fixed pixel grid, stepped sine animation, eased palette and alpha, fog/OIT.
-src/client/java/naturality/client/mixin/NetherPortalBlockMixin.java
-  Client-only observation hook at the end of NetherPortalBlock.animateTick.
+src/client/java/naturality/client/portals/nether/glow/mixins/GlowMixins.java
+  Nested independently gated portal observation and emissive-surface hooks.
 src/gametest/java/naturality/client/particle/PortalGlowGeometryTest.java
-  Geometry checks, run automatically by Gradle check/build.
+  Geometry checks, run by Gradle check/build under the AGENTS.md test rules.
 
 TEST IN GAME
 ------------

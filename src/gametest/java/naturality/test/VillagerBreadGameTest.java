@@ -1,6 +1,6 @@
 package naturality.test;
 
-import naturality.villager.VillagerBreadState;
+import naturality.systems.villagerwork.bread.VillagerBread.VillagerBreadState;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.core.BlockPos;

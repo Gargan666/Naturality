@@ -1,6 +1,10 @@
 package naturality.test;
+import naturality.api.worlds.EnvironmentWorldData;
+import naturality.systems.weather.end.framework.EndWeatherSystem.EndWeatherCycle;
+import naturality.systems.weather.end.framework.EndWeatherSystem.EndWeatherState;
+import naturality.systems.weather.end.framework.EndWeatherSystem;
+import naturality.systems.gravity.EndGravity;
 
-import naturality.weather.*;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.world.level.Level;

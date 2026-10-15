@@ -1,7 +1,7 @@
 package naturality.test;
 
-import naturality.client.fluid.WaterVisuals;
-import naturality.config.NaturalityConfig;
+import naturality.client.fluids.water.WaterVisuals;
+import naturality.config.live.NaturalityConfig;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 
@@ -51,15 +51,15 @@ public final class WaterVisualsGameTest implements FabricClientGameTest {
                 shieldBearer.setPos(TestFixtures.player(client).position());
                 shieldBearer.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND,
                     new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.SHIELD));
-                if(naturality.client.portal.PortalModelCapture.mesh(shieldBearer,shieldBearer.position(),client.gameRenderer.mainCamera(),1).isEmpty())
+                if(naturality.client.api.geometry.ModelCapture.mesh(shieldBearer,shieldBearer.position(),client.gameRenderer.mainCamera(),1).isEmpty())
                     throw new AssertionError("Shield-bearing models must support outline capture");
                 // Reproduce replacement terrain renderers which omit vanilla's UBO.
                 @SuppressWarnings("null") // Deliberately emulate a third-party renderer violating the vanilla UBO contract.
                 var unavailable = new net.minecraft.client.renderer.chunk.ChunkSectionsToRender.DrawSeparate(
                     null, java.util.Map.of(), 0, new com.mojang.renderpearl.api.buffers.GpuBufferSlice[0]);
-                naturality.client.fluid.WaterComposite.render(client.gameRenderer.mainRenderTarget(), unavailable);
-                if (naturality.client.fluid.WaterComposite.maskView()!=null
-                        || naturality.client.fluid.WaterComposite.depthView()!=null)
+                naturality.client.fluids.water.WaterComposite.render(client.gameRenderer.mainRenderTarget(), unavailable);
+                if (naturality.client.fluids.water.WaterComposite.maskView()!=null
+                        || naturality.client.fluids.water.WaterComposite.depthView()!=null)
                     throw new AssertionError("Missing terrain buffers must not expose stale water textures");
             });
             for (boolean oit : new boolean[]{false, true}) {
@@ -69,9 +69,9 @@ public final class WaterVisualsGameTest implements FabricClientGameTest {
                 world.getConnection().waitForClientboundPackets();
                 context.waitTicks(10);
                 context.runOnClient(_ -> {
-                    if (naturality.client.fluid.WaterComposite.maskView()==null)
+                    if (naturality.client.fluids.water.WaterComposite.maskView()==null)
                         throw new AssertionError("Water mask must render, including with Sodium, OIT="+oit);
-                    if (naturality.client.fluid.WaterIntersection.lastPixelCount == 0)
+                    if (naturality.client.fluids.water.WaterIntersection.lastPixelCount == 0)
                         throw new AssertionError("Posed pig legs must intersect the water surface, OIT="+oit);
                 });
                 context.takeScreenshot("water-model-rim-"+oit);
@@ -83,7 +83,7 @@ public final class WaterVisualsGameTest implements FabricClientGameTest {
                 context.runOnClient(_ -> NaturalityConfig.get().liquids.water=false);
                 context.waitTicks(3);
                 context.runOnClient(_ -> {
-                    if(naturality.client.fluid.WaterIntersection.lastPixelCount!=0)
+                    if(naturality.client.fluids.water.WaterIntersection.lastPixelCount!=0)
                         throw new AssertionError("Water changes OFF must disable the rim");
                     NaturalityConfig.get().liquids.water=true;
                 });
@@ -91,14 +91,14 @@ public final class WaterVisualsGameTest implements FabricClientGameTest {
                 world.getConnection().waitForClientboundPackets();
                 context.waitTicks(12);
                 context.runOnClient(_ -> {
-                    if (naturality.client.fluid.WaterIntersection.lastPixelCount != 0)
+                    if (naturality.client.fluids.water.WaterIntersection.lastPixelCount != 0)
                         throw new AssertionError("Fully submerged models must not leave a rim");
                 });
                 server.runCommand("tp @e[tag=water_rim_test] 0 105 0");
                 world.getConnection().waitForClientboundPackets();
                 context.waitTicks(12);
                 context.runOnClient(_ -> {
-                    if (naturality.client.fluid.WaterIntersection.lastPixelCount != 0)
+                    if (naturality.client.fluids.water.WaterIntersection.lastPixelCount != 0)
                         throw new AssertionError("Models above water must not leave a rim");
                 });
                 server.runCommand("kill @e[tag=water_rim_test]");
@@ -107,7 +107,7 @@ public final class WaterVisualsGameTest implements FabricClientGameTest {
                 world.getConnection().waitForClientboundPackets();
                 context.waitTicks(8);
                 context.runOnClient(_ -> {
-                    if(naturality.client.fluid.WaterIntersection.lastPixelCount==0)
+                    if(naturality.client.fluids.water.WaterIntersection.lastPixelCount==0)
                         throw new AssertionError("Boat model must make a water rim across the negative chunk boundary");
                 });
                 context.takeScreenshot("water-model-rim-boat-"+oit);

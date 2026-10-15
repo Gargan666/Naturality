@@ -6,7 +6,7 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SnowLayerBlock;
-import naturality.snow.SnowfallBudget;
+import naturality.systems.weather.overworld.snow.WeatherSnow.SnowfallBudget;
 
 /** Dense, changing snow rather than a static snow-mesh benchmark. */
 public final class SnowStormGameTest implements FabricClientGameTest {
@@ -56,7 +56,7 @@ public final class SnowStormGameTest implements FabricClientGameTest {
             }
             if(visited.size()!=16)throw new AssertionError("Later storm columns starved: "+visited);
             server.runOnServer(s -> {
-                var config=naturality.config.NaturalityServerConfig.get();
+                var config=naturality.config.gameplay.GameplaySettings.NaturalityServerConfig.get();
                 boolean wrapping=config.snowWrapping,accumulation=config.weatherSnowAccumulation;
                 try {
                     config.snowWrapping=false;config.weatherSnowAccumulation=false;
@@ -105,10 +105,10 @@ public final class SnowStormGameTest implements FabricClientGameTest {
                 if(s.overworld().getBlockState(pos).is(Blocks.SNOW))throw new AssertionError("Unsupported snow survived removal of its floor");
             });
             System.out.println("SNOW_STORM_BUDGET: bounded preflights, soft-limit progress, all 16 fixed-order columns and support removal passed");
-            var profile=new naturality.weather.WeatherProfile(true);
+            var profile=new naturality.systems.weather.framework.WeatherSystem.WeatherProfile(true);
             profile.overrideRain=profile.overrideTemperature=profile.overrideWind=true;
             profile.rain=100;profile.temperature=0;profile.wind=0;
-            server.runOnServer(s -> naturality.weather.WeatherWorldData.get(s).setProfile("minecraft:overworld",profile));
+            server.runOnServer(s -> naturality.systems.weather.framework.WeatherSystem.WeatherWorldData.get(s).setProfile("minecraft:overworld",profile));
             context.waitTicks(410);
             server.runOnServer(s -> {
                 for(int x=0;x<32;x++)for(int z=0;z<16;z++)s.overworld().setBlock(new BlockPos(x,102,z),

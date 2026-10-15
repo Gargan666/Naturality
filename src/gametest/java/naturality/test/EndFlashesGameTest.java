@@ -1,10 +1,10 @@
 package naturality.test;
 
-import naturality.client.sky.EndFlashes;
-import naturality.client.sky.SkyEventsClient;
-import naturality.sky.SkyEventCycle;
-import naturality.sky.SkyEventType;
-import naturality.sky.SkyEvents;
+import naturality.client.sky.end.flashes.EndFlashes;
+import naturality.client.systems.skyevents.framework.SkyEventsClient;
+import naturality.systems.skyevents.framework.SkyEvents.SkyEventCycle;
+import naturality.systems.skyevents.framework.SkyEvents.SkyEventType;
+import naturality.systems.skyevents.framework.SkyEvents;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.world.level.Level;
@@ -95,11 +95,11 @@ public final class EndFlashesGameTest implements FabricClientGameTest {
             server.runOnServer(s -> {
                 TestFixtures.require(s.getLevel(Level.END), "s.getLevel(Level.END)").getGameRules().set(
                     net.minecraft.world.level.gamerules.GameRules.ADVANCE_WEATHER, false, s);
-                before.set(naturality.weather.EnvironmentWorldData.get(s)
+                before.set(naturality.api.worlds.EnvironmentWorldData.get(s)
                     .read("sky/minecraft:the_end/end_flashes"));
             });
             context.waitTicks(5);
-            server.runOnServer(s -> check(!before.get().equals(naturality.weather.EnvironmentWorldData.get(s)
+            server.runOnServer(s -> check(!before.get().equals(naturality.api.worlds.EnvironmentWorldData.get(s)
                 .read("sky/minecraft:the_end/end_flashes")), "End event clock advances without a weather timer"));
             server.runCommand("skyevent minecraft:the_end status");
             server.runCommand("skyevent minecraft:the_end end_flashes 10");
@@ -153,7 +153,7 @@ public final class EndFlashesGameTest implements FabricClientGameTest {
                     float without = light.skyFactor;
                     client.options.hideLightningFlash().set(false);
                     extractor.tick(); extractor.extract(light, 0);
-                    float factor = naturality.client.lighting.HardcoreDarkness.atmosphere(TestFixtures.level(client), client.gameRenderer.mainCamera(), 0);
+                    float factor = naturality.client.rendering.lighting.hardcore.HardcoreDarkness.atmosphere(TestFixtures.level(client), client.gameRenderer.mainCamera(), 0);
                     check(Math.abs(light.skyFactor - without - visible * factor) < .0001F,
                         "Real lightmap receives event intensity and respects Hide Sky Flashes");
                 } finally { client.options.hideLightningFlash().set(hidden); }

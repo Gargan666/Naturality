@@ -1,7 +1,7 @@
 package naturality.test;
 
 import java.util.UUID;
-import naturality.weather.CeilingPathNavigation;
+import naturality.systems.gravity.EndGravity.CeilingPathNavigation;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.core.BlockPos;

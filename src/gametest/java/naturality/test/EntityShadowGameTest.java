@@ -1,7 +1,7 @@
 package naturality.test;
 
 import com.mojang.blaze3d.platform.NativeImage;
-import naturality.client.shadow.BlockGridShadow;
+import naturality.client.rendering.shadows.BlockGridShadow;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.resources.Identifier;

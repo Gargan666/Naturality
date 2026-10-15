@@ -1,7 +1,7 @@
 package naturality.test;
 import naturality.Naturality;
-import naturality.client.entity.CrystalVisuals;
-import naturality.client.particle.CrystalTextParticle;
+import naturality.client.entities.endcrystals.CrystalVisuals;
+import naturality.client.entities.endcrystals.CrystalVisuals.CrystalTextParticle;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.client.model.object.crystal.EndCrystalModel;
@@ -22,8 +22,8 @@ public final class CrystalVisualGameTest implements FabricClientGameTest {
                 }
             });
             var texture=Naturality.id("textures/entity/end_crystal.png");
-            var core=new naturality.client.entity.CrystalCoreModel();
-            check(core.renderType(texture)==naturality.client.entity.CrystalCoreModel.LAYER,"Core uses its independent emissive material");
+            var core=new naturality.client.entities.endcrystals.CrystalCoreModel();
+            check(core.renderType(texture)==naturality.client.entities.endcrystals.CrystalCoreModel.LAYER,"Core uses its independent emissive material");
             var state=new EndCrystalRenderState();state.ageInTicks=40;
             model.setupAnim(state);core.setupAnim(state);
             check(!model.cube.visible && core.cube.visible && core.outerGlass.skipDraw && core.innerGlass.skipDraw,"Core is isolated from normally lit glass and base");

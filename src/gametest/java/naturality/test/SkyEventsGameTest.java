@@ -1,7 +1,10 @@
 package naturality.test;
+import naturality.systems.skyevents.framework.SkyEvents.SkyEventCycle;
+import naturality.systems.skyevents.framework.SkyEvents;
+import naturality.systems.skyevents.framework.SkyEvents.SkyEventType;
+import naturality.systems.skyevents.framework.SkyEvents.SkyEventWorldData;
 
-import naturality.sky.*;
-import naturality.client.sky.MeteorShower;
+import naturality.client.sky.overworld.meteors.MeteorShower;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.world.level.Level;
@@ -18,7 +21,7 @@ public final class SkyEventsGameTest implements FabricClientGameTest {
             moderate.tick(true, true);
             if (tick % 100 == 0) {
                 var saved = moderate.snapshot();
-                float target = naturality.weather.EnvironmentWorldData.number(saved, "target");
+                float target = naturality.api.worlds.EnvironmentWorldData.number(saved, "target");
                 check(saved.get("boostRemaining") > 0 ? target >= 10 && target <= 20 : target >= 5 && target <= 10,
                     "Meteor targets stay at 5-10 except during rare stronger windows");
                 if (tick % 1200 == 0 && saved.get("boostRemaining") == 1200L) boosts++;

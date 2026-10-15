@@ -1,7 +1,7 @@
 package naturality.test;
 import java.util.Random;
-import naturality.client.confusion.ConfusionLayout;
-import naturality.client.confusion.ConfusionSlots;
+import naturality.client.effects.confusion.ConfusionSlots.ConfusionLayout;
+import naturality.client.effects.confusion.ConfusionSlots;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
@@ -136,30 +136,30 @@ public final class ConfusionGameTest implements FabricClientGameTest {
             context.waitTicks(35);
             server.runOnServer(s -> {
                 var p=s.overworld().players().getFirst();
-                var state=((naturality.confusion.ConfusionOffhandAccess)p).naturality$confusionOffhand();
+                var state=((naturality.effects.confusion.ConfusionOffhand.ConfusionOffhandAccess)p).naturality$confusionOffhand();
                 var inv=p.getInventory();
                 for(int i=0;i<36;i++) inv.setItem(i,net.minecraft.world.item.ItemStack.EMPTY);
                 inv.setItem(0,new net.minecraft.world.item.ItemStack(Items.DIAMOND));
                 inv.setItem(40,new net.minecraft.world.item.ItemStack(Items.SHIELD));
-                p.addEffect(new net.minecraft.world.effect.MobEffectInstance(naturality.NaturalityEffects.CONFUSION,1000));
+                p.addEffect(new net.minecraft.world.effect.MobEffectInstance(naturality.bootstrap.ContentRegistration.NaturalityEffects.CONFUSION,1000));
                 state.tick(p); state.exchange(p,0);
                 check(p.getOffhandItem().is(Items.DIAMOND) && inv.getItem(0).is(Items.SHIELD),"Actual server offhand exchange");
                 var saved=net.minecraft.world.level.storage.TagValueOutput.createWithContext(net.minecraft.util.ProblemReporter.DISCARDING,s.registryAccess());
                 state.save(saved);
                 inv.setItem(17,inv.getItem(0).copy()); inv.setItem(0,new net.minecraft.world.item.ItemStack(Items.GOLD_INGOT));
                 state.load(net.minecraft.world.level.storage.TagValueInput.create(net.minecraft.util.ProblemReporter.DISCARDING,s.registryAccess(),saved.buildResult()));
-                p.removeEffect(naturality.NaturalityEffects.CONFUSION); state.tick(p);
+                p.removeEffect(naturality.bootstrap.ContentRegistration.NaturalityEffects.CONFUSION); state.tick(p);
                 check(p.getOffhandItem().is(Items.SHIELD) && inv.getItem(17).is(Items.DIAMOND),"Moved original restored across saved state without losing replacement");
-                p.addEffect(new net.minecraft.world.effect.MobEffectInstance(naturality.NaturalityEffects.CONFUSION,1000));
+                p.addEffect(new net.minecraft.world.effect.MobEffectInstance(naturality.bootstrap.ContentRegistration.NaturalityEffects.CONFUSION,1000));
                 state.tick(p); state.exchange(p,0);
                 inv.setItem(0,net.minecraft.world.item.ItemStack.EMPTY);
-                p.removeEffect(naturality.NaturalityEffects.CONFUSION); state.tick(p);
+                p.removeEffect(naturality.bootstrap.ContentRegistration.NaturalityEffects.CONFUSION); state.tick(p);
                 check(p.getOffhandItem().is(Items.GOLD_INGOT),"Lost original is not recreated");
                 inv.setItem(40,net.minecraft.world.item.ItemStack.EMPTY); inv.setItem(0,new net.minecraft.world.item.ItemStack(Items.APPLE));
-                p.addEffect(new net.minecraft.world.effect.MobEffectInstance(naturality.NaturalityEffects.CONFUSION,1000));
+                p.addEffect(new net.minecraft.world.effect.MobEffectInstance(naturality.bootstrap.ContentRegistration.NaturalityEffects.CONFUSION,1000));
                 state.tick(p); state.exchange(p,0);
                 check(p.getOffhandItem().is(Items.APPLE),"Empty offhand can receive an actual item");
-                p.removeEffect(naturality.NaturalityEffects.CONFUSION); state.tick(p);
+                p.removeEffect(naturality.bootstrap.ContentRegistration.NaturalityEffects.CONFUSION); state.tick(p);
                 check(p.getOffhandItem().isEmpty() && inv.getItem(0).is(Items.APPLE),"Original empty offhand restored without deleting its replacement");
             });
         }

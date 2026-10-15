@@ -1,8 +1,11 @@
 // Frozen pre-optimization renderer for volume and pixel equivalence checks.
 package naturality.test.reference;
+import naturality.config.startup.FeatureConfig.Feature;
+import naturality.config.startup.FeatureConfig;
+import naturality.config.live.NaturalityConfig;
 import naturality.test.TestFixtures;
 
-import naturality.client.fluid.ProceduralFluids;
+import naturality.client.fluids.shared.ProceduralFluids;
 
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
@@ -13,7 +16,6 @@ import com.mojang.renderpearl.api.textures.FilterMode;
 import java.nio.*;
 import java.util.*;
 import naturality.Naturality;
-import naturality.config.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.*;
 import net.minecraft.core.BlockPos;

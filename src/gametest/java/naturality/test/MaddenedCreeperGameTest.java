@@ -1,8 +1,8 @@
 package naturality.test;
 
-import naturality.entity.MaddenedCreeper;
-import naturality.entity.MaddenedCreepers;
-import naturality.client.entity.MaddenedCreeperRenderer;
+import naturality.entities.maddened.MaddenedCreepers.MaddenedCreeper;
+import naturality.entities.maddened.MaddenedCreepers;
+import naturality.client.entities.maddened.MaddenedCreeperRenderer;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.world.entity.AreaEffectCloud;
@@ -10,7 +10,7 @@ import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.animal.pig.Pig;
-import naturality.NaturalityEffects;
+import naturality.bootstrap.ContentRegistration.NaturalityEffects;
 import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.util.ProblemReporter;

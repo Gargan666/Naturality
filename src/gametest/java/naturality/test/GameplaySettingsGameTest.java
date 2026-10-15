@@ -1,8 +1,8 @@
 package naturality.test;
 
-import naturality.config.GameplaySettings;
-import naturality.config.NaturalityServerConfig;
-import naturality.portal.PortalCrossing;
+import naturality.config.gameplay.GameplaySettings;
+import naturality.config.gameplay.GameplaySettings.NaturalityServerConfig;
+import naturality.portals.nether.travel.PortalCrossing;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.renderer.v1.Renderer;
@@ -48,10 +48,10 @@ public final class GameplaySettingsGameTest implements FabricClientGameTest {
                 var ordinary = pos.offset(3, 0, 0);
                 level.setBlock(ordinary.below(), Blocks.STONE.defaultBlockState(), 18);
                 level.setBlock(ordinary, layers, 18);
-                naturality.snow.SnowCompaction.press(level, ordinary, 100);
+                naturality.blocks.snow.SnowGeometry.SnowCompaction.press(level, ordinary, 100);
                 check(level.getBlockState(ordinary).equals(layers), "Disabled compaction does not remove layers");
-                check(!naturality.weather.WeatherThaw.thawAt(level, ordinary), "Disabled thaw never modifies snow");
-                check(naturality.weather.WeatherSnow.accumulationLimit(level, 8) == 8, "Disabled weather depth honors vanilla gamerule");
+                check(!naturality.systems.weather.overworld.snow.WeatherSnow.WeatherThaw.thawAt(level, ordinary), "Disabled thaw never modifies snow");
+                check(naturality.systems.weather.overworld.snow.WeatherSnow.accumulationLimit(level, 8) == 8, "Disabled weather depth honors vanilla gamerule");
                 var fire = Blocks.FIRE.defaultBlockState();
                 check(!fire.canSurvive(level, pos), "Disabled wrapping must reject non-sturdy, nonflammable support");
                 check(fire.getShape(level, pos).min(Direction.Axis.Y) >= 0, "Vanilla fire outline must stay in its own block");
@@ -109,7 +109,7 @@ public final class GameplaySettingsGameTest implements FabricClientGameTest {
                 check(snow.canSurvive(level, pos), "Re-enabled wrapping supports slab snow");
                 check(snow.getShape(level,pos).min(Direction.Axis.Y) == -.5, "Re-enabled snow outline fits slab");
                 var ordinary=pos.offset(3,0,0);
-                naturality.snow.SnowCompaction.press(level,ordinary,8);
+                naturality.blocks.snow.SnowGeometry.SnowCompaction.press(level,ordinary,8);
                 check(level.getBlockState(ordinary).getValue(net.minecraft.world.level.block.SnowLayerBlock.LAYERS)==2, "Re-enabled compaction removes a layer");
                 check(fire.canSurvive(level, pos), "Wrapping must restore partial support placement");
                 check(fire.getShape(level, pos).min(Direction.Axis.Y) == -0.5, "Wrapping must fit the slab outline");
@@ -122,7 +122,7 @@ public final class GameplaySettingsGameTest implements FabricClientGameTest {
                 check(PortalCrossing.get(pig) != null, "Physical crossing must return when vanilla entry is off");
                 config.vanillaPortalEntry = true;
                 PortalCrossing.tick(pig);
-                check(((naturality.portal.PortalCrossingAccess) pig).naturality$getCrossing() == null,
+                check(((naturality.portals.nether.travel.PortalCrossing.PortalCrossingAccess) pig).naturality$getCrossing() == null,
                     "Switching to vanilla must clear an in-progress physical crossing");
             });
             context.waitFor(_ -> !GameplaySettings.clientPhysicalPortalEntry());

@@ -1,7 +1,7 @@
 package naturality.test;
-import naturality.client.entity.FishSwim;
-import naturality.client.entity.FishSwimState;
-import naturality.fish.FishMoveControl;
+import naturality.client.entities.fish.FishSwim;
+import naturality.client.entities.fish.FishSwim.FishSwimState;
+import naturality.entities.fish.FishMoveControl;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.world.entity.animal.fish.AbstractFish;

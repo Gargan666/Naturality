@@ -1,7 +1,7 @@
 package naturality.test;
 
-import naturality.config.NaturalityServerConfig;
-import naturality.sleep.SleepAcceleration;
+import naturality.config.gameplay.GameplaySettings.NaturalityServerConfig;
+import naturality.systems.sleep.SleepAcceleration;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.core.BlockPos;
@@ -17,20 +17,20 @@ import net.minecraft.world.level.GameType;
 public final class SleepAccelerationGameTest implements FabricClientGameTest {
     private static void check(boolean value, String message) { if (!value) throw new AssertionError(message); }
     @Override public void runTest(ClientGameTestContext context) {
-        var angle = new naturality.client.sleep.SleepSky.Angle();
+        var angle = new naturality.client.systems.sleep.SleepVisuals.SleepSky.Angle();
         float initial = angle.sample(6.2F, .016, true);
         float wrapped = angle.sample(.05F, .016, true);
         check(wrapped > initial && wrapped < initial + .05F, "Sky crosses dawn continuously through the short angular arc");
         float frozen = angle.sample(.2F, 0, true);
         check(frozen == wrapped, "Paused sky easing does not advance");
-        var snapshots = new naturality.client.sleep.SleepCloudClock();
+        var snapshots = new naturality.client.systems.sleep.SleepVisuals.SleepCloudClock();
         snapshots.sample(1000, 1, 0, true);
         check(snapshots.sample(1200, 2, .06, true) == 1100, "Snapshot interpolation has a bounded eased midpoint");
         check(snapshots.sample(1200, 2, .06, true) == 1200, "Interpolation reaches the server snapshot");
         check(snapshots.sample(9999, 2, 1, true) == 1200, "Without a new snapshot rendering holds rather than predicting time");
         check(snapshots.sample(1400, 3, 0, true) == 1200, "A new snapshot preserves continuity");
         check(angle.sample(.3F, 0, false) == .3F, "Sky motion returns to normal immediately on waking");
-        var continuous = new naturality.client.sleep.SleepCloudClock();
+        var continuous = new naturality.client.systems.sleep.SleepVisuals.SleepCloudClock();
         continuous.sample(1000, 1, 0, true);
         double a = continuous.sample(1200, 2, .08, true);
         double b = continuous.sample(1200, 2, .000001, true);
@@ -44,7 +44,7 @@ public final class SleepAccelerationGameTest implements FabricClientGameTest {
             "Default 30-second ramp integrates exactly to 60,300 clock ticks");
         check(Math.abs(SleepAcceleration.elapsedTicks(29, 2, 200, 30, 20) - (8000 - 199.0 / 3)) < .00001,
             "An interval crossing the ramp cap integrates both speeds");
-        var cloud = new naturality.client.sleep.SleepCloudClock();
+        var cloud = new naturality.client.systems.sleep.SleepVisuals.SleepCloudClock();
         check(cloud.sample(1000, .016, false) == 1000, "Ordinary cloud movement is unchanged");
         cloud.sample(1000, 0, true);
         double drift = cloud.sample(1200, .016, true);
@@ -52,11 +52,11 @@ public final class SleepAccelerationGameTest implements FabricClientGameTest {
         check(cloud.sample(1400, 0, true) == drift, "Paused cloud drift does not advance");
         check(cloud.sample(1400, 0, false) == 1400 && cloud.sample(1500, .016, false) == 1500,
             "Cloud motion returns to normal immediately on waking");
-        float eased = naturality.client.sleep.SleepAudio.ease(0, 1, .5);
+        float eased = naturality.client.systems.sleep.SleepVisuals.SleepAudio.ease(0, 1, .5);
         check(eased > 0 && eased < 1, "Sleep audio eases instead of snapping");
-        check(Math.abs(naturality.client.sleep.SleepAudio.ease(eased, 1, .5)
-            - naturality.client.sleep.SleepAudio.ease(0, 1, 1)) < .00001, "Audio easing is independent of update frequency");
-        check(naturality.client.sleep.SleepAudio.highFrequencyGain(1) < naturality.client.sleep.SleepAudio.gain(1), "Sleep filter removes high frequencies more strongly than overall volume");
+        check(Math.abs(naturality.client.systems.sleep.SleepVisuals.SleepAudio.ease(eased, 1, .5)
+            - naturality.client.systems.sleep.SleepVisuals.SleepAudio.ease(0, 1, 1)) < .00001, "Audio easing is independent of update frequency");
+        check(naturality.client.systems.sleep.SleepVisuals.SleepAudio.highFrequencyGain(1) < naturality.client.systems.sleep.SleepVisuals.SleepAudio.gain(1), "Sleep filter removes high frequencies more strongly than overall volume");
         var config = NaturalityServerConfig.get();
         boolean enabled = config.sleepAcceleration;
         int maximum = config.sleepMaxSpeed, ramp = config.sleepRampSeconds;
@@ -85,10 +85,10 @@ public final class SleepAccelerationGameTest implements FabricClientGameTest {
             });
             context.waitTicks(120);
             context.runOnClient(client -> {
-                check(naturality.client.sleep.SleepSnapshots.latest(client.level) != null, "Server time packets capture celestial and cloud snapshots");
+                check(naturality.client.systems.sleep.SleepVisuals.SleepSnapshots.latest(client.level) != null, "Server time packets capture celestial and cloud snapshots");
                 check(TestFixtures.level(client).tickRateManager().tickrate() == 20, "Sleep preserves normal client simulation rate");
-                check(naturality.client.sleep.SleepVisuals.speed() == 2, "Visual speed is synchronized independently of tick rate");
-                check(naturality.config.GameplaySettings.displayedSettings().sleepMaxSpeed() == 2,
+                check(naturality.client.systems.sleep.SleepVisuals.speed() == 2, "Visual speed is synchronized independently of tick rate");
+                check(naturality.config.gameplay.GameplaySettings.displayedSettings().sleepMaxSpeed() == 2,
                     "Server sleep configuration is synchronized to clients");
             });
             server.runOnServer(s -> {
@@ -101,21 +101,21 @@ public final class SleepAccelerationGameTest implements FabricClientGameTest {
                 try {
                     long gameTime = levelTime(s);
                     int playerTicks = s.getPlayerList().getPlayers().getFirst().tickCount;
-                    for (int tick = 0; tick < 1000; tick++) naturality.sleep.SleepServerSnapshots.tickClocks(s);
+                    for (int tick = 0; tick < 1000; tick++) naturality.systems.sleep.SleepAcceleration.SleepServerSnapshots.tickClocks(s);
                     check(instance.totalTicks() == saved.totalTicks() + 2000,
                         "Two-speed clock advancement requires no extra simulation ticks");
                     check(levelTime(s) == gameTime && s.getPlayerList().getPlayers().getFirst().tickCount == playerTicks,
                         "Clock advancement does not replay world or entity ticks");
                     instance.loadFrom(new net.minecraft.world.clock.ClockState(saved.totalTicks(), .25F, .5F, false));
-                    for (int tick = 0; tick < 100; tick++) naturality.sleep.SleepServerSnapshots.tickClocks(s);
+                    for (int tick = 0; tick < 100; tick++) naturality.systems.sleep.SleepAcceleration.SleepServerSnapshots.tickClocks(s);
                     check(instance.totalTicks() == saved.totalTicks() + 100 && instance.partialTick() == .25F,
                         "Clock batching preserves fractional clock rates and partial ticks");
                     instance.loadFrom(new net.minecraft.world.clock.ClockState(saved.totalTicks(), .25F, 1, true));
-                    for (int tick = 0; tick < 100; tick++) naturality.sleep.SleepServerSnapshots.tickClocks(s);
+                    for (int tick = 0; tick < 100; tick++) naturality.systems.sleep.SleepAcceleration.SleepServerSnapshots.tickClocks(s);
                     check(instance.totalTicks() == saved.totalTicks() && instance.partialTick() == .25F,
                         "Paused clocks remain paused during batched sleep updates");
                     instance.loadFrom(saved);
-                    naturality.sleep.SleepServerSnapshots.tickClocks(s);
+                    naturality.systems.sleep.SleepAcceleration.SleepServerSnapshots.tickClocks(s);
                     s.clockManager().setTotalTicks(definition, 1234);
                     check(instance.totalTicks() == 1234, "Time commands have no delayed clock work to replay afterward");
                 } finally {
@@ -131,8 +131,8 @@ public final class SleepAccelerationGameTest implements FabricClientGameTest {
             context.runOnClient(client -> {
                 particle[0] = new ProbeParticle(client.level);
                 client.particleEngine.add(particle[0]);
-                visualClock[0] = naturality.client.fire.ProceduralFire.ticks();
-                naturality.client.sleep.SleepVisuals.register(c -> {
+                visualClock[0] = naturality.client.blocks.fire.ProceduralFire.ticks();
+                naturality.client.systems.sleep.SleepVisuals.register(c -> {
                     if (watching[0]) {
                         births[0]++;
                         c.particleEngine.add(new ProbeParticle(c.level));
@@ -142,18 +142,18 @@ public final class SleepAccelerationGameTest implements FabricClientGameTest {
             context.waitTicks(20);
             context.runOnClient(client -> {
                 watching[0] = false;
-                visualClock[1] = naturality.client.fire.ProceduralFire.ticks();
+                visualClock[1] = naturality.client.blocks.fire.ProceduralFire.ticks();
                 check(births[0] >= 19 && births[0] <= 22, "Particle spawn callbacks keep normal cadence during sleep");
                 check(particle[0].ticks >= 18 && particle[0].ticks <= 22 && particle[0].distance() >= 3.5,
                     "Particle movement accelerates while age and lifetime stay at normal cadence");
                 check(visualClock[1] - visualClock[0] >= 35, "Procedural fire animation follows accelerated visual ticks");
-                check(naturality.client.sleep.SleepAudio.amount() > .5, "Sleeping listener receives eased muffling");
+                check(naturality.client.systems.sleep.SleepVisuals.SleepAudio.amount() > .5, "Sleeping listener receives eased muffling");
                 verifySleepFilter();
-                double speed = naturality.client.sleep.SleepVisuals.speed();
+                double speed = naturality.client.systems.sleep.SleepVisuals.speed();
                 int before = particle[0].ticks, playerTicks = TestFixtures.player(client).tickCount, beforeBirths = births[0];
                 double beforeX = particle[0].distance();
                 try {
-                    naturality.client.sleep.SleepVisuals.accept(new naturality.sleep.SleepStatePayload(true, 200));
+                    naturality.client.systems.sleep.SleepVisuals.accept(new naturality.systems.sleep.SleepAcceleration.SleepStatePayload(true, 200));
                     long beforeTime = TestFixtures.level(client).getGameTime();
                     TestFixtures.level(client).tick(() -> true);
                     check(TestFixtures.level(client).getGameTime() == beforeTime + 1,
@@ -163,7 +163,7 @@ public final class SleepAccelerationGameTest implements FabricClientGameTest {
                     check(particle[0].ticks - before == 1, "The 200x default still executes only one particle tick");
                     check(Math.abs(particle[0].distance() - beforeX - 20) < .00001, "One particle movement uses the 200x velocity multiplier");
                     check(TestFixtures.player(client).tickCount == playerTicks, "Visual acceleration must preserve the local input/player clock");
-                } finally { naturality.client.sleep.SleepVisuals.accept(new naturality.sleep.SleepStatePayload(true, speed)); }
+                } finally { naturality.client.systems.sleep.SleepVisuals.accept(new naturality.systems.sleep.SleepAcceleration.SleepStatePayload(true, speed)); }
             });
             server.runOnServer(s -> {
                 var player = s.getPlayerList().getPlayers().getFirst();
@@ -213,20 +213,20 @@ public final class SleepAccelerationGameTest implements FabricClientGameTest {
                 boolean advance = s.overworld().getGameRules().get(net.minecraft.world.level.gamerules.GameRules.ADVANCE_TIME);
                 s.overworld().getGameRules().set(net.minecraft.world.level.gamerules.GameRules.ADVANCE_TIME, true, s);
                 long before = clock.totalTicks();
-                naturality.sleep.SleepServerSnapshots.tickClocks(s);
+                naturality.systems.sleep.SleepAcceleration.SleepServerSnapshots.tickClocks(s);
                 check(clock.totalTicks() == before + 1, "The very next clock update after waking advances by one tick");
                 s.overworld().getGameRules().set(net.minecraft.world.level.gamerules.GameRules.ADVANCE_TIME, advance, s);
             });
             float[] beforeFade = new float[1];
-            context.runOnClient(_ -> beforeFade[0] = naturality.client.sleep.SleepAudio.amount());
+            context.runOnClient(_ -> beforeFade[0] = naturality.client.systems.sleep.SleepVisuals.SleepAudio.amount());
             context.waitTicks(20);
             context.runOnClient(_ -> {
-                check(!naturality.client.sleep.SleepVisuals.accelerating(), "Wake stops particle velocity acceleration on the client");
-                check(naturality.client.sleep.SleepVisuals.speed() == 1, "Wake restores normal particle velocity");
-                check(naturality.client.sleep.SleepAudio.amount() < beforeFade[0], "Wake restores audio gradually");
-                double offset = naturality.client.sleep.SleepVisuals.boostSeconds();
-                naturality.client.sleep.SleepVisuals.accept(new naturality.sleep.SleepStatePayload(false, 1));
-                check(naturality.client.sleep.SleepVisuals.boostSeconds() == offset,
+                check(!naturality.client.systems.sleep.SleepVisuals.accelerating(), "Wake stops particle velocity acceleration on the client");
+                check(naturality.client.systems.sleep.SleepVisuals.speed() == 1, "Wake restores normal particle velocity");
+                check(naturality.client.systems.sleep.SleepVisuals.SleepAudio.amount() < beforeFade[0], "Wake restores audio gradually");
+                double offset = naturality.client.systems.sleep.SleepVisuals.boostSeconds();
+                naturality.client.systems.sleep.SleepVisuals.accept(new naturality.systems.sleep.SleepAcceleration.SleepStatePayload(false, 1));
+                check(naturality.client.systems.sleep.SleepVisuals.boostSeconds() == offset,
                     "Wake keeps the cloud offset fixed instead of jumping or continuing acceleration");
             });
             // Run the actual server at the default 200x setting, then the 1000x cap.
@@ -259,7 +259,7 @@ public final class SleepAccelerationGameTest implements FabricClientGameTest {
                     check(!SleepAcceleration.active(s), "High-speed sleep stops synchronously on waking");
                 });
                 world.getConnection().waitForClientboundPackets();
-                context.runOnClient(_ -> check(naturality.client.sleep.SleepVisuals.speed() == 1,
+                context.runOnClient(_ -> check(naturality.client.systems.sleep.SleepVisuals.speed() == 1,
                     "The wake packet immediately restores normal visual speed"));
             }
         } finally {
@@ -281,16 +281,16 @@ public final class SleepAccelerationGameTest implements FabricClientGameTest {
             create.setAccessible(true);
             channel = TestFixtures.require((com.mojang.blaze3d.audio.Channel)create.invoke(null), "OpenAL channel");
             check(channel != null, "OpenAL channel can be created during sleep");
-            ((naturality.client.sound.WeatherAudioFilter)channel).naturality$setEnvironmentAmounts(0, 0);
+            ((naturality.client.api.audio.WeatherAudioFilter)channel).naturality$setEnvironmentAmounts(0, 0);
             if (org.lwjgl.openal.ALC.getCapabilities().ALC_EXT_EFX) {
                 var field = com.mojang.blaze3d.audio.Channel.class.getDeclaredField("naturality$weatherFilter");
                 field.setAccessible(true);
                 int filter = field.getInt(channel);
                 check(filter != 0, "Sleep alone attaches a low-pass filter without immersion or shelter");
                 float hf = org.lwjgl.openal.EXTEfx.alGetFilterf(filter, org.lwjgl.openal.EXTEfx.AL_LOWPASS_GAINHF);
-                check(Math.abs(hf - naturality.client.sleep.SleepAudio.highFrequencyGain(naturality.client.sleep.SleepAudio.amount())) < .0001,
+                check(Math.abs(hf - naturality.client.systems.sleep.SleepVisuals.SleepAudio.highFrequencyGain(naturality.client.systems.sleep.SleepVisuals.SleepAudio.amount())) < .0001,
                     "Actual OpenAL high-frequency gain follows eased sleep depth");
-                ((naturality.client.sound.WeatherAudioFilter)channel).naturality$setEnvironmentAmounts(1, 1);
+                ((naturality.client.api.audio.WeatherAudioFilter)channel).naturality$setEnvironmentAmounts(1, 1);
                 float combined = org.lwjgl.openal.EXTEfx.alGetFilterf(filter, org.lwjgl.openal.EXTEfx.AL_LOWPASS_GAINHF);
                 check(combined < hf, "Sleep filtering composes with shelter and underwater filtering");
             }

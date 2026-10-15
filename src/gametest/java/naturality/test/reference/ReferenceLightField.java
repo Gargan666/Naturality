@@ -90,7 +90,7 @@ public final class ReferenceLightField {
         var pos = BlockPos.of(key);
         // Build limits constrain terrain, not entity light. Loaded columns have
         // open air above/below their terrain and can still contain flying entities.
-        var result = !naturality.util.LoadedChunks.has(level, pos)
+        var result = !naturality.api.worlds.LoadedChunks.has(level, pos)
             ? Blocks.BEDROCK.defaultBlockState() : level.getBlockState(pos);
         blocks.put(key, result);
         return result;

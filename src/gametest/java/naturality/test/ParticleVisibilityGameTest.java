@@ -1,6 +1,6 @@
 package naturality.test;
 
-import naturality.NaturalityParticles;
+import naturality.bootstrap.ContentRegistration.NaturalityParticles;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 
@@ -21,13 +21,13 @@ public final class ParticleVisibilityGameTest implements FabricClientGameTest {
                 }
                 c.particleEngine.clearParticles();
                 for(int batch=0;batch<12;batch++) {
-                    naturality.client.particle.FallParticleBudget.reset();
+                    naturality.client.fluids.shared.FallingFluidTail.FallParticleBudget.reset();
                     for(int i=0;i<64;i++)check(c.particleEngine.createParticle(NaturalityParticles.WATERFALL,.5,110,6.5,0,0,0)!=null,
                         "Spawning is permitted up to the shared limits");
                     check(c.particleEngine.createParticle(NaturalityParticles.LAVAFALL,.5,110,6.5,0,0,0)==null,
                         "Water and lava retain their shared per-tick allowance");
                 }
-                naturality.client.particle.FallParticleBudget.reset();
+                naturality.client.fluids.shared.FallingFluidTail.FallParticleBudget.reset();
                 check(c.particleEngine.createParticle(NaturalityParticles.WATERFALL,.5,110,6.5,0,0,0)==null,
                     "768 queued spray particles retain the population cap");
                 c.particleEngine.clearParticles();

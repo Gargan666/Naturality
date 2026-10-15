@@ -1,6 +1,6 @@
 package naturality.test;
 
-import naturality.NaturalityBlocks;
+import naturality.bootstrap.ContentRegistration.NaturalityBlocks;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.core.BlockPos;
@@ -11,7 +11,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.Level;
-import naturality.chorus.ChorusFlowers;
+import naturality.blocks.chorus.ChorusFlowers;
 import net.minecraft.util.RandomSource;
 
 public final class SmoothEndstoneGameTest implements FabricClientGameTest {
@@ -63,12 +63,12 @@ public final class SmoothEndstoneGameTest implements FabricClientGameTest {
                 check(lirestone.is(NaturalityBlocks.LIRESTONE), "Lirestone block registration failed");
                 check(lirestone.getDestroySpeed(level, lirestonePos) == 2.5F
                     && lirestone.getBlock().getExplosionResistance() == Blocks.END_STONE.getExplosionResistance()
-                    && lirestone.getSoundType() == naturality.NaturalitySounds.LIRESTONE, "Lirestone hardness/resistance/sound incorrect");
-                check(lirestone.getSoundType().getBreakSound() == naturality.NaturalitySounds.LIRESTONE_BREAK
-                    && lirestone.getSoundType().getPlaceSound() == naturality.NaturalitySounds.LIRESTONE_PLACE
-                    && lirestone.getSoundType().getStepSound() == naturality.NaturalitySounds.LIRESTONE_STEP
-                    && lirestone.getSoundType().getHitSound() == naturality.NaturalitySounds.LIRESTONE_BREAK
-                    && lirestone.getSoundType().getFallSound() == naturality.NaturalitySounds.LIRESTONE_STEP,
+                    && lirestone.getSoundType() == naturality.bootstrap.ContentRegistration.NaturalitySounds.LIRESTONE, "Lirestone hardness/resistance/sound incorrect");
+                check(lirestone.getSoundType().getBreakSound() == naturality.bootstrap.ContentRegistration.NaturalitySounds.LIRESTONE_BREAK
+                    && lirestone.getSoundType().getPlaceSound() == naturality.bootstrap.ContentRegistration.NaturalitySounds.LIRESTONE_PLACE
+                    && lirestone.getSoundType().getStepSound() == naturality.bootstrap.ContentRegistration.NaturalitySounds.LIRESTONE_STEP
+                    && lirestone.getSoundType().getHitSound() == naturality.bootstrap.ContentRegistration.NaturalitySounds.LIRESTONE_BREAK
+                    && lirestone.getSoundType().getFallSound() == naturality.bootstrap.ContentRegistration.NaturalitySounds.LIRESTONE_STEP,
                     "Lirestone custom sound bindings incorrect");
                 check(lirestone.is(BlockTags.MINEABLE_WITH_PICKAXE) && lirestone.is(BlockTags.DRAGON_IMMUNE),
                     "Lirestone End Stone tags missing");
@@ -110,10 +110,10 @@ public final class SmoothEndstoneGameTest implements FabricClientGameTest {
                 check(coral.getDestroySpeed(level, coralPos) == Blocks.BROWN_MUSHROOM_BLOCK.defaultBlockState().getDestroySpeed(level, coralPos)
                     && coral.getBlock().getExplosionResistance() == Blocks.BROWN_MUSHROOM_BLOCK.getExplosionResistance(), "Echo Coral must match mushroom block strength");
                 check(coral.is(BlockTags.MINEABLE_WITH_AXE) && new ItemStack(Items.WOODEN_AXE).isCorrectToolForDrops(coral), "Echo Coral axe mining incorrect");
-                check(coral.getSoundType() == naturality.NaturalitySounds.ECHO_CORAL
-                    && coral.getSoundType().getBreakSound() == naturality.NaturalitySounds.ECHO_CORAL_BREAK
-                    && coral.getSoundType().getPlaceSound() == naturality.NaturalitySounds.ECHO_CORAL_PLACE
-                    && coral.getSoundType().getStepSound() == naturality.NaturalitySounds.ECHO_CORAL_STEP,
+                check(coral.getSoundType() == naturality.bootstrap.ContentRegistration.NaturalitySounds.ECHO_CORAL
+                    && coral.getSoundType().getBreakSound() == naturality.bootstrap.ContentRegistration.NaturalitySounds.ECHO_CORAL_BREAK
+                    && coral.getSoundType().getPlaceSound() == naturality.bootstrap.ContentRegistration.NaturalitySounds.ECHO_CORAL_PLACE
+                    && coral.getSoundType().getStepSound() == naturality.bootstrap.ContentRegistration.NaturalitySounds.ECHO_CORAL_STEP,
                     "Echo Coral custom sounds missing");
                 check(NaturalityBlocks.ECHO_CORAL.asItem() == NaturalityBlocks.ECHO_CORAL_ITEM, "Echo Coral block item mapping missing");
                 var coralDrops = Block.getDrops(coral, level, coralPos, null, level.players().getFirst(), ItemStack.EMPTY);
@@ -169,7 +169,7 @@ public final class SmoothEndstoneGameTest implements FabricClientGameTest {
                 }
                 for (int y = 0; y < 4; y++) level.setBlockAndUpdate(treeBase.above(y), Blocks.OAK_LOG.defaultBlockState());
                 level.setBlockAndUpdate(treeBase.above(4), Blocks.OAK_LEAVES.defaultBlockState());
-                var mossFeature = new naturality.worldgen.TreeMossFeature();
+                var mossFeature = new naturality.worldgen.overworld.moss.TreeMossFeature();
                 check(mossFeature.place(level, level.getChunkSource().getGenerator(), RandomSource.create(42), treeBase.east(3)), "Tree moss must generate around a supported forest tree");
                 int groundMoss = 0, trunkMoss = 0;
                 for (int x = -6; x <= 6; x++) for (int z = -6; z <= 6; z++) {
@@ -197,12 +197,12 @@ public final class SmoothEndstoneGameTest implements FabricClientGameTest {
                     }
                 }
                 check(mossRemaining.isEmpty(), "Generated moss ground and trunk must form one connected patch");
-                check(naturality.worldgen.TreeMossFeature.rarity(net.minecraft.world.level.biome.Biomes.OLD_GROWTH_SPRUCE_TAIGA) == 1
-                    && naturality.worldgen.TreeMossFeature.rarity(net.minecraft.world.level.biome.Biomes.DARK_FOREST) == 4
-                    && naturality.worldgen.TreeMossFeature.rarity(net.minecraft.world.level.biome.Biomes.BIRCH_FOREST) == 16, "Tree moss biome frequency tiers incorrect");
+                check(naturality.worldgen.overworld.moss.TreeMossFeature.rarity(net.minecraft.world.level.biome.Biomes.OLD_GROWTH_SPRUCE_TAIGA) == 1
+                    && naturality.worldgen.overworld.moss.TreeMossFeature.rarity(net.minecraft.world.level.biome.Biomes.DARK_FOREST) == 4
+                    && naturality.worldgen.overworld.moss.TreeMossFeature.rarity(net.minecraft.world.level.biome.Biomes.BIRCH_FOREST) == 16, "Tree moss biome frequency tiers incorrect");
                 for (var excluded : java.util.List.of(net.minecraft.world.level.biome.Biomes.SAVANNA, net.minecraft.world.level.biome.Biomes.DESERT,
                         net.minecraft.world.level.biome.Biomes.JUNGLE, net.minecraft.world.level.biome.Biomes.SNOWY_TAIGA, net.minecraft.world.level.biome.Biomes.PALE_GARDEN))
-                    check(naturality.worldgen.TreeMossFeature.rarity(excluded) == 0, "Excluded biome must not generate tree moss");
+                    check(naturality.worldgen.overworld.moss.TreeMossFeature.rarity(excluded) == 0, "Excluded biome must not generate tree moss");
                 check(!mossFeature.place(level, level.getChunkSource().getGenerator(), RandomSource.create(42), treeBase.offset(32, 0, 0)), "Moss must not generate in an unlisted biome");
 
                 BlockPos mossPos = pos.offset(40, 0, 0);
@@ -247,7 +247,7 @@ public final class SmoothEndstoneGameTest implements FabricClientGameTest {
                         level.setBlockAndUpdate(groupCenter.offset(x, -1, z), Blocks.GRASS_BLOCK.defaultBlockState());
                         level.setBlockAndUpdate(groupCenter.offset(x, 0, z), Blocks.AIR.defaultBlockState());
                     }
-                    check(new naturality.worldgen.CloverPatchesFeature().place(level, level.getChunkSource().getGenerator(), RandomSource.create(seed), groupCenter), "Flat supported ground must generate a clover group");
+                    check(new naturality.worldgen.overworld.clover.CloverPatchesFeature().place(level, level.getChunkSource().getGenerator(), RandomSource.create(seed), groupCenter), "Flat supported ground must generate a clover group");
                     var pendingClovers = new java.util.HashSet<BlockPos>();
                     for (int x = -18; x <= 18; x++) for (int z = -18; z <= 18; z++) {
                         var probePos = groupCenter.offset(x, 0, z);
@@ -279,7 +279,7 @@ public final class SmoothEndstoneGameTest implements FabricClientGameTest {
                 for (int roll = 0; roll < 5000; roll++) {
                     var result = Block.getDrops(clovers, level, cloverPos, null, level.players().getFirst(), ItemStack.EMPTY);
                     check(result.size() == 1, "Clovers must return either normal or rare item");
-                    if (result.getFirst().is(naturality.NaturalityItems.FOUR_LEAF_CLOVER)) rareClovers++;
+                    if (result.getFirst().is(naturality.bootstrap.ContentRegistration.NaturalityItems.FOUR_LEAF_CLOVER)) rareClovers++;
                     else check(result.getFirst().is(NaturalityBlocks.CLOVERS_ITEM), "Unexpected Clovers drop");
                 }
                 check(rareClovers > 10 && rareClovers < 100, "Rare Clovers drop rate must be approximately 1%");
@@ -289,7 +289,7 @@ public final class SmoothEndstoneGameTest implements FabricClientGameTest {
                 var bottleItems = new net.minecraft.world.item.Item[]{Items.POTION, Items.SPLASH_POTION, Items.LINGERING_POTION};
                 for (int slot = 0; slot < 3; slot++) brewing.setItem(slot,
                     net.minecraft.world.item.alchemy.PotionContents.createItemStack(bottleItems[slot], net.minecraft.world.item.alchemy.Potions.AWKWARD));
-                brewing.setItem(3, new ItemStack(naturality.NaturalityItems.FOUR_LEAF_CLOVER));
+                brewing.setItem(3, new ItemStack(naturality.bootstrap.ContentRegistration.NaturalityItems.FOUR_LEAF_CLOVER));
                 brewing.setItem(4, new ItemStack(Items.BLAZE_POWDER));
                 for (int tick = 0; tick < 405; tick++) net.minecraft.world.level.block.entity.BrewingStandBlockEntity.serverTick(level, brewingPos, level.getBlockState(brewingPos), brewing);
                 for (int slot = 0; slot < 3; slot++) check(brewing.getItem(slot).is(bottleItems[slot])
@@ -357,7 +357,7 @@ public final class SmoothEndstoneGameTest implements FabricClientGameTest {
                     for (int y = end.getMaxY(); y >= end.getMinY(); y--) {
                         probe.set(x, y, z);
                         var material = island.getBlockState(probe);
-                        if (!naturality.worldgen.LirestoneBoulderFeature.isEndStone(material)) {
+                        if (!naturality.worldgen.end.lirestonecrags.LirestoneCrags.LirestoneBoulderFeature.isEndStone(material)) {
                             depth = 0;
                             continue;
                         }

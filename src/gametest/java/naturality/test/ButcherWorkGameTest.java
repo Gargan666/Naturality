@@ -148,7 +148,7 @@ public final class ButcherWorkGameTest implements FabricClientGameTest {
             server.runOnServer(s -> {
                 check(new BlockPos(0, 101, 0).closerToCenterThan(butcher[0].position(), 2.5),
                     "Restocked butcher returns to its workstation");
-                check(naturality.villager.FarmerSupplies.display(farmer[0]).isEmpty(),
+                check(naturality.systems.villagerwork.professions.ProfessionWork.FarmerSupplies.display(farmer[0]).isEmpty(),
                     "Farmer's delivery interruption ends after restocking");
                 check(!butcher[0].getMainHandItem().is(Items.IRON_SWORD),
                     "Butcher puts away its sword outside harvesting");

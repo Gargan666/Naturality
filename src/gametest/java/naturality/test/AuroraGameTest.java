@@ -1,7 +1,16 @@
 package naturality.test;
+import naturality.client.systems.skyevents.framework.SkyEventsClient;
+import naturality.systems.skyevents.framework.SkyEvents.SkyEventType;
+import naturality.systems.skyevents.framework.SkyEvents.SkyEventWorldData;
 
-import naturality.sky.*;
-import naturality.client.sky.*;
+import naturality.client.sky.shared.aurora.AuroraRenderer;
+import naturality.client.sky.shared.aurora.AuroraGeometry;
+
+
+import naturality.sky.shared.aurora.AuroraEvents;
+import naturality.sky.shared.aurora.AuroraEvents.AuroraCycle;
+
+
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.client.CloudStatus;
@@ -41,15 +50,15 @@ public final class AuroraGameTest implements FabricClientGameTest {
             }
         }
         check(varied, "Curtain height varies between shared panel edges");
-        boolean oldFog = naturality.config.NaturalityConfig.get().fog.enabled;
-        int oldSegments = naturality.config.NaturalityConfig.get().effects.auroraSegments;
+        boolean oldFog = naturality.config.live.NaturalityConfig.get().fog.enabled;
+        int oldSegments = naturality.config.live.NaturalityConfig.get().effects.auroraSegments;
         var oldClouds = new CloudStatus[1];
         boolean[] oldOit = new boolean[1];
         context.runOnClient(client -> {
             oldClouds[0] = client.options.cloudStatus().get();
             oldOit[0] = client.options.improvedTransparency().get();
             client.options.cloudStatus().set(CloudStatus.OFF);
-            naturality.config.NaturalityConfig.get().effects.auroraSegments = 2;
+            naturality.config.live.NaturalityConfig.get().effects.auroraSegments = 2;
         });
         try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
@@ -87,13 +96,13 @@ public final class AuroraGameTest implements FabricClientGameTest {
             int[] defaultPanels = new int[1];
             context.runOnClient(_ -> {
                 defaultPanels[0] = AuroraRenderer.drawnPanels();
-                naturality.config.NaturalityConfig.get().effects.auroraSegments = 6;
+                naturality.config.live.NaturalityConfig.get().effects.auroraSegments = 6;
             });
             context.waitTicks(3);
             context.runOnClient(_ -> {
                 check(AuroraRenderer.drawnPanels() == defaultPanels[0] * 3,
                     "Changing plane density rebuilds the visible curtain meshes");
-                naturality.config.NaturalityConfig.get().effects.auroraSegments = 2;
+                naturality.config.live.NaturalityConfig.get().effects.auroraSegments = 2;
             });
             context.waitTicks(3);
             server.runCommand("tp @a 640 100 -32 0 -35");
@@ -111,12 +120,12 @@ public final class AuroraGameTest implements FabricClientGameTest {
             context.waitTicks(100);
             // A nearby opaque roof must occlude the world geometry, even without custom fog.
             server.runCommand("fill 624 116 -48 656 116 -16 stone");
-            context.runOnClient(_ -> naturality.config.NaturalityConfig.get().fog.enabled = false);
+            context.runOnClient(_ -> naturality.config.live.NaturalityConfig.get().fog.enabled = false);
             context.waitTicks(20);
             context.takeScreenshot("aurora-roof-occlusion");
             server.runCommand("fill 624 116 -48 656 116 -16 air");
             context.runOnClient(client -> {
-                naturality.config.NaturalityConfig.get().fog.enabled = true;
+                naturality.config.live.NaturalityConfig.get().fog.enabled = true;
                 client.options.cloudStatus().set(CloudStatus.FANCY);
                 client.options.improvedTransparency().set(true);
             });
@@ -174,8 +183,8 @@ public final class AuroraGameTest implements FabricClientGameTest {
                 .settings(TestFixtures.require(s.getLevel(net.minecraft.world.level.Level.END), "s.getLevel(net.minecraft.world.level.Level.END)"), SkyEventType.END_AURORA).override,
                 "End Aurora returns to automatic scheduling"));
         } finally {
-            naturality.config.NaturalityConfig.get().fog.enabled = oldFog;
-            naturality.config.NaturalityConfig.get().effects.auroraSegments = oldSegments;
+            naturality.config.live.NaturalityConfig.get().fog.enabled = oldFog;
+            naturality.config.live.NaturalityConfig.get().effects.auroraSegments = oldSegments;
             context.runOnClient(client -> {
                 client.options.cloudStatus().set(oldClouds[0]);
                 client.options.improvedTransparency().set(oldOit[0]);

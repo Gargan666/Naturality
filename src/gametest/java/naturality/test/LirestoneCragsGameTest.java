@@ -1,8 +1,8 @@
 package naturality.test;
 
-import naturality.NaturalityBlocks;
-import naturality.worldgen.EndTerrainDensity;
-import naturality.worldgen.LirestoneCrags;
+import naturality.bootstrap.ContentRegistration.NaturalityBlocks;
+import naturality.worldgen.end.terrain.EndTerrainDensity;
+import naturality.worldgen.end.lirestonecrags.LirestoneCrags;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.core.BlockPos;
@@ -118,8 +118,8 @@ public final class LirestoneCragsGameTest implements FabricClientGameTest {
                 view[0]=interior;
             });
             int[] distance={0};boolean[] hidden={false};
-            boolean fog=naturality.config.NaturalityConfig.get().fog.enabled;
-            naturality.config.NaturalityConfig.get().fog.enabled=false;
+            boolean fog=naturality.config.live.NaturalityConfig.get().fog.enabled;
+            naturality.config.live.NaturalityConfig.get().fog.enabled=false;
             context.runOnClient(client -> {
                 distance[0]=client.options.renderDistance().get();hidden[0]=client.gui.hud.isHidden();
                 if(!hidden[0])client.gui.hud.toggle();client.options.renderDistance().set(16);client.options.broadcastOptions();
@@ -136,7 +136,7 @@ public final class LirestoneCragsGameTest implements FabricClientGameTest {
                 context.runOnClient(_ -> check(net.minecraft.client.resources.language.I18n.get("biome.naturality.lirestone_crags")
                     .equals("Lirestone Crags"),"Biome display name is missing"));
             } finally {
-                naturality.config.NaturalityConfig.get().fog.enabled=fog;
+                naturality.config.live.NaturalityConfig.get().fog.enabled=fog;
                 context.runOnClient(client -> {
                     if(client.gui.hud.isHidden()!=hidden[0])client.gui.hud.toggle();
                     client.options.renderDistance().set(distance[0]);client.options.broadcastOptions();

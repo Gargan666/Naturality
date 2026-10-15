@@ -34,15 +34,15 @@ public final class EndPortalParallaxGameTest implements FabricClientGameTest {
             context.waitTicks(8);
             boolean[] previous = new boolean[2];
             context.runOnClient(client -> {
-                previous[0] = naturality.config.NaturalityConfig.get().portalChanges.glowEffect;
+                previous[0] = naturality.config.live.NaturalityConfig.get().portalChanges.glowEffect;
                 previous[1] = client.options.improvedTransparency().get();
-                naturality.config.NaturalityConfig.get().portalChanges.glowEffect = false;
+                naturality.config.live.NaturalityConfig.get().portalChanges.glowEffect = false;
             });
             try {
                 context.waitTicks(3);
                 context.takeScreenshot("end-portal-wall-no-glow");
                 context.runOnClient(client -> {
-                    naturality.config.NaturalityConfig.get().portalChanges.glowEffect = true;
+                    naturality.config.live.NaturalityConfig.get().portalChanges.glowEffect = true;
                     client.options.improvedTransparency().set(true);
                 });
                 context.waitTicks(8);
@@ -60,7 +60,7 @@ public final class EndPortalParallaxGameTest implements FabricClientGameTest {
                 context.takeScreenshot("end-portal-border-gap");
             } finally {
                 context.runOnClient(client -> {
-                    naturality.config.NaturalityConfig.get().portalChanges.glowEffect = previous[0];
+                    naturality.config.live.NaturalityConfig.get().portalChanges.glowEffect = previous[0];
                     client.options.improvedTransparency().set(previous[1]);
                 });
             }

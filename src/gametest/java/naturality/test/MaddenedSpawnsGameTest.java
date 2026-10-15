@@ -1,7 +1,13 @@
 package naturality.test;
+import naturality.entities.maddened.MaddenedZombies.MaddenedZombie;
+import naturality.entities.maddened.MaddenedZombies;
+import naturality.entities.maddened.MaddenedCreepers.MaddenedCreeper;
+import naturality.entities.maddened.MaddenedCreepers;
+import naturality.entities.maddened.MaddenedVariants;
+import naturality.systems.skyevents.framework.SkyEvents.SkyEventType;
+import naturality.systems.skyevents.framework.SkyEvents.SkyEventWorldData;
+import naturality.sky.overworld.bloodmoon.BloodMoonCycle.BloodMoonSpawning;
 
-import naturality.entity.*;
-import naturality.sky.*;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.server.level.ServerLevel;

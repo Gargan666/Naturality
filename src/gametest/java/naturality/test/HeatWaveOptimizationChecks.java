@@ -7,7 +7,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.renderpearl.api.GpuFormat;
 import java.lang.management.ManagementFactory;
 import java.util.*;
-import naturality.client.fluid.HeatWaves;
+import naturality.client.rendering.heatwaves.HeatWaves;
 import naturality.test.reference.ReferenceHeatWaves;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.Projection;

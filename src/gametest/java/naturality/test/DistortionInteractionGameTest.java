@@ -31,11 +31,11 @@ public final class DistortionInteractionGameTest implements FabricClientGameTest
                     var inventory=net.minecraft.client.gui.screens.inventory.InventoryScreen.class.getDeclaredMethod("extractRenderState",net.minecraft.world.entity.LivingEntity.class);
                     inventory.setAccessible(true);
                     var preview=(net.minecraft.client.renderer.entity.state.AvatarRenderState)inventory.invoke(null,p);
-                    check(((naturality.client.weather.EndGravityRenderState)preview).naturality$inversion()==0,"Inventory preview uses its own upright orientation");
-                    check(!naturality.client.weather.GravityPreviewContext.active(),"Inventory rendering restores the world context");
+                    check(((naturality.client.systems.gravity.GravityPreviewContext.EndGravityRenderState)preview).naturality$inversion()==0,"Inventory preview uses its own upright orientation");
+                    check(!naturality.client.systems.gravity.GravityPreviewContext.active(),"Inventory rendering restores the world context");
                     var renderer=c.getEntityRenderDispatcher().getRenderer(p);
-                    var state=TestFixtures.require((net.minecraft.client.renderer.entity.state.AvatarRenderState)renderer.createRenderState(p,1), "(naturality.client.weather.EndGravityRenderState)state");
-                    check(((naturality.client.weather.EndGravityRenderState)state).naturality$inversion()>.99,"World rendering remains inverted after inventory extraction");
+                    var state=TestFixtures.require((net.minecraft.client.renderer.entity.state.AvatarRenderState)renderer.createRenderState(p,1), "(naturality.client.systems.gravity.GravityPreviewContext.EndGravityRenderState)state");
+                    check(((naturality.client.systems.gravity.GravityPreviewContext.EndGravityRenderState)state).naturality$inversion()>.99,"World rendering remains inverted after inventory extraction");
                     state.isCrouching=true;
                     check(((net.minecraft.client.renderer.entity.player.AvatarRenderer<?>)renderer).getRenderOffset(state).y>0,"Inverted crouch model offset points toward the ceiling");
                 }catch(ReflectiveOperationException e){throw new AssertionError(e);}

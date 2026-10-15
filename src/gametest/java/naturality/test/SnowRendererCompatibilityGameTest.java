@@ -1,6 +1,6 @@
 package naturality.test;
 
-import naturality.client.weather.WindRendering;
+import naturality.client.systems.weather.wind.WindRendering;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;

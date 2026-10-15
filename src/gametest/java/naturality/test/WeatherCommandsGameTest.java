@@ -2,8 +2,8 @@ package naturality.test;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
-import naturality.weather.WeatherSystem;
-import naturality.weather.WeatherWorldData;
+import naturality.systems.weather.framework.WeatherSystem;
+import naturality.systems.weather.framework.WeatherSystem.WeatherWorldData;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.commands.CommandSourceStack;
@@ -60,7 +60,7 @@ public final class WeatherCommandsGameTest implements FabricClientGameTest {
                 check(overworld.rain == 10 && overworld.wind == 75 && overworld.temperature == 20, "Invalid commands cannot mutate settings");
                 execute(commands, source, "weather minecraft:the_nether wind 90");
                 execute(commands, source, "weather minecraft:the_end gravity 5");
-                var endCycle = naturality.weather.EndWeatherSystem.cycle(TestFixtures.require(s.getLevel(Level.END), "s.getLevel(Level.END)"));
+                var endCycle = naturality.systems.weather.end.framework.EndWeatherSystem.cycle(TestFixtures.require(s.getLevel(Level.END), "s.getLevel(Level.END)"));
                 reject(commands, source, "weather minecraft:the_end rain 50");
                 reject(commands, source, "weather minecraft:overworld gravity 50");
                 reject(commands, source, "weather minecraft:the_end distortion 100");

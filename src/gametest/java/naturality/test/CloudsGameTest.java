@@ -1,6 +1,6 @@
 package naturality.test;
 
-import naturality.config.NaturalityConfig;
+import naturality.config.live.NaturalityConfig;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.client.CloudStatus;
@@ -51,7 +51,7 @@ public final class CloudsGameTest implements FabricClientGameTest {
                 context.takeScreenshot("clouds-pixels-" + oit);
                 context.runOnClient(_ -> {
                     var origin = new net.minecraft.world.phys.Vec3(edge[0], 180, edge[1] + 8);
-                    float transmission = naturality.client.cloud.CloudSunOcclusion.transmission(origin, origin.add(0, 200, 0));
+                    float transmission = naturality.client.sky.shared.clouds.CloudLayerRenderer.CloudSunOcclusion.transmission(origin, origin.add(0, 200, 0));
                     if (transmission >= 0.7F)
                         throw new AssertionError("Rendered cloud occupancy must reach the sun-flare overlay: " + transmission);
                 });
@@ -205,8 +205,8 @@ public final class CloudsGameTest implements FabricClientGameTest {
             context.waitFor(client -> client.gui.overlay() == null);
             context.waitTicks(5);
             context.takeScreenshot("clouds-after-reload");
-            context.runOnClient(client -> client.gui.setScreen(new naturality.client.config.NaturalityCategoryScreen(
-                new net.minecraft.client.gui.screens.TitleScreen(), naturality.client.config.NaturalityCategoryScreen.Category.CLOUDS)));
+            context.runOnClient(client -> client.gui.setScreen(new naturality.client.ui.settings.NaturalityCategoryScreen(
+                new net.minecraft.client.gui.screens.TitleScreen(), naturality.client.ui.settings.NaturalityCategoryScreen.Category.CLOUDS)));
             context.waitTicks(2);
             context.takeScreenshot("clouds-settings");
             context.runOnClient(client -> TestFixtures.screen(client).onClose());
@@ -237,10 +237,10 @@ public final class CloudsGameTest implements FabricClientGameTest {
     }
 
     static void checkGeometry() {
-        if (Math.abs(naturality.client.cloud.CloudMoonLighting.phaseStrength(0) - 1) > 0.0001
-                || Math.abs(naturality.client.cloud.CloudMoonLighting.phaseStrength(4) - 0.1) > 0.0001)
+        if (Math.abs(naturality.client.sky.shared.clouds.CloudLayerRenderer.CloudMoonLighting.phaseStrength(0) - 1) > 0.0001
+                || Math.abs(naturality.client.sky.shared.clouds.CloudLayerRenderer.CloudMoonLighting.phaseStrength(4) - 0.1) > 0.0001)
             throw new AssertionError("Cloud moonlight must range from 100% at full moon to 10% at new moon");
-        try (var renderer = new naturality.client.cloud.CloudLayerRenderer()) {
+        try (var renderer = new naturality.client.sky.shared.clouds.CloudLayerRenderer()) {
             var settings = new NaturalityConfig.CloudLayer();
             settings.fadingSides = false;
             var field = renderer.getClass().getDeclaredField("settings");

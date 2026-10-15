@@ -3,7 +3,7 @@ package naturality.test;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
-import naturality.util.DisposableWorlds;
+import naturality.api.worlds.DisposableWorlds;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestServerConnection;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestServerContext;

@@ -1,8 +1,10 @@
 package naturality.test;
+import naturality.systems.skyevents.framework.SkyEvents;
+import naturality.systems.skyevents.framework.SkyEvents.SkyEventType;
+import naturality.sky.overworld.rainbow.RainbowCycle;
 
-import naturality.client.sky.RainbowRenderer;
-import naturality.client.weather.ParticleWeather;
-import naturality.sky.*;
+import naturality.client.sky.overworld.rainbow.RainbowRenderer;
+import naturality.client.systems.weather.overworld.precipitation.ParticleWeather;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.client.CloudStatus;

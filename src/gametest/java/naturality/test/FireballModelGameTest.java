@@ -1,7 +1,7 @@
 package naturality.test;
 
-import naturality.client.entity.FireballModelRenderer;
-import naturality.client.entity.FireballShell;
+import naturality.client.entities.fireballs.FireballModelRenderer;
+import naturality.client.entities.fireballs.FireballShell;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.world.entity.projectile.hurtingprojectile.AbstractHurtingProjectile;

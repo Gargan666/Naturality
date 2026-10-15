@@ -1,7 +1,7 @@
 package naturality.test;
 
-import naturality.worldgen.EndIslandMaskCache;
-import naturality.worldgen.EndTerrainDensity;
+import naturality.worldgen.end.terrain.EndTerrainDensity.EndIslandMaskCache;
+import naturality.worldgen.end.terrain.EndTerrainDensity;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.levelgen.densityfunction.*;
 

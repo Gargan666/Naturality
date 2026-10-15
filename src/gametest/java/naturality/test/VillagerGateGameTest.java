@@ -3,7 +3,7 @@ package naturality.test;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
-import naturality.villager.VillagerGates;
+import naturality.systems.villagerwork.gates.VillagerGates;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.core.BlockPos;
@@ -139,8 +139,8 @@ public final class VillagerGateGameTest implements FabricClientGameTest {
                     body.getBrain().setMemory(MemoryModuleType.WALK_TARGET, new WalkTarget(destination, .5F, 0));
                     body.getNavigation().moveTo(body.getNavigation().createPath(destination, 0), .5);
                 }
-                boolean firstWaits = naturality.villager.DoorwayTraffic.yield(level, crowd[0]);
-                boolean secondWaits = naturality.villager.DoorwayTraffic.yield(level, crowd[1]);
+                boolean firstWaits = naturality.systems.villagerwork.framework.VillagerWork.DoorwayTraffic.yield(level, crowd[0]);
+                boolean secondWaits = naturality.systems.villagerwork.framework.VillagerWork.DoorwayTraffic.yield(level, crowd[1]);
                 check(firstWaits != secondWaits, "Exactly one villager gets doorway priority");
             });
             boolean[] bothEntered = {false};
@@ -149,7 +149,7 @@ public final class VillagerGateGameTest implements FabricClientGameTest {
                 server.runOnServer(_ -> {
                     bothEntered[0] = crowd[0].getZ() > 2 && crowd[1].getZ() > 2;
                     for (var body : crowd) {
-                        naturality.villager.Reputation.state(body).conversationPartner = null;
+                        naturality.systems.reputation.Reputation.state(body).conversationPartner = null;
                         body.getBrain().eraseMemory(MemoryModuleType.INTERACTION_TARGET);
                         if (body.getZ() <= 2 && !body.getBrain().hasMemoryValue(MemoryModuleType.WALK_TARGET))
                             body.getBrain().setMemory(MemoryModuleType.WALK_TARGET, new WalkTarget(destination, .5F, 0));

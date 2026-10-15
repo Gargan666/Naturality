@@ -1,10 +1,10 @@
 package naturality.test;
 
-import naturality.NaturalityParticles;
-import naturality.client.particle.WeatherClusterParticle;
-import naturality.client.weather.ParticleWeather;
-import naturality.client.weather.WeatherParticleContext;
-import naturality.weather.WeatherProfile;
+import naturality.bootstrap.ContentRegistration.NaturalityParticles;
+import naturality.client.systems.weather.overworld.precipitation.ParticleWeather.WeatherClusterParticle;
+import naturality.client.systems.weather.overworld.precipitation.ParticleWeather;
+import naturality.client.systems.weather.framework.WeatherClient.WeatherParticleContext;
+import naturality.systems.weather.framework.WeatherSystem.WeatherProfile;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.server.level.ParticleStatus;
@@ -24,10 +24,10 @@ public final class ParticleWeatherGameTest implements FabricClientGameTest {
         }
     }
     @Override public void runTest(ClientGameTestContext context) {
-        check(new naturality.weather.WeatherState(100,80,0,0).snowFallMultiplier()==1,"Snow retains calm speed through wind 80");
-        check(new naturality.weather.WeatherState(100,90,0,0).snowFallMultiplier()==2.5F,"Snow eases through the severe-wind midpoint");
-        check(new naturality.weather.WeatherState(100,100,0,0).snowFallMultiplier()==4,"Wind 100 quadruples snow fall speed");
-        check(new naturality.weather.WeatherState(80,100,0,0).heavyRainParticleChance(15)==0,"Strong wind alone cannot spawn heavy precipitation");
+        check(new naturality.systems.weather.framework.WeatherSystem.WeatherState(100,80,0,0).snowFallMultiplier()==1,"Snow retains calm speed through wind 80");
+        check(new naturality.systems.weather.framework.WeatherSystem.WeatherState(100,90,0,0).snowFallMultiplier()==2.5F,"Snow eases through the severe-wind midpoint");
+        check(new naturality.systems.weather.framework.WeatherSystem.WeatherState(100,100,0,0).snowFallMultiplier()==4,"Wind 100 quadruples snow fall speed");
+        check(new naturality.systems.weather.framework.WeatherSystem.WeatherState(80,100,0,0).heavyRainParticleChance(15)==0,"Strong wind alone cannot spawn heavy precipitation");
         var profile = new WeatherProfile(true);
         profile.overrideRain = profile.overrideWind = profile.overrideTemperature = true;
         profile.rain = 100; profile.wind = 100; profile.temperature = 50;
@@ -38,7 +38,7 @@ public final class ParticleWeatherGameTest implements FabricClientGameTest {
         });
         try (var world = TestWorlds.disposable(context).create()) {
             var server = world.getServer();
-            server.runOnServer(s -> naturality.weather.WeatherWorldData.get(s).setProfile("minecraft:overworld", profile));
+            server.runOnServer(s -> naturality.systems.weather.framework.WeatherSystem.WeatherWorldData.get(s).setProfile("minecraft:overworld", profile));
             server.runCommand("gamemode spectator @a");
             server.runCommand("time set 6000");
             server.runCommand("fill -24 100 -24 24 100 24 grass_block");
@@ -169,14 +169,14 @@ public final class ParticleWeatherGameTest implements FabricClientGameTest {
 
     private static void checkSharedQueries(net.minecraft.client.Minecraft client) {
         var level = java.util.Objects.requireNonNull(client.level);
-        var config = naturality.config.NaturalityConfig.get().effects;
+        var config = naturality.config.live.NaturalityConfig.get().effects;
         boolean enabled = config.weatherParticles;
         WeatherParticleContext.begin(level);
         var first = WeatherParticleContext.state(level);
         try {
             check(first == WeatherParticleContext.state(level), "Cards share one snapshot during a pass");
             check(WeatherParticleContext.wind(level)==WeatherParticleContext.wind(level),"Other particles share a wind snapshot");
-            var weather = naturality.weather.WeatherSystem.state(level);
+            var weather = naturality.systems.weather.framework.WeatherSystem.state(level);
             check(weather != null && first.rainWindX() == weather.windX() * .34
                 && first.snowWindZ() == weather.windZ() * .10, "Shared wind keeps the original scaling");
             for (int repeat=0;repeat<2;repeat++) {

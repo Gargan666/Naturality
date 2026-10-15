@@ -1,7 +1,7 @@
 package naturality.test;
 
-import naturality.client.entity.FloatingMobTilt;
-import naturality.client.entity.FloatingMobTiltState;
+import naturality.client.entities.floatingmobtilt.FloatingMobTilt;
+import naturality.client.entities.floatingmobtilt.FloatingMobTilt.FloatingMobTiltState;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.world.entity.LivingEntity;

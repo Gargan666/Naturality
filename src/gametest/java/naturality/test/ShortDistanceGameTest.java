@@ -45,7 +45,7 @@ public final class ShortDistanceGameTest implements FabricClientGameTest {
             context.waitTicks(40);
             world.getConnection().waitForChunksRender();
             context.runOnClient(c -> {
-                if (c.options.getEffectiveRenderDistance() != 2 || !naturality.client.fluid.WaterVisuals.ready())
+                if (c.options.getEffectiveRenderDistance() != 2 || !naturality.client.fluids.water.WaterVisuals.ready())
                     throw new AssertionError("Two-chunk test requires active water optics and a 32-block draw range");
             });
             if (shoreFaces.get() == 0 || badShoreVertices.get() != 0)

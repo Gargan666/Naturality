@@ -1,11 +1,15 @@
 package naturality.test;
 
 import java.util.List;
-import naturality.fire.FireSurface;
-import naturality.client.fire.SurfaceFireModel;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import naturality.blocks.fire.FireGeometry.FireSurface;
+import naturality.client.blocks.fire.SurfaceFireModel;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.renderer.v1.Renderer;
+import net.fabricmc.fabric.api.client.model.loading.v1.wrapper.WrapperBlockStateModel;
+import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.block.Blocks;
@@ -33,9 +37,9 @@ public final class SurfaceFireGameTest implements FabricClientGameTest {
                 var level = TestFixtures.require(client.level, "level");
                 var fire = Blocks.FIRE.defaultBlockState();
                 var model = client.getModelManager().getBlockStateModelSet().get(fire);
-                check(model instanceof SurfaceFireModel, "Fire model wrapper registered");
-                check(client.getModelManager().getBlockStateModelSet().get(Blocks.SOUL_FIRE.defaultBlockState())
-                    instanceof SurfaceFireModel, "Soul fire uses the same surface fitting");
+                check(hasFireWrapper(model), "Fire model wrapper registered");
+                check(hasFireWrapper(client.getModelManager().getBlockStateModelSet().get(Blocks.SOUL_FIRE.defaultBlockState())),
+                    "Soul fire uses the same surface fitting");
                 check(!FireSurface.isFloorFire(fire.setValue(FireBlock.NORTH, true)), "Wall fire stays attached");
                 var slab = FireSurface.below(level, new BlockPos(-6, 101, 0));
                 check(slab.size() == 1, "Bottom slab has one surface");
@@ -46,15 +50,15 @@ public final class SurfaceFireGameTest implements FabricClientGameTest {
                 var fence = FireSurface.below(level, new BlockPos(2, 101, 0));
                 near(area(fence), 1F / 16, "Fence post footprint uses visible 4x4 top");
                 near(fence.getFirst().y(), 0, "Fence avoids 1.5-block collision height");
-                near((float) naturality.fire.FireGeometry.floorHeight(slab.getFirst()),
+                near((float) naturality.blocks.fire.FireGeometry.floorHeight(slab.getFirst()),
                     1.4F,"Full-width slab fire keeps vanilla model height");
-                near((float) naturality.fire.FireGeometry.floorHeight(top.getFirst()),
+                near((float) naturality.blocks.fire.FireGeometry.floorHeight(top.getFirst()),
                     1.4F,"Top slab fire keeps vanilla model height");
-                near((float) naturality.fire.FireGeometry.floorHeight(
+                near((float) naturality.blocks.fire.FireGeometry.floorHeight(
                     new FireSurface.Patch(0,0,0,1,0,0,1)),1.4F,
                     "Full-block fire keeps vanilla model height");
-                near((float) naturality.fire.FireGeometry.floorHeight(fence.getFirst()),
-                    naturality.fire.FireGeometry.HEIGHT / 4,"Fence fire is scaled to its 4-pixel top");
+                near((float) naturality.blocks.fire.FireGeometry.floorHeight(fence.getFirst()),
+                    naturality.blocks.fire.FireGeometry.HEIGHT / 4,"Fence fire is scaled to its 4-pixel top");
                 for(var flame : List.of(fire, Blocks.SOUL_FIRE.defaultBlockState())) {
                     float[] heightRange={Float.POSITIVE_INFINITY,Float.NEGATIVE_INFINITY};
                     client.getModelManager().getBlockStateModelSet().get(flame).emitQuads(
@@ -64,7 +68,7 @@ public final class SurfaceFireGameTest implements FabricClientGameTest {
                                 heightRange[1]=Math.max(heightRange[1],q.y(v));
                             }
                         }),level,new BlockPos(2,101,0),flame,RandomSource.create(0),_->false);
-                    near(heightRange[1]-heightRange[0],naturality.fire.FireGeometry.HEIGHT / 4,
+                    near(heightRange[1]-heightRange[0],naturality.blocks.fire.FireGeometry.HEIGHT / 4,
                         "Normal and soul fence flames render at the fitted height");
                 }
                 var gate = FireSurface.below(level, new BlockPos(6, 101, 0));
@@ -112,7 +116,7 @@ public final class SurfaceFireGameTest implements FabricClientGameTest {
                     "Walk-through foliage is skipped as a fire support");
                 var merged=FireSurface.below(level, changing.above());
                 near(merged.getFirst().y(),-1,"Fire begins on ground beneath fern");
-                var fernTop=naturality.fire.FireSurface.exposed(naturality.fire.FireGeometry.supportBoxes(level,changing)
+                var fernTop=naturality.blocks.fire.FireGeometry.FireSurface.exposed(naturality.blocks.fire.FireGeometry.supportBoxes(level,changing)
                     .stream().map(b->new FireSurface.Patch((float)b.minX,(float)b.maxY-1,(float)b.minZ,
                         (float)(b.maxX-b.minX),0,0,(float)(b.maxZ-b.minZ))).toList());
                 near(area(merged),area(fernTop),"Merged fern fire keeps its original footprint");
@@ -123,7 +127,7 @@ public final class SurfaceFireGameTest implements FabricClientGameTest {
                             range[0]=Math.min(range[0],q.y(v));range[1]=Math.max(range[1],q.y(v));
                         }}),level,changing.above(),flame,RandomSource.create(0),_->false);
                     near(range[0],-1,"Normal and soul fire merge into fern at ground level");
-                    near(range[1]-range[0],(float)naturality.fire.FireGeometry.floorHeight(merged.getFirst()),
+                    near(range[1]-range[0],(float)naturality.blocks.fire.FireGeometry.floorHeight(merged.getFirst()),
                         "Merged flames keep their original height");
                 }
                 level.setBlock(changing,Blocks.CACTUS.defaultBlockState(),2);
@@ -143,11 +147,11 @@ public final class SurfaceFireGameTest implements FabricClientGameTest {
                 for (var direction : net.minecraft.core.Direction.Plane.HORIZONTAL) {
                     level.setBlock(changing.relative(direction), Blocks.OAK_FENCE.defaultBlockState(), 2);
                     var sideState = fire.setValue(FireBlock.PROPERTY_BY_DIRECTION.get(direction), true);
-                    var sheets = naturality.fire.FireGeometry.sides(level, changing, sideState);
+                    var sheets = naturality.blocks.fire.FireGeometry.sides(level, changing, sideState);
                     check(sheets.size() == 1, "Isolated fence exposes one side");
                     near((float) sheets.getFirst().bottomLeft().distanceTo(sheets.getFirst().bottomRight()), 0.25F,
                         "Side flame is exactly four texture pixels wide");
-                    var box = naturality.fire.FireGeometry.shape(level, changing, sideState).bounds();
+                    var box = naturality.blocks.fire.FireGeometry.shape(level, changing, sideState).bounds();
                     if (direction.getAxis() == net.minecraft.core.Direction.Axis.X)
                         check(direction.getStepX() > 0 ? box.minX > 1.3 : box.maxX < -0.3, "Side fire moves onto inset fence face");
                     else check(direction.getStepZ() > 0 ? box.minZ > 1.3 : box.maxZ < -0.3, "Side fire moves onto inset fence face");
@@ -160,13 +164,13 @@ public final class SurfaceFireGameTest implements FabricClientGameTest {
                         level.setBlock(supportPos, Blocks.OAK_SIGN.defaultBlockState().setValue(
                             net.minecraft.world.level.block.StandingSignBlock.ROTATION, rotation), 2);
                         var side = fire.setValue(FireBlock.PROPERTY_BY_DIRECTION.get(direction), true);
-                        var sheets = naturality.fire.FireGeometry.sides(level, changing, side);
+                        var sheets = naturality.blocks.fire.FireGeometry.sides(level, changing, side);
                         check(sheets.size() == 1, "Every sign rotation emits one sheet per attached face");
                         near((float) sheets.getFirst().bottomLeft().distanceTo(sheets.getFirst().bottomRight()),
                             1, "Sign sprite spans the whole board");
-                        check(naturality.fire.FireGeometry.shape(level, changing, side).toAabbs().size() == 1,
+                        check(naturality.blocks.fire.FireGeometry.shape(level, changing, side).toAabbs().size() == 1,
                             "Rotated sign fire has exactly one hitbox");
-                        check(naturality.fire.FireGeometry.supportBoxes(level, supportPos).size() == 1,
+                        check(naturality.blocks.fire.FireGeometry.supportBoxes(level, supportPos).size() == 1,
                             "Sign support queries do not voxelize the board");
                         level.setBlock(supportPos, Blocks.AIR.defaultBlockState(), 2);
                     }
@@ -211,10 +215,10 @@ public final class SurfaceFireGameTest implements FabricClientGameTest {
             world.getConnection().waitForClientboundPackets();
             world.getConnection().waitForChunksRender();
             long[] ticks = new long[1];
-            context.runOnClient(_ -> ticks[0] = naturality.client.fire.ProceduralFire.ticks());
+            context.runOnClient(_ -> ticks[0] = naturality.client.blocks.fire.ProceduralFire.ticks());
             context.takeScreenshot("fire-side-posts-and-soul");
             context.waitTicks(15);
-            context.runOnClient(_ -> check(naturality.client.fire.ProceduralFire.ticks() > ticks[0], "Heat simulation animates"));
+            context.runOnClient(_ -> check(naturality.client.blocks.fire.ProceduralFire.ticks() > ticks[0], "Heat simulation animates"));
             context.takeScreenshot("fire-side-posts-and-soul-later");
             server.runCommand("tp @a 0.5 101 -1.5 0 0");
             world.getConnection().waitForClientboundPackets();
@@ -301,16 +305,16 @@ public final class SurfaceFireGameTest implements FabricClientGameTest {
             context.runOnClient(client -> {
                 var pos = new BlockPos(-1, 102, 0);
                 var state = TestFixtures.level(client).getBlockState(pos);
-                var sheet = naturality.fire.FireGeometry.sides(TestFixtures.level(client), pos, state).getFirst();
-                int color = naturality.client.fire.ConnectedFire.color(TestFixtures.level(client), pos, state, sheet);
+                var sheet = naturality.blocks.fire.FireGeometry.sides(TestFixtures.level(client), pos, state).getFirst();
+                int color = naturality.client.blocks.fire.SurfaceFireModel.ConnectedFire.color(TestFixtures.level(client), pos, state, sheet);
                 check(((color >>> 20) & 15) == 15, "Interior wall fire connects on four edges");
                 var isolated = new BlockPos(3, 104, 0);
                 var isolatedState = TestFixtures.level(client).getBlockState(isolated);
-                var single = naturality.fire.FireGeometry.sides(TestFixtures.level(client), isolated, isolatedState).getFirst();
-                check(((naturality.client.fire.ConnectedFire.color(TestFixtures.level(client), isolated, isolatedState, single)
+                var single = naturality.blocks.fire.FireGeometry.sides(TestFixtures.level(client), isolated, isolatedState).getFirst();
+                check(((naturality.client.blocks.fire.SurfaceFireModel.ConnectedFire.color(TestFixtures.level(client), isolated, isolatedState, single)
                     >>> 20) & 15) == 0, "Detached fire retains its vanilla sprite");
                 TestFixtures.level(client).setBlock(pos.above(), Blocks.AIR.defaultBlockState(), 3);
-                color = naturality.client.fire.ConnectedFire.color(TestFixtures.level(client), pos, state, sheet);
+                color = naturality.client.blocks.fire.SurfaceFireModel.ConnectedFire.color(TestFixtures.level(client), pos, state, sheet);
                 check(((color >>> 20) & 4) == 0, "Removing a neighbour opens the flame edge");
             });
             context.waitTicks(5);
@@ -342,9 +346,9 @@ public final class SurfaceFireGameTest implements FabricClientGameTest {
                 for (var entity : TestFixtures.level(client).entitiesForRendering()) {
                     if (!entity.displayFireAnimation()) continue;
                     var renderState = client.getEntityRenderDispatcher().getRenderer(entity).createRenderState(entity, 0.5F);
-                    var data = TestFixtures.require((naturality.client.fire.EntityFireState) renderState, "data");
+                    var data = TestFixtures.require((naturality.client.blocks.fire.SurfaceFireModel.EntityFireState) renderState, "data");
                     check(data.naturality$fireBox() != null, "Burning entity extracts its actual hitbox");
-                    var bounds = naturality.client.fire.EntityFireRenderer.envelope(TestFixtures.require(data.naturality$fireBox(), "data.naturality$fireBox()"));
+                    var bounds = naturality.client.blocks.fire.SurfaceFireModel.EntityFireRenderer.envelope(TestFixtures.require(data.naturality$fireBox(), "data.naturality$fireBox()"));
                     check(bounds.maxY > TestFixtures.require(data.naturality$fireBox(), "data.naturality$fireBox()").maxY, "Flames extend above entity hitbox");
                     near((float) bounds.minY, (float) TestFixtures.require(data.naturality$fireBox(), "data.naturality$fireBox()").minY, "Flame root follows feet");
                     burning++;
@@ -398,8 +402,8 @@ public final class SurfaceFireGameTest implements FabricClientGameTest {
     }
 
     private static void checkSimulation() {
-        var a = new naturality.client.fire.FireSimulation(123);
-        var b = new naturality.client.fire.FireSimulation(456);
+        var a = new naturality.client.blocks.fire.ProceduralFire.FireSimulation(123);
+        var b = new naturality.client.blocks.fire.ProceduralFire.FireSimulation(456);
         for (int tick = 0; tick < 80; tick++) { a.tick(); b.tick(); }
         float difference = 0, bottom = 0, top = 0;
         for (int x = 0; x < 256; x++) {
@@ -409,8 +413,25 @@ public final class SurfaceFireGameTest implements FabricClientGameTest {
         check(difference > 1, "Independent fuel creates different flames");
         check(bottom > top, "Fire rises and cools");
         var seeds = new java.util.HashSet<Integer>();
-        for (int x = -20; x <= 20; x++) seeds.add(naturality.client.fire.ProceduralFire.seedColor(new BlockPos(x, 100, 0)));
+        for (int x = -20; x <= 20; x++) seeds.add(naturality.client.blocks.fire.ProceduralFire.seedColor(new BlockPos(x, 100, 0)));
         check(seeds.size() == 41, "Neighboring fires have distinct stable seeds");
+    }
+
+    private static boolean hasFireWrapper(BlockStateModel model) {
+        // Other registered wrappers may surround surface fire; Fabric exposes no unwrap accessor.
+        var visited = Collections.newSetFromMap(new IdentityHashMap<BlockStateModel, Boolean>());
+        try {
+            var wrapped = WrapperBlockStateModel.class.getDeclaredField("wrapped");
+            wrapped.setAccessible(true);
+            while (visited.add(model)) {
+                if (model instanceof SurfaceFireModel) return true;
+                if (!(model instanceof WrapperBlockStateModel)) return false;
+                model = (BlockStateModel) TestFixtures.require(wrapped.get(model), "Wrapped fire model");
+            }
+            throw new AssertionError("Cycle in fire model wrapper chain");
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Cannot inspect fire model wrapper chain", exception);
+        }
     }
 
     private static float area(List<FireSurface.Patch> patches) {

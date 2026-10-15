@@ -1,9 +1,9 @@
 package naturality.test;
 
-import naturality.NaturalityEffects;
-import naturality.client.insanity.Insanity;
-import naturality.client.insanity.InsanityState;
-import naturality.client.insanity.InsanitySoundSettings;
+import naturality.bootstrap.ContentRegistration.NaturalityEffects;
+import naturality.client.effects.insanity.Insanity;
+import naturality.client.effects.insanity.Insanity.InsanityState;
+import naturality.client.effects.insanity.Insanity.InsanitySoundSettings;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;

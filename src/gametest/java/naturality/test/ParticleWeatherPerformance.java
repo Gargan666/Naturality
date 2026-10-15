@@ -1,9 +1,9 @@
 package naturality.test;
 
 import java.lang.management.ManagementFactory;
-import naturality.NaturalityParticles;
-import naturality.client.particle.WeatherClusterParticle;
-import naturality.client.weather.WeatherParticleContext;
+import naturality.bootstrap.ContentRegistration.NaturalityParticles;
+import naturality.client.systems.weather.overworld.precipitation.ParticleWeather.WeatherClusterParticle;
+import naturality.client.systems.weather.framework.WeatherClient.WeatherParticleContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.particle.SingleQuadParticle;
 import net.minecraft.client.renderer.state.level.QuadParticleRenderState;

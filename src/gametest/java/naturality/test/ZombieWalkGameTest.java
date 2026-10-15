@@ -1,6 +1,6 @@
 package naturality.test;
-import naturality.client.entity.ZombieWalk;
-import naturality.client.entity.ZombieWalkState;
+import naturality.client.entities.zombies.ZombieWalk;
+import naturality.client.entities.zombies.ZombieWalk.ZombieWalkState;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.world.entity.monster.zombie.Zombie;

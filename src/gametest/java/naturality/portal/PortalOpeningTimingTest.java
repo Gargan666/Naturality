@@ -1,4 +1,5 @@
 package naturality.portal;
+import naturality.portals.nether.opening.PortalOpeningManager.PortalOpeningTiming;
 
 public final class PortalOpeningTimingTest {
     public static void run() {

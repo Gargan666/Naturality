@@ -2,9 +2,9 @@ package naturality.test;
 
 import java.util.ArrayList;
 import java.util.List;
-import naturality.client.config.NaturalityCategoryScreen;
-import naturality.client.config.NaturalityConfigScreen;
-import naturality.config.NaturalityConfig;
+import naturality.client.ui.settings.NaturalityCategoryScreen;
+import naturality.client.ui.settings.NaturalityCategoryScreen.NaturalityConfigScreen;
+import naturality.config.live.NaturalityConfig;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.client.gui.components.Button;
@@ -62,16 +62,16 @@ public final class ConfigMenuGameTest implements FabricClientGameTest {
                 if (descendants(client.gui.screen()).stream().noneMatch(e -> e instanceof Button b && b.getMessage().getString().equals(name)))
                     throw new AssertionError("Missing preset: " + name);
             press(client.gui.screen(), "Clientside Only");
-            if (naturality.config.FeatureConfig.get().get(naturality.config.Feature.CONTENT)
-                    || !naturality.config.NaturalityServerConfig.get().vanillaPortalEntry)
+            if (naturality.config.startup.FeatureConfig.get().get(naturality.config.startup.FeatureConfig.Feature.CONTENT)
+                    || !naturality.config.gameplay.GameplaySettings.NaturalityServerConfig.get().vanillaPortalEntry)
                 throw new AssertionError("Preset button must apply ordinary content and portal settings");
             search(client.gui.screen()).setValue("ghast squash");
             press(client.gui.screen(), "Ghast squash and movement:");
-            if (naturality.config.FeatureConfig.get().get(naturality.config.Feature.GHAST_SQUASH))
+            if (naturality.config.startup.FeatureConfig.get().get(naturality.config.startup.FeatureConfig.Feature.GHAST_SQUASH))
                 throw new AssertionError("Individual settings must remain editable after applying a preset");
             search(client.gui.screen()).setValue("");
             press(client.gui.screen(), "No Visual Overhaul");
-            if (!naturality.config.FeatureConfig.get().get(naturality.config.Feature.CONTENT)
+            if (!naturality.config.startup.FeatureConfig.get().get(naturality.config.startup.FeatureConfig.Feature.CONTENT)
                     || NaturalityConfig.get().lighting.enabled)
                 throw new AssertionError("Content-only button must retain content and disable visuals");
             press(client.gui.screen(), "Default");
@@ -173,7 +173,7 @@ public final class ConfigMenuGameTest implements FabricClientGameTest {
         context.takeScreenshot("config-presets");
         context.runOnClient(client -> {
             // Every feature remains reachable once, irrespective of its storage group.
-            for (var feature : naturality.config.Feature.values()) {
+            for (var feature : naturality.config.startup.FeatureConfig.Feature.values()) {
                 var label = net.minecraft.network.chat.Component.translatable("naturality.config.feature." + feature.key()).getString();
                 search(client.gui.screen()).setValue(label);
                 long count = descendants(client.gui.screen()).stream().filter(e -> e instanceof net.minecraft.client.gui.components.AbstractButton b
@@ -203,10 +203,10 @@ public final class ConfigMenuGameTest implements FabricClientGameTest {
             if (!NaturalityConfig.get().liquids.heatWaves) throw new AssertionError("Impact-filtered reset must restore the live option");
             checkSearch(client.gui.screen(), "#Low ghast", 1);
             press(client.gui.screen(), "Ghast squash and movement:");
-            if (naturality.config.FeatureConfig.get().get(naturality.config.Feature.GHAST_SQUASH))
+            if (naturality.config.startup.FeatureConfig.get().get(naturality.config.startup.FeatureConfig.Feature.GHAST_SQUASH))
                 throw new AssertionError("Impact-filtered startup toggle must remain editable");
             press(client.gui.screen(), "Reset");
-            if (!naturality.config.FeatureConfig.get().get(naturality.config.Feature.GHAST_SQUASH))
+            if (!naturality.config.startup.FeatureConfig.get().get(naturality.config.startup.FeatureConfig.Feature.GHAST_SQUASH))
                 throw new AssertionError("Impact-filtered reset must restore the startup option");
             checkSearch(client.gui.screen(), "#Medium", 5);
         });
@@ -214,12 +214,12 @@ public final class ConfigMenuGameTest implements FabricClientGameTest {
         context.takeScreenshot("config-impact-search");
         context.runOnClient(client -> {
             search(client.gui.screen()).setValue("heat waves");
-            var tooltip = naturality.client.config.VisualPerformance.tooltip("naturality.config.liquids.heatWaves").getString();
+            var tooltip = naturality.client.ui.settings.NaturalityCategoryScreen.VisualPerformance.tooltip("naturality.config.liquids.heatWaves").getString();
             if (!tooltip.contains("Estimated FPS impact: High") || !tooltip.contains("not a measured average") || tooltip.contains("naturality.config."))
                 throw new AssertionError("Performance guidance must disclose its estimate and uncertainty");
-            if (naturality.client.config.VisualPerformance.estimate("effects.bubblePops") != null)
+            if (naturality.client.ui.settings.NaturalityCategoryScreen.VisualPerformance.estimate("effects.bubblePops") != null)
                 throw new AssertionError("Unrated settings must not receive invented performance labels");
-            for (var impact : naturality.client.config.VisualPerformance.Impact.values())
+            for (var impact : naturality.client.ui.settings.NaturalityCategoryScreen.VisualPerformance.Impact.values())
                 if (net.minecraft.network.chat.Component.translatable("naturality.config.performance." + impact.name().toLowerCase(java.util.Locale.ROOT))
                     .getString().startsWith("naturality.")) throw new AssertionError("Untranslated impact tier");
             var heat = descendants(client.gui.screen()).stream()
@@ -286,16 +286,16 @@ public final class ConfigMenuGameTest implements FabricClientGameTest {
                 try {
                     effects.worldGlintContours=effects.handGlintContours=effects.previewGlintContours=false;
                     effects.weatherParticles=false;
-                    if (naturality.client.weather.ParticleWeather.enabled(TestFixtures.level(client))) throw new AssertionError("Disabled precipitation must restore vanilla sheets");
+                    if (naturality.client.systems.weather.overworld.precipitation.ParticleWeather.enabled(TestFixtures.level(client))) throw new AssertionError("Disabled precipitation must restore vanilla sheets");
                     var texture=net.minecraft.resources.Identifier.withDefaultNamespace("textures/item/diamond_sword.png");
-                    naturality.client.glint.GlintContours.beginFrame();
-                    if (naturality.client.glint.GlintContours.armor(texture,true)!=null) throw new AssertionError("Disabled world outlines captured geometry");
-                    naturality.client.glint.GlintContours.beginHandFrame();
-                    if (naturality.client.glint.GlintContours.armor(texture,true)!=null) throw new AssertionError("Disabled hand outlines captured geometry");
-                    naturality.client.glint.GlintContours.beginPreview(1);
-                    if (naturality.client.glint.GlintContours.armor(texture,true)!=null) throw new AssertionError("Disabled portrait outlines captured geometry");
+                    naturality.client.rendering.glint.GlintContours.beginFrame();
+                    if (naturality.client.rendering.glint.GlintContours.armor(texture,true)!=null) throw new AssertionError("Disabled world outlines captured geometry");
+                    naturality.client.rendering.glint.GlintContours.beginHandFrame();
+                    if (naturality.client.rendering.glint.GlintContours.armor(texture,true)!=null) throw new AssertionError("Disabled hand outlines captured geometry");
+                    naturality.client.rendering.glint.GlintContours.beginPreview(1);
+                    if (naturality.client.rendering.glint.GlintContours.armor(texture,true)!=null) throw new AssertionError("Disabled portrait outlines captured geometry");
                 } finally {
-                    naturality.client.glint.GlintContours.endFrame();
+                    naturality.client.rendering.glint.GlintContours.endFrame();
                     effects.worldGlintContours=worldContours; effects.handGlintContours=handContours;
                     effects.previewGlintContours=previewContours; effects.weatherParticles=weatherParticles;
                 }
@@ -320,8 +320,8 @@ public final class ConfigMenuGameTest implements FabricClientGameTest {
                             throw new AssertionError("Disabled flames must use vanilla behavior");
                     }
                     NaturalityConfig.get().portalChanges.eyeGlow = false;
-                    naturality.client.portal.end.EndEyeGlow.start(TestFixtures.level(client), net.minecraft.core.BlockPos.ZERO);
-                    if (naturality.client.portal.end.EndEyeGlow.isActive(net.minecraft.core.BlockPos.ZERO))
+                    naturality.client.portals.end.EndPortalBorderState.EndEyeGlow.start(TestFixtures.level(client), net.minecraft.core.BlockPos.ZERO);
+                    if (naturality.client.portals.end.EndPortalBorderState.EndEyeGlow.isActive(net.minecraft.core.BlockPos.ZERO))
                         throw new AssertionError("Disabled eye glow must reject new flashes");
                 } finally {
                     effects.smoke = smoke;

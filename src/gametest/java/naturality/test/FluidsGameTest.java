@@ -1,36 +1,43 @@
 package naturality.test;
 
-import naturality.client.fluid.FluidSimulation;
-import naturality.client.fluid.ProceduralFluids;
+import naturality.client.fluids.shared.ProceduralFluids.FluidSimulation;
+import naturality.client.fluids.shared.ProceduralFluids;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 
 /** Real terrain shader checks, including OIT alpha passes and resource reload. */
 public final class FluidsGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
-        var previousLiquids = naturality.config.NaturalityConfig.get().liquids;
+        var previousLiquids = naturality.config.live.NaturalityConfig.get().liquids;
         boolean[] saved = new boolean[2];
         context.runOnClient(client -> {
-            naturality.config.NaturalityConfig.get().liquids = new naturality.config.NaturalityConfig.Liquids();
+            naturality.config.live.NaturalityConfig.get().liquids = new naturality.config.live.NaturalityConfig.Liquids();
             saved[0] = client.options.improvedTransparency().get();
             saved[1] = client.gui.hud.isHidden();
             if (!saved[1]) client.gui.hud.toggle();
         });
         try (var world = TestWorlds.disposable(context).create()) {
             context.runOnClient(client -> {
-                client.gui.setScreen(new naturality.client.config.NaturalityConfigScreen(new net.minecraft.client.gui.screens.TitleScreen()));
-                press(client.gui.screen(), "Blocks and Effects");
-                press(client.gui.screen(), "Liquids");
+                client.gui.setScreen(new naturality.client.ui.settings.NaturalityCategoryScreen.NaturalityConfigScreen(new net.minecraft.client.gui.screens.TitleScreen()));
+                press(client.gui.screen(), "Visuals");
+                press(client.gui.screen(), "Water and Lava");
+                press(client.gui.screen(), "Water");
                 press(client.gui.screen(), "Water changes:");
+                var settings = naturality.config.live.NaturalityConfig.get().liquids;
+                if (settings.water) throw new AssertionError("Water toggle did not apply");
+                resetControls(client.gui.screen());
+                if (!settings.water) throw new AssertionError("Water reset did not apply");
+                TestFixtures.screen(client).onClose();
+                press(client.gui.screen(), "Lava");
                 press(client.gui.screen(), "Lava changes:");
                 press(client.gui.screen(), "Custom flowing lava:");
-                var settings = naturality.config.NaturalityConfig.get().liquids;
-                if (settings.water || settings.lava || settings.flowingLava) throw new AssertionError("Liquid toggles did not apply");
+                if (settings.lava || settings.flowingLava) throw new AssertionError("Lava toggles did not apply");
                 resetControls(client.gui.screen());
                 if (!settings.water || !settings.lava || !settings.flowingLava) throw new AssertionError("Liquid resets did not apply");
             });
             context.takeScreenshot("fluids-settings");
             context.runOnClient(client -> {
+                TestFixtures.screen(client).onClose();
                 TestFixtures.screen(client).onClose();
                 TestFixtures.screen(client).onClose();
                 TestFixtures.screen(client).onClose();
@@ -97,7 +104,7 @@ public final class FluidsGameTest implements FabricClientGameTest {
             for (int mode = 0; mode < 3; mode++) {
                 final int choice = mode;
                 context.runOnClient(_ -> {
-                    var settings = naturality.config.NaturalityConfig.get().liquids;
+                    var settings = naturality.config.live.NaturalityConfig.get().liquids;
                     settings.water = choice != 0;
                     settings.lava = choice != 1;
                     settings.flowingLava = choice != 2;
@@ -107,7 +114,7 @@ public final class FluidsGameTest implements FabricClientGameTest {
                 context.waitTicks(3);
                 context.takeScreenshot("fluids-disabled-" + mode);
             }
-            context.runOnClient(_ -> naturality.config.NaturalityConfig.get().liquids = new naturality.config.NaturalityConfig.Liquids());
+            context.runOnClient(_ -> naturality.config.live.NaturalityConfig.get().liquids = new naturality.config.live.NaturalityConfig.Liquids());
             server.runCommand("fill -25 98 33 25 99 47 stone");
             server.runCommand("setblock -14 100 40 water");
             server.runCommand("setblock 14 100 40 lava");
@@ -128,20 +135,20 @@ public final class FluidsGameTest implements FabricClientGameTest {
                     var pos = new net.minecraft.core.BlockPos(x, 110, 0);
                     int local = x & 15;
                     int localY = pos.getY() & 15;
-                    if (naturality.client.fluid.FluidGeometry.connectedHeight(TestFixtures.level(client), pos, localY + 0.001F) != localY
-                        || naturality.client.fluid.FluidGeometry.connectedHeight(TestFixtures.level(client), pos, localY + 0.999F) != localY + 1)
+                    if (naturality.client.fluids.shared.FluidGeometry.connectedHeight(TestFixtures.level(client), pos, localY + 0.001F) != localY
+                        || naturality.client.fluids.shared.FluidGeometry.connectedHeight(TestFixtures.level(client), pos, localY + 0.999F) != localY + 1)
                         throw new AssertionError("Exposed vertical liquid edges remain inset");
                     for (boolean axis : new boolean[]{false, true}) {
                         int base = axis ? local : 0;
-                        if (naturality.client.fluid.FluidGeometry.connectedCoordinate(TestFixtures.level(client), pos, base + 0.001F, axis) != base
-                            || naturality.client.fluid.FluidGeometry.connectedCoordinate(TestFixtures.level(client), pos, base + 0.999F, axis) != base + 1)
+                        if (naturality.client.fluids.shared.FluidGeometry.connectedCoordinate(TestFixtures.level(client), pos, base + 0.001F, axis) != base
+                            || naturality.client.fluids.shared.FluidGeometry.connectedCoordinate(TestFixtures.level(client), pos, base + 0.999F, axis) != base + 1)
                             throw new AssertionError("Exposed liquid faces do not meet at the block boundary");
                     }
                 }
                 var solid = new net.minecraft.core.BlockPos(0, 99, 0);
-                if (naturality.client.fluid.FluidGeometry.connectedHeight(TestFixtures.level(client), solid, 3.001F) != 3.001F)
+                if (naturality.client.fluids.shared.FluidGeometry.connectedHeight(TestFixtures.level(client), solid, 3.001F) != 3.001F)
                     throw new AssertionError("Liquid bottom inset against solid geometry was removed");
-                if (naturality.client.fluid.FluidGeometry.connectedCoordinate(TestFixtures.level(client), solid, 0.001F, true) != 0.001F)
+                if (naturality.client.fluids.shared.FluidGeometry.connectedCoordinate(TestFixtures.level(client), solid, 0.001F, true) != 0.001F)
                     throw new AssertionError("Liquid inset against solid geometry was removed");
             });
             for (int x : new int[]{-14, 14}) {
@@ -179,8 +186,8 @@ public final class FluidsGameTest implements FabricClientGameTest {
             context.takeScreenshot("fluids-far-negative-sections");
         } finally {
             context.runOnClient(client -> {
-                naturality.config.NaturalityConfig.get().liquids = previousLiquids;
-                naturality.config.NaturalityConfig.get().save();
+                naturality.config.live.NaturalityConfig.get().liquids = previousLiquids;
+                naturality.config.live.NaturalityConfig.get().save();
                 client.options.improvedTransparency().set(saved[0]);
                 if (client.gui.hud.isHidden() != saved[1]) client.gui.hud.toggle();
             });
@@ -221,13 +228,13 @@ public final class FluidsGameTest implements FabricClientGameTest {
 
     static void checkConfig() {
         var gson = new com.google.gson.Gson();
-        var defaults = gson.fromJson("{}", naturality.config.NaturalityConfig.class).liquids;
+        var defaults = gson.fromJson("{}", naturality.config.live.NaturalityConfig.class).liquids;
         if (!defaults.water || !defaults.lava || !defaults.flowingLava) throw new AssertionError("Missing liquid defaults");
         for (int bits = 0; bits < 8; bits++) {
             defaults.water = (bits & 1) != 0;
             defaults.lava = (bits & 2) != 0;
             defaults.flowingLava = (bits & 4) != 0;
-            var restored = gson.fromJson(gson.toJson(defaults), naturality.config.NaturalityConfig.Liquids.class);
+            var restored = gson.fromJson(gson.toJson(defaults), naturality.config.live.NaturalityConfig.Liquids.class);
             if (restored.includes(0) != defaults.water || restored.includes(1) != defaults.water
                     || restored.includes(2) != defaults.lava || restored.includes(3) != (defaults.lava && defaults.flowingLava))
                 throw new AssertionError("Liquid toggle independence/roundtrip failed");

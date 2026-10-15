@@ -1,6 +1,6 @@
 package naturality.test;
 
-import naturality.snow.SnowGeometry;
+import naturality.blocks.snow.SnowGeometry;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.core.BlockPos;
@@ -12,7 +12,7 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
     /** The shared atlas also contains ordinary LOD tiles, which are not snow overlays. */
     private static boolean isSnowOverlayUv(float u, float v) {
         try {
-            var atlas = naturality.client.snow.SnowTextureAtlas.class;
+            var atlas = naturality.client.blocks.snow.SnowTextureAtlas.class;
             synchronized (atlas) {
                 var current = atlas.getDeclaredField("current"); current.setAccessible(true);
                 var store = current.get(null);
@@ -20,7 +20,8 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                 var field = store.getClass().getDeclaredField("variants"); field.setAccessible(true);
                 var variants = (java.util.Map<?, ?>)field.get(store);
                 for (var entry : variants.entrySet()) {
-                    if (!TestFixtures.require(entry.getKey(), "entry.getKey()").getClass().getName().equals("naturality.client.snow.SnowOverlayModel$CompositeKey")) continue;
+                    if (!TestFixtures.require(entry.getKey(), "entry.getKey()").getClass().getName().equals(
+                            naturality.client.blocks.snow.SurfaceSnowModel.SnowOverlayModel.class.getName() + "$CompositeKey")) continue;
                     var spriteField = TestFixtures.require(entry.getValue(), "entry.getValue()").getClass().getDeclaredField("sprite"); spriteField.setAccessible(true);
                     var sprite = (net.minecraft.client.renderer.texture.TextureAtlasSprite)spriteField.get(entry.getValue());
                     if (u >= sprite.getU0() && u <= sprite.getU1() && v >= sprite.getV0() && v <= sprite.getV1()) return true;
@@ -80,17 +81,17 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                         Blocks.REDSTONE_TORCH.defaultBlockState(),Blocks.REDSTONE_WALL_TORCH.defaultBlockState(),
                         Blocks.CAMPFIRE.defaultBlockState(),Blocks.SOUL_CAMPFIRE.defaultBlockState()}) {
                     level.setBlock(supportOnly,support,18);
-                    check(naturality.snow.SnowSupportOnly.contains(support),"Configured torch or lit campfire is support-only");
+                    check(naturality.blocks.snow.SnowGeometry.SnowSupportOnly.contains(support),"Configured torch or lit campfire is support-only");
                     var patches=SnowGeometry.surfaces(level,supportOnly.above());
                     check(patches.size()==1 && Math.abs(patches.getFirst().y()+1)<1e-5,
                         "Support-only snow covers the ground without a raised cap");
                 }
                 var unlitCampfire=Blocks.CAMPFIRE.defaultBlockState().setValue(CampfireBlock.LIT,false);
-                check(!naturality.snow.SnowSupportOnly.contains(unlitCampfire),"Unlit campfire can receive ordinary snow coating");
+                check(!naturality.blocks.snow.SnowGeometry.SnowSupportOnly.contains(unlitCampfire),"Unlit campfire can receive ordinary snow coating");
                 level.removeBlock(supportOnly,false);
                 var water = new BlockPos(12,100,6);
                 level.setBlock(water,Blocks.WATER.defaultBlockState(),3);
-                check(naturality.snow.NoSnowBlocks.contains(level.getBlockState(water)),
+                check(naturality.blocks.snow.SnowGeometry.NoSnowBlocks.contains(level.getBlockState(water)),
                     "Water is in the configurable nosnow block tag");
                 check(!Blocks.SNOW.defaultBlockState().canSurvive(level,water.above()),
                     "Snow cannot survive above water");
@@ -142,26 +143,26 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                 level.setBlock(mixed.above(),Blocks.SNOW.defaultBlockState(),18);
                 near(SnowGeometry.shape(level,mixed.above(),1).max(Direction.Axis.Y),.125,
                     "Legacy snow above fire uses its vanilla outline");
-                check(naturality.fire.FireGeometry.shape(level,mixed,level.getBlockState(mixed))!=null,
+                check(naturality.blocks.fire.FireGeometry.shape(level,mixed,level.getBlockState(mixed))!=null,
                     "Legacy fire beside snow has a bounded shape");
-                check(naturality.snow.ShapeRecursionGuard.enterFire(),"Fire shape guard starts");
+                check(naturality.api.geometry.ShapeRecursionGuard.enterFire(),"Fire shape guard starts");
                 try {
                     near(SnowGeometry.shape(level,mixed.above(),3).max(Direction.Axis.Y),.375,
                         "Nested snow shape falls back to vanilla layers");
                     near(SnowGeometry.collisionShape(level,mixed.above(),3).max(Direction.Axis.Y),.25,
                         "Nested snow collision falls back to vanilla layers");
-                } finally { naturality.snow.ShapeRecursionGuard.exitFire(); }
-                check(naturality.snow.ShapeRecursionGuard.enterSnow(),"Snow shape guard starts");
+                } finally { naturality.api.geometry.ShapeRecursionGuard.exitFire(); }
+                check(naturality.api.geometry.ShapeRecursionGuard.enterSnow(),"Snow shape guard starts");
                 try {
-                    near(naturality.fire.FireGeometry.shape(level,mixed,level.getBlockState(mixed))
+                    near(naturality.blocks.fire.FireGeometry.shape(level,mixed,level.getBlockState(mixed))
                         .max(Direction.Axis.Y),1.0/16,"Nested fire shape falls back to vanilla height");
                     var sideFire=Blocks.FIRE.defaultBlockState().setValue(FireBlock.NORTH,true);
-                    check(naturality.fire.FireGeometry.shape(level,mixed,sideFire)
-                        .equals(((naturality.mixin.FireShapeAccessor)Blocks.FIRE)
+                    check(naturality.blocks.fire.FireGeometry.shape(level,mixed,sideFire)
+                        .equals(((naturality.blocks.fire.mixins.FireMixins.FireShapeAccessor)Blocks.FIRE)
                             .naturality$vanillaShapes().apply(sideFire)),
                         "Nested wall fire uses its state-specific vanilla shape");
-                } finally { naturality.snow.ShapeRecursionGuard.exitSnow(); }
-                check(!naturality.snow.ShapeRecursionGuard.active(),"Shape guard clears after both queries");
+                } finally { naturality.api.geometry.ShapeRecursionGuard.exitSnow(); }
+                check(!naturality.api.geometry.ShapeRecursionGuard.active(),"Shape guard clears after both queries");
                 level.setBlock(mixed.above(),Blocks.AIR.defaultBlockState(),18);
                 var snowItem=new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.SNOW,2);
                 var fireClick=new net.minecraft.world.item.context.BlockPlaceContext(level,null,
@@ -178,7 +179,7 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                 for(var rod:new Block[]{Blocks.END_ROD,net.minecraft.core.registries.BuiltInRegistries.BLOCK.getValue(net.minecraft.resources.Identifier.withDefaultNamespace("lightning_rod"))})for(var facing:Direction.values()) {
                     level.setBlock(modelSupport,rod.defaultBlockState().setValue(
                         net.minecraft.world.level.block.state.properties.BlockStateProperties.FACING,facing),18);
-                    var boxes=naturality.snow.SnowSupportModels.boxes(level,modelSupport);
+                    var boxes=naturality.blocks.snow.SnowBlockModels.SnowSupportModels.boxes(level,modelSupport);
                     check(!boxes.isEmpty(),"Rod snow uses the upward faces actually present in its model");
                     var surfaces=SnowGeometry.surfaces(level,modelSupport.above());
                     check(!surfaces.isEmpty(),"All rod orientations can hold snow");
@@ -194,17 +195,17 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                     -7.0/16,"Lantern snow rests on metal cap, not handle hitbox");
                 level.removeBlock(modelSupport,false);
                 level.setBlock(modelSupport,Blocks.BREWING_STAND.defaultBlockState(),18);
-                var brewing=naturality.snow.SnowSupportModels.boxes(level,modelSupport);
+                var brewing=naturality.blocks.snow.SnowBlockModels.SnowSupportModels.boxes(level,modelSupport);
                 check(brewing.stream().anyMatch(b->Math.abs(b.maxY-14.0/16)<1e-5
                     && Math.abs(b.maxX-b.minX-2.0/16)<1e-5),
                     "Brewing stand snow follows the model's narrow pole");
                 check(brewing.stream().filter(b->Math.abs(b.maxY-2.0/16)<1e-5).count()==3,
                     "Brewing stand snow follows its three modeled feet rather than the broad selection base");
                 level.setBlock(modelSupport,Blocks.COBBLESTONE_WALL.defaultBlockState(),18);
-                near(naturality.snow.SnowSupportModels.boxes(level,modelSupport).stream().mapToDouble(b->b.maxY).max().orElseThrow(),
+                near(naturality.blocks.snow.SnowBlockModels.SnowSupportModels.boxes(level,modelSupport).stream().mapToDouble(b->b.maxY).max().orElseThrow(),
                     1,"Wall snow uses the one-block model height instead of its tall collision post");
                 level.setBlock(modelSupport,Blocks.CHEST.defaultBlockState(),18);
-                near(naturality.snow.SnowSupportModels.boxes(level,modelSupport).getFirst().maxY,14.0/16,
+                near(naturality.blocks.snow.SnowBlockModels.SnowSupportModels.boxes(level,modelSupport).getFirst().maxY,14.0/16,
                     "Block-entity snow uses the chest lid model height");
                 level.removeBlock(modelSupport,false);
                 var removal = new BlockPos(11,100,7);
@@ -233,19 +234,19 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                 var compact = new BlockPos(11,100,6);
                 level.setBlockAndUpdate(compact,Blocks.SNOW.defaultBlockState().setValue(SnowLayerBlock.LAYERS,3));
                 var feet = new net.minecraft.world.phys.AABB(11.2,100.25,6.2,11.8,102.05,6.8);
-                check(compact.equals(TestFixtures.require(naturality.snow.SnowCompaction.contact(level,feet), "naturality.snow.SnowCompaction.contact(level,feet)")),"Foot contact resolves layered snow");
-                check(naturality.snow.SnowCompaction.contact(level,feet.move(0,1,0))==null,"Airborne feet do not press snow");
-                for(int i=0;i<7;i++)naturality.snow.SnowCompaction.press(level,compact,1);
+                check(compact.equals(TestFixtures.require(naturality.blocks.snow.SnowGeometry.SnowCompaction.contact(level,feet), "naturality.blocks.snow.SnowGeometry.SnowCompaction.contact(level,feet)")),"Foot contact resolves layered snow");
+                check(naturality.blocks.snow.SnowGeometry.SnowCompaction.contact(level,feet.move(0,1,0))==null,"Airborne feet do not press snow");
+                for(int i=0;i<7;i++)naturality.blocks.snow.SnowGeometry.SnowCompaction.press(level,compact,1);
                 check(level.getBlockState(compact).getValue(SnowLayerBlock.LAYERS)==3,"Seven steps do not compact yet");
-                naturality.snow.SnowCompaction.press(level,compact,1);
+                naturality.blocks.snow.SnowGeometry.SnowCompaction.press(level,compact,1);
                 check(level.getBlockState(compact).getValue(SnowLayerBlock.LAYERS)==2,"Eighth step removes exactly one layer");
-                for(int i=0;i<4;i++)naturality.snow.SnowCompaction.press(level,compact,2);
+                for(int i=0;i<4;i++)naturality.blocks.snow.SnowGeometry.SnowCompaction.press(level,compact,2);
                 check(level.getBlockState(compact).getValue(SnowLayerBlock.LAYERS)==1,"Four landings compact one layer");
-                for(int i=0;i<20;i++)naturality.snow.SnowCompaction.press(level,compact,2);
+                for(int i=0;i<20;i++)naturality.blocks.snow.SnowGeometry.SnowCompaction.press(level,compact,2);
                 check(level.getBlockState(compact).getValue(SnowLayerBlock.LAYERS)==1,"Foot traffic never removes the final layer");
                 var slabSnow = new BlockPos(-6,101,0);
                 level.setBlockAndUpdate(slabSnow,Blocks.SNOW.defaultBlockState().setValue(SnowLayerBlock.LAYERS,3));
-                check(slabSnow.equals(TestFixtures.require(naturality.snow.SnowCompaction.contact(level,
+                check(slabSnow.equals(TestFixtures.require(naturality.blocks.snow.SnowGeometry.SnowCompaction.contact(level,
                     new net.minecraft.world.phys.AABB(-5.8,100.75,.2,-5.2,102.55,.8)), "slab snow contact")),"Foot contact follows fitted slab snow geometry");
                 level.setBlockAndUpdate(slabSnow,Blocks.SNOW.defaultBlockState());
                 // Exercise the real item path, including replacement and item consumption.
@@ -445,7 +446,7 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                     for(var patch:patches) {
                         check(patch.ux()>1F/16 && patch.vz()>1F/16,"No one-pixel snow slices survive");
                         if(patch.y()<-.99)continue;
-                        var boxes=naturality.fire.FireGeometry.supportBoxes(level,gatePos);
+                        var boxes=naturality.blocks.fire.FireGeometry.supportBoxes(level,gatePos);
                         check(boxes.stream().anyMatch(b->Math.abs(b.maxY-1-patch.y())<1e-5
                             && b.minX<=patch.x()+patch.ux()/2 && b.maxX>=patch.x()+patch.ux()/2
                             && b.minZ<=patch.z()+patch.vz()/2 && b.maxZ>=patch.z()+patch.vz()/2),
@@ -479,8 +480,8 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                 check(!SnowGeometry.coversFoot(level,slab.below(),
                     new net.minecraft.world.phys.AABB(-5.75,101.5,.25,-5.25,103,.75)),
                     "Snow away from the feet does not override the walking sound");
-                check(naturality.snow.NoSnowSideOverlay.contains(Blocks.SNOW_BLOCK.defaultBlockState())
-                    && !naturality.snow.NoSnowSideOverlay.contains(Blocks.STONE.defaultBlockState()),
+                check(naturality.blocks.snow.SnowGeometry.NoSnowSideOverlay.contains(Blocks.SNOW_BLOCK.defaultBlockState())
+                    && !naturality.blocks.snow.SnowGeometry.NoSnowSideOverlay.contains(Blocks.STONE.defaultBlockState()),
                     "Only snow blocks are excluded from the side overlay by default");
                 level.setBlock(slab,Blocks.SNOW.defaultBlockState().setValue(SnowLayerBlock.LAYERS,8),3);
                 check(!level.getBlockState(slab).isViewBlocking(level,slab,
@@ -624,11 +625,11 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                 check(TestFixtures.level(client).getBlockState(highSnow).is(Blocks.SNOW),"Cross-section snow fixture exists");
                 near(SnowGeometry.shape(TestFixtures.level(client),highSnow,1).min(Direction.Axis.Y),-2,
                     "Cross-section snow extends two blocks below its owner");
-                int recordedDrop=naturality.client.snow.SnowSectionVisibility.below(
+                int recordedDrop=naturality.client.blocks.snow.SurfaceSnowModel.SnowSectionVisibility.below(
                     net.minecraft.core.SectionPos.of(highSnow).asLong());
                 check(recordedDrop>=2,"Compiled owner section records lower snow (drop="+recordedDrop+")");
                 var _=client.getAtlasManager().get(new net.minecraft.client.resources.model.sprite.SpriteId(
-                    naturality.client.AtlasLocations.BLOCKS,
+                    naturality.client.api.rendering.AtlasLocations.BLOCKS,
                     net.minecraft.resources.Identifier.fromNamespaceAndPath("naturality","block/snow_overlay")));
                 int[] fenceOverlays={0,0,0};
                 for(int segment=0;segment<3;segment++) {
@@ -644,7 +645,7 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                     "Only the top fence segment receives snow overlay quads: " + java.util.Arrays.toString(fenceOverlays)
                         + ", top=" + TestFixtures.level(client).getBlockState(new BlockPos(9,102,6))
                         + ", snow=" + TestFixtures.level(client).getBlockState(new BlockPos(9,103,6))
-                        + ", wrapping=" + naturality.config.GameplaySettings.clientSnowWrapping());
+                        + ", wrapping=" + naturality.config.gameplay.GameplaySettings.clientSnowWrapping());
                 for(int plantX=8;plantX<=9;plantX++) {
                 int[] grassOverlays={0,0};
                 for(int half=0;half<2;half++) {
@@ -675,7 +676,7 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                 renderer.tesselateBlock(sink,0,0,0,TestFixtures.level(client),cactusPos,cactus,
                     client.getModelManager().getBlockStateModelSet().get(cactus),0);
                 check(topFaces[0]>0,"Displaced snow must not cull the exposed cactus top");
-                check(naturality.client.weather.WindRendering.tag(cactus)==255,"Snowy cactus remains rigid in wind");
+                check(naturality.client.systems.weather.wind.WindRendering.tag(cactus)==255,"Snowy cactus remains rigid in wind");
             });
             server.runCommand("tp @a 10 101 0 0 0");
             world.getConnection().waitForClientboundPackets();world.getConnection().waitForChunksRender();context.waitTicks(5);
@@ -689,32 +690,32 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                 var fern=Blocks.FERN.defaultBlockState();
                 var model=client.getModelManager().getBlockStateModelSet().get(fern);
                 var _=client.getAtlasManager().get(new net.minecraft.client.resources.model.sprite.SpriteId(
-                    naturality.client.AtlasLocations.BLOCKS,
+                    naturality.client.api.rendering.AtlasLocations.BLOCKS,
                     net.minecraft.resources.Identifier.fromNamespaceAndPath("naturality","block/snow_overlay")));
                 int[] count={0};var starts=new java.util.HashSet<Integer>();
                 var source=client.getAtlasManager().get(new net.minecraft.client.resources.model.sprite.SpriteId(
-                    naturality.client.AtlasLocations.BLOCKS,net.minecraft.resources.Identifier.withDefaultNamespace("block/fern")));
-                var original=((naturality.client.snow.SnowSpritePixels)source.contents()).naturality$image();
+                    naturality.client.api.rendering.AtlasLocations.BLOCKS,net.minecraft.resources.Identifier.withDefaultNamespace("block/fern")));
+                var original=((naturality.client.blocks.snow.SnowTextureAtlas.SnowSpritePixels)source.contents()).naturality$image();
                 int fernTint=TestFixtures.require(client.getBlockColors().getTintSource(fern,0), "client.getBlockColors().getTintSource(fern,0)").colorInWorld(fern,TestFixtures.level(client),new BlockPos(10,100,-3));
                 var basePositions=new java.util.ArrayList<java.util.List<Float>>();
-                boolean oldOverlays=naturality.config.NaturalityConfig.get().effects.snowOverlays;
-                naturality.config.NaturalityConfig.get().effects.snowOverlays=false;
+                boolean oldOverlays=naturality.config.live.NaturalityConfig.get().effects.snowOverlays;
+                naturality.config.live.NaturalityConfig.get().effects.snowOverlays=false;
                 try {
                     model.emitQuads(net.fabricmc.fabric.api.client.renderer.v1.Renderer.get().quadEmitter(q->{
                         var positions=new java.util.ArrayList<Float>();
                         for(int i=0;i<4;i++){positions.add(q.x(i));positions.add(q.y(i));positions.add(q.z(i));}
                         basePositions.add(positions);
                     }),TestFixtures.level(client),new BlockPos(10,100,-3),fern,net.minecraft.util.RandomSource.create(0),_->false);
-                } finally { naturality.config.NaturalityConfig.get().effects.snowOverlays=oldOverlays; }
+                } finally { naturality.config.live.NaturalityConfig.get().effects.snowOverlays=oldOverlays; }
                 var snowPositions=new java.util.ArrayList<java.util.List<Float>>();
                 var sink=net.fabricmc.fabric.api.client.renderer.v1.Renderer.get().quadEmitter(q -> {
                     var positions=new java.util.ArrayList<Float>();
                     for(int i=0;i<4;i++){positions.add(q.x(i));positions.add(q.y(i));positions.add(q.z(i));}
                     snowPositions.add(positions);
-                    var composite=naturality.client.snow.SnowTextureAtlas.findComposite(q.u(0),q.v(0));
+                    var composite=naturality.client.blocks.snow.SnowTextureAtlas.findComposite(q.u(0),q.v(0));
                     if(composite==null)return;
                     count[0]++;
-                    var pixels=((naturality.client.snow.SnowSpritePixels)composite.contents()).naturality$image();
+                    var pixels=((naturality.client.blocks.snow.SnowTextureAtlas.SnowSpritePixels)composite.contents()).naturality$image();
                     check(pixels.getWidth()==original.getWidth() && pixels.getHeight()==original.getHeight(),
                         "Composited snow keeps the foliage texture resolution");
                     for(int y=0;y<original.getHeight();y++)for(int x=0;x<original.getWidth();x++)
@@ -768,7 +769,7 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                 int[] buriedOverlay={0};
                 var buried=new BlockPos(0,100,-2);var buriedState=TestFixtures.level(client).getBlockState(buried);
                 var _=client.getAtlasManager().get(new net.minecraft.client.resources.model.sprite.SpriteId(
-                    naturality.client.AtlasLocations.BLOCKS,
+                    naturality.client.api.rendering.AtlasLocations.BLOCKS,
                     net.minecraft.resources.Identifier.fromNamespaceAndPath("naturality","block/snow_overlay")));
                 client.getModelManager().getBlockStateModelSet().get(buriedState).emitQuads(
                     net.fabricmc.fabric.api.client.renderer.v1.Renderer.get().quadEmitter(q->{
@@ -790,7 +791,7 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                                 if(q.lightFace()==Direction.WEST)cornerEdges[1]=Math.min(cornerEdges[1],q.z(vertex));
                             }
                             if(q.lightFace()==Direction.WEST)for(int vertex=0;vertex<4;vertex++) {
-                                var composite=TestFixtures.require(naturality.client.snow.SnowTextureAtlas.findComposite(q.u(0),q.v(0)), "composite");
+                                var composite=TestFixtures.require(naturality.client.blocks.snow.SnowTextureAtlas.findComposite(q.u(0),q.v(0)), "composite");
                                 check(composite!=null,"Snowy wall uses a composite sprite");
                                 float u=(q.u(vertex)-composite.getU0())/(composite.getU1()-composite.getU0());
                                 overlayURange[0]=Math.min(overlayURange[0],u);
@@ -811,24 +812,24 @@ public final class SnowloggingGameTest implements FabricClientGameTest {
                 int[] animatedFaces={0};
                 client.getModelManager().getBlockStateModelSet().get(animatedState).emitQuads(
                     net.fabricmc.fabric.api.client.renderer.v1.Renderer.get().quadEmitter(q->{
-                        var composite=naturality.client.snow.SnowTextureAtlas.findComposite(q.u(0),q.v(0));
+                        var composite=naturality.client.blocks.snow.SnowTextureAtlas.findComposite(q.u(0),q.v(0));
                         if(composite==null)return;
                         animatedFaces[0]++;
                         check(composite.isAnimated(),"Snow preserves the underlying prismarine animation");
-                        var pixels=((naturality.client.snow.SnowSpritePixels)composite.contents()).naturality$image();
+                        var pixels=((naturality.client.blocks.snow.SnowTextureAtlas.SnowSpritePixels)composite.contents()).naturality$image();
                         check(pixels.getHeight()>composite.contents().height(),"All animated frames are retained in the composite");
                     }),TestFixtures.level(client),animatedPos,animatedState,net.minecraft.util.RandomSource.create(0),_->false);
                 check(animatedFaces[0]>0,"Animated block sides receive composited snow");
                 var glassPos=new BlockPos(-10,100,10);var glassState=TestFixtures.level(client).getBlockState(glassPos);
                 var glassSprite=client.getAtlasManager().get(new net.minecraft.client.resources.model.sprite.SpriteId(
-                    naturality.client.AtlasLocations.BLOCKS,net.minecraft.resources.Identifier.withDefaultNamespace("block/glass")));
-                var glassPixels=((naturality.client.snow.SnowSpritePixels)glassSprite.contents()).naturality$image();
+                    naturality.client.api.rendering.AtlasLocations.BLOCKS,net.minecraft.resources.Identifier.withDefaultNamespace("block/glass")));
+                var glassPixels=((naturality.client.blocks.snow.SnowTextureAtlas.SnowSpritePixels)glassSprite.contents()).naturality$image();
                 int[] paintedGlass={0};
                 client.getModelManager().getBlockStateModelSet().get(glassState).emitQuads(
                     net.fabricmc.fabric.api.client.renderer.v1.Renderer.get().quadEmitter(q->{
-                        var composite=naturality.client.snow.SnowTextureAtlas.findComposite(q.u(0),q.v(0));
+                        var composite=naturality.client.blocks.snow.SnowTextureAtlas.findComposite(q.u(0),q.v(0));
                         if(composite==null)return;
-                        var pixels=((naturality.client.snow.SnowSpritePixels)composite.contents()).naturality$image();
+                        var pixels=((naturality.client.blocks.snow.SnowTextureAtlas.SnowSpritePixels)composite.contents()).naturality$image();
                         for(int y=0;y<glassPixels.getHeight();y++)for(int x=0;x<glassPixels.getWidth();x++)
                             if((glassPixels.getPixel(x,y)>>>24)==0 && (pixels.getPixel(x,y)>>>24)>0)paintedGlass[0]++;
                     }),TestFixtures.level(client),glassPos,glassState,net.minecraft.util.RandomSource.create(0),_->false);

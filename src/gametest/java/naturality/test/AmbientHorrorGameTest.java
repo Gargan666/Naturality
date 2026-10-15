@@ -1,6 +1,6 @@
 package naturality.test;
 
-import naturality.client.horror.AmbientHorror;
+import naturality.client.effects.ambienthorror.AmbientHorror;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.world.phys.Vec3;
@@ -110,7 +110,7 @@ public final class AmbientHorrorGameTest implements FabricClientGameTest {
             server.runCommand("tp @a 0 101 -8 0 0");
             context.waitTicks(8);
             context.takeScreenshot("ambient-horror-white-eyes");
-            for (var variant : naturality.client.horror.EyeVariant.values()) {
+            for (var variant : naturality.client.effects.ambienthorror.HorrorEyesLayer.EyeVariant.values()) {
                 context.runOnClient(_ -> set("eyeVariant", variant));
                 context.waitTicks(2);
                 context.takeScreenshot("ambient-horror-variant-" + variant.name().toLowerCase(java.util.Locale.ROOT));

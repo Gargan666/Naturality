@@ -1,7 +1,7 @@
 package naturality.test;
 
 import java.util.LinkedHashMap;
-import naturality.worldgen.MountainWaterfallFeature;
+import naturality.worldgen.overworld.waterfalls.MountainWaterfallFeature;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.core.BlockPos;

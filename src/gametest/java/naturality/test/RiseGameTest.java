@@ -1,7 +1,9 @@
 package naturality.test;
+import naturality.client.systems.weather.end.rise.RiseWeather.RiseParticle;
+import naturality.client.systems.weather.end.rise.RiseWeather;
+import naturality.systems.weather.end.framework.EndWeatherSystem.EndWeatherCycle;
+import naturality.systems.weather.end.framework.EndWeatherSystem;
 
-import naturality.weather.*;
-import naturality.client.weather.*;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.world.level.Level;
@@ -42,10 +44,10 @@ public final class RiseGameTest implements FabricClientGameTest {
                     check(p.upwardSpeed()>0 && p.widthRatio()<.5,"Particles rise with a velocity-aligned elongated footprint");
                     check(p.colorCoordinate(20)!=p.colorCoordinate(0),"Hue traverses palette columns");
                     check(Math.abs(p.brightnessCoordinate(20)-p.brightnessCoordinate(0))>.0001,"Brightness pulses independently through palette rows");
-                    check(naturality.client.particle.WindParticleControl.immune(p),"Weather motion is independent of ordinary particle wind");
+                    check(naturality.client.systems.weather.wind.WindRendering.WindParticleControl.immune(p),"Weather motion is independent of ordinary particle wind");
                 }catch(ReflectiveOperationException e){throw new AssertionError(e);}
                 var velocity=new Vec3(.05,.5,-.03);
-                var orientation=naturality.client.particle.PortalMoteGeometry.orientation(velocity,new Vec3(2,3,5));
+                var orientation=naturality.client.api.geometry.ParticleGeometry.orientation(velocity,new Vec3(2,3,5));
                 var axis=orientation.transform(new org.joml.Vector3f(1,0,0));
                 check(new Vec3(axis.x,axis.y,axis.z).dot(velocity.normalize())>.999,"Long edge is locked to velocity");
                 var pos=new BlockPos(4,25,4);TestFixtures.level(c).setBlock(pos,Blocks.END_STONE.defaultBlockState(),3);

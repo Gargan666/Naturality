@@ -1,6 +1,6 @@
 package naturality.test;
 
-import naturality.chorus.ChorusFlowers;
+import naturality.blocks.chorus.ChorusFlowers;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.core.BlockPos;

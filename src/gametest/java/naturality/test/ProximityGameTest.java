@@ -1,7 +1,11 @@
 package naturality.test;
+import naturality.client.systems.skyevents.framework.SkyEventsClient;
+import naturality.systems.skyevents.framework.SkyEvents;
+import naturality.systems.skyevents.framework.SkyEvents.SkyEventType;
+import naturality.systems.skyevents.framework.SkyEvents.SkyEventWorldData;
+import naturality.client.sky.overworld.proximity.ProximityRenderer;
+import naturality.sky.overworld.proximity.ProximityCycle;
 
-import naturality.sky.*;
-import naturality.client.sky.*;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 
@@ -95,7 +99,7 @@ public final class ProximityGameTest implements FabricClientGameTest {
             server.runOnServer(s -> {
                 s.overworld().getGameRules().set(net.minecraft.world.level.gamerules.GameRules.ADVANCE_WEATHER, false, s);
                 SkyEvents.proximityCycle(s.overworld()).restore(expected);
-                naturality.weather.EnvironmentWorldData.get(s).write("sky/minecraft:overworld/proximity", expected);
+                naturality.api.worlds.EnvironmentWorldData.get(s).write("sky/minecraft:overworld/proximity", expected);
                 boolean rejected = false;
                 try { s.getCommands().getDispatcher().execute("skyevent minecraft:overworld proximity 8", s.createCommandSourceStack()); }
                 catch (com.mojang.brigadier.exceptions.CommandSyntaxException expectedError) { rejected = true; }

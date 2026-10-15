@@ -3,15 +3,15 @@ package naturality.test;
 import java.lang.management.ManagementFactory;
 import java.lang.reflect.Field;
 import java.util.Random;
-import naturality.client.cloud.CloudLayerRenderer;
-import naturality.client.fluid.FluidSectionScan;
-import naturality.client.lighting.DynamicLighting;
-import naturality.client.snow.SnowRenderRegion;
-import naturality.config.NaturalityConfig;
+import naturality.client.sky.shared.clouds.CloudLayerRenderer;
+import naturality.client.fluids.shared.FallingFluidTail.FluidSectionScan;
+import naturality.client.rendering.lighting.dynamic.DynamicLighting;
+import naturality.client.blocks.snow.SurfaceSnowModel.SnowRenderRegion;
+import naturality.config.live.NaturalityConfig;
 import naturality.test.reference.ReferenceCloudLayerRenderer;
 import naturality.test.reference.ReferenceWindShelter;
-import naturality.weather.WindShapes;
-import naturality.weather.WindShelter;
+import naturality.systems.weather.wind.WindPush.WindShapes;
+import naturality.systems.weather.wind.WindPush.WindShelter;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.client.CloudStatus;
@@ -88,7 +88,7 @@ public final class RenderRedundancyGameTest implements FabricClientGameTest {
         var stalk = new RenderRegionCache().createRegion(level, node);
         var tip = new BlockPos(12,103,12);
         if (((SnowRenderRegion)stalk).naturality$mayHaveSnow()
-                || naturality.client.weather.WindRendering.vertexTag(stalk,tip,Blocks.SUGAR_CANE.defaultBlockState(),.5F,0,.5F) != 43)
+                || naturality.client.systems.weather.wind.WindRendering.vertexTag(stalk,tip,Blocks.SUGAR_CANE.defaultBlockState(),.5F,0,.5F) != 43)
             throw new AssertionError("Snow-free snapshot lost a tall stalk's wind anchor");
         // A neighboring owner two sections up still needs the full support snapshot.
         BlockPos owner = new BlockPos(16, 132, 0), support = owner.below();
@@ -123,16 +123,16 @@ public final class RenderRedundancyGameTest implements FabricClientGameTest {
     }
 
     private static void checkWindUniform() throws ReflectiveOperationException {
-        var type = naturality.client.weather.WindRendering.class;
+        var type = naturality.client.systems.weather.wind.WindRendering.class;
         var prepare = type.getDeclaredMethod("prepareFrame");
         prepare.setAccessible(true);
         prepare.invoke(null);
         Object first = field(type, "uniform").get(null);
-        naturality.client.weather.WindRendering.beginFrame();
+        naturality.client.systems.weather.wind.WindRendering.beginFrame();
         prepare.invoke(null);
         if (field(type, "uniform").get(null) != first)
             throw new AssertionError("Unchanged wind data allocated another GPU buffer");
-        naturality.client.weather.WindRendering.close();
+        naturality.client.systems.weather.wind.WindRendering.close();
         prepare.invoke(null);
         if (field(type, "uniform").get(null) == first)
             throw new AssertionError("Closed wind buffer was reused after reload");

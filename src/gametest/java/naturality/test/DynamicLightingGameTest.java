@@ -1,10 +1,10 @@
 package naturality.test;
 
-import naturality.client.lighting.DynamicLighting;
-import naturality.client.lighting.FractionalLightField;
-import naturality.client.lighting.LightSourcePlacement;
-import naturality.client.config.NaturalityCategoryScreen;
-import naturality.config.NaturalityConfig;
+import naturality.client.rendering.lighting.dynamic.DynamicLighting;
+import naturality.client.rendering.lighting.dynamic.FractionalLightField;
+import naturality.client.rendering.lighting.dynamic.FractionalLightField.LightSourcePlacement;
+import naturality.client.ui.settings.NaturalityCategoryScreen;
+import naturality.config.live.NaturalityConfig;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.core.BlockPos;

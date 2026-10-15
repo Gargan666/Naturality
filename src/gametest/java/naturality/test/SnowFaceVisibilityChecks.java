@@ -1,7 +1,7 @@
 package naturality.test;
 
 import java.util.HashMap;
-import naturality.client.snow.SnowFaceVisibility;
+import naturality.client.blocks.snow.SurfaceSnowModel.SnowFaceVisibility;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -60,36 +60,36 @@ final class SnowFaceVisibilityChecks {
         // Sodium reuses a snapshot instance. A new build must see changed supports,
         // while repeated queries inside one build should share their exact volume.
         blocks.clear();blocks.put(owner.below(),slab);
-        var before=naturality.snow.SnowGeometry.shape(snapshot,owner,3);
-        naturality.snow.SnowGeometryCache.begin();
+        var before=naturality.blocks.snow.SnowGeometry.shape(snapshot,owner,3);
+        naturality.blocks.snow.SnowGeometry.SnowGeometryCache.begin();
         try {
-            var first=naturality.snow.SnowGeometry.shape(snapshot,owner,3);
-            check(first==naturality.snow.SnowGeometry.shape(snapshot,owner,3),"Mesh reuses fitted shape");
-            check(naturality.snow.SnowGeometry.collisionShape(snapshot,owner,1).isEmpty(),"Single snow layer has no collision");
-            check(naturality.snow.SnowGeometry.collisionShape(snapshot,owner,3).bounds().maxY<first.bounds().maxY,
+            var first=naturality.blocks.snow.SnowGeometry.shape(snapshot,owner,3);
+            check(first==naturality.blocks.snow.SnowGeometry.shape(snapshot,owner,3),"Mesh reuses fitted shape");
+            check(naturality.blocks.snow.SnowGeometry.collisionShape(snapshot,owner,1).isEmpty(),"Single snow layer has no collision");
+            check(naturality.blocks.snow.SnowGeometry.collisionShape(snapshot,owner,3).bounds().maxY<first.bounds().maxY,
                 "Collision and outline caches remain distinct");
-            naturality.snow.SnowGeometryCache.begin();
-            naturality.snow.SnowGeometryCache.end();
-            check(first==naturality.snow.SnowGeometry.shape(snapshot,owner,3),"Nested model scope keeps outer cache");
-        } finally { naturality.snow.SnowGeometryCache.end(); }
+            naturality.blocks.snow.SnowGeometry.SnowGeometryCache.begin();
+            naturality.blocks.snow.SnowGeometry.SnowGeometryCache.end();
+            check(first==naturality.blocks.snow.SnowGeometry.shape(snapshot,owner,3),"Nested model scope keeps outer cache");
+        } finally { naturality.blocks.snow.SnowGeometry.SnowGeometryCache.end(); }
         blocks.put(owner.below(),Blocks.STONE.defaultBlockState());
-        naturality.snow.SnowGeometryCache.begin();
+        naturality.blocks.snow.SnowGeometry.SnowGeometryCache.begin();
         try {
-            var after=naturality.snow.SnowGeometry.shape(snapshot,owner,3);
+            var after=naturality.blocks.snow.SnowGeometry.shape(snapshot,owner,3);
             check(before.min(Direction.Axis.Y)==-.5 && after.min(Direction.Axis.Y)==0,
                 "Reused snapshot invalidates position cache between builds");
-        } finally { naturality.snow.SnowGeometryCache.end(); }
+        } finally { naturality.blocks.snow.SnowGeometry.SnowGeometryCache.end(); }
         blocks.put(owner.below(),slab);
-        check(naturality.snow.SnowGeometry.shape(snapshot,owner,3).min(Direction.Axis.Y)==-.5,
+        check(naturality.blocks.snow.SnowGeometry.shape(snapshot,owner,3).min(Direction.Axis.Y)==-.5,
             "Live world queries never retain position cache");
-        naturality.snow.SnowGeometryCache.begin();
+        naturality.blocks.snow.SnowGeometry.SnowGeometryCache.begin();
         try {
-            naturality.snow.ShapeRecursionGuard.enterFire();
-            try { check(naturality.snow.SnowGeometry.shape(snapshot,owner,3).min(Direction.Axis.Y)==0,
+            naturality.api.geometry.ShapeRecursionGuard.enterFire();
+            try { check(naturality.blocks.snow.SnowGeometry.shape(snapshot,owner,3).min(Direction.Axis.Y)==0,
                 "Fire recursion fallback remains vanilla"); }
-            finally { naturality.snow.ShapeRecursionGuard.exitFire(); }
-            check(naturality.snow.SnowGeometry.shape(snapshot,owner,3).min(Direction.Axis.Y)==-.5,
+            finally { naturality.api.geometry.ShapeRecursionGuard.exitFire(); }
+            check(naturality.blocks.snow.SnowGeometry.shape(snapshot,owner,3).min(Direction.Axis.Y)==-.5,
                 "Recursion fallback does not poison fitted cache");
-        } finally { naturality.snow.SnowGeometryCache.end(); }
+        } finally { naturality.blocks.snow.SnowGeometry.SnowGeometryCache.end(); }
     }
 }

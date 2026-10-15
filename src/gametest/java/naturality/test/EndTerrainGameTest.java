@@ -4,7 +4,7 @@ import java.awt.image.BufferedImage;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import javax.imageio.ImageIO;
-import naturality.worldgen.EndTerrainDensity;
+import naturality.worldgen.end.terrain.EndTerrainDensity;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.core.BlockPos;
@@ -226,15 +226,15 @@ public final class EndTerrainGameTest implements FabricClientGameTest {
                         var actual=chunk.getBlockState(new BlockPos(x,y,z));
                         var predicted=column.getBlock(y);
                         if(!actual.isAir() && !actual.is(net.minecraft.world.level.block.Blocks.END_STONE)
-                            && !actual.is(naturality.NaturalityBlocks.SMOOTH_ENDSTONE)) continue;
+                            && !actual.is(naturality.bootstrap.ContentRegistration.NaturalityBlocks.SMOOTH_ENDSTONE)) continue;
                         check(actual.isAir()==predicted.isAir(),"Generated blocks and base column disagree at "+x+","+y+","+z);
                     }
                 }
             });
             int[] oldDistance=new int[1];
             boolean[] oldGui=new boolean[1];
-            boolean oldFog=naturality.config.NaturalityConfig.get().fog.enabled;
-            naturality.config.NaturalityConfig.get().fog.enabled=false;
+            boolean oldFog=naturality.config.live.NaturalityConfig.get().fog.enabled;
+            naturality.config.live.NaturalityConfig.get().fog.enabled=false;
             context.runOnClient(client -> {
                 oldDistance[0]=client.options.renderDistance().get(); oldGui[0]=client.gui.hud.isHidden();
                 if(!oldGui[0])client.gui.hud.toggle(); client.options.renderDistance().set(24); client.options.broadcastOptions();
@@ -266,7 +266,7 @@ public final class EndTerrainGameTest implements FabricClientGameTest {
                 context.waitTicks(180);
                 context.takeScreenshot("end-terrain-undersides");
             } finally {
-                naturality.config.NaturalityConfig.get().fog.enabled=oldFog;
+                naturality.config.live.NaturalityConfig.get().fog.enabled=oldFog;
                 context.runOnClient(client -> {
                     if(client.gui.hud.isHidden()!=oldGui[0])client.gui.hud.toggle(); client.options.renderDistance().set(oldDistance[0]);client.options.broadcastOptions();
                 });

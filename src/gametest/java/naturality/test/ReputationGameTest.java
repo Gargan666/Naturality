@@ -1,7 +1,11 @@
 package naturality.test;
+import naturality.systems.villagerwork.sleep.VillagerSleep;
+import naturality.systems.reputation.Reputation.GossipReactions;
+import naturality.systems.reputation.Reputation;
+import naturality.systems.reputation.Reputation.ReputationData;
+import naturality.systems.reputation.Reputation.VillageChest;
 
 import java.util.UUID;
-import naturality.villager.*;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.core.*;

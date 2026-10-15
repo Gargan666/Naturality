@@ -1,8 +1,8 @@
 package naturality.test;
 
-import naturality.config.NaturalityConfig;
-import naturality.client.sky.SunBeams;
-import naturality.client.sky.SunLensFlare;
+import naturality.config.live.NaturalityConfig;
+import naturality.client.sky.overworld.sunbeams.SunBeams;
+import naturality.client.sky.overworld.sunbeams.SunBeams.SunLensFlare;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 
@@ -11,10 +11,10 @@ public final class SunsetGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
         boolean[] previous = new boolean[2];
         context.runOnClient(client -> {
-            var grayTop = naturality.client.sky.SkyGradientRenderer.zenithTint(new org.joml.Vector3f(.5F));
+            var grayTop = naturality.client.sky.shared.atmosphere.SkyGradientRenderer.zenithTint(new org.joml.Vector3f(.5F));
             if (Math.abs(grayTop.x - grayTop.z) > .0001F || grayTop.x <= .5F || grayTop.x > .57F)
                 throw new AssertionError("Neutral biome zenith must remain gray and only slightly lighter");
-            var blueTop = naturality.client.sky.SkyGradientRenderer.zenithTint(new org.joml.Vector3f(.48F, .65F, 1));
+            var blueTop = naturality.client.sky.shared.atmosphere.SkyGradientRenderer.zenithTint(new org.joml.Vector3f(.48F, .65F, 1));
             if (!(blueTop.z > blueTop.y && blueTop.y > blueTop.x && blueTop.x < .48F))
                 throw new AssertionError("Blue biome sky must retain its hue with a richer zenith");
             float previousSpan = 0;
@@ -22,7 +22,7 @@ public final class SunsetGameTest implements FabricClientGameTest {
                 var fog = new net.minecraft.client.renderer.fog.FogData();
                 fog.renderDistanceEnd = chunks * 16;
                 fog.renderDistanceStart = fog.renderDistanceEnd * .9F;
-                naturality.client.fog.DistanceFogSpan.apply(fog, chunks);
+                naturality.client.rendering.fog.EndFogComposite.DistanceFogSpan.apply(fog, chunks);
                 float span = fog.renderDistanceEnd - fog.renderDistanceStart;
                 if (span <= previousSpan || fog.renderDistanceEnd != chunks * 16 || fog.renderDistanceStart <= 0)
                     throw new AssertionError("Fog must widen with distance without moving the opaque boundary");
@@ -35,17 +35,17 @@ public final class SunsetGameTest implements FabricClientGameTest {
             var eye = new net.minecraft.world.phys.Vec3(6, 90, 2);
             var end = eye.add(0, 200, 0);
             var occupied = new net.minecraft.client.renderer.CloudRenderer.TextureData(new long[]{1}, 1, 1);
-            naturality.client.cloud.CloudSunOcclusion.beginFrame();
-            naturality.client.cloud.CloudSunOcclusion.add(occupied, cloud, 100, 32, 0, 0);
-            if (SunLensFlare.visibilityStrength(naturality.client.cloud.CloudSunOcclusion.transmission(eye, end)) != 0)
+            naturality.client.sky.shared.clouds.CloudLayerRenderer.CloudSunOcclusion.beginFrame();
+            naturality.client.sky.shared.clouds.CloudLayerRenderer.CloudSunOcclusion.add(occupied, cloud, 100, 32, 0, 0);
+            if (SunLensFlare.visibilityStrength(naturality.client.sky.shared.clouds.CloudLayerRenderer.CloudSunOcclusion.transmission(eye, end)) != 0)
                 throw new AssertionError("Opaque cloud must suppress flare");
-            naturality.client.cloud.CloudSunOcclusion.beginFrame();
+            naturality.client.sky.shared.clouds.CloudLayerRenderer.CloudSunOcclusion.beginFrame();
             cloud.opacityPercent = 10;
-            naturality.client.cloud.CloudSunOcclusion.add(occupied, cloud, 100, 32, 0, 0);
-            if (SunLensFlare.visibilityStrength(naturality.client.cloud.CloudSunOcclusion.transmission(eye, end)) != 1)
+            naturality.client.sky.shared.clouds.CloudLayerRenderer.CloudSunOcclusion.add(occupied, cloud, 100, 32, 0, 0);
+            if (SunLensFlare.visibilityStrength(naturality.client.sky.shared.clouds.CloudLayerRenderer.CloudSunOcclusion.transmission(eye, end)) != 1)
                 throw new AssertionError("Faint cloud must preserve flare");
-            naturality.client.cloud.CloudSunOcclusion.beginFrame();
-            if (naturality.client.cloud.CloudSunOcclusion.transmission(eye, end) != 1)
+            naturality.client.sky.shared.clouds.CloudLayerRenderer.CloudSunOcclusion.beginFrame();
+            if (naturality.client.sky.shared.clouds.CloudLayerRenderer.CloudSunOcclusion.transmission(eye, end) != 1)
                 throw new AssertionError("Cloud data must not survive frame reset");
             if (SunLensFlare.visibilityStrength(0.28F) != 0
                     || SunLensFlare.visibilityStrength(0.5F) <= 0

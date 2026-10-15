@@ -1,7 +1,7 @@
 package naturality.test;
 
-import naturality.config.NaturalityServerConfig;
-import naturality.snow.SnowGeometry;
+import naturality.config.gameplay.GameplaySettings.NaturalityServerConfig;
+import naturality.blocks.snow.SnowGeometry;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.core.BlockPos;

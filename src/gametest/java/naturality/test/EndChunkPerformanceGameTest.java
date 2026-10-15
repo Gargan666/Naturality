@@ -8,7 +8,7 @@ import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import jdk.jfr.Recording;
 import jdk.jfr.consumer.RecordingFile;
-import naturality.worldgen.EndTerrainDensity;
+import naturality.worldgen.end.terrain.EndTerrainDensity;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.world.level.Level;

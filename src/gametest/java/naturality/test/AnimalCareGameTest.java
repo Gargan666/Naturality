@@ -1,6 +1,6 @@
 package naturality.test;
 
-import naturality.villager.AnimalCareWork;
+import naturality.systems.villagerwork.professions.AnimalCareWork;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.core.BlockPos;

@@ -1,7 +1,7 @@
 package naturality.test;
 
-import naturality.client.particle.WaterParticleTint;
-import naturality.config.NaturalityConfig;
+import naturality.client.fluids.water.WaterShaders.WaterParticleTint;
+import naturality.config.live.NaturalityConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.particle.SingleQuadParticle;
 import net.minecraft.client.renderer.BiomeColors;
@@ -42,14 +42,14 @@ final class WaterParticleTintChecks {
                 if(capture.waterLayer()) throw new AssertionError("Disabled water must use vanilla layer");
             } finally {NaturalityConfig.get().liquids.water=true;}
         }
-        for(var type:new net.minecraft.core.particles.SimpleParticleType[]{ParticleTypes.DRIPPING_LAVA,ParticleTypes.DRIPPING_HONEY,ParticleTypes.SMOKE,naturality.NaturalityParticles.WATERFALL,naturality.NaturalityParticles.WATERFALL_BIG}) {
+        for(var type:new net.minecraft.core.particles.SimpleParticleType[]{ParticleTypes.DRIPPING_LAVA,ParticleTypes.DRIPPING_HONEY,ParticleTypes.SMOKE,naturality.bootstrap.ContentRegistration.NaturalityParticles.WATERFALL,naturality.bootstrap.ContentRegistration.NaturalityParticles.WATERFALL_BIG}) {
             var p=TestFixtures.require(client.particleEngine.createParticle(type,0,101,0,0,0,0), "(WaterParticleTint.Access)p");
             if(((WaterParticleTint.Access)p).naturality$isWaterParticle()) throw new AssertionError("Nonwater particle was tinted");
         }
     }
     private static final class Capture extends QuadParticleRenderState {
         int color; SingleQuadParticle.Layer layer;
-        boolean waterLayer(){return layer==WaterParticleTint.SOLID || layer==WaterParticleTint.TRANSPARENT || layer==naturality.client.particle.RainParticleTint.TRANSPARENT;}
+        boolean waterLayer(){return layer==WaterParticleTint.SOLID || layer==WaterParticleTint.TRANSPARENT || layer==naturality.client.systems.weather.overworld.rain.RainParticleTint.TRANSPARENT;}
         @Override public void add(SingleQuadParticle.Layer layer,float x,float y,float z,float rx,float ry,float rz,float rw,
                                   float scale,float u0,float u1,float v0,float v1,int color,int light) {
             this.layer=layer;this.color=color;

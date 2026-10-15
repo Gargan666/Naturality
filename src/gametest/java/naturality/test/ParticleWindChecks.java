@@ -1,9 +1,9 @@
 package naturality.test;
 
-import naturality.client.particle.WindParticleControl;
-import naturality.weather.WeatherPayload;
-import naturality.weather.WeatherState;
-import naturality.weather.WeatherSystem;
+import naturality.client.systems.weather.wind.WindRendering.WindParticleControl;
+import naturality.systems.weather.framework.WeatherSystem.WeatherPayload;
+import naturality.systems.weather.framework.WeatherSystem.WeatherState;
+import naturality.systems.weather.framework.WeatherSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Camera;
 import net.minecraft.client.particle.Particle;

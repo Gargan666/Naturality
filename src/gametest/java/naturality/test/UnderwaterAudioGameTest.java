@@ -1,8 +1,8 @@
 package naturality.test;
 
 import com.mojang.blaze3d.audio.Channel;
-import naturality.client.sound.UnderwaterAudio;
-import naturality.client.sound.WeatherAudioFilter;
+import naturality.client.audio.underwater.UnderwaterAudio;
+import naturality.client.api.audio.WeatherAudioFilter;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import org.lwjgl.openal.AL10;
 import org.lwjgl.openal.ALC;

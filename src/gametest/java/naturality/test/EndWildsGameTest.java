@@ -1,7 +1,7 @@
 package naturality.test;
 
-import naturality.NaturalityBlocks;
-import naturality.worldgen.EndWilds;
+import naturality.bootstrap.ContentRegistration.NaturalityBlocks;
+import naturality.worldgen.end.endwilds.EndWilds;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.core.BlockPos;
@@ -28,15 +28,15 @@ public final class EndWildsGameTest implements FabricClientGameTest {
                 // A Lirestone conversion fringe can overlap the Wilds surface mask.
                 // Both regular and smooth deposits must win over Heath in that overlap.
                 int collisions=0;
-                var heathMask=new naturality.worldgen.LyrenHeathPatches(1);
+                var heathMask=new naturality.worldgen.end.endwilds.EndWilds.LyrenHeathPatches(1);
                 var crags=end.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.BIOME)
-                    .getOrThrow(naturality.worldgen.LirestoneCrags.BIOME);
+                    .getOrThrow(naturality.worldgen.end.lirestonecrags.LirestoneCrags.BIOME);
                 var fixture=new net.minecraft.world.level.chunk.ProtoChunk(new net.minecraft.world.level.ChunkPos(0,0),
                     net.minecraft.world.level.chunk.UpgradeData.EMPTY,end,
                     net.minecraft.world.level.chunk.PalettedContainerFactory.create(end.registryAccess()),null);
                 for(int x=0;x<16;x++)for(int z=0;z<16;z++)for(int y=80;y<=100;y++)
                     fixture.setBlockState(new BlockPos(x,y,z),(x%2==0?Blocks.END_STONE:NaturalityBlocks.SMOOTH_ENDSTONE).defaultBlockState());
-                naturality.worldgen.EndStoneLayers.apply(fixture,1,null,(_,_,_)->crags,
+                naturality.worldgen.end.materials.EndStoneLayers.apply(fixture,1,null,(_,_,_)->crags,
                     new net.minecraft.world.level.biome.BiomeManager((_,_,_)->biome,0L));
                 for(int x=0;x<16;x++)for(int z=0;z<16;z++) {
                     if(heathMask.contains(x,z))collisions++;
@@ -56,7 +56,7 @@ public final class EndWildsGameTest implements FabricClientGameTest {
                         if(run==5)longRuns++;
                         for(int dz=-64;dz<=64;dz+=32)for(int dx=-64;dx<=64;dx+=32)
                             check(!resolver.getNoiseBiome(QuartPos.fromBlock(x+dx),0,QuartPos.fromBlock(z+dz))
-                                .is(naturality.worldgen.LirestoneCrags.BIOME),"End Wilds is too close to Lirestone Crags");
+                                .is(naturality.worldgen.end.lirestonecrags.LirestoneCrags.BIOME),"End Wilds is too close to Lirestone Crags");
                     }
                 }
                 check(wildSamples>1000 && longRuns>100,"Wilds does not form broad regions");
@@ -95,7 +95,7 @@ public final class EndWildsGameTest implements FabricClientGameTest {
                         if(!end.getBiome(p).is(EndWilds.BIOME))continue;
                         check(!state.is(Blocks.CHORUS_PLANT) && !state.is(Blocks.CHORUS_FLOWER)
                             && !state.is(NaturalityBlocks.CHORUS_SPROUT),"Chorus generated in End Wilds");
-                        boolean rock=naturality.worldgen.LirestoneBoulderFeature.isEndStone(state);
+                        boolean rock=naturality.worldgen.end.lirestonecrags.LirestoneCrags.LirestoneBoulderFeature.isEndStone(state);
                         if(rock && chunk.getBlockState(p.above()).isAir()) {
                             bareSurface++;bare=true;
                             if(generator.getBaseColumn(p.getX(),p.getZ(),end,random).getBlock(y).isAir()) {
@@ -130,7 +130,7 @@ public final class EndWildsGameTest implements FabricClientGameTest {
                 var floor=region.atY(230);
                 for(int dz=-24;dz<=24;dz++)for(int dx=-24;dx<=24;dx++)for(int y=228;y<=244;y++)
                     end.setBlock(floor.offset(dx,y-230,dz),(y<=230?Blocks.END_STONE:Blocks.AIR).defaultBlockState(),2);
-                var boulders=new naturality.worldgen.WildsBouldersFeature();
+                var boulders=new naturality.worldgen.end.endwilds.EndWilds.WildsBouldersFeature();
                 boolean placed=false;
                 for(int seed=0;seed<32 && !placed;seed++)placed=boulders.place(end,generator,
                     RandomSource.create(seed*0x9e3779b97f4a7c15L),floor.above());
@@ -140,13 +140,13 @@ public final class EndWildsGameTest implements FabricClientGameTest {
                     var state=end.getBlockState(p);
                     if(state.is(Blocks.END_STONE))endRock++;
                     if(state.is(NaturalityBlocks.LIRESTONE))lireRock++;
-                    if(naturality.worldgen.LirestoneBoulderFeature.isEndStone(state) && p.getY()>=233)tall++;
+                    if(naturality.worldgen.end.lirestonecrags.LirestoneCrags.LirestoneBoulderFeature.isEndStone(state) && p.getY()>=233)tall++;
                 }
                 check(endRock+lireRock>10 && endRock+lireRock>150 && tall>10,
                     "Boulder group lacks a larger dominant rock");
                 var remaining=new java.util.HashSet<BlockPos>();
                 for(BlockPos p:BlockPos.betweenClosed(floor.offset(-24,1,-24),floor.offset(24,14,24)))
-                    if(naturality.worldgen.LirestoneBoulderFeature.isEndStone(end.getBlockState(p)))remaining.add(p.immutable());
+                    if(naturality.worldgen.end.lirestonecrags.LirestoneCrags.LirestoneBoulderFeature.isEndStone(end.getBlockState(p)))remaining.add(p.immutable());
                 while(!remaining.isEmpty()) {
                     var queue=new java.util.ArrayDeque<BlockPos>();
                     var first=remaining.iterator().next();remaining.remove(first);queue.add(first);
@@ -167,13 +167,13 @@ public final class EndWildsGameTest implements FabricClientGameTest {
                 System.out.println("Wilds boulder group: End Stone="+endRock+", Lirestone="+lireRock+", tall="+tall);
                 System.out.println("End Wilds: heath="+heath+", stone="+stone+", region="+region);view[0]=region;
             });
-            boolean fog=naturality.config.NaturalityConfig.get().fog.enabled;
-            naturality.config.NaturalityConfig.get().fog.enabled=false;
+            boolean fog=naturality.config.live.NaturalityConfig.get().fog.enabled;
+            naturality.config.live.NaturalityConfig.get().fog.enabled=false;
             try {
                 var p=view[0];server.runCommand("gamemode spectator @a");
                 server.runCommand("execute in minecraft:the_end run tp @a "+(p.getX()+60)+" "+(p.getY()+45)+" "+(p.getZ()+60)+" 135 25");
                 context.waitTicks(200);context.takeScreenshot("end-wilds-heath");
-            } finally {naturality.config.NaturalityConfig.get().fog.enabled=fog;}
+            } finally {naturality.config.live.NaturalityConfig.get().fog.enabled=fog;}
         }
     }
 }
