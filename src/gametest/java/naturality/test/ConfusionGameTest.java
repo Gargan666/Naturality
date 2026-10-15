@@ -86,14 +86,14 @@ public final class ConfusionGameTest implements FabricClientGameTest {
             context.waitTicks(70);
             context.runOnClient(c->{
                 check(ConfusionSlots.visible(),"Active synced effect");
-                check(c.player.getInventory().getItem(0).is(Items.DIAMOND) || c.player.getInventory().getItem(0).is(Items.SHIELD) || c.player.getInventory().getItem(0).isEmpty(),"Only offhand exchanges affect item storage");
-                check(ConfusionSlots.visual(c.player.getInventory().getSelectedSlot())==0,"Fixed selection cell");
-                c.gui.setScreen(new InventoryScreen(c.player));
+                check(TestFixtures.player(c).getInventory().getItem(0).is(Items.DIAMOND) || TestFixtures.player(c).getInventory().getItem(0).is(Items.SHIELD) || TestFixtures.player(c).getInventory().getItem(0).isEmpty(),"Only offhand exchanges affect item storage");
+                check(ConfusionSlots.visual(TestFixtures.player(c).getInventory().getSelectedSlot())==0,"Fixed selection cell");
+                c.gui.setScreen(new InventoryScreen(TestFixtures.player(c)));
             });
             context.waitTicks(5); context.takeScreenshot("confusion-inventory");
             context.runOnClient(c->{
-                ConfusionSlots.layout(c.player.inventoryMenu,1);
-                for(var slot:c.player.inventoryMenu.slots) if(slot.container==c.player.getInventory() && slot.getContainerSlot()<36) {
+                ConfusionSlots.layout(TestFixtures.player(c).inventoryMenu,1);
+                for(var slot:TestFixtures.player(c).inventoryMenu.slots) if(slot.container==TestFixtures.player(c).getInventory() && slot.getContainerSlot()<36) {
                     int i=slot.getContainerSlot(), cell=i<9?ConfusionSlots.hotbar.cell(i):ConfusionSlots.inventory.cell(i-9);
                     check(slot.x==(8+cell%9*18),"Mapped slot position including offhand anchor");
                     try {
@@ -105,25 +105,25 @@ public final class ConfusionGameTest implements FabricClientGameTest {
                     } catch(ReflectiveOperationException e) { throw new AssertionError(e); }
                 }
                 c.gui.setScreen(null);
-                int expectedSelection=ConfusionSlots.selectable(4,c.player.getInventory().getSelectedSlot());
+                int expectedSelection=ConfusionSlots.selectable(4,TestFixtures.player(c).getInventory().getSelectedSlot());
                 net.minecraft.client.KeyMapping.click(c.options.keyHotbarSlots[4].getDefaultKey());
                 try {
                     var keys=net.minecraft.client.Minecraft.class.getDeclaredMethod("handleKeybinds"); keys.setAccessible(true); keys.invoke(c);
                 } catch(ReflectiveOperationException e) { throw new AssertionError(e); }
-                check(c.player.getInventory().getSelectedSlot()==expectedSelection,"Number key selects visual cell");
+                check(TestFixtures.player(c).getInventory().getSelectedSlot()==expectedSelection,"Number key selects visual cell");
                 int expectedCell=(ConfusionSlots.visual(expectedSelection)+1)%9;
                 if(ConfusionSlots.storage(expectedCell)==9) expectedCell=(expectedCell+1)%10;
                 c.mouseHandler.onScroll(c.getWindow().handle(),0,-1);
-                check(ConfusionSlots.visual(c.player.getInventory().getSelectedSlot())==expectedCell,"Scroll follows selectable visual order");
+                check(ConfusionSlots.visual(TestFixtures.player(c).getInventory().getSelectedSlot())==expectedCell,"Scroll follows selectable visual order");
             });
             context.takeScreenshot("confusion-hotbar");
 
             server.runCommand("effect clear @a naturality:confusion"); context.waitTicks(35);
             context.runOnClient(c->{
                 check(!ConfusionSlots.visible(),"Return finished");
-                check(c.player.getOffhandItem().is(Items.SHIELD),"Original offhand restored by server");
+                check(TestFixtures.player(c).getOffhandItem().is(Items.SHIELD),"Original offhand restored by server");
                 for(int i=0;i<9;i++) check(ConfusionSlots.visual(i)==i,"Identity restored");
-                for(var slot:c.player.inventoryMenu.slots) if(slot.container==c.player.getInventory() && slot.getContainerSlot()<36)
+                for(var slot:TestFixtures.player(c).inventoryMenu.slots) if(slot.container==TestFixtures.player(c).getInventory() && slot.getContainerSlot()<36)
                     check(slot.x==8+slot.getContainerSlot()%9*18,"Original coordinates restored");
             });
             context.takeScreenshot("confusion-restored");

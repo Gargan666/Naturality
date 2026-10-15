@@ -76,7 +76,7 @@ public final class HeatWavesGameTest implements FabricClientGameTest {
                 int sample = index++;
                 server.runCommand("tp @a 0 103 " + z + " 0 8");
                 world.getConnection().waitForClientboundPackets(); context.waitTicks(6);
-                context.runOnClient(c -> approach[sample] = uploadedProximity());
+                context.runOnClient(_ -> approach[sample] = uploadedProximity());
                 context.takeScreenshot("heat-waves-proximity-" + sample);
             }
             check(approach[0] > 0 && approach[0] < .5 && approach[1] > approach[0] && approach[1] <= 1,
@@ -88,15 +88,15 @@ public final class HeatWavesGameTest implements FabricClientGameTest {
                 context.waitTicks(8); context.takeScreenshot("heat-waves-"+oit);
             }
             long[] scanAtZero = new long[1];
-            context.runOnClient(c -> {
+            context.runOnClient(_ -> {
                 naturality.config.NaturalityConfig.get().liquids.heatWavePower = 0;
                 scanAtZero[0] = (long)HeatWaveOptimizationChecks.field(HeatWaves.class, "scanned");
             });
             context.waitTicks(7);
-            context.runOnClient(c -> check(scanAtZero[0] == (long)HeatWaveOptimizationChecks.field(HeatWaves.class, "scanned"),
+            context.runOnClient(_ -> check(scanAtZero[0] == (long)HeatWaveOptimizationChecks.field(HeatWaves.class, "scanned"),
                 "Zero power must not scan sources"));
             for (int power : new int[]{0, 200}) {
-                context.runOnClient(c -> naturality.config.NaturalityConfig.get().liquids.heatWavePower = power);
+                context.runOnClient(_ -> naturality.config.NaturalityConfig.get().liquids.heatWavePower = power);
                 context.waitTicks(2); context.takeScreenshot("heat-waves-power-"+power);
             }
             server.runCommand("tp @a 0 104 -10 0 17");
@@ -104,7 +104,7 @@ public final class HeatWavesGameTest implements FabricClientGameTest {
             context.takeScreenshot("heat-waves-world-bands-moved-camera");
             server.runCommand("fill -8 100 -5 8 103 5 air");
             world.getConnection().waitForClientboundPackets(); context.waitTicks(10);
-            context.runOnClient(c -> check(volumes().isEmpty(), "Removed heat sources clear the effect"));
+            context.runOnClient(_ -> check(volumes().isEmpty(), "Removed heat sources clear the effect"));
             // A single merged lake must still contain many independently moving patches.
             server.runCommand("fill -12 100 -4 12 100 6 lava");
             server.runCommand("tp @a 0 106 -10 0 25");
@@ -118,7 +118,7 @@ public final class HeatWavesGameTest implements FabricClientGameTest {
                 HeatWaves.close();
             });
             context.waitTicks(2);
-            context.runOnClient(c -> check(HeatWaveOptimizationChecks.field(HeatWaves.class, "uniforms") != null,
+            context.runOnClient(_ -> check(HeatWaveOptimizationChecks.field(HeatWaves.class, "uniforms") != null,
                 "Renderer recreates resources after close"));
         } finally { context.runOnClient(c -> {
             naturality.test.reference.ReferenceHeatWaves.close();

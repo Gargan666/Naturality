@@ -85,6 +85,9 @@ public final class SelectedClientGameTests implements FabricClientGameTest {
         suites.put("aurora", new AuroraGameTest());
         suites.put("rainbow", new RainbowGameTest());
         suites.put("config", new ConfigMenuGameTest());
+        suites.put("cloud-geometry", c -> c.runOnClient(_ -> CloudsGameTest.checkGeometry()));
+        suites.put("darkness-config", _ -> HardcoreDarknessGameTest.checkConfig());
+        suites.put("portal-metadata", c -> c.runOnClient(_ -> ForestPerformanceGameTest.checkPortalMetadata()));
         suites.put("glint", new GlintContourGameTest());
         suites.put("rain-splash", new RainSplashGameTest());
         suites.put("weather", new WeatherGameTest());

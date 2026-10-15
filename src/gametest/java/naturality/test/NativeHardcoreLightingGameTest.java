@@ -23,14 +23,14 @@ public final class NativeHardcoreLightingGameTest implements FabricClientGameTes
                 final int selected = phase;
                 context.runOnClient(client -> {
                     var settings = NaturalityConfig.get().hardcoreDarkness;
-                    float expected = settings.moon.enabled && settings.moon.dimensions.includes(client.level.dimension())
+                    float expected = settings.moon.enabled && settings.moon.dimensions.includes(TestFixtures.level(client).dimension())
                             ? HardcoreDarkness.moonBrightness(MoonPhase.values()[selected]) : 1;
-                    float actual = HardcoreDarkness.atmosphere(client.level, client.gameRenderer.mainCamera(), 0);
+                    float actual = HardcoreDarkness.atmosphere(TestFixtures.level(client), client.gameRenderer.mainCamera(), 0);
                     if (Math.abs(actual - expected) > .001F) throw new AssertionError("Moonlight multiplier: " + actual + " != " + expected);
                     var extractor = new LightmapRenderStateExtractor(client.gameRenderer, client);
                     extractor.tick(); var state = new LightmapRenderState(); extractor.extract(state, 0);
                     if (expected == 0 && state.skyFactor != 0) throw new AssertionError("New moon leaves skylight");
-                    if (HardcoreDarkness.cavesEnabled(client.level) && settings.caves.ambientPercent == 0
+                    if (HardcoreDarkness.cavesEnabled(TestFixtures.level(client)) && settings.caves.ambientPercent == 0
                             && state.ambientColor.lengthSquared() != 0) throw new AssertionError("Disabled ambient light remains");
                     if (naturality.client.menu.MenuPreview.active()) throw new AssertionError("Gameplay inherited the preview camera");
                     System.out.println("NATIVE_LIGHTING phase=" + selected + " multiplier=" + actual + " sky=" + state.skyFactor);

@@ -34,7 +34,7 @@ final class FishermanCastingChecks {
         try {
             var targetType = Class.forName("naturality.villager.ProfessionWork$Target");
             var taskType = Class.forName("naturality.villager.ProfessionWork$Task");
-            Object fish = java.util.Arrays.stream(taskType.getEnumConstants()).filter(t -> t.toString().equals("FISH")).findFirst().orElseThrow();
+            Object fish = java.util.Arrays.stream(taskType.getEnumConstants()).filter(t -> TestFixtures.require(t, "t").toString().equals("FISH")).findFirst().orElseThrow();
             var constructor = targetType.getDeclaredConstructor(BlockPos.class, BlockPos.class, taskType);
             constructor.setAccessible(true);
             Object target = constructor.newInstance(water, stand, fish);

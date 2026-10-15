@@ -4,7 +4,6 @@ import naturality.client.fluid.*;
 import naturality.config.NaturalityConfig;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
-import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
 
 /** Actual stepped fluid geometry checks moving spray, splash roots and outward face winding. */
@@ -33,26 +32,26 @@ public final class LiquidSlopesGameTest implements FabricClientGameTest {
             context.runOnClient(c->{
                 for(boolean lava:new boolean[]{false,true}) {
                     double z=lava?7.5:1.5;
-                    var start=java.util.Objects.requireNonNull(LiquidSurfaceGeometry.near(c.level,.5,103.5,z,lava,false));
+                    var start=java.util.Objects.requireNonNull(LiquidSurfaceGeometry.near(TestFixtures.level(c),.5,103.5,z,lava,false));
                     var path=new FallSurfacePath(lava);
                     Vec3 point=new Vec3(.5,start.height()+.025,z);
                     for(int tick=0;tick<(lava?90:24);tick++) {
-                        var next=path.step(c.level,point.x,point.y,point.z,0,-.03,0);
+                        var next=path.step(TestFixtures.level(c),point.x,point.y,point.z,0,-.03,0);
                         check(next!=null,"Stream spray must remain on the stepped liquid path");
-                        point=next;
-                        var contact=LiquidSurfaceGeometry.near(c.level,point.x,point.y,point.z,lava,false);
+                        point=TestFixtures.require(next, "stream path step");
+                        var contact=LiquidSurfaceGeometry.near(TestFixtures.level(c),point.x,point.y,point.z,lava,false);
                         check(contact!=null && point.y>=contact.height(),"Spray stays above liquid: lava="+lava+", tick="+tick+", position="+point+", surface="+contact);
                     }
                     check(point.x>3 && point.y<start.height()-.8,"Spray crosses a ledge: lava="+lava+", final="+point+", start="+start);
                     net.minecraft.world.entity.Entity entity=null;
-                    for(var e:c.level.entitiesForRendering())if(e instanceof net.minecraft.world.entity.animal.pig.Pig && Math.abs(e.getZ()-z)<.5)entity=e;
+                    for(var e:TestFixtures.level(c).entitiesForRendering())if(e instanceof net.minecraft.world.entity.animal.pig.Pig && Math.abs(e.getZ()-z)<.5)entity=e;
                     entity=java.util.Objects.requireNonNull(entity);
                     var eye=new Vec3(20,120,30);
-                    if(lava){LavaImpactColumn.spawn(c.level,entity,12);var output=new LavaIntersection();LavaImpactColumn.render(output,c.level,eye,3);checkMesh(output,entity,eye);}
-                    else {WaterImpactColumn.spawn(c.level,entity,12);var output=new WaterIntersection();WaterImpactColumn.render(output,c.level,eye,1.5F);checkMesh(output,entity,eye);}
+                    if(lava){LavaImpactColumn.spawn(TestFixtures.level(c),entity,12);var output=new LavaIntersection();LavaImpactColumn.render(output,TestFixtures.level(c),eye,3);checkMesh(output,entity,eye);}
+                    else {WaterImpactColumn.spawn(TestFixtures.level(c),entity,12);var output=new WaterIntersection();WaterImpactColumn.render(output,TestFixtures.level(c),eye,1.5F);checkMesh(output,entity,eye);}
                     var insideEye=new Vec3(entity.getX(),entity.getY()+1,entity.getZ());
-                    if(lava){var output=new LavaIntersection();LavaImpactColumn.render(output,c.level,insideEye,3);checkMesh(output,entity,insideEye);}
-                    else {var output=new WaterIntersection();WaterImpactColumn.render(output,c.level,insideEye,1.5F);checkMesh(output,entity,insideEye);}
+                    if(lava){var output=new LavaIntersection();LavaImpactColumn.render(output,TestFixtures.level(c),insideEye,3);checkMesh(output,entity,insideEye);}
+                    else {var output=new WaterIntersection();WaterImpactColumn.render(output,TestFixtures.level(c),insideEye,1.5F);checkMesh(output,entity,insideEye);}
                 }
             });
             server.runCommand("tick step 3");context.waitTicks(20);

@@ -32,26 +32,26 @@ public final class WaterRipplesGameTest implements FabricClientGameTest {
             world.getConnection().waitForChunksRender();
             context.runOnClient(c->{
                 for(int i=1;i<=3;i++) {
-                    var p=new BlockPos((i-2)*3,101,-4); var s=WaterSurface.at(c.level,p);
+                    var p=new BlockPos((i-2)*3,101,-4); var s=TestFixtures.require(WaterSurface.at(TestFixtures.level(c),p), "s");
                     check(s!=null && s.cauldron() && Math.abs(s.height(.5,.5)-(101+(6+3*i)/16.0))<1e-8,"Cauldron water height "+i);
                     check(!s.contains(.0625,.5) && s.contains(.5,.5),"Cauldron rim clipping");
                     int before=WaterRipples.activeCount();
-                    var drop=c.particleEngine.createParticle(ParticleTypes.FALLING_WATER,p.getX()+.5,103,p.getZ()+.5,0,0,0);
+                    var drop=TestFixtures.require(c.particleEngine.createParticle(ParticleTypes.FALLING_WATER,p.getX()+.5,103,p.getZ()+.5,0,0,0), "drop");
                     for(int j=0;j<40 && drop.isAlive();j++)drop.tick();
                     check(WaterRipples.activeCount()==before+1,"Falling water must hit cauldron level "+i);
                 }
-                check(WaterSurface.at(c.level,new BlockPos(5,101,-4))==null,"Empty cauldron excluded");
-                check(WaterSurface.at(c.level,new BlockPos(6,101,-4))==null,"Lava cauldron excluded");
+                check(WaterSurface.at(TestFixtures.level(c),new BlockPos(5,101,-4))==null,"Empty cauldron excluded");
+                check(WaterSurface.at(TestFixtures.level(c),new BlockPos(6,101,-4))==null,"Lava cauldron excluded");
                 for(var type:new net.minecraft.core.particles.SimpleParticleType[]{ParticleTypes.FALLING_WATER,ParticleTypes.FALLING_DRIPSTONE_WATER,ParticleTypes.RAIN}) {
                     int before=WaterRipples.activeCount();
-                    var drop=c.particleEngine.createParticle(type,.5,102,.5,0,0,0);
+                    var drop=TestFixtures.require(c.particleEngine.createParticle(type,.5,102,.5,0,0,0), "drop");
                     // Keep short-lived rain drops alive long enough for this deterministic impact test.
                     drop.setLifetime(100);
                     for(int j=0;j<50 && drop.isAlive();j++)drop.tick();
                     check(WaterRipples.activeCount()==before+1,"Water particle impact: "+type);
                 }
                 int before=WaterRipples.activeCount();
-                var lava=c.particleEngine.createParticle(ParticleTypes.FALLING_LAVA,.5,102,.5,0,0,0);
+                var lava=TestFixtures.require(c.particleEngine.createParticle(ParticleTypes.FALLING_LAVA,.5,102,.5,0,0,0), "lava");
                 for(int j=0;j<30 && lava.isAlive();j++)lava.tick();
                 check(WaterRipples.activeCount()==before,"Lava drip must not create water rings");
             });
@@ -60,14 +60,14 @@ public final class WaterRipplesGameTest implements FabricClientGameTest {
             context.waitTicks(3);
             context.takeScreenshot("water-ripples-cauldron-drips");
             context.waitTicks(5);
-            context.runOnClient(c->check(WaterRipples.activeCount()==0,"Rings must expire"));
+            context.runOnClient(_->check(WaterRipples.activeCount()==0,"Rings must expire"));
             for(boolean oit:new boolean[]{false,true}) {
                 context.runOnClient(c->c.options.improvedTransparency().set(oit));
                 server.runCommand("summon pig 0.5 101.6 -3.5 {Age:-24000,NoAI:1b,NoGravity:1b,Tags:[\"cauldron_rim\"]}");
                 world.getConnection().waitForClientboundPackets();context.waitTicks(8);
                 context.runOnClient(c->{
                     check(WaterIntersection.lastPixelCount>0,"Entity rim on cauldron, OIT="+oit);
-                    for(int i=1;i<=3;i++) WaterRipples.impact(c.level,(i-2)*3+.5,102,-3.5,(i-2)*3+.5,101,-3.5);
+                    for(int i=1;i<=3;i++) WaterRipples.impact(TestFixtures.level(c),(i-2)*3+.5,102,-3.5,(i-2)*3+.5,101,-3.5);
                 });
                 context.waitTicks(4);
                 context.takeScreenshot("water-ripples-cauldron-model-"+oit);
@@ -84,7 +84,7 @@ public final class WaterRipplesGameTest implements FabricClientGameTest {
                 for(int x=-16;x<0;x++)for(int z=0;z<=16;z++)
                     check(WaterRipples.activeRainAt(new BlockPos(x,100,z))==0,"Sampled rain ring beneath roof");
                 int before=WaterRipples.activeCount();
-                var drip=c.particleEngine.createParticle(ParticleTypes.FALLING_DRIPSTONE_WATER,-4.5,103,4.5,0,0,0);
+                var drip=TestFixtures.require(c.particleEngine.createParticle(ParticleTypes.FALLING_DRIPSTONE_WATER,-4.5,103,4.5,0,0,0), "drip");
                 for(int i=0;i<40 && drip.isAlive();i++)drip.tick();
                 check(WaterRipples.activeCount()==before+1,"Real drips must still splash on sheltered water");
             });
@@ -94,7 +94,7 @@ public final class WaterRipplesGameTest implements FabricClientGameTest {
             context.runOnClient(c->{
                 check(WaterRipples.activeCount()==0,"Rain rings must stop after weather clears");
                 NaturalityConfig.get().liquids.water=false;
-                check(!WaterRipples.impact(c.level,.5,102,.5,.5,100,.5),"Disabled water must reject impacts");
+                check(!WaterRipples.impact(TestFixtures.level(c),.5,102,.5,.5,100,.5),"Disabled water must reject impacts");
             });
         } finally {
             context.runOnClient(c->{NaturalityConfig.get().liquids.water=saved[0];c.options.improvedTransparency().set(saved[1]);if(c.gui.hud.isHidden()!=saved[2])c.gui.hud.toggle();});

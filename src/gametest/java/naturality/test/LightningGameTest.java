@@ -25,18 +25,18 @@ public final class LightningGameTest implements FabricClientGameTest {
             for(boolean oit:new boolean[]{false,true}) {
                 context.runOnClient(c -> {
                     c.options.improvedTransparency().set(oit);
-                    int loaded=c.level.getChunkSource().getLoadedChunksCount();
-                    DistantLightningClient.receive(new DistantLightningPayload(c.level.dimension().identifier(),0,1500,c.level.getSeaLevel(),12345));
+                    int loaded=TestFixtures.level(c).getChunkSource().getLoadedChunksCount();
+                    DistantLightningClient.receive(new DistantLightningPayload(TestFixtures.level(c).dimension().identifier(),0,1500,TestFixtures.level(c).getSeaLevel(),12345));
                     var render=new LevelRenderState();DistantLightningClient.extract(render,1);
                     check(!render.entityRenderStates.isEmpty(),"Distant lightning is extracted outside chunk/render distance");
                     var state=render.entityRenderStates.getLast();
-                    check(state.y==c.level.getSeaLevel()+1,"Unloaded strikes start one block above sea level");
-                    check(c.level.getChunkSource().getLoadedChunksCount()==loaded,"Distant visual strikes never load terrain");
+                    check(state.y==TestFixtures.level(c).getSeaLevel()+1,"Unloaded strikes start one block above sea level");
+                    check(TestFixtures.level(c).getChunkSource().getLoadedChunksCount()==loaded,"Distant visual strikes never load terrain");
                 });
                 context.waitTicks(1);context.takeScreenshot("distant-lightning-fog-"+oit);
             }
             context.waitTicks(100);
-            context.runOnClient(c -> {var render=new LevelRenderState();DistantLightningClient.extract(render,1);check(render.entityRenderStates.isEmpty(),"Distant bolts expire normally");});
+            context.runOnClient(_ -> {var render=new LevelRenderState();DistantLightningClient.extract(render,1);check(render.entityRenderStates.isEmpty(),"Distant bolts expire normally");});
             world.getServer().runCommand("fill -12 110 -12 12 122 12 stone");
             world.getConnection().waitForClientboundPackets();
             context.waitTicks(20);
@@ -56,7 +56,7 @@ public final class LightningGameTest implements FabricClientGameTest {
             world.getServer().runCommand("fill 3 110 -12 12 122 12 air");
             world.getConnection().waitForClientboundPackets();
             context.waitTicks(20);
-            context.runOnClient(c -> check(naturality.client.weather.ThunderAudio.audible(),
+            context.runOnClient(_ -> check(naturality.client.weather.ThunderAudio.audible(),
                 "Nearby unobstructed surface exit restores thunder under an overhang"));
         } finally { context.runOnClient(c -> c.options.improvedTransparency().set(original[0])); }
     }

@@ -34,15 +34,15 @@ public final class FluidTailGameTest implements FabricClientGameTest {
             context.runOnClient(c->{
                 for(int x:new int[]{-2,2}) {
                     var pos=new BlockPos(x,112,0);
-                    check(FallingFluidTail.eligible(c.level,pos,c.level.getFluidState(pos)),"Air-ended falling column gets a tail");
-                    check(c.level.getBlockState(pos.below()).isAir(),"Tail remains purely visual air");
-                    check(!FallingFluidTail.eligible(c.level,pos.above(),c.level.getFluidState(pos.above())),"No tail between fluid blocks");
-                    check(!FallingFluidTail.eligible(c.level,pos.above(3),c.level.getFluidState(pos.above(3))),"Resting sources have no tail");
+                    check(FallingFluidTail.eligible(TestFixtures.level(c),pos,TestFixtures.level(c).getFluidState(pos)),"Air-ended falling column gets a tail");
+                    check(TestFixtures.level(c).getBlockState(pos.below()).isAir(),"Tail remains purely visual air");
+                    check(!FallingFluidTail.eligible(TestFixtures.level(c),pos.above(),TestFixtures.level(c).getFluidState(pos.above())),"No tail between fluid blocks");
+                    check(!FallingFluidTail.eligible(TestFixtures.level(c),pos.above(3),TestFixtures.level(c).getFluidState(pos.above(3))),"Resting sources have no tail");
                     checkMesh(c,pos);
                     checkMesh(c,pos.above(3),false);
                 }
                 var grounded=new BlockPos(5,112,0);
-                check(!FallingFluidTail.eligible(c.level,grounded,c.level.getFluidState(grounded)),"Tail does not extend through ground");
+                check(!FallingFluidTail.eligible(TestFixtures.level(c),grounded,TestFixtures.level(c).getFluidState(grounded)),"Tail does not extend through ground");
             });
             for(boolean improved:new boolean[]{false,true}) {
                 context.runOnClient(c->c.options.improvedTransparency().set(improved));
@@ -80,8 +80,8 @@ public final class FluidTailGameTest implements FabricClientGameTest {
                 return method.getReturnType()==void.class?null:proxy;
             });
         var renderer=new net.minecraft.client.renderer.block.FluidRenderer(client.getModelManager().getFluidStateModelSet());
-        var block=client.level.getBlockState(pos);
-        renderer.tesselate(client.level,pos,layer->consumer,block,block.getFluidState());
+        var block=TestFixtures.level(client).getBlockState(pos);
+        renderer.tesselate(TestFixtures.level(client),pos,_->consumer,block,block.getFluidState());
         for (var vertex : vertices) {
             check(vertex[0] == Math.round(vertex[0]) && vertex[2] == Math.round(vertex[2]),
                 "Exposed column walls and corners meet exact block boundaries without cracks");

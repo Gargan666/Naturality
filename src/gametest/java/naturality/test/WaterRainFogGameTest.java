@@ -41,7 +41,7 @@ public final class WaterRainFogGameTest implements FabricClientGameTest {
             // Rain/fluid updates continuously dirty meshes; global renderer
             // quiescence is not a valid wait condition in this scene.
             context.runOnClient(client -> {
-                if (WeatherSystem.state(client.level).heavyRainFog() < 0.99F)
+                if (TestFixtures.require(WeatherSystem.state(TestFixtures.level(client)), "WeatherSystem.state(client.level)").heavyRainFog() < 0.99F)
                     throw new AssertionError("Heavy rain must be active for water fog regression");
             });
             for (boolean mode : new boolean[]{false, true}) {

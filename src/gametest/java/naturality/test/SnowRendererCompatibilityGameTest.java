@@ -11,12 +11,12 @@ import net.minecraft.world.level.block.Blocks;
 public final class SnowRendererCompatibilityGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
         try(var world=context.worldBuilder().create()) {
-        context.runOnClient(client -> {
+        context.runOnClient(_ -> {
             SnowFaceVisibilityChecks.run();
             for(int brightness : new int[]{0,15}) {
                 var snapshot=(BlockAndTintGetter)java.lang.reflect.Proxy.newProxyInstance(
                     BlockAndTintGetter.class.getClassLoader(),new Class<?>[]{BlockAndTintGetter.class},
-                    (proxy,method,args)-> {
+                    (_,method,_)-> {
                         if(method.getName().equals("getBrightness")) return brightness;
                         if(method.getName().equals("getBlockState")) return Blocks.AIR.defaultBlockState();
                         throw new AssertionError("Unexpected render snapshot query: "+method.getName());
@@ -29,7 +29,7 @@ public final class SnowRendererCompatibilityGameTest implements FabricClientGame
 
             var roofed=(BlockAndTintGetter)java.lang.reflect.Proxy.newProxyInstance(
                 BlockAndTintGetter.class.getClassLoader(),new Class<?>[]{BlockAndTintGetter.class},
-                (proxy,method,args)-> {
+                (_,method,args)-> {
                     if(method.getName().equals("getBrightness")) return 15;
                     if(method.getName().equals("getBlockState")) {
                         BlockPos pos=(BlockPos)args[0];
@@ -67,11 +67,11 @@ public final class SnowRendererCompatibilityGameTest implements FabricClientGame
             world.getConnection().waitForClientboundPackets();
             context.runOnClient(client -> {
                 var fittedPos=new BlockPos(5,101,0);
-                var fittedState=client.level.getBlockState(fittedPos);
+                var fittedState=TestFixtures.level(client).getBlockState(fittedPos);
                 int[] faces=new int[net.minecraft.core.Direction.values().length];
                 client.getModelManager().getBlockStateModelSet().get(fittedState).emitQuads(
                     net.fabricmc.fabric.api.client.renderer.v1.Renderer.get().quadEmitter(q -> faces[q.lightFace().ordinal()]++),
-                    client.level,fittedPos,fittedState,net.minecraft.util.RandomSource.create(0),direction -> false);
+                    TestFixtures.level(client),fittedPos,fittedState,net.minecraft.util.RandomSource.create(0),_ -> false);
                 if(faces[net.minecraft.core.Direction.DOWN.ordinal()]!=0
                         || faces[net.minecraft.core.Direction.EAST.ordinal()]!=0
                         || faces[net.minecraft.core.Direction.UP.ordinal()]==0)
@@ -85,7 +85,7 @@ public final class SnowRendererCompatibilityGameTest implements FabricClientGame
                     var slab=Blocks.STONE_SLAB.defaultBlockState();
                     var stateField=base.getDeclaredField("state");stateField.setAccessible(true);stateField.set(renderer,slab);
                     if(net.minecraft.world.level.block.Block.shouldRenderFace(slab,
-                            client.level.getBlockState(new BlockPos(5,101,0)),net.minecraft.core.Direction.EAST))
+                            TestFixtures.level(client).getBlockState(new BlockPos(5,101,0)),net.minecraft.core.Direction.EAST))
                         throw new AssertionError("Fixture must reproduce incorrect state-only snow occlusion");
                     var posField=base.getDeclaredField("pos");posField.setAccessible(true);
                     var draw=base.getMethod("shouldDrawSide",net.minecraft.core.Direction.class);

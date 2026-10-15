@@ -10,7 +10,6 @@ import net.minecraft.world.entity.animal.happyghast.HappyGhast;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.phys.Vec3;
-import net.minecraft.core.BlockPos;
 
 public final class GhastCrashGameTest implements FabricClientGameTest {
     private static void check(boolean value,String message) { if (!value) throw new AssertionError(message); }
@@ -65,7 +64,7 @@ public final class GhastCrashGameTest implements FabricClientGameTest {
                 var level = s.overworld();
                 for (var e : level.getAllEntities()) if (e instanceof Ghast ghast) body[0]=ghast;
                 body[0].hurtServer(level,level.damageSources().playerAttack(level.players().getFirst()),1000);
-                var flight = ((GhastCrashBody)body[0]).naturality$flight();
+                var flight = TestFixtures.require(((GhastCrashBody)body[0]).naturality$flight(), "ghast flight");
                 initial[0]=body[0].position(); initial[1]=flight.velocity;
                 check(flight!=null && flight.drops.size()==1,"Normal loot held during crash");
                 check(flight.impulse.z>0,"Recoil moves away from the killing hit");
@@ -83,15 +82,15 @@ public final class GhastCrashGameTest implements FabricClientGameTest {
             });
             context.waitTicks(3);
             context.runOnClient(client -> {
-                for(var e:client.level.entitiesForRendering()) if(e instanceof Ghast ghast) {
-                    var state=(SquashingGhastRenderer.State)client.getEntityRenderDispatcher().getRenderer(ghast).createRenderState(ghast,1);
+                for(var e:TestFixtures.level(client).entitiesForRendering()) if(e instanceof Ghast ghast) {
+                    var state = TestFixtures.require((SquashingGhastRenderer.State)client.getEntityRenderDispatcher().getRenderer(ghast).createRenderState(ghast,1), "ghast render state");
                     check(ghast.hurtTime>0 && state.hasRedOverlay,"Killing blow retains the ordinary timed hit flash");
                 }
             });
             context.waitTicks(6);
 
-            server.runOnServer(s -> {
-                var flight=((GhastCrashBody)body[0]).naturality$flight();
+            server.runOnServer(_ -> {
+                var flight = TestFixtures.require(((GhastCrashBody)body[0]).naturality$flight(), "ghast flight");
                 Vec3 position=initial[0], velocity=initial[1];
                 for(int age=1;age<=flight.age;age++) {
                     velocity=GhastCrash.integrateVelocity(velocity,age); position=position.add(velocity);
@@ -100,8 +99,8 @@ public final class GhastCrashGameTest implements FabricClientGameTest {
                     "Nearby surfaces do not alter the freely integrated trajectory");
             });
             context.runOnClient(client -> {
-                for (var e : client.level.entitiesForRendering()) if (e instanceof Ghast ghast) {
-                    var state = (SquashingGhastRenderer.State)client.getEntityRenderDispatcher().getRenderer(ghast).createRenderState(ghast,1);
+                for (var e : TestFixtures.level(client).entitiesForRendering()) if (e instanceof Ghast ghast) {
+                    var state = TestFixtures.require((SquashingGhastRenderer.State)client.getEntityRenderDispatcher().getRenderer(ghast).createRenderState(ghast,1), "ghast render state");
                     check(state.tentacles!=null && state.tentacles.pitch().length==9,"Death tentacle physics render state");
                     check(state.crash!=null && state.deathTime==0 && state.hasRedOverlay==(ghast.hurtTime>0),"Falling tint follows the normal hurt timer");
                 }
@@ -113,9 +112,9 @@ public final class GhastCrashGameTest implements FabricClientGameTest {
             context.waitTicks(2);
             context.runOnClient(client -> {
                 int count=0;
-                for (var e : client.level.entitiesForRendering()) if (e instanceof Ghast ghast) {
+                for (var e : TestFixtures.level(client).entitiesForRendering()) if (e instanceof Ghast ghast) {
                     count++;
-                    var state=(SquashingGhastRenderer.State)client.getEntityRenderDispatcher().getRenderer(ghast).createRenderState(ghast,1);
+                    var state = TestFixtures.require((SquashingGhastRenderer.State)client.getEntityRenderDispatcher().getRenderer(ghast).createRenderState(ghast,1), "ghast render state");
                     check(state.crash!=null && !state.hasRedOverlay,"Visible untinted fall beyond vanilla death duration");
                     check(state.crash.rotation().length()<2,"Moving body remains partly rotated");
                 }
@@ -127,9 +126,9 @@ public final class GhastCrashGameTest implements FabricClientGameTest {
             for (int tick=0;tick<80;tick++) {
                 context.waitTicks(1);
                 context.runOnClient(client -> {
-                    for (var e : client.level.entitiesForRendering()) if (e instanceof Ghast ghast
+                    for (var e : TestFixtures.level(client).entitiesForRendering()) if (e instanceof Ghast ghast
                             && ((GhastCrashBody)ghast).naturality$impactTicks()>=0) {
-                        var state=(SquashingGhastRenderer.State)client.getEntityRenderDispatcher().getRenderer(ghast).createRenderState(ghast,1);
+                        var state = TestFixtures.require((SquashingGhastRenderer.State)client.getEntityRenderDispatcher().getRenderer(ghast).createRenderState(ghast,1), "ghast render state");
                         check(state.hasRedOverlay && state.deathTime==0,"Impact must turn red without native death roll");
                         check(((MobDeathState)(Object)state).naturality$deathPixels()>0,"Synced impact must enable pixel fade");
                         sawImpact[0]=true;
@@ -143,8 +142,8 @@ public final class GhastCrashGameTest implements FabricClientGameTest {
                     break;
                 }
             }
-            server.runOnServer(s -> {
-                var flight=((GhastCrashBody)body[0]).naturality$flight();
+            server.runOnServer(_ -> {
+                var flight = TestFixtures.require(((GhastCrashBody)body[0]).naturality$flight(), "ghast flight");
                 check(sawImpact[0],"Client must observe synchronized impact phase: age="+flight.age+", impact="+flight.impactAge
                     +", synced="+((GhastCrashBody)body[0]).naturality$impactTicks()+", removed="+body[0].isRemoved());
             });
@@ -155,7 +154,7 @@ public final class GhastCrashGameTest implements FabricClientGameTest {
                 var drops=diamonds(s.overworld());
                 check(body[0].isRemoved() && drops.size()==1,"Exactly one loot drop at actual impact");
                 var item=drops.getFirst();
-                var landing=((GhastCrashBody)body[0]).naturality$flight().landing;
+                var landing=TestFixtures.require(((GhastCrashBody)body[0]).naturality$flight(), "ghast flight").landing;
                 check(Math.abs(item.getX()-landing.x)<.01 && Math.abs(item.getZ()-landing.z)<.01
                     && item.getY()>=91 && item.getY()<91.3,"Loot remains at the natural impact point");
                 check(item.getDeltaMovement().horizontalDistance()<.001,"No scattered item velocity");
@@ -173,7 +172,7 @@ public final class GhastCrashGameTest implements FabricClientGameTest {
                 happy.setItemSlot(EquipmentSlot.BODY,new net.minecraft.world.item.ItemStack(Items.HARNESS.red()));
                 happy.setDropChance(EquipmentSlot.BODY,1);
                 happy.hurtServer(s.overworld(),s.overworld().damageSources().playerAttack(s.overworld().players().getFirst()),1000);
-                var flight=((GhastCrashBody)happy).naturality$flight();
+                var flight = TestFixtures.require(((GhastCrashBody)happy).naturality$flight(), "ghast flight");
                 check(flight.drops.stream().anyMatch(item -> item.is(Items.HARNESS.red())),"Harness held with death loot");
             });
             server.runCommand("tp @a 0 112 -12 0 0");
@@ -183,9 +182,9 @@ public final class GhastCrashGameTest implements FabricClientGameTest {
             for(int tick=0;tick<60;tick++) {
                 context.waitTicks(1);
                 context.runOnClient(client -> {
-                    for(var e:client.level.entitiesForRendering()) if(e instanceof HappyGhast ghast
+                    for(var e:TestFixtures.level(client).entitiesForRendering()) if(e instanceof HappyGhast ghast
                             && ((GhastCrashBody)ghast).naturality$impactTicks()>=0) {
-                        var state=(LeaningHappyGhastRenderer.State)client.getEntityRenderDispatcher().getRenderer(ghast).createRenderState(ghast,1);
+                        var state = TestFixtures.require((LeaningHappyGhastRenderer.State)client.getEntityRenderDispatcher().getRenderer(ghast).createRenderState(ghast,1), "ghast render state");
                         check(state.hasRedOverlay && ((MobDeathState)(Object)state).naturality$deathPixels()>0,"Happy ghast impact tint and fade");
                         happyImpact[0]=true;
                     }
@@ -209,13 +208,13 @@ public final class GhastCrashGameTest implements FabricClientGameTest {
                 body[0].hurtServer(s.overworld(),s.overworld().damageSources().playerAttack(s.overworld().players().getFirst()),1000);
             });
             context.waitTicks(25);
-            server.runOnServer(s -> {
-                var flight=((GhastCrashBody)body[0]).naturality$flight();
+            server.runOnServer(_ -> {
+                var flight = TestFixtures.require(((GhastCrashBody)body[0]).naturality$flight(), "ghast flight");
                 check(!body[0].isRemoved() && flight.rotation.length()<1,"Slow start of long fall remains largely upright");
             });
             context.waitTicks(40);
-            server.runOnServer(s -> {
-                var flight=((GhastCrashBody)body[0]).naturality$flight();
+            server.runOnServer(_ -> {
+                var flight = TestFixtures.require(((GhastCrashBody)body[0]).naturality$flight(), "ghast flight");
                 check(!body[0].isRemoved() && flight.velocity.y<-2 && flight.rotation.length()>1.5,"High-speed long fall progressively tips head-first");
             });
             server.runCommand("tp @a 3 115 -5 0 15");
@@ -232,7 +231,7 @@ public final class GhastCrashGameTest implements FabricClientGameTest {
             server.runOnServer(s -> {
                 for (var e : s.overworld().getAllEntities()) if (e instanceof HappyGhast ghast) body[0]=ghast;
                 body[0].hurtServer(s.overworld(),s.overworld().damageSources().playerAttack(s.overworld().players().getFirst()),1000);
-                var flight=((GhastCrashBody)body[0]).naturality$flight();
+                ((GhastCrashBody)body[0]).naturality$flight();
             });
             context.waitTicks(100);
             server.runOnServer(s -> check(body[0].isRemoved() && diamonds(s.overworld()).isEmpty(),"Natural impact in lava loses loot"));

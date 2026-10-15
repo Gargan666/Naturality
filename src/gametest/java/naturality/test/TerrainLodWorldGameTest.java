@@ -29,8 +29,8 @@ public final class TerrainLodWorldGameTest implements FabricClientGameTest {
     private static void view(Minecraft client, Vec3 eye) { RenderDetail.view(null, Vec3.ZERO); RenderDetail.view(client.level, eye); }
     private static int quads(Minecraft client, BlockPos pos, BlockState state) {
         int[] count = {0};
-        var emitter = Renderer.get().quadEmitter(q -> count[0]++);
-        client.getModelManager().getBlockStateModelSet().get(state).emitQuads(emitter, client.level, pos, state,
+        var emitter = Renderer.get().quadEmitter(_ -> count[0]++);
+        client.getModelManager().getBlockStateModelSet().get(state).emitQuads(emitter, TestFixtures.level(client), pos, state,
             RandomSource.create(state.getSeed(pos)), _ -> false);
         return count[0];
     }
@@ -61,23 +61,23 @@ public final class TerrainLodWorldGameTest implements FabricClientGameTest {
         config.distantDetails = true;
 
         var support = Blocks.STONE.defaultBlockState();
-        var original = client.level.getBlockState(pos); var above = client.level.getBlockState(pos.above());
+        var original = TestFixtures.level(client).getBlockState(pos); var above = TestFixtures.level(client).getBlockState(pos.above());
         try {
-            client.level.setBlock(pos,support,2); client.level.setBlock(pos.above(),Blocks.SNOW.defaultBlockState(),2);
+            TestFixtures.level(client).setBlock(pos,support,2); TestFixtures.level(client).setBlock(pos.above(),Blocks.SNOW.defaultBlockState(),2);
             var model = client.getModelManager().getBlockStateModelSet().get(support);
             view(client,Vec3.atCenterOf(pos));
-            check(model.createGeometryKey(client.level,pos,support,RandomSource.create(0)) == null,
+            check(model.createGeometryKey(TestFixtures.level(client),pos,support,RandomSource.create(0)) == null,
                 "Nearby snow overlay retains position-dependent geometry");
             view(client,Vec3.atCenterOf(pos).add(0,0,-220));
             check(quads(client,pos.above(),Blocks.SNOW.defaultBlockState()) > 0, "Supported snow layer geometry remains rendered");
-            check(model.createGeometryKey(client.level,pos,support,RandomSource.create(0)) != null,
+            check(model.createGeometryKey(TestFixtures.level(client),pos,support,RandomSource.create(0)) != null,
                 "Distant snow overlay bypasses position-dependent work");
             config.distantDetails = false;
-            check(model.createGeometryKey(client.level,pos,support,RandomSource.create(0)) == null,
+            check(model.createGeometryKey(TestFixtures.level(client),pos,support,RandomSource.create(0)) == null,
                 "Disabling detail LOD restores snow overlays");
         } finally {
             config.distantDetails = true;
-            client.level.setBlock(pos,original,2); client.level.setBlock(pos.above(),above,2);
+            TestFixtures.level(client).setBlock(pos,original,2); TestFixtures.level(client).setBlock(pos.above(),above,2);
             view(client,client.gameRenderer.mainCamera().position());
         }
     }
@@ -105,12 +105,12 @@ public final class TerrainLodWorldGameTest implements FabricClientGameTest {
         // This Minecraft version sends a rounded chunk view, while Fabric's
         // generic download wait still expects every corner of a square.
         context.waitFor(client -> {
-            var center=client.player.chunkPosition();
+            var center=TestFixtures.player(client).chunkPosition();
             int radius=client.options.getEffectiveRenderDistance();
             for (int z=-radius-1;z<=radius+1;z++) for (int x=-radius-1;x<=radius+1;x++) {
                 int cx=center.x()+x, cz=center.z()+z;
                 if (net.minecraft.server.level.ChunkTrackingView.isWithinDistance(center.x(),center.z(),radius,cx,cz,true)
-                    && client.level.getChunk(cx,cz,net.minecraft.world.level.chunk.status.ChunkStatus.FULL,false)==null) return false;
+                    && TestFixtures.level(client).getChunk(cx,cz,net.minecraft.world.level.chunk.status.ChunkStatus.FULL,false)==null) return false;
             }
             return true;
         },6000);
@@ -118,7 +118,7 @@ public final class TerrainLodWorldGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
         var effects = NaturalityConfig.get().effects;
         boolean textures=effects.distantTextures, detail=effects.distantDetails;
-        int distance=context.computeOnClient(c -> c.options.renderDistance().get());
+        int distance=TestFixtures.require(context.computeOnClient(c -> c.options.renderDistance().get()), "context.computeOnClient(c -> c.options.renderDistance().get())");
         String renderer=net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("sodium") ? "sodium" : "fabric";
         var report=new StringBuilder("Normal overworld; seed=84219871; distance=32; wind/leaf LOD unchanged.\n"
             + "Mesh counts and CPU profile only; lockstep gametest timing is not gameplay FPS.\n");
@@ -140,7 +140,7 @@ public final class TerrainLodWorldGameTest implements FabricClientGameTest {
                 report.append("forest_camera=52,").append(forestHeight[0]).append(",-300\n");
                 server.runCommand("tp @a 52 "+forestHeight[0]+" -300 90 10");
                 context.waitTicks(30);
-                context.runOnClient(c -> check(c.level.getBlockState(BlockPos.containing(c.gameRenderer.mainCamera().position())).isAir(),
+                context.runOnClient(c -> check(TestFixtures.level(c).getBlockState(BlockPos.containing(c.gameRenderer.mainCamera().position())).isAir(),
                     "Forest camera must be above terrain"));
                 context.runOnClient(TerrainLodWorldGameTest::details);
                 context.runOnClient(c -> { c.options.renderDistance().set(32); c.options.broadcastOptions(); });
@@ -175,7 +175,7 @@ public final class TerrainLodWorldGameTest implements FabricClientGameTest {
                     var found=s.overworld().findClosestBiome3d(b -> b.is(Biomes.SNOWY_TAIGA) || b.is(Biomes.SNOWY_PLAINS),
                         new BlockPos(52,80,-300),4096,64,64);
                     check(found!=null,"Seed must provide a natural snowy biome");
-                    var p=found.getFirst();
+                    var p=TestFixtures.require(found, "found").getFirst();
                     int y=s.overworld().getHeight(Heightmap.Types.WORLD_SURFACE,p.getX(),p.getZ());
                     snow[0]=new BlockPos(p.getX(),y+40,p.getZ());
                     report.append("snow_camera=").append(snow[0]).append('\n');

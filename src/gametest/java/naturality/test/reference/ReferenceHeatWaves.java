@@ -1,5 +1,6 @@
 // Frozen pre-optimization renderer for volume and pixel equivalence checks.
 package naturality.test.reference;
+import naturality.test.TestFixtures;
 
 import naturality.client.fluid.ProceduralFluids;
 
@@ -53,7 +54,7 @@ public final class ReferenceHeatWaves {
     }
 
     private static void scan(Minecraft client) {
-        var level = client.level;
+        var level = TestFixtures.require(client.level, "level");
         var center = BlockPos.containing(client.gameRenderer.mainCamera().position());
         if (world == level && level.getGameTime() - scanned < 5 && center.distSqr(origin) < 16) return;
         world = level; scanned = level.getGameTime(); origin = center; boxes.clear(); fireBoxes.clear();
@@ -136,7 +137,7 @@ public final class ReferenceHeatWaves {
         data.flip();
         try (var uniform = RenderSystem.getDevice().createBuffer(() -> "Naturality heat volumes", 128, data);
              var pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
-                 () -> "Naturality pixel heat waves", target.getColorTextureView(), Optional.empty())) {
+                 () -> "Naturality pixel heat waves", TestFixtures.require(target.getColorTextureView(), "target.getColorTextureView()"), Optional.empty())) {
             pass.setPipeline(RenderSystem.getCompiledPipeline(PIPELINE));
             RenderSystem.bindDefaultUniforms(pass);
             pass.setUniform("DynamicTransforms", RenderSystem.getDynamicUniforms().writeTransform(RenderSystem.getModelViewMatrixCopy(), new Vector4f(1)));

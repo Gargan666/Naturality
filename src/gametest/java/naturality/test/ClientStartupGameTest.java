@@ -28,7 +28,7 @@ public final class ClientStartupGameTest implements FabricClientGameTest {
                 throw new AssertionError("Client must finish resource loading and render the title screen");
         });
         context.takeScreenshot("client-startup-title-screen");
-        try (var world = context.worldBuilder().create()) {
+        try (var _ = context.worldBuilder().create()) {
             context.waitTicks(10);
             context.runOnClient(client -> {
                 if (client.level == null) throw new AssertionError("Client must load and render a world");

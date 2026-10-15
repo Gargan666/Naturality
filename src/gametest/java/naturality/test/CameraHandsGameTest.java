@@ -21,7 +21,7 @@ public final class CameraHandsGameTest implements FabricClientGameTest {
         for (int i = 0; i < 100; i++) tilt.tick(false, -.42, true);
         check(Math.abs(tilt.sample(1) + 2.5) < .001, "Controlled creative descent does not accrue freefall duration");
         check(ElasticMotion.elasticOut(0) == 0 && ElasticMotion.elasticOut(1) == 1 && ElasticMotion.elasticOut(.2) > 1, "Actual elasticOut curve overshoots with exact endpoints");
-        check(ElasticMotion.DURATION == 18 && Math.abs(ElasticMotion.elasticOut(.2) - 1.0625) < .00001,
+        check(Double.compare(ElasticMotion.DURATION, 18) == 0 && Math.abs(ElasticMotion.elasticOut(.2) - 1.0625) < .00001,
             "Three-times duration and half-strength elastic overshoot");
         var motion = new ElasticMotion(); motion.sample(new float[]{0}, 0);
         check(motion.sample(new float[]{1}, 1)[0] == 0, "A changed target starts continuously");
@@ -49,7 +49,7 @@ public final class CameraHandsGameTest implements FabricClientGameTest {
             server.runCommand("tp @a 0 100 0 0 0");
             context.waitTicks(12);
             context.runOnClient(client -> {
-                var player = client.player;
+                var player = TestFixtures.require(client.player, "player");
                 var camera = client.gameRenderer.mainCamera();
                 try {
                     var align = net.minecraft.client.Camera.class.getDeclaredMethod("alignWithEntity", float.class); align.setAccessible(true);
@@ -86,7 +86,7 @@ public final class CameraHandsGameTest implements FabricClientGameTest {
             context.runOnClient(client -> client.options.keyUse.setDown(false));
             server.runCommand("item replace entity @a weapon.mainhand with minecraft:fishing_rod");
             context.waitTicks(12);
-            context.runOnClient(client -> check(naturality.client.villager.FirstPersonRodTip.worldTip != null,
+            context.runOnClient(_ -> check(naturality.client.villager.FirstPersonRodTip.worldTip != null,
                 "Fishing rod measurement still follows the elastic rendered pose"));
             server.runCommand("item replace entity @a weapon.offhand with minecraft:air");
             server.runCommand("item replace entity @a weapon.mainhand with minecraft:filled_map[minecraft:map_id=0]");

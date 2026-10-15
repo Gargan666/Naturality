@@ -9,7 +9,7 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 /** Reproducible chunk-arrival CPU profile; lockstep test tick times are not gameplay FPS. */
 public final class OverworldLoadingGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
-        int distance = context.computeOnClient(c -> c.options.renderDistance().get());
+        int distance = TestFixtures.require(context.computeOnClient(c -> c.options.renderDistance().get()), "context.computeOnClient(c -> c.options.renderDistance().get())");
         try (var recording = new Recording(Configuration.getConfiguration("profile"))) {
             recording.start();
             try (var world = context.worldBuilder().setUseConsistentSettings(false)

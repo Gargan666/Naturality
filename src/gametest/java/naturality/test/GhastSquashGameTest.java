@@ -65,9 +65,9 @@ public final class GhastSquashGameTest implements FabricClientGameTest {
             });
             context.waitTicks(10);
             context.runOnClient(client -> {
-                for (var e : client.level.entitiesForRendering()) if (e instanceof Ghast ghast) {
+                for (var e : TestFixtures.level(client).entitiesForRendering()) if (e instanceof Ghast ghast) {
                     var renderer = client.getEntityRenderDispatcher().getRenderer(ghast);
-                    var state = (SquashingGhastRenderer.State)renderer.createRenderState(ghast, 1);
+                    var state = TestFixtures.require((SquashingGhastRenderer.State)renderer.createRenderState(ghast, 1), "state");
                     if (Math.hypot(state.leanPitch, state.leanRoll) < .1)
                         throw new AssertionError("Moving ghast render state must lean");
                 }
@@ -86,10 +86,10 @@ public final class GhastSquashGameTest implements FabricClientGameTest {
             context.waitTicks(10);
             context.runOnClient(client -> {
                 int adult = 0, baby = 0;
-                for (var e : client.level.entitiesForRendering())
+                for (var e : TestFixtures.level(client).entitiesForRendering())
                     if (e instanceof net.minecraft.world.entity.animal.happyghast.HappyGhast ghast) {
                         var renderer = client.getEntityRenderDispatcher().getRenderer(ghast);
-                        var state = (naturality.client.entity.LeaningHappyGhastRenderer.State)renderer.createRenderState(ghast, 1);
+                        var state = TestFixtures.require((naturality.client.entity.LeaningHappyGhastRenderer.State)renderer.createRenderState(ghast, 1), "state");
                         double lean = Math.hypot(state.leanPitch, state.leanRoll);
                         if (lean < .1 || lean > 8) throw new AssertionError("Happy ghast must lean within the shared limit");
                         if (state.isBaby) baby++; else adult++;
@@ -103,9 +103,9 @@ public final class GhastSquashGameTest implements FabricClientGameTest {
     }
     private static void check(ClientGameTestContext context, int phase) {
         context.runOnClient(client -> {
-            for (var e : client.level.entitiesForRendering()) if (e instanceof Ghast ghast) {
+            for (var e : TestFixtures.level(client).entitiesForRendering()) if (e instanceof Ghast ghast) {
                 var renderer = client.getEntityRenderDispatcher().getRenderer(ghast);
-                var state = (SquashingGhastRenderer.State)renderer.createRenderState(ghast, 1);
+                var state = TestFixtures.require((SquashingGhastRenderer.State)renderer.createRenderState(ghast, 1), "state");
                 if ((phase == 1 && state.squash < .11F) || (phase == -1 && state.squash >= 0)
                         || (phase == 0 && state.squash != 0)) throw new AssertionError("Ghast animation phase " + phase);
                 return;

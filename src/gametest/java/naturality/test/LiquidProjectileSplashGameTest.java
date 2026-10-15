@@ -10,7 +10,7 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 public final class LiquidProjectileSplashGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
         var saved=NaturalityConfig.get().liquids;
-        context.runOnClient(c->NaturalityConfig.get().liquids=new NaturalityConfig.Liquids());
+        context.runOnClient(_->NaturalityConfig.get().liquids=new NaturalityConfig.Liquids());
         try(var world=context.worldBuilder().create()) {
             var server=world.getServer();
             server.runCommand("gamemode spectator @a");
@@ -29,7 +29,7 @@ public final class LiquidProjectileSplashGameTest implements FabricClientGameTes
                 int[] counts=new int[2];
                 for(int tick=0;tick<60;tick++) {
                     context.waitTicks(1);
-                    context.runOnClient(c->{counts[0]+=lava?LavaEntrySplash.lastSplashCount:WaterEntrySplash.lastSplashCount;counts[1]+=WaterEntrySplash.lastSoundCount;});
+                    context.runOnClient(_->{counts[0]+=lava?LavaEntrySplash.lastSplashCount:WaterEntrySplash.lastSplashCount;counts[1]+=WaterEntrySplash.lastSoundCount;});
                 }
                 check(counts[0]==(high?1:0),type+" into "+(lava?"lava":"water")+" must follow the normal five-block threshold and splash once; got "+counts[0]);
                 check(counts[1]==0,"Items and projectiles must not play the custom splash sound");
@@ -42,10 +42,10 @@ public final class LiquidProjectileSplashGameTest implements FabricClientGameTes
             int[] normal=new int[2];
             for(int tick=0;tick<60;tick++) {
                 context.waitTicks(1);
-                context.runOnClient(c->{normal[0]+=WaterEntrySplash.lastSplashCount;normal[1]+=WaterEntrySplash.lastSoundCount;});
+                context.runOnClient(_->{normal[0]+=WaterEntrySplash.lastSplashCount;normal[1]+=WaterEntrySplash.lastSoundCount;});
             }
             check(normal[0]==1 && normal[1]==1,"Living entities still produce one visual splash and sound");
-        } finally {context.runOnClient(c->NaturalityConfig.get().liquids=saved);}
+        } finally {context.runOnClient(_->NaturalityConfig.get().liquids=saved);}
     }
     private static void check(boolean value,String message){if(!value)throw new AssertionError(message);}
 }

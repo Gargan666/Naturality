@@ -20,7 +20,7 @@ public final class LeavesGameTest implements FabricClientGameTest {
                 for (var type : new SimpleParticleType[] { ParticleTypes.CHERRY_LEAVES,
                         ParticleTypes.PALE_OAK_LEAVES, ParticleTypes.RED_POPLAR_LEAVES,
                         ParticleTypes.ORANGE_POPLAR_LEAVES, ParticleTypes.YELLOW_POPLAR_LEAVES }) {
-                    var leaf = client.particleEngine.createParticle(type, 0, 100.01, 0, 0, 0, 0);
+                    var leaf = TestFixtures.require(client.particleEngine.createParticle(type, 0, 100.01, 0, 0, 0, 0), "leaf");
                     check(leaf != null, "Leaf provider must exist");
                     leaf.setParticleSpeed(0.01, -0.1, 0.01);
                     leaf.tick();
@@ -34,8 +34,8 @@ public final class LeavesGameTest implements FabricClientGameTest {
                     leaf.tick();
                     check(!leaf.isAlive(), "Leaf must expire after 40 resting and 10 fading ticks");
                     for (boolean xWall : new boolean[] { true, false }) {
-                        var sliding = client.particleEngine.createParticle(type,
-                            xWall ? 1.9 : 0.5, 102, xWall ? 0.5 : 1.9, 0, 0, 0);
+                        var sliding = TestFixtures.require(client.particleEngine.createParticle(type,
+                            xWall ? 1.9 : 0.5, 102, xWall ? 0.5 : 1.9, 0, 0, 0), "sliding");
                         // Press toward each wall while falling; neither blocked
                         // horizontal axis should remove or ground the particle.
                         for (int tick = 0; tick < 8; tick++) {

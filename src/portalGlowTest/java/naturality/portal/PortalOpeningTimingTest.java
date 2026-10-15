@@ -9,7 +9,7 @@ public final class PortalOpeningTimingTest {
             && PortalOpeningTiming.pulse(70) == 0, "Pulse starts on reveal completion and ends exactly two seconds later");
         check(Math.abs(PortalOpeningTiming.expoIn(0.5F) - 0.03125F) < 0.00001F, "Reveal uses expo-in");
         check(Math.abs(PortalOpeningTiming.pulse(50) - 0.03125F) < 0.00001F, "Two-second pulse uses expo-out");
-        check(PortalOpeningTiming.pulse(50) > 0 && PortalOpeningTiming.END_TICK == 70, "Pulse must not finish after one second");
+        check(PortalOpeningTiming.pulse(50) > 0 && Integer.compare(PortalOpeningTiming.END_TICK, 70) == 0, "Pulse must not finish after one second");
         for (float luminance : new float[]{0, 0.1F, 0.5F, 1}) {
             check(PortalOpeningTiming.pixelAlpha(0, luminance) == 0, "All texels start transparent");
             check(PortalOpeningTiming.pixelAlpha(1, luminance) == 1, "All texels finish at source alpha");

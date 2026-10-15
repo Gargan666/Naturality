@@ -35,4 +35,4 @@ Entity and GUI renderers may refer to full texture paths, for example:
   naturality:textures/entity/example.png
 
 Restart the development client after rebuilding to see updated resources.
-For more project details, see PROJECT_REFERENCE.txt in the project root.
+For the current project map and working rules, see AGENTS.md in the project root.

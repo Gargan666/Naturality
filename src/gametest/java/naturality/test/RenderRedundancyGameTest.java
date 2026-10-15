@@ -19,12 +19,12 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.chunk.RenderRegionCache;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
-import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 
 /** Checks removal of invisible/redundant work without reducing feature coverage. */
 public final class RenderRedundancyGameTest implements FabricClientGameTest {
+    @SuppressWarnings("unused") // Volatile benchmark sink prevents dead-code elimination; deliberately never read.
     private static volatile Object sink;
     @Override public void runTest(ClientGameTestContext context) {
         try (var world = context.worldBuilder().create()) {
@@ -65,14 +65,14 @@ public final class RenderRedundancyGameTest implements FabricClientGameTest {
         for (int i = 0; i < 512; i++) {
             BlockPos pos = new BlockPos(random.nextInt(25)-12, 99+random.nextInt(7), random.nextInt(25)-12);
             // Identical fixed light input isolates the geometric probe, including roof edges.
-            boolean old = WindShapes.raw(() -> ReferenceWindShelter.hasOpenSkyPath(level, pos, p -> 15));
-            boolean now = WindShapes.raw(() -> WindShelter.hasOpenSkyPath(level, pos, p -> 15));
+            boolean old = WindShapes.raw(() -> ReferenceWindShelter.hasOpenSkyPath(level, pos, _ -> 15));
+            boolean now = WindShapes.raw(() -> WindShelter.hasOpenSkyPath(level, pos, _ -> 15));
             if (old != now) throw new AssertionError("Shelter changed at " + pos);
         }
         var point = new BlockPos(0, 100, 0);
         for (int round = 0; round < 4; round++) {
-            probe("shelter-original", 10000, () -> sink = WindShapes.raw(() -> ReferenceWindShelter.hasOpenSkyPath(level, point, p -> 15)));
-            probe("shelter-optimized", 10000, () -> sink = WindShapes.raw(() -> WindShelter.hasOpenSkyPath(level, point, p -> 15)));
+            probe("shelter-original", 10000, () -> sink = WindShapes.raw(() -> ReferenceWindShelter.hasOpenSkyPath(level, point, _ -> 15)));
+            probe("shelter-optimized", 10000, () -> sink = WindShapes.raw(() -> WindShelter.hasOpenSkyPath(level, point, _ -> 15)));
         }
     }
 
@@ -139,10 +139,10 @@ public final class RenderRedundancyGameTest implements FabricClientGameTest {
     }
 
     private static void checkClouds(ClientGameTestContext context) throws ReflectiveOperationException {
-        var current = context.computeOnClient(c -> new CloudLayerRenderer());
-        var original = context.computeOnClient(c -> new ReferenceCloudLayerRenderer());
+        var current = context.computeOnClient(_ -> new CloudLayerRenderer());
+        var original = context.computeOnClient(_ -> new ReferenceCloudLayerRenderer());
         try {
-            context.runOnClient(c -> {
+            context.runOnClient(_ -> {
                 long[] cells = new long[64];
                 for (int i = 0; i < cells.length; i++) if (i % 3 != 0) cells[i] = 15;
                 field(current.getClass(), "texture").set(current, new CloudLayerRenderer.TextureData(cells, 8, 8));
@@ -150,7 +150,7 @@ public final class RenderRedundancyGameTest implements FabricClientGameTest {
             });
             for (boolean fade : new boolean[] {false,true}) for (int style : new int[] {0,1,2})
                 for (double height : new double[] {90,104,108,112,116,124}) {
-                    context.runOnClient(c -> {
+                    context.runOnClient(_ -> {
                         var settings = new NaturalityConfig.CloudLayer();
                         settings.fadingSides=fade; settings.style=style;
                         var camera = new Vec3(-2.5,height,-3.5);
@@ -164,7 +164,7 @@ public final class RenderRedundancyGameTest implements FabricClientGameTest {
                     });
                     context.waitTick(); // Submit the GPU ring-buffer fences before another prepare.
                 }
-        } finally { context.runOnClient(c -> { current.close(); original.close(); }); }
+        } finally { context.runOnClient(_ -> { current.close(); original.close(); }); }
     }
     private static Field field(Class<?> type, String name) throws ReflectiveOperationException {
         Field f=type.getDeclaredField(name); f.setAccessible(true); return f;

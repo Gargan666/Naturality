@@ -132,11 +132,11 @@ public final class VillagerWorkGameTest implements FabricClientGameTest {
                             e -> e.owner() == actors[1] && e.phase() <= naturality.villager.VillagerBobber.BOBBING).isEmpty();
                     if (activeCast[0]) {
                         check(ProfessionWork.restingWater(s.overworld(), cast)
-                            && cast.distSqr(actors[1].blockPosition()) >= 9,
+                            && TestFixtures.require(cast, "cast").distSqr(actors[1].blockPosition()) >= 9,
                             "Fisherman casts several blocks into resting water");
                         int interior = 0;
                         for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++)
-                            if (ProfessionWork.restingWater(s.overworld(), cast.offset(dx, 0, dz))) interior++;
+                            if (ProfessionWork.restingWater(s.overworld(), TestFixtures.require(cast, "cast").offset(dx, 0, dz))) interior++;
                         check(interior == 9, "Fisherman aims at the interior of the connected pool");
                     }
                 });
@@ -148,9 +148,9 @@ public final class VillagerWorkGameTest implements FabricClientGameTest {
             for (int attempt = 0; attempt < 30 && !clientHook[0]; attempt++) {
                 context.waitTicks(2);
                 context.runOnClient(client -> {
-                    var entity = client.level.getEntity(fishermanId);
+                    var entity = TestFixtures.level(client).getEntity(fishermanId);
                     if (!(entity instanceof Villager villager)) return;
-                    clientHook[0] = !client.level.getEntitiesOfClass(naturality.villager.VillagerBobber.class,
+                    clientHook[0] = !TestFixtures.level(client).getEntitiesOfClass(naturality.villager.VillagerBobber.class,
                         new net.minecraft.world.phys.AABB(15, 99, -2, 21, 103, 4), e -> e.owner() == villager).isEmpty()
                         && new net.minecraft.client.renderer.item.properties.conditional.FishingRodCast()
                             .get(villager.getMainHandItem(), client.level, villager, 0,
@@ -165,7 +165,7 @@ public final class VillagerWorkGameTest implements FabricClientGameTest {
             context.waitTicks(2);
             context.takeScreenshot("villager-bobber-model-close");
             double[] poseViews = new double[12];
-            server.runOnServer(s -> {
+            server.runOnServer(_ -> {
                 var center = actors[1].position();
                 var look = actors[1].getLookAngle();
                 var forward = new net.minecraft.world.phys.Vec3(look.x, 0, look.z).normalize();
@@ -195,7 +195,7 @@ public final class VillagerWorkGameTest implements FabricClientGameTest {
                 server.runOnServer(s -> replanted[0] = s.overworld().getBlockState(crop).getBlock() instanceof CropBlock);
                 if (!replanted[0]) context.waitTicks(10);
             }
-            server.runOnServer(s -> {
+            server.runOnServer(_ -> {
                 check(actors[0].getInventory().countItem(Items.BONE_MEAL) < 16, "Farmer uses bone meal on growing crops");
                 check(replanted[0], "Harvested plots are replanted after the intentional planting pause");
                 check(actors[1].getInventory().countItem(Items.COOKED_COD) == 0,
@@ -243,7 +243,7 @@ public final class VillagerWorkGameTest implements FabricClientGameTest {
                 actors[1].setTradingPlayer(world.getConnection().getServerPlayer());
             });
             context.waitTicks(10);
-            server.runOnServer(s -> {
+            server.runOnServer(_ -> {
                 check(actors[1].getMainHandItem().isEmpty(), "Trading interrupts fishing and clears the rod");
                 check(((VillagerWorkVisuals)actors[1]).naturality$castTarget() == null, "Trading reels in the fishing line");
                 actors[1].setTradingPlayer(null);
@@ -254,7 +254,7 @@ public final class VillagerWorkGameTest implements FabricClientGameTest {
             server.runOnServer(s -> check(((CropBlock)Blocks.WHEAT).isMaxAge(s.overworld().getBlockState(crop)), "Farming respects mob griefing"));
             server.runCommand("time set 14000");
             context.waitTicks(60);
-            server.runOnServer(s -> {
+            server.runOnServer(_ -> {
                 check(actors[0].getMainHandItem().isEmpty() || actors[0].getMainHandItem().is(Items.BREAD),
                     "Farmer clears work tools outside work hours; evening bread sharing remains allowed: " + actors[0].getMainHandItem());
                 check(actors[1].getMainHandItem().isEmpty(), "Fisherman clears rod outside work hours");
@@ -286,8 +286,8 @@ public final class VillagerWorkGameTest implements FabricClientGameTest {
             context.takeScreenshot("player-bobber-fixed-front");
             server.runOnServer(s -> {
                 var level = s.overworld();
-                var cow = net.minecraft.world.entity.EntityTypes.COW.create(level,
-                    net.minecraft.world.entity.EntitySpawnReason.COMMAND);
+                var cow = TestFixtures.require(net.minecraft.world.entity.EntityTypes.COW.create(level,
+                    net.minecraft.world.entity.EntitySpawnReason.COMMAND), "cow");
                 cow.setPos(22, 101, -3);
                 cow.setNoAi(true);
                 level.addFreshEntity(cow);
@@ -303,14 +303,14 @@ public final class VillagerWorkGameTest implements FabricClientGameTest {
             context.waitTicks(2);
             net.minecraft.world.phys.Vec3[] animatedTip = new net.minecraft.world.phys.Vec3[1];
             context.runOnClient(client -> {
-                animatedTip[0] = naturality.client.villager.PlayerRodTips.tips.get(client.player.getId());
+                animatedTip[0] = naturality.client.villager.PlayerRodTips.tips.get(TestFixtures.player(client).getId());
                 check(animatedTip[0] != null, "Third-person fishing line measures the rendered player rod");
             });
-            context.runOnClient(client -> client.player.swing(
+            context.runOnClient(client -> TestFixtures.player(client).swing(
                 net.minecraft.world.InteractionHand.MAIN_HAND, net.minecraft.world.item.component.SwingAnimation.DEFAULT, true));
             context.waitTicks(2);
             context.runOnClient(client -> {
-                var tip = naturality.client.villager.PlayerRodTips.tips.get(client.player.getId());
+                var tip = naturality.client.villager.PlayerRodTips.tips.get(TestFixtures.player(client).getId());
                 check(tip != null && tip.distanceToSqr(animatedTip[0]) > .0001,
                     "Third-person rod endpoint moves with the player's swinging arm");
             });
@@ -330,14 +330,14 @@ public final class VillagerWorkGameTest implements FabricClientGameTest {
             var ropeStart = new net.minecraft.world.phys.Vec3(17, 105, 0);
             var ropeEnd = new net.minecraft.world.phys.Vec3(20, 105, 0);
             net.minecraft.world.phys.Vec3[] ropeMiddle = new net.minecraft.world.phys.Vec3[1];
-            context.runOnClient(client -> {
+            context.runOnClient(_ -> {
                 var chain = naturality.client.villager.RopeChain.sample(ropeTestKey, ropeStart, ropeEnd);
                 check(chain[0].equals(ropeStart) && chain[chain.length - 1].equals(ropeEnd),
                     "Physics rope pins both endpoints");
                 ropeMiddle[0] = chain[chain.length / 2];
             });
             context.waitTicks(4);
-            context.runOnClient(client -> {
+            context.runOnClient(_ -> {
                 var movedEnd = ropeEnd.add(0, 0, 1);
                 var chain = naturality.client.villager.RopeChain.sample(ropeTestKey, ropeStart, movedEnd);
                 check(chain[chain.length - 1].equals(movedEnd), "Physics rope follows a moving endpoint");
@@ -360,7 +360,7 @@ public final class VillagerWorkGameTest implements FabricClientGameTest {
             context.waitTicks(2);
             context.takeScreenshot("player-bobber-return");
             context.waitTicks(6);
-            server.runOnServer(s -> {
+            server.runOnServer(_ -> {
                 var player = world.getConnection().getServerPlayer();
                 check(player.getInventory().countItem(playerCatch[0].getItem()) > beforePlayerCatch[0],
                     "Player receives the caught item when the bobber reaches them");
@@ -503,6 +503,7 @@ public final class VillagerWorkGameTest implements FabricClientGameTest {
         check(top == null || !top.canReach(), "Villager cannot choose the top of its workstation as a destination");
         var around = villager.getNavigation().createPath(job.offset(0, 0, 3), 0);
         check(around != null && around.canReach(), "Villager can still path around its workstation");
+                around=TestFixtures.require(around, "around");
         for (int i = 0; i < around.getNodeCount(); i++) {
             var node = around.getNode(i);
             check(node.x != job.getX() || node.y != job.getY() + 1 || node.z != job.getZ(),

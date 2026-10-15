@@ -94,21 +94,21 @@ public final class WeatherGameTest implements FabricClientGameTest {
                     var water = new BlockPos(10, 100, 10);
                     level.setBlockAndUpdate(water, Blocks.WATER.defaultBlockState());
                     check(plains.shouldFreeze(level, water), "Cold temperate water can freeze");
-                    check(WeatherSystem.state(s.getLevel(Level.NETHER)) == null && WeatherSystem.state(s.getLevel(Level.END)) == null, "Other dimension pools disabled");
+                    check(WeatherSystem.state(TestFixtures.require(s.getLevel(Level.NETHER), "s.getLevel(Level.NETHER)")) == null && WeatherSystem.state(TestFixtures.require(s.getLevel(Level.END), "s.getLevel(Level.END)")) == null, "Other dimension pools disabled");
                 });
                 world.getConnection().waitForClientboundPackets();
                 context.runOnClient(client -> {
-                    var state = WeatherSystem.state(client.level);
+                    var state = WeatherSystem.state(TestFixtures.level(client));
                     check(state != null && state.temperature() == 0 && state.wind() == 100, "Client receives independent channels");
-                    check(client.level.getPrecipitationAt(new BlockPos(0, 104, 0)) == Biome.Precipitation.SNOW, "Renderer uses snow climate");
+                    check(TestFixtures.level(client).getPrecipitationAt(new BlockPos(0, 104, 0)) == Biome.Precipitation.SNOW, "Renderer uses snow climate");
                     check(client.getSoundManager().getSoundEvent(naturality.NaturalitySounds.WIND_WEAK.location()) != null, "Weak wind registered");
                     check(client.getSoundManager().getSoundEvent(naturality.NaturalitySounds.WIND_STRONG.location()) != null, "Strong wind registered");
                     var cane=Blocks.SUGAR_CANE.defaultBlockState();
                     var root=new BlockPos(-8,101,3);
-                    check(WindRendering.vertexTag(client.level,root,cane,.5F,0,.5F)==0,"Only cane root is pinned");
+                    check(WindRendering.vertexTag(TestFixtures.level(client),root,cane,.5F,0,.5F)==0,"Only cane root is pinned");
                     for(int h=0;h<3;h++) {
-                        int top=WindRendering.vertexTag(client.level,root.above(h),cane,.5F,1,.5F);
-                        int bottom=WindRendering.vertexTag(client.level,root.above(h+1),cane,.5F,0,.5F);
+                        int top=WindRendering.vertexTag(TestFixtures.level(client),root.above(h),cane,.5F,1,.5F);
+                        int bottom=WindRendering.vertexTag(TestFixtures.level(client),root.above(h+1),cane,.5F,0,.5F);
                         check(top==h+1 && top==bottom,"Cane joints share increasing height above the root");
                     }
                     check(WindRendering.tag(Blocks.VINE.defaultBlockState())==100
@@ -116,7 +116,7 @@ public final class WeatherGameTest implements FabricClientGameTest {
                         && WindRendering.tag(Blocks.WEEPING_VINES_PLANT.defaultBlockState())==100,
                         "Wall and growing vine segments share connected wind mode");
                     var wallVine=Blocks.VINE.defaultBlockState().setValue(net.minecraft.world.level.block.VineBlock.SOUTH,true);
-                    check(WindRendering.vertexTag(client.level,new BlockPos(6,102,2),wallVine,0,1,.9375F)==110,
+                    check(WindRendering.vertexTag(TestFixtures.level(client),new BlockPos(6,102,2),wallVine,0,1,.9375F)==110,
                         "South support forbids positive Z wind displacement");
                     check(WindRendering.vineSupportMask(wallVine.setValue(net.minecraft.world.level.block.VineBlock.WEST,true))==9,
                         "Corner vines combine constraints from both support faces");
@@ -196,7 +196,7 @@ public final class WeatherGameTest implements FabricClientGameTest {
                     level.setBlockAndUpdate(thaw.above(2),Blocks.STONE.defaultBlockState());
                     check(!WeatherThaw.thawAt(level,thaw), "Sheltered snow is preserved");
                     level.removeBlock(thaw.above(2),false);
-                    check(WeatherSystem.state(level).rain() == 100, "Extreme downpour reaches endpoint");
+                    check(TestFixtures.require(WeatherSystem.state(level), "WeatherSystem.state(level)").rain() == 100, "Extreme downpour reaches endpoint");
                 });
                 for (boolean oit : new boolean[]{false, true}) {
                     context.runOnClient(client -> client.options.improvedTransparency().set(oit));
@@ -205,14 +205,14 @@ public final class WeatherGameTest implements FabricClientGameTest {
                 }
                 server.runCommand("execute in minecraft:the_nether run tp @a 0 100 0");
                 context.waitTicks(30);
-                context.runOnClient(client -> check(WeatherSystem.state(client.level) == null, "No Overworld state leaks into Nether"));
+                context.runOnClient(client -> check(WeatherSystem.state(TestFixtures.level(client)) == null, "No Overworld state leaks into Nether"));
                 server.runCommand("execute in minecraft:the_end run tp @a 0 100 0");
                 context.waitTicks(30);
-                context.runOnClient(client -> check(WeatherSystem.state(client.level) == null, "No Overworld state leaks into End"));
+                context.runOnClient(client -> check(WeatherSystem.state(TestFixtures.level(client)) == null, "No Overworld state leaks into End"));
                 server.runCommand("execute in minecraft:overworld run tp @a 0 104 -7");
                 p.enabled = false;
                 context.waitTicks(20);
-                context.runOnClient(client -> check(WeatherSystem.state(client.level) == null, "Disable clears synchronized state"));
+                context.runOnClient(client -> check(WeatherSystem.state(TestFixtures.level(client)) == null, "Disable clears synchronized state"));
                 p.enabled = true; p.overrideRain = p.overrideWind = p.overrideTemperature = false;
                 server.runCommand("gamerule advance_weather false");
                 server.runOnServer(s -> s.setWeatherParameters(12000, 0, false, false));
@@ -220,18 +220,18 @@ public final class WeatherGameTest implements FabricClientGameTest {
                 server.runOnServer(s -> {
                     var state = WeatherSystem.state(s.overworld());
                     check(state != null && state.rain() == 0, "Automatic rain remains calm before activation");
-                    check(state.wind() == 0, "Paused automatic wind remains calm before activation");
+                    check(TestFixtures.require(state, "state").wind() == 0, "Paused automatic wind remains calm before activation");
                 });
                 server.runOnServer(s -> s.setWeatherParameters(0, 12000, true, false));
                 context.waitTicks(30);
-                server.runOnServer(s -> check(WeatherSystem.state(s.overworld()).rain() == 0, "Vanilla rain does not force a paused automatic slider to activate"));
+                server.runOnServer(s -> check(TestFixtures.require(WeatherSystem.state(s.overworld()), "WeatherSystem.state(s.overworld())").rain() == 0, "Vanilla rain does not force a paused automatic slider to activate"));
                 server.runCommand("gamerule advance_weather false");
                 // Let the transition finish; subsequent targets must stop evolving.
                 context.waitTicks(110);
                 WeatherState[] frozen = new WeatherState[1];
                 server.runOnServer(s -> frozen[0] = WeatherSystem.state(s.overworld()));
                 context.waitTicks(25);
-                server.runOnServer(s -> check(frozen[0].equals(WeatherSystem.state(s.overworld())), "Weather gamerule freezes automatic channels"));
+                server.runOnServer(s -> check(frozen[0].equals(TestFixtures.require(WeatherSystem.state(s.overworld()), "WeatherSystem.state(s.overworld())")), "Weather gamerule freezes automatic channels"));
             }
         } finally {
             context.runOnClient(client -> client.options.improvedTransparency().set(oldTransparency[0]));

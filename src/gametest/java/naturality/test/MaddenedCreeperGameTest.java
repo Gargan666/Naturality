@@ -36,7 +36,7 @@ public final class MaddenedCreeperGameTest implements FabricClientGameTest {
             context.waitTicks(30);
             context.runOnClient(client -> {
                 int count = 0;
-                for (var e : client.level.entitiesForRendering()) if (e instanceof MaddenedCreeper creeper) {
+                for (var e : TestFixtures.level(client).entitiesForRendering()) if (e instanceof MaddenedCreeper creeper) {
                     count++;
                     check(creeper.isAlive() && creeper.getSwelling(1) == 0, "Idle pulse does not prime gameplay fuse");
                     var renderer = (MaddenedCreeperRenderer)client.getEntityRenderDispatcher().getRenderer(creeper);
@@ -73,6 +73,7 @@ public final class MaddenedCreeperGameTest implements FabricClientGameTest {
                 AreaEffectCloud cloud = null;
                 for (var e : level.getAllEntities()) if (e instanceof AreaEffectCloud found) cloud = found;
                 check(cloud != null && cloud.getRadius() > 2, "Explosion creates lingering cloud without prior potion effects");
+                cloud=TestFixtures.require(cloud, "cloud");
                 var victim = new Pig(EntityTypes.PIG, level);
                 victim.setPos(cloud.getX(), cloud.getY(), cloud.getZ());
                 victim.setNoAi(true); level.addFreshEntity(victim);

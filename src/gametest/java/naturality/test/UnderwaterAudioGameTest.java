@@ -19,7 +19,7 @@ final class UnderwaterAudioGameTest {
         near(UnderwaterAudio.strength(2.5F), .5F);
         near(UnderwaterAudio.strength(4), 1);
         near(UnderwaterAudio.strength(40), 1);
-        context.runOnClient(client -> {
+        context.runOnClient(_ -> {
             Channel channel;
             try {
                 var create = Channel.class.getDeclaredMethod("create");

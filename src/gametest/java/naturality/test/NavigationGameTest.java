@@ -60,7 +60,7 @@ public final class NavigationGameTest implements FabricClientGameTest {
             context.waitTicks(10);
             context.runOnClient(client -> {
                 check(NavigationClient.target(client.level).pos().equals(new BlockPos(24, 100, 32)), "Anchor target synchronized in Nether");
-                var compass = client.player.getOffhandItem();
+                var compass = TestFixtures.player(client).getOffhandItem();
                 var kind = net.minecraft.client.renderer.item.properties.numeric.CompassAngleState.CompassTarget.SPAWN;
                 var spawnAngle = new net.minecraft.client.renderer.item.properties.numeric.CompassAngle(false, kind);
                 float actual = spawnAngle.get(compass, client.level, client.player, 0);
@@ -69,9 +69,9 @@ public final class NavigationGameTest implements FabricClientGameTest {
                 var lodestoneAngle = new net.minecraft.client.renderer.item.properties.numeric.CompassAngle(false, net.minecraft.client.renderer.item.properties.numeric.CompassAngleState.CompassTarget.LODESTONE);
                 check(Math.abs(actual - lodestoneAngle.get(comparison, client.level, client.player, 0)) < .00001, "Actual compass needle points to the anchor rather than spinning");
                 compass.set(DataComponents.LODESTONE_TRACKER, new LodestoneTracker(java.util.Optional.of(GlobalPos.of(Level.NETHER, new BlockPos(60, 100, 70))), false));
-                check(net.minecraft.client.renderer.item.properties.numeric.CompassAngleState.CompassTarget.LODESTONE.get(client.level, compass, client.player).pos().equals(new BlockPos(60, 100, 70)), "Lodestone still overrides target");
-                client.player.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
-                client.player.setItemInHand(InteractionHand.OFF_HAND, ItemStack.EMPTY);
+                check(TestFixtures.require(net.minecraft.client.renderer.item.properties.numeric.CompassAngleState.CompassTarget.LODESTONE.get(TestFixtures.level(client), compass, client.player), "lodestone compass target").pos().equals(new BlockPos(60, 100, 70)), "Lodestone still overrides target");
+                TestFixtures.player(client).setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+                TestFixtures.player(client).setItemInHand(InteractionHand.OFF_HAND, ItemStack.EMPTY);
                 check(NavigationClient.message() == null, "Readout disappears as soon as neither item is held");
             });
             server.runCommand("execute in minecraft:the_end run tp @a 10 100 20");

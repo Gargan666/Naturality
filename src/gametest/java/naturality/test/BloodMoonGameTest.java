@@ -8,7 +8,7 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 public final class BloodMoonGameTest implements FabricClientGameTest {
     private static void check(boolean value, String message) { if (!value) throw new AssertionError(message); }
     @Override public void runTest(ClientGameTestContext context) {
-        check(BloodMoonCycle.START_CHANCE == .05, "Blood Moon has a 5% nightfall roll");
+        check(Double.compare(BloodMoonCycle.START_CHANCE, .05) == 0, "Blood Moon has a 5% nightfall roll");
         var cycle = new BloodMoonCycle(17);
         cycle.tick(true, false); cycle.tick(true, true);
         check(cycle.strength() == 0, "First fixture roll is unsuccessful");
@@ -48,10 +48,10 @@ public final class BloodMoonGameTest implements FabricClientGameTest {
                 check(rejected && SkyEvents.strength(s.overworld(), SkyEventType.BLOOD_MOON) == 0,
                     "The toggle rejects numeric strengths above one");
             });
-            context.runOnClient(client -> check(BloodMoonClient.current() == 0, "Normal moon starts without a blood tint"));
+            context.runOnClient(_ -> check(BloodMoonClient.current() == 0, "Normal moon starts without a blood tint"));
             context.takeScreenshot("blood-moon-normal");
             server.runCommand("skyevent minecraft:overworld blood_moon on"); context.waitTicks(25);
-            context.runOnClient(client -> check(BloodMoonClient.current() > .1F && BloodMoonClient.current() < .9F,
+            context.runOnClient(_ -> check(BloodMoonClient.current() > .1F && BloodMoonClient.current() < .9F,
                 "Command tint and scale ease toward their target"));
             context.takeScreenshot("blood-moon-transition");
             context.waitTicks(150);
@@ -85,16 +85,16 @@ public final class BloodMoonGameTest implements FabricClientGameTest {
             }
             server.runCommand("skyevent minecraft:overworld status");
             server.runCommand("skyevent minecraft:overworld blood_moon off"); context.waitTicks(25);
-            context.runOnClient(client -> check(BloodMoonClient.current() > .1F && BloodMoonClient.current() < .9F,
+            context.runOnClient(_ -> check(BloodMoonClient.current() > .1F && BloodMoonClient.current() < .9F,
                 "Switching off reverses moon, cloud and light tint gradually"));
             context.waitTicks(150);
-            context.runOnClient(client -> check(BloodMoonClient.current() == 0 && BloodMoonClient.scale(1) == 1,
+            context.runOnClient(_ -> check(BloodMoonClient.current() == 0 && BloodMoonClient.scale(1) == 1,
                 "The original moon and skylight are restored"));
-            context.runOnClient(client -> check(BloodMoonClient.tintArgb(0x806080ff, 1) == 0x806080ff,
+            context.runOnClient(_ -> check(BloodMoonClient.tintArgb(0x806080ff, 1) == 0x806080ff,
                 "Original blue cloud colors return when Blood Moon fades out"));
             server.runCommand("skyevent minecraft:overworld blood_moon 1"); context.waitTicks(160);
             server.runCommand("time set noon"); context.waitTicks(160);
-            context.runOnClient(client -> check(BloodMoonClient.current() == 0, "Even an override fades out during daylight"));
+            context.runOnClient(_ -> check(BloodMoonClient.current() == 0, "Even an override fades out during daylight"));
             server.runCommand("skyevent minecraft:overworld blood_moon auto");
         } finally {
             naturality.config.NaturalityConfig.get().clouds = oldClouds;
@@ -102,9 +102,9 @@ public final class BloodMoonGameTest implements FabricClientGameTest {
                 client.options.cloudStatus().set(oldStatus[0]); client.options.improvedTransparency().set(oldOit[0]);
             });
         }
-        try (var other = context.worldBuilder().create()) {
+        try (var _ = context.worldBuilder().create()) {
             context.waitTicks(5);
-            context.runOnClient(client -> check(BloodMoonClient.current() == 0, "Another world inherits no blood tint"));
+            context.runOnClient(_ -> check(BloodMoonClient.current() == 0, "Another world inherits no blood tint"));
         }
     }
 }

@@ -76,7 +76,7 @@ public final class SleepAccelerationGameTest implements FabricClientGameTest {
                 level.setBlockAndUpdate(foot, bed.setValue(AbstractBedBlock.PART, BedPart.FOOT));
                 level.setBlockAndUpdate(head, bed.setValue(AbstractBedBlock.PART, BedPart.HEAD));
                 player.setPos(.5, 100, .5);
-                var zombie = EntityTypes.ZOMBIE.create(level, EntitySpawnReason.COMMAND);
+                var zombie = TestFixtures.require(EntityTypes.ZOMBIE.create(level, EntitySpawnReason.COMMAND), "zombie");
                 zombie.setPos(2, 100, 0); zombie.setNoAi(true); level.addFreshEntity(zombie);
                 player.awardStat(Stats.TIME_SINCE_REST, 12345);
                 var block = (AbstractBedBlock)bed.getBlock();
@@ -86,7 +86,7 @@ public final class SleepAccelerationGameTest implements FabricClientGameTest {
             context.waitTicks(120);
             context.runOnClient(client -> {
                 check(naturality.client.sleep.SleepSnapshots.latest(client.level) != null, "Server time packets capture celestial and cloud snapshots");
-                check(client.level.tickRateManager().tickrate() == 20, "Sleep preserves normal client simulation rate");
+                check(TestFixtures.level(client).tickRateManager().tickrate() == 20, "Sleep preserves normal client simulation rate");
                 check(naturality.client.sleep.SleepVisuals.speed() == 2, "Visual speed is synchronized independently of tick rate");
                 check(naturality.config.GameplaySettings.displayedSettings().sleepMaxSpeed() == 2,
                     "Server sleep configuration is synchronized to clients");
@@ -150,19 +150,19 @@ public final class SleepAccelerationGameTest implements FabricClientGameTest {
                 check(naturality.client.sleep.SleepAudio.amount() > .5, "Sleeping listener receives eased muffling");
                 verifySleepFilter();
                 double speed = naturality.client.sleep.SleepVisuals.speed();
-                int before = particle[0].ticks, playerTicks = client.player.tickCount, beforeBirths = births[0];
+                int before = particle[0].ticks, playerTicks = TestFixtures.player(client).tickCount, beforeBirths = births[0];
                 double beforeX = particle[0].distance();
                 try {
                     naturality.client.sleep.SleepVisuals.accept(new naturality.sleep.SleepStatePayload(true, 200));
-                    long beforeTime = client.level.getGameTime();
-                    client.level.tick(() -> true);
-                    check(client.level.getGameTime() == beforeTime + 1,
+                    long beforeTime = TestFixtures.level(client).getGameTime();
+                    TestFixtures.level(client).tick(() -> true);
+                    check(TestFixtures.level(client).getGameTime() == beforeTime + 1,
                         "Requested 200x rate must not predict extra client world time ahead of the server");
                     check(particle[0].ticks == before && births[0] == beforeBirths, "Normal clock ticking never replays particle ticking or spawning");
                     client.particleEngine.tick();
                     check(particle[0].ticks - before == 1, "The 200x default still executes only one particle tick");
                     check(Math.abs(particle[0].distance() - beforeX - 20) < .00001, "One particle movement uses the 200x velocity multiplier");
-                    check(client.player.tickCount == playerTicks, "Visual acceleration must preserve the local input/player clock");
+                    check(TestFixtures.player(client).tickCount == playerTicks, "Visual acceleration must preserve the local input/player clock");
                 } finally { naturality.client.sleep.SleepVisuals.accept(new naturality.sleep.SleepStatePayload(true, speed)); }
             });
             server.runOnServer(s -> {
@@ -218,9 +218,9 @@ public final class SleepAccelerationGameTest implements FabricClientGameTest {
                 s.overworld().getGameRules().set(net.minecraft.world.level.gamerules.GameRules.ADVANCE_TIME, advance, s);
             });
             float[] beforeFade = new float[1];
-            context.runOnClient(client -> beforeFade[0] = naturality.client.sleep.SleepAudio.amount());
+            context.runOnClient(_ -> beforeFade[0] = naturality.client.sleep.SleepAudio.amount());
             context.waitTicks(20);
-            context.runOnClient(client -> {
+            context.runOnClient(_ -> {
                 check(!naturality.client.sleep.SleepVisuals.accelerating(), "Wake stops particle velocity acceleration on the client");
                 check(naturality.client.sleep.SleepVisuals.speed() == 1, "Wake restores normal particle velocity");
                 check(naturality.client.sleep.SleepAudio.amount() < beforeFade[0], "Wake restores audio gradually");
@@ -259,7 +259,7 @@ public final class SleepAccelerationGameTest implements FabricClientGameTest {
                     check(!SleepAcceleration.active(s), "High-speed sleep stops synchronously on waking");
                 });
                 world.getConnection().waitForClientboundPackets();
-                context.runOnClient(client -> check(naturality.client.sleep.SleepVisuals.speed() == 1,
+                context.runOnClient(_ -> check(naturality.client.sleep.SleepVisuals.speed() == 1,
                     "The wake packet immediately restores normal visual speed"));
             }
         } finally {
@@ -279,7 +279,7 @@ public final class SleepAccelerationGameTest implements FabricClientGameTest {
         try {
             var create = com.mojang.blaze3d.audio.Channel.class.getDeclaredMethod("create");
             create.setAccessible(true);
-            channel = (com.mojang.blaze3d.audio.Channel)create.invoke(null);
+            channel = TestFixtures.require((com.mojang.blaze3d.audio.Channel)create.invoke(null), "OpenAL channel");
             check(channel != null, "OpenAL channel can be created during sleep");
             ((naturality.client.sound.WeatherAudioFilter)channel).naturality$setEnvironmentAmounts(0, 0);
             if (org.lwjgl.openal.ALC.getCapabilities().ALC_EXT_EFX) {

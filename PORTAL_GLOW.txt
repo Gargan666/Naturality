@@ -146,22 +146,22 @@ Portal emissivity also uses PortalMaterialEmissiveMixin (baked material emission
 
 MOTE APPROACH: Spawn centers are strictly more than 0.3 blocks from the portal surface (minimum 0.3001). Distant motes have a 4:1 aspect ratio along texture X / travel, easing back to squares with proximity. Opacity is unchanged above 0.1 blocks, then fades linearly to zero at contact. Growth and color progression use smoothstep proximity. The portal_mote fragment shader clips transverse width and supports the complete fade in regular and OIT rendering.
 
-OPENING: Newly ignited portals hold the glow and portal particles off until the one-second surface reveal completes. The glow appears immediately at full opacity and 150% reach; the surface/glow/mote palette flashes to 200% brightness and 200% saturation. All three multipliers ease back with expo-out over two seconds. The initial fire fades over 0.5 seconds. The server-side portalIntroAnimation setting in config/naturality-server.json controls this sequence; all client visual toggles remain independent. See PROJECT_REFERENCE.txt for synchronization and test details.
+OPENING: Newly ignited portals hold the glow and portal particles off until the one-second surface reveal completes. The glow appears immediately at full opacity and 150% reach; the surface/glow/mote palette flashes to 200% brightness and 200% saturation. All three multipliers ease back with expo-out over two seconds. The initial fire fades over 0.5 seconds. The server-side portalIntroAnimation setting in config/naturality-server.json controls this sequence; all client visual toggles remain independent. See AGENTS.md for current implementation locations and targeted testing guidance.
 
 OCCLUSION: GPU depth bias is disabled. Glow faces sit 1/1024 block inward from the supporting frame surface to avoid coplanar z-fighting. Rear-side glow is clipped at the portal surface, with no glow inside the 0.25-block portal slab. This prevents the far glow drawing over the portal and avoids angle-dependent bleed through foreground blocks.
 
-OPENING SOUND: A positional End portal activation sound plays once at the opening pulse. Event: naturality:portal_open, Blocks category. See PROJECT_REFERENCE.txt for custom sound replacement.
+OPENING SOUND: A positional End portal activation sound plays once at the opening pulse. Event: naturality:portal_open, Blocks category. See resources/README.txt for custom sound replacement.
 
 Opening audio is downmixed to mono in memory to enable normal positional distance fading; vanilla End portal audio remains unchanged.
 
 AUDIO: Mod Menu has opening, ambient and travel volume sliders (0-100%). Destroyed portal ambience stops on the next client tick. Aborted entry audio fades out over 0.25 seconds.
 
-CROSSING VISUALS: The portal surface is now opaque. Entering hitboxes receive a pixelated palette glow strongest at half immersion, visible only from the entry side. Player overlay strength follows physical depth with brightness-dependent expo easing and no minimum alpha. Fully crossing teleports players and entities; backing out cancels. See PROJECT_REFERENCE.txt.
+CROSSING VISUALS: The portal surface is now opaque. Entering hitboxes receive a pixelated palette glow strongest at half immersion, visible only from the entry side. Player overlay strength follows physical depth with brightness-dependent expo easing and no minimum alpha. Fully crossing teleports players and entities; backing out cancels. See the portal feature entry in AGENTS.md.
 
 ENTITY RAYS: Hitbox silhouettes now extrude the same pixelated, waving rays as the frame. Covered frame intervals disappear and join the exposed entity boundary, including at the feet. The surface halo remains with filled corners. Completed portals write depth so the surface cannot overpaint foreground rays.
 
 Halo gradient rows use stable rounding to avoid interpolation speckles; outward rays start just ahead of the surface halo rather than intersecting its plane.
 
-MODEL OUTLINES: Entry rays, surface halos and frame shadows now follow the animated model's intersection with the portal on the 16-pixel grid. Unsupported non-model renderers retain hitbox fallback. Teleport timing remains based on physical hitbox crossing. See PROJECT_REFERENCE.txt for implementation and scope.
+MODEL OUTLINES: Entry rays, surface halos and frame shadows now follow the animated model's intersection with the portal on the 16-pixel grid. Unsupported non-model renderers retain hitbox fallback. Teleport timing remains based on physical hitbox crossing. See AGENTS.md for current implementation locations.
 
 CAMERA / ARRIVAL: The overlay becomes fully opaque before the camera's near plane crosses the portal. Destination arrivals retain an active crossing: walking outward exits it, while reversing through the portal returns immediately without first stepping away. Standing still does not trigger another teleport.

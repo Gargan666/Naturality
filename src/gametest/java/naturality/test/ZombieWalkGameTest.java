@@ -34,9 +34,9 @@ public final class ZombieWalkGameTest implements FabricClientGameTest {
             context.waitTicks(24);
             context.runOnClient(client -> {
                 int count=0;
-                for(var e:client.level.entitiesForRendering()) if(e instanceof Zombie zombie) {
+                for(var e:TestFixtures.level(client).entitiesForRendering()) if(e instanceof Zombie zombie) {
                     count++;
-                    var state=(LivingEntityRenderState)client.getEntityRenderDispatcher().getRenderer(zombie).createRenderState(zombie,1);
+                    var state=TestFixtures.require((LivingEntityRenderState)client.getEntityRenderDispatcher().getRenderer(zombie).createRenderState(zombie,1), "(ZombieWalkState)state");
                     var lean=((ZombieWalkState)state).naturality$walkLean();
                     if(lean.x<.1 || lean.x>10 || Math.abs(lean.y)>1.8) throw new AssertionError("Walking zombie render lean: "+lean.x+","+lean.y+" ground="+zombie.onGround()+" velocity="+zombie.getDeltaMovement()+" position="+zombie.position()+" walk="+state.walkAnimationSpeed);
                 }
@@ -56,15 +56,15 @@ public final class ZombieWalkGameTest implements FabricClientGameTest {
                 zombie.needsSync=true;zombie.syncPosition=true;
             });
             for(int tick=0;tick<40;tick++) {
-                server.runOnServer(s -> {
+                server.runOnServer(_ -> {
                     var zombie=blocked[0];
                     zombie.move(net.minecraft.world.entity.MoverType.SELF,new net.minecraft.world.phys.Vec3(0,.025,.3));
                     zombie.setDeltaMovement(0,.2,.3);zombie.needsSync=true;zombie.syncPosition=true;
                 });context.waitTicks(1);
             }
             context.runOnClient(client -> {
-                for(var e:client.level.entitiesForRendering()) if(e instanceof Zombie zombie) {
-                    var state=(LivingEntityRenderState)client.getEntityRenderDispatcher().getRenderer(zombie).createRenderState(zombie,1);
+                for(var e:TestFixtures.level(client).entitiesForRendering()) if(e instanceof Zombie zombie) {
+                    var state=TestFixtures.require((LivingEntityRenderState)client.getEntityRenderDispatcher().getRenderer(zombie).createRenderState(zombie,1), "(ZombieWalkState)state");
                     var lean=((ZombieWalkState)state).naturality$walkLean();
                     if(lean.x>.1 || Math.abs(lean.y)>.1) throw new AssertionError("Blocked jumping zombie must ease upright despite attempted movement");
                 }

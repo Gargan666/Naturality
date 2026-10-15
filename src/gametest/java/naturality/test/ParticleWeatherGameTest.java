@@ -58,8 +58,8 @@ public final class ParticleWeatherGameTest implements FabricClientGameTest {
                     var layouts = new java.util.HashSet<String>();
                     boolean flipped=false, unflipped=false;
                     for (int i=0;i<96;i++) {
-                        var card=(WeatherClusterParticle)c.particleEngine.createParticle(snowKind ? NaturalityParticles.SNOW_CLUSTER : NaturalityParticles.RAIN_CLUSTER,0,118,0,0,0,0);
-                        var flow=WeatherParticleContext.state(c.level);
+                        var card=TestFixtures.require((WeatherClusterParticle)c.particleEngine.createParticle(snowKind ? NaturalityParticles.SNOW_CLUSTER : NaturalityParticles.RAIN_CLUSTER,0,118,0,0,0,0), "card");
+                        var flow=WeatherParticleContext.state(TestFixtures.level(c));
                         var initial=card.velocity();
                         double residual=Math.hypot(initial.x-(snowKind?flow.snowWindX():flow.rainWindX()),
                             initial.z-(snowKind?flow.snowWindZ():flow.rainWindZ()));
@@ -69,7 +69,7 @@ public final class ParticleWeatherGameTest implements FabricClientGameTest {
                         var axis = probe.rotation.transform(new Vector3f(0,1,0));
                         var velocity = card.velocity().normalize();
                         check(axis.dot(new Vector3f((float)velocity.x,(float)velocity.y,(float)velocity.z))>.9999, "Both rain and snow preserve sprite Y velocity lock during extraction");
-                        int expected = snowKind ? 0xFFFFFF : net.minecraft.client.renderer.BiomeColors.getAverageWaterColor(c.level,new net.minecraft.core.BlockPos(0,118,0));
+                        int expected = snowKind ? 0xFFFFFF : net.minecraft.client.renderer.BiomeColors.getAverageWaterColor(TestFixtures.level(c),new net.minecraft.core.BlockPos(0,118,0));
                         check((probe.color & 0xFFFFFF)==(expected & 0xFFFFFF), "Rain uses biome water color; snow stays white");
                         flipped |= probe.left>probe.right; unflipped |= probe.left<probe.right;
                         layouts.add(Math.min(probe.left,probe.right)+":"+probe.top);
@@ -80,12 +80,12 @@ public final class ParticleWeatherGameTest implements FabricClientGameTest {
                 }
                 try(var renderer=new WeatherEffectRenderer()) {
                     var state=new WeatherRenderState();
-                    renderer.extractRenderState(c.level,1,c.gameRenderer.mainCamera().position(),state);
+                    renderer.extractRenderState(TestFixtures.level(c),1,c.gameRenderer.mainCamera().position(),state);
                     check(state.rainColumns.isEmpty() && state.snowColumns.isEmpty() && state.intensity==0,
                         "Vanilla sheets must not double-render over the particles");
                 }
-                var rain=(WeatherClusterParticle)c.particleEngine.createParticle(NaturalityParticles.RAIN_CLUSTER,0,118,0,0,0,0);
-                var snow=(WeatherClusterParticle)c.particleEngine.createParticle(NaturalityParticles.SNOW_CLUSTER,0,118,0,0,0,0);
+                var rain=TestFixtures.require((WeatherClusterParticle)c.particleEngine.createParticle(NaturalityParticles.RAIN_CLUSTER,0,118,0,0,0,0), "rain");
+                var snow=TestFixtures.require((WeatherClusterParticle)c.particleEngine.createParticle(NaturalityParticles.SNOW_CLUSTER,0,118,0,0,0,0), "snow");
                 check(Math.abs(snow.velocity().y)>=.055*4*.88 && Math.abs(snow.velocity().y)<=.09*4*1.12, "New snow cards include wind acceleration and their flutter phase");
                 check(Math.abs(snow.velocity().y) < Math.abs(rain.velocity().y), "Even severe-wind snow falls slower than rain");
                 snow.remove();
@@ -119,19 +119,19 @@ public final class ParticleWeatherGameTest implements FabricClientGameTest {
             }
             context.runOnClient(c->c.options.particles().set(ParticleStatus.MINIMAL));
             context.waitTicks(20);
-            context.runOnClient(c->check(ParticleWeather.activeCount()>0 && ParticleWeather.activeCount()<=141,
+            context.runOnClient(_->check(ParticleWeather.activeCount()>0 && ParticleWeather.activeCount()<=141,
                 "Minimal quality retains weather with a reduced budget"));
             context.runOnClient(c->c.options.particles().set(ParticleStatus.ALL));
             context.runOnClient(c->c.reloadResourcePacks());
             context.waitFor(c->c.gui.overlay()==null);
             context.waitTicks(30);
-            context.runOnClient(c->check(ParticleWeather.activeCount()>0, "Weather repopulates after a resource reload"));
+            context.runOnClient(_->check(ParticleWeather.activeCount()>0, "Weather repopulates after a resource reload"));
             profile.temperature=0;
             context.waitTicks(220);
             context.runOnClient(c->{
                 check(ParticleWeather.snowCount()>0 && ParticleWeather.snowCount()==ParticleWeather.activeCount(), "Cold plains use only snow cards");
                 ParticleWeatherPerformance.measure(c,true);
-                var snow=(WeatherClusterParticle)c.particleEngine.createParticle(NaturalityParticles.SNOW_CLUSTER,0,118,0,0,0,0);
+                var snow=TestFixtures.require((WeatherClusterParticle)c.particleEngine.createParticle(NaturalityParticles.SNOW_CLUSTER,0,118,0,0,0,0), "snow");
                 double y=snow.getBoundingBox().minY;
                 var initialSnow=snow.velocity();
                 snow.tick(); var first=snow.velocity();
@@ -147,21 +147,21 @@ public final class ParticleWeatherGameTest implements FabricClientGameTest {
             server.runCommand("fill -6 114 -6 6 114 6 stone");
             world.getConnection().waitForClientboundPackets();
             context.runOnClient(c->{
-                check(ParticleWeather.clearance(c.level,0,112,0,1.7)<0, "Roof excludes full card footprint");
-                var snow=(WeatherClusterParticle)c.particleEngine.createParticle(NaturalityParticles.SNOW_CLUSTER,0,112,0,0,0,0);
+                check(ParticleWeather.clearance(TestFixtures.level(c),0,112,0,1.7)<0, "Roof excludes full card footprint");
+                var snow=TestFixtures.require((WeatherClusterParticle)c.particleEngine.createParticle(NaturalityParticles.SNOW_CLUSTER,0,112,0,0,0,0), "snow");
                 snow.tick(); check(!snow.isAlive(), "Cards cannot remain under roofs");
             });
             server.runCommand("tp @a 0 108 0");
             for(int x:new int[]{-32,0})for(int z:new int[]{-32,0})
                 server.runCommand("fillbiome "+x+" 96 "+z+" "+(x+31)+" 127 "+(z+31)+" desert");
             context.waitTicks(25);
-            context.runOnClient(c->check(ParticleWeather.activeCount()==0, "Desert stays dry even at temperature zero"));
+            context.runOnClient(_->check(ParticleWeather.activeCount()==0, "Desert stays dry even at temperature zero"));
             profile.rain=0;
             context.waitTicks(210);
-            context.runOnClient(c->check(ParticleWeather.activeCount()==0, "Clear weather has no lingering clusters"));
+            context.runOnClient(_->check(ParticleWeather.activeCount()==0, "Clear weather has no lingering clusters"));
             server.runCommand("execute in minecraft:the_nether run tp @a 0 108 0");
             context.waitTicks(25);
-            context.runOnClient(c->check(!ParticleWeather.enabled(c.level) && ParticleWeather.activeCount()==0, "Disabled dimensions have no precipitation particles"));
+            context.runOnClient(c->check(!ParticleWeather.enabled(TestFixtures.level(c)) && ParticleWeather.activeCount()==0, "Disabled dimensions have no precipitation particles"));
         } finally {
             context.runOnClient(c->{ParticleWeather.clear();c.options.particles().set(quality[0]);c.options.weatherRadius().set(radius[0]);c.options.improvedTransparency().set(oit[0]);});
         }
@@ -194,7 +194,7 @@ public final class ParticleWeatherGameTest implements FabricClientGameTest {
                         "Render-pass light cache preserves vanilla and dynamic light");
                     check(WeatherParticleContext.canSeeSky(level,pos)==level.canSeeSky(pos),"Shared sky queries match the world");
                     var eye=first.eye();
-                    check(Math.abs(first.heavyParticleChance(x,y,0)-weather.heavyRainParticleChance(new Vec3(x,y,0).distanceTo(eye)))<1E-7,
+                    check(Math.abs(first.heavyParticleChance(x,y,0)-TestFixtures.require(weather, "weather").heavyRainParticleChance(new Vec3(x,y,0).distanceTo(eye)))<1E-7,
                         "Shared heavy sprite probability matches distance and weather");
                 }
             }

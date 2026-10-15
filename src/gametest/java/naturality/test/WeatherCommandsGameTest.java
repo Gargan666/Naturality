@@ -39,7 +39,7 @@ public final class WeatherCommandsGameTest implements FabricClientGameTest {
                     "Dimension selection must be the first and only command branch");
                 check(!root.canUse(source.withPermission(PermissionSet.NO_PERMISSIONS)), "Operator permission is required");
                 reject(commands, source.withPermission(PermissionSet.NO_PERMISSIONS), "weather minecraft:overworld rain 80");
-                check(WeatherSystem.state(s.overworld()).temperature() == 50 && !overworld.overrideTemperature,
+                check(TestFixtures.require(WeatherSystem.state(s.overworld()), "WeatherSystem.state(s.overworld())").temperature() == 50 && !overworld.overrideTemperature,
                     "New worlds start at neutral temperature in automatic mode, even with a cold weather pool");
                 var plains = s.overworld().registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.BIOME)
                     .getOrThrow(net.minecraft.world.level.biome.Biomes.PLAINS).value();
@@ -60,13 +60,13 @@ public final class WeatherCommandsGameTest implements FabricClientGameTest {
                 check(overworld.rain == 10 && overworld.wind == 75 && overworld.temperature == 20, "Invalid commands cannot mutate settings");
                 execute(commands, source, "weather minecraft:the_nether wind 90");
                 execute(commands, source, "weather minecraft:the_end gravity 5");
-                var endCycle = naturality.weather.EndWeatherSystem.cycle(s.getLevel(Level.END));
+                var endCycle = naturality.weather.EndWeatherSystem.cycle(TestFixtures.require(s.getLevel(Level.END), "s.getLevel(Level.END)"));
                 reject(commands, source, "weather minecraft:the_end rain 50");
                 reject(commands, source, "weather minecraft:overworld gravity 50");
                 reject(commands, source, "weather minecraft:the_end distortion 100");
                 reject(commands, source, "weather minecraft:the_end distortion on");
                 reject(commands, source, "weather minecraft:the_end distortion off");
-                execute(commands, source.withLevel(s.getLevel(Level.NETHER)), "weather minecraft:the_nether rain 45");
+                execute(commands, source.withLevel(TestFixtures.require(s.getLevel(Level.NETHER), "s.getLevel(Level.NETHER)")), "weather minecraft:the_nether rain 45");
                 check(nether.rain == 45 && nether.wind == 90 && endCycle.override("gravity") == 5, "Explicit dimension routing");
                 check(!nether.enabled && !end.enabled && overworld.rain == 10, "Reserved pools stay disabled and independent");
                 execute(commands, source, "weather minecraft:overworld rain auto");
@@ -101,13 +101,13 @@ public final class WeatherCommandsGameTest implements FabricClientGameTest {
             });
             context.waitTicks(220);
             server.runOnServer(s -> {
-                var state = WeatherSystem.state(s.overworld());
+                var state = TestFixtures.require(WeatherSystem.state(s.overworld()), "state");
                 check(state.rain() == 0 && state.wind() == 100 && state.temperature() == 0, "Commands drive live server channels");
-                check(WeatherSystem.state(s.getLevel(Level.NETHER)) == null && WeatherSystem.state(s.getLevel(Level.END)) == null, "Reserved dimension effects remain off");
+                check(WeatherSystem.state(TestFixtures.require(s.getLevel(Level.NETHER), "s.getLevel(Level.NETHER)")) == null && WeatherSystem.state(TestFixtures.require(s.getLevel(Level.END), "s.getLevel(Level.END)")) == null, "Reserved dimension effects remain off");
             });
             world.getConnection().waitForClientboundPackets();
             context.runOnClient(client -> {
-                var state = WeatherSystem.state(client.level);
+                var state = WeatherSystem.state(TestFixtures.level(client));
                 check(state != null && state.rain() == 0 && state.wind() == 100 && state.temperature() == 0, "Command changes synchronize to client");
             });
         }

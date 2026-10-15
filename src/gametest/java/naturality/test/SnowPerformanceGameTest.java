@@ -12,9 +12,10 @@ import net.minecraft.util.RandomSource;
 
 /** Fixed input CPU/allocation probes; GPU submission and FPS are deliberately excluded. */
 public final class SnowPerformanceGameTest implements FabricClientGameTest {
+    @SuppressWarnings("unused") // Volatile benchmark sink prevents dead-code elimination; deliberately never read.
     private static volatile double sink;
     @Override public void runTest(ClientGameTestContext context) {
-        try (var world = context.worldBuilder().create()) {
+        try (var _ = context.worldBuilder().create()) {
             context.runOnClient(client -> {
                 for (var support : new net.minecraft.world.level.block.state.BlockState[]{
                         Blocks.STONE.defaultBlockState(), Blocks.STONE_SLAB.defaultBlockState(),
@@ -23,7 +24,7 @@ public final class SnowPerformanceGameTest implements FabricClientGameTest {
                     var snow = Blocks.SNOW.defaultBlockState().setValue(SnowLayerBlock.LAYERS, 3);
                     var view = (BlockAndTintGetter) java.lang.reflect.Proxy.newProxyInstance(
                         BlockAndTintGetter.class.getClassLoader(), new Class<?>[]{BlockAndTintGetter.class},
-                        (proxy, method, args) -> {
+                        (_, method, args) -> {
                             if (method.getName().equals("getBlockState")) {
                                 var p = (BlockPos) args[0];
                                 if (p.getX() != 0 || p.getZ() != 0) return Blocks.AIR.defaultBlockState();
@@ -46,7 +47,7 @@ public final class SnowPerformanceGameTest implements FabricClientGameTest {
                     var random=RandomSource.create(0);
                     probe(name + " overlay", () -> {
                         quads[0]=0; area[0]=0;
-                        model.emitQuads(emitter,view,BlockPos.ZERO,support,random,direction -> false);
+                        model.emitQuads(emitter,view,BlockPos.ZERO,support,random,_ -> false);
                     });
                     System.out.println("SNOW_MESH " + name + " quads=" + quads[0] + " area=" + area[0]);
                 }

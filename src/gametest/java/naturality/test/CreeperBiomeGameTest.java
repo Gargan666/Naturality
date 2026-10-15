@@ -38,14 +38,14 @@ public final class CreeperBiomeGameTest implements FabricClientGameTest {
     private static void check(ClientGameTestContext context) {
         context.runOnClient(client -> {
             int count = 0;
-            for (var entity : client.level.entitiesForRendering()) if (entity instanceof Creeper creeper) {
+            for (var entity : TestFixtures.level(client).entitiesForRendering()) if (entity instanceof Creeper creeper) {
                 count++;
                 if (!"minecraft:swamp".equals(((CreeperBiome)creeper).naturality$spawnBiome()))
                     throw new AssertionError("Spawn biome must survive movement and sync to client");
                 var renderer = (net.minecraft.client.renderer.entity.CreeperRenderer)client.getEntityRenderDispatcher().getRenderer(creeper);
                 var state = (CreeperRenderState)renderer.createRenderState(creeper, 1);
-                int expected = 0xFF000000 | client.level.registryAccess().lookupOrThrow(Registries.BIOME)
-                    .getValue(Identifier.withDefaultNamespace("swamp")).getFoliageColor();
+                int expected = 0xFF000000 | TestFixtures.require(TestFixtures.level(client).registryAccess().lookupOrThrow(Registries.BIOME)
+                    .getValue(Identifier.withDefaultNamespace("swamp")), "swamp biome").getFoliageColor();
                 if (((CreeperTintState)state).naturality$foliageTint() != expected)
                     throw new AssertionError("Creeper must retain swamp foliage tint in desert");
                 if (!renderer.getTextureLocation(state).equals(Identifier.fromNamespaceAndPath("naturality", "textures/entity/creeper.png")))

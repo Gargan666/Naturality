@@ -19,7 +19,7 @@ final class SnowFaceVisibilityChecks {
         var blocks=new HashMap<BlockPos,BlockState>();
         var snapshot=(BlockAndTintGetter)java.lang.reflect.Proxy.newProxyInstance(
             BlockAndTintGetter.class.getClassLoader(),new Class<?>[]{BlockAndTintGetter.class},
-            (proxy,method,args)-> {
+            (_,method,args)-> {
                 if(method.getName().equals("getBlockState"))return blocks.getOrDefault(args[0],Blocks.AIR.defaultBlockState());
                 throw new AssertionError("Unexpected snow culling snapshot query: "+method.getName());
             });

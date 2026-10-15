@@ -16,9 +16,9 @@ public final class SkyStateGameTest implements FabricClientGameTest {
             server.runCommand("execute in minecraft:the_end run tp @a 3000 110 0");
             context.waitTicks(30);
             context.runOnClient(client -> {
-                check(client.level.dimension().equals(Level.END), "Fixture enters the End");
+                check(TestFixtures.level(client).dimension().equals(Level.END), "Fixture enters the End");
                 // Remove the old Overworld color that normally masks the login crash.
-                client.gameRenderer.gameRenderState().levelRenderState.skyRenderState.skyColor = null;
+                TestFixtures.clearSkyColor(client.gameRenderer.gameRenderState().levelRenderState.skyRenderState);
             });
             context.waitTicks(5);
             context.runOnClient(client -> check(
@@ -45,11 +45,11 @@ public final class SkyStateGameTest implements FabricClientGameTest {
             context.waitTicks(20);
         }
         context.runOnClient(client ->
-            client.gameRenderer.gameRenderState().levelRenderState.skyRenderState.skyColor = null);
+            TestFixtures.clearSkyColor(client.gameRenderer.gameRenderState().levelRenderState.skyRenderState));
         try (var reopened = save.open()) {
             reopened.getConnection().waitForClientboundPackets();
             context.waitTicks(20);
-            context.runOnClient(client -> check(client.level.dimension().equals(Level.END),
+            context.runOnClient(client -> check(TestFixtures.level(client).dimension().equals(Level.END),
                 "A world saved in the End reopens and renders without a previous Overworld frame"));
         }
     }

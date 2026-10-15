@@ -50,7 +50,7 @@ public final class ChunkSafetyGameTest implements FabricClientGameTest {
             });
             // This snapshot needs a real snow owner; wait for the server edits
             // to reach the client before testing its extended snow region.
-            context.waitFor(client -> client.level.getBlockState(SAVED_SNOW[2]).is(Blocks.SNOW));
+            context.waitFor(client -> TestFixtures.level(client).getBlockState(SAVED_SNOW[2]).is(Blocks.SNOW));
             context.runOnClient(client -> {
                 var level = java.util.Objects.requireNonNull(client.level);
                 var region = new RenderRegionCache().createRegion(level, SectionPos.asLong(-1, 6, -1));

@@ -6,7 +6,6 @@ import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.client.model.object.crystal.EndCrystalModel;
 import net.minecraft.client.renderer.entity.state.EndCrystalRenderState;
-import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
 import com.mojang.blaze3d.vertex.PoseStack;
 import org.joml.Quaternionf;
@@ -15,7 +14,7 @@ public final class CrystalVisualGameTest implements FabricClientGameTest {
     public void runTest(ClientGameTestContext context) {
         for(int i=0;i<1000;i++) check(CrystalVisuals.centerHeight(i)>.94 && CrystalVisuals.centerHeight(i)<1.4,"Bobbing keeps the rotated outer cube above support");
         check(Math.abs(CrystalVisuals.bob(10)-CrystalVisuals.bob((float)(10+Math.PI*20)))<.00001,"Half-vanilla-speed bobbing period");
-        context.runOnClient(client -> {
+        context.runOnClient(_ -> {
             var model=new EndCrystalModel(EndCrystalModel.createBodyLayer().bakeRoot());
             model.cube.visit(new PoseStack(),(_,_,_,cube) -> {
                 for(var face:cube.polygons) {
@@ -42,21 +41,21 @@ public final class CrystalVisualGameTest implements FabricClientGameTest {
                     var field=CrystalTextParticle.class.getDeclaredField("ACTIVE");field.setAccessible(true);
                     var active=(java.util.Map<?,?>)field.get(null);
                     check(active.size()==1,"One looping particle per crystal");
-                    for(var particle:active.values()) check(((CrystalTextParticle)particle).isAlive(),"Crystal glyph remains alive");
+                    for(var particle:active.values()) check((TestFixtures.require((CrystalTextParticle)particle, "(CrystalTextParticle)particle")).isAlive(),"Crystal glyph remains alive");
                 } catch(ReflectiveOperationException error) {throw new AssertionError(error);}
-                for(var e:client.level.entitiesForRendering()) if(e instanceof EndCrystal crystal) {
-                    var state=(EndCrystalRenderState)client.getEntityRenderDispatcher().getRenderer(crystal).createRenderState(crystal,1);
+                for(var e:TestFixtures.level(client).entitiesForRendering()) if(e instanceof EndCrystal crystal) {
+                    var state=TestFixtures.require((EndCrystalRenderState)client.getEntityRenderDispatcher().getRenderer(crystal).createRenderState(crystal,1), "state");
                     check(Math.abs(state.ageInTicks-(crystal.time+1))<.001,"Beam and model share the native age clock");
                 }
             });context.takeScreenshot("crystal-custom-core-glyph");context.waitTicks(60);
-            context.runOnClient(client -> {
+            context.runOnClient(_ -> {
                 try {
                     var field=CrystalTextParticle.class.getDeclaredField("ACTIVE");field.setAccessible(true);
                     check(((java.util.Map<?,?>)field.get(null)).size()==1,"Particle does not accumulate over animation loops");
                 } catch(ReflectiveOperationException error) {throw new AssertionError(error);}
             });context.takeScreenshot("crystal-slow-bob-loop");
             server.runCommand("kill @e[type=end_crystal]");context.waitTicks(8);
-            context.runOnClient(client -> {
+            context.runOnClient(_ -> {
                 try {
                     var field=CrystalTextParticle.class.getDeclaredField("ACTIVE");field.setAccessible(true);
                     check(((java.util.Map<?,?>)field.get(null)).isEmpty(),"Crystal removal clears its attached particle");

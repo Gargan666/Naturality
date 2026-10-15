@@ -29,7 +29,7 @@ public final class LirestoneWorldgenGameTest implements FabricClientGameTest {
             server.runCommand("gamerule minecraft:random_tick_speed 0");
             BlockPos[] views = new BlockPos[4];
             server.runOnServer(s -> {
-                var end = s.getLevel(Level.END);
+                var end = TestFixtures.require(s.getLevel(Level.END), "end");
                 var generator = (NoiseBasedChunkGenerator)end.getChunkSource().getGenerator();
                 var random = end.getChunkSource().randomState();
                 var sampler = random.samplersWithContext(SamplerContext.builder().build()).get(
@@ -70,6 +70,8 @@ public final class LirestoneWorldgenGameTest implements FabricClientGameTest {
                 check(changedSeed>samples*.01 && neighboringChanges<samples*.04,"Deposits are speckles or ignore the seed");
                 check(emptyRegions>256*256*.15 && rich!=null && empty!=null,"Missing rich or large patch-free regions");
                 check(buried<filled*.2,"Deep deposits remain too common");
+                rich=TestFixtures.require(rich, "rich");
+                empty=TestFixtures.require(empty, "empty");
                 for(int dx=-256;dx<=256;dx+=32)for(int dz=-256;dz<=256;dz+=32)for(int y=32;y<224;y+=16)
                     check(!first.contains(empty.getX()+dx,y,empty.getZ()+dz),"Empty region is only a small hole");
 
@@ -111,6 +113,7 @@ public final class LirestoneWorldgenGameTest implements FabricClientGameTest {
                     for(int y=80;y<224;y+=16)if(sampler.sampleValue(x,y,z)>0) {survey=new BlockPos(x,y,z);break search;}
                 }
                 check(survey!=null,"Missing a deposit-rich island region");
+                survey=TestFixtures.require(survey, "survey");
                 int startX=(survey.getX()>>4)-8,startZ=(survey.getZ()>>4)-8;
                 // A fresh 256-chunk region includes cliff deposits, plateaus and empty gaps.
                 for(int cz=startZ;cz<startZ+16;cz++)for(int cx=startX;cx<startX+16;cx++)end.getChunk(cx,cz);
@@ -234,7 +237,7 @@ public final class LirestoneWorldgenGameTest implements FabricClientGameTest {
                         +" "+(point.getZ()+offset)+" 135 "+pitch);
                     context.waitTicks(40);
                     context.waitFor(client -> client.level!=null && client.level.dimension()==Level.END
-                        && client.level.getChunkSource().getChunk(point.getX()>>4,point.getZ()>>4,
+                        && TestFixtures.level(client).getChunkSource().getChunk(point.getX()>>4,point.getZ()>>4,
                             net.minecraft.world.level.chunk.status.ChunkStatus.FULL,false)!=null,600);
                     context.waitTicks(100);
                     context.takeScreenshot(view==0?"lirestone-patches":view==1?"lirestone-boulder":view==2?"lirestone-free-region":"lirestone-entire-island");

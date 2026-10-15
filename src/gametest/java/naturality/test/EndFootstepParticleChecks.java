@@ -23,13 +23,13 @@ public final class EndFootstepParticleChecks {
 
     public static void inverted(Minecraft client) {
         checkBurst(client.player, true);
-        var cow = EntityTypes.COW.create(client.level, EntitySpawnReason.COMMAND);
+        var cow = TestFixtures.require(EntityTypes.COW.create(TestFixtures.level(client), EntitySpawnReason.COMMAND), "cow");
         DistortionFixtures.invert(cow);
         cow.setPos(4, 105 - cow.getBbHeight(), 4);
         cow.setOnGround(true);
         checkBurst(cow, true);
         // Only the test resource pack exempts pigs from End gravity.
-        var pig = EntityTypes.PIG.create(client.level, EntitySpawnReason.COMMAND);
+        var pig = TestFixtures.require(EntityTypes.PIG.create(TestFixtures.level(client), EntitySpawnReason.COMMAND), "pig");
         pig.setPos(4, 99, 4);
         pig.setOnGround(true);
         checkBurst(pig, false);

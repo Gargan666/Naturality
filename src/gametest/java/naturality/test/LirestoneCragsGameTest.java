@@ -28,7 +28,7 @@ public final class LirestoneCragsGameTest implements FabricClientGameTest {
             var server=world.getServer();BlockPos[] view={null};
             server.runCommand("gamerule minecraft:random_tick_speed 0");
             server.runOnServer(s -> {
-                var end=s.getLevel(Level.END);
+                var end=TestFixtures.require(s.getLevel(Level.END), "end");
                 var generator=(NoiseBasedChunkGenerator)end.getChunkSource().getGenerator();
                 var random=end.getChunkSource().randomState();
                 var source=generator.getBiomeSource();
@@ -37,9 +37,9 @@ public final class LirestoneCragsGameTest implements FabricClientGameTest {
                 check(biome.is(net.minecraft.tags.BiomeTags.IS_END),"Crags lacks the End biome tag");
                 var resolver=source.createCachingResolver(random);
                 var alternate=source.createCachingResolver(RandomState.create(
-                    end.registryAccess().lookupOrThrow(Registries.NOISE),random.seed()+1,generator.generatorSettings().value()));
+                    end.registryAccess().lookupOrThrow(Registries.NOISE),end.getSeed()+1,generator.generatorSettings().value()));
                 var repeated=source.createCachingResolver(RandomState.create(
-                    end.registryAccess().lookupOrThrow(Registries.NOISE),random.seed(),generator.generatorSettings().value()));
+                    end.registryAccess().lookupOrThrow(Registries.NOISE),end.getSeed(),generator.generatorSettings().value()));
                 var density=random.samplersWithContext(SamplerContext.builder().build()).get(
                     new EndTerrainDensity(generator.generatorSettings().value().noiseRouter().finalDensity()));
                 int coverage=0,different=0,samples=0;
@@ -61,6 +61,7 @@ public final class LirestoneCragsGameTest implements FabricClientGameTest {
                 System.out.println("Lirestone Crags map: "+coverage+"/"+samples+", changed seed="+different);
                 check(coverage>samples*.03 && coverage<samples*.7 && different>samples*.03 && interior!=null,
                     "Crags is missing, universal, seed-independent or too small");
+                interior=TestFixtures.require(interior, "interior");
                 var located=source.findBiomeHorizontal(interior.getX(),interior.getY(),interior.getZ(),512,4,
                     holder->holder.is(LirestoneCrags.BIOME),RandomSource.create(1),true,random);
                 check(located!=null,"Biome locator cannot find Lirestone Crags");
@@ -129,10 +130,10 @@ public final class LirestoneCragsGameTest implements FabricClientGameTest {
                     +" "+(point.getZ()+100)+" 135 25");
                 context.waitTicks(40);
                 context.waitFor(client -> client.level!=null && client.level.dimension()==Level.END
-                    && client.level.getChunkSource().getChunk(point.getX()>>4,point.getZ()>>4,
+                    && TestFixtures.level(client).getChunkSource().getChunk(point.getX()>>4,point.getZ()>>4,
                         net.minecraft.world.level.chunk.status.ChunkStatus.FULL,false)!=null,600);
                 context.waitTicks(140);context.takeScreenshot("lirestone-crags-biome");
-                context.runOnClient(client -> check(net.minecraft.client.resources.language.I18n.get("biome.naturality.lirestone_crags")
+                context.runOnClient(_ -> check(net.minecraft.client.resources.language.I18n.get("biome.naturality.lirestone_crags")
                     .equals("Lirestone Crags"),"Biome display name is missing"));
             } finally {
                 naturality.config.NaturalityConfig.get().fog.enabled=fog;

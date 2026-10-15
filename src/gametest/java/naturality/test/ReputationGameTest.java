@@ -11,7 +11,6 @@ import net.minecraft.server.level.*;
 import net.minecraft.world.*;
 import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.ai.village.ReputationEventType;
-import net.minecraft.world.entity.animal.golem.IronGolem;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.npc.villager.*;
 import net.minecraft.world.effect.MobEffects;
@@ -107,7 +106,7 @@ public final class ReputationGameTest implements FabricClientGameTest {
                 check(Reputation.state(listener).gossipReaction == GossipReactions.LISTEN_POSITIVE
                     && Reputation.state(body).gossipReaction == GossipReactions.TELL_POSITIVE,
                     "Positive gossip triggers separate listener nod and speaker upward bob reactions");
-                check(listener.getGossips().getReputation(player.getUUID(), type -> true) == 20,
+                check(listener.getGossips().getReputation(player.getUUID(), _ -> true) == 20,
                     "Minor cure goodwill spreads with vanilla transfer decay; permanent cure goodwill stays personal");
                 listener.discard();
                 var negativeSpeaker = villager(level, VillagerProfession.LIBRARIAN, 4.5);
@@ -147,7 +146,7 @@ public final class ReputationGameTest implements FabricClientGameTest {
                 check(Reputation.state(emptySpeaker).conversationPartner == null, "Ordinary conversation focus expires after five seconds");
                 emptySpeaker.discard(); emptyListener.discard();
                 for (int day = 0; day < 30; day++) body.getGossips().decay();
-                check(body.getGossips().getReputation(player.getUUID(), type -> true) == 100,
+                check(body.getGossips().getReputation(player.getUUID(), _ -> true) == 100,
                     "Permanent cure goodwill survives daily decay");
                 body.getGossips().remove(player.getUUID(), net.minecraft.world.entity.ai.gossip.GossipType.MAJOR_POSITIVE);
                 check(Reputation.score(player) == 50, "Gossip transfer and decay do not duplicate shared-score rewards or penalties");
@@ -167,11 +166,11 @@ public final class ReputationGameTest implements FabricClientGameTest {
                 body.saveWithoutId(gossipSave);
                 var gossipReload = new Villager(EntityTypes.VILLAGER, level);
                 gossipReload.load(TagValueInput.create(ProblemReporter.DISCARDING, level.registryAccess(), gossipSave.buildResult()));
-                check(gossipReload.getGossips().getReputation(player.getUUID(), type -> true) == 25,
+                check(gossipReload.getGossips().getReputation(player.getUUID(), _ -> true) == 25,
                     "Native local gossip persists alongside custom villager state");
                 body.getGossips().remove(player.getUUID(), net.minecraft.world.entity.ai.gossip.GossipType.TRADING);
                 score(player, 100); Reputation.change(player, 1);
-                check(player.hasEffect(MobEffects.HERO_OF_THE_VILLAGE) && player.getEffect(MobEffects.HERO_OF_THE_VILLAGE).getDuration() == 1200,
+                check(player.hasEffect(MobEffects.HERO_OF_THE_VILLAGE) && TestFixtures.require(player.getEffect(MobEffects.HERO_OF_THE_VILLAGE), "player.getEffect(MobEffects.HERO_OF_THE_VILLAGE)").getDuration() == 1200,
                     "Gain at existing maximum gives one minute of hero");
                 player.removeEffect(MobEffects.HERO_OF_THE_VILLAGE);
                 score(player, 50);
@@ -191,7 +190,7 @@ public final class ReputationGameTest implements FabricClientGameTest {
                     check(Reputation.score(player) == (starting <= 20 ? 0 : 20), "Villager kill applies the threshold rule from " + starting);
                     check(!player.hasEffect(MobEffects.HERO_OF_THE_VILLAGE), "Setting kill reputation is not a positive reputation reward");
                 }
-                var golem = EntityTypes.IRON_GOLEM.create(level, EntitySpawnReason.COMMAND);
+                var golem = TestFixtures.require(EntityTypes.IRON_GOLEM.create(level, EntitySpawnReason.COMMAND), "golem");
                 golem.setPos(5, 101, 3); level.addFreshEntity(golem); score(player, 50);
                 golem.hurtServer(level, player.damageSources().playerAttack(player), 1000);
                 check(Reputation.score(player) == 40, "Killing a golem costs ten");
@@ -199,11 +198,11 @@ public final class ReputationGameTest implements FabricClientGameTest {
                 lineage[0] = Reputation.state(original).lineage; score(player, 50);
                 original.onReputationEventFrom(ReputationEventType.ZOMBIE_VILLAGER_CURED, player);
                 check(Reputation.score(player) == 60, "First cure gives ten");
-                var zombie = original.convertTo(EntityTypes.ZOMBIE_VILLAGER, ConversionParams.single(original, false, false), converted -> { });
+                var zombie = TestFixtures.require(original.convertTo(EntityTypes.ZOMBIE_VILLAGER, ConversionParams.single(original, false, false), _ -> { }), "zombie");
                 var cured = zombie.convertTo(EntityTypes.VILLAGER, ConversionParams.single(zombie, false, false), converted ->
                     converted.onReputationEventFrom(ReputationEventType.ZOMBIE_VILLAGER_CURED, player));
                 check(Reputation.state(cured).lineage.equals(lineage[0]) && Reputation.score(player) == 60,
-                    "Conversion callback retains lineage before cure reward; repeat cure gives nothing"); cured.discard();
+                    "Conversion callback retains lineage before cure reward; repeat cure gives nothing"); TestFixtures.require(cured, "cured").discard();
                 var nitwit = villager(level, VillagerProfession.NITWIT, 7.5);
                 score(player, 50); nitwit.mobInteract(player, InteractionHand.MAIN_HAND);
                 check(nitwit.getUnhappyCounter() > 0, "Neutral nitwit shakes head");
@@ -211,7 +210,7 @@ public final class ReputationGameTest implements FabricClientGameTest {
                 check(nitwit.getTradingPlayer() == null, "Friendly nitwit remains a reputation display"); nitwit.discard();
                 score(player, 50);
                 var chestPos = new BlockPos(10, 101, 0); level.setBlockAndUpdate(chestPos, Blocks.CHEST.defaultBlockState());
-                var chest = (ChestBlockEntity)level.getBlockEntity(chestPos);
+                var chest = TestFixtures.require((ChestBlockEntity)level.getBlockEntity(chestPos), "chest");
                 chest.setLootTable(ResourceKey.create(Registries.LOOT_TABLE, Identifier.withDefaultNamespace("chests/village/village_weaponsmith")));
                 chest.setLootTable(null); chest.setItem(0, new ItemStack(Items.EMERALD, 5));
                 check(((VillageChest)chest).naturality$isVillageChest(), "Village chest provenance survives loot unpacking");
@@ -219,7 +218,7 @@ public final class ReputationGameTest implements FabricClientGameTest {
                 player.containerMenu.clicked(0, 0, ContainerInput.QUICK_MOVE, player);
                 check(Reputation.score(player) == 47 && chest.getItem(0).isEmpty(), "Shift-click theft costs three"); player.closeContainer();
                 var ordinaryPos = new BlockPos(12, 101, 0); level.setBlockAndUpdate(ordinaryPos, Blocks.CHEST.defaultBlockState());
-                var ordinary = (ChestBlockEntity)level.getBlockEntity(ordinaryPos); ordinary.setItem(0, new ItemStack(Items.EMERALD));
+                var ordinary = TestFixtures.require((ChestBlockEntity)level.getBlockEntity(ordinaryPos), "ordinary"); ordinary.setItem(0, new ItemStack(Items.EMERALD));
                 player.openMenu(ordinary); player.containerMenu.clicked(0, 0, ContainerInput.PICKUP, player);
                 check(Reputation.score(player) == 47, "Player-placed chest withdrawal has no penalty"); player.closeContainer();
             });
@@ -237,20 +236,20 @@ public final class ReputationGameTest implements FabricClientGameTest {
                 level.getBlockState(bed).useWithoutItem(level, player,
                     new net.minecraft.world.phys.BlockHitResult(net.minecraft.world.phys.Vec3.atCenterOf(bed), Direction.UP, bed, false));
                 check(!sleeper.isSleeping() && Reputation.score(player) == 49, "Actually waking a sleeper costs one");
-                check(wakeWitness.getUnhappyCounter() == 0 && wakeWitness.getGossips().getReputation(player.getUUID(), type -> true) == 0,
+                check(wakeWitness.getUnhappyCounter() == 0 && wakeWitness.getGossips().getReputation(player.getUUID(), _ -> true) == 0,
                     "Night waking initially upsets only the sleeper, not nearby villagers");
-                check(sleeper.getGossips().getReputation(player.getUUID(), type -> true) == -25,
+                check(sleeper.getGossips().getReputation(player.getUUID(), _ -> true) == -25,
                     "Sleeper remembers the disturbance as negative gossip");
                 long gossipTime = level.getGameTime() + 1200;
                 wakeWitness.gossip(level, sleeper, gossipTime);
-                check(wakeWitness.getGossips().getReputation(player.getUUID(), type -> true) < 0 && Reputation.score(player) == 49,
+                check(wakeWitness.getGossips().getReputation(player.getUUID(), _ -> true) < 0 && Reputation.score(player) == 49,
                     "Wake-up complaint spreads later through gossip without another score penalty");
                 var newSubject = UUID.randomUUID();
                 sleeper.getGossips().add(newSubject, net.minecraft.world.entity.ai.gossip.GossipType.MINOR_NEGATIVE, 25);
                 wakeWitness.gossip(level, sleeper, gossipTime + 799);
-                check(wakeWitness.getGossips().getReputation(newSubject, type -> true) == 0, "Gossip interval still prevents premature transfers");
+                check(wakeWitness.getGossips().getReputation(newSubject, _ -> true) == 0, "Gossip interval still prevents premature transfers");
                 wakeWitness.gossip(level, sleeper, gossipTime + 800);
-                check(wakeWitness.getGossips().getReputation(newSubject, type -> true) < 0, "Gossip repeats after 800 ticks instead of 1200");
+                check(wakeWitness.getGossips().getReputation(newSubject, _ -> true) < 0, "Gossip repeats after 800 ticks instead of 1200");
                 wakeWitness.discard();
                 check(Reputation.tradeBlocked(sleeper, player), "Force-woken villager refuses until morning");
                 var output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, level.registryAccess()); sleeper.saveWithoutId(output);
@@ -269,17 +268,17 @@ public final class ReputationGameTest implements FabricClientGameTest {
                 var body = villager(level, VillagerProfession.FARMER, 2.5);
                 Reputation.state(body).wakeUntil = 24000;
                 check(!Reputation.tradeBlocked(body, player), "Morning clears wake refusal");
-                var pillager = EntityTypes.PILLAGER.create(level, EntitySpawnReason.COMMAND); pillager.setNoAi(true);
+                var pillager = TestFixtures.require(EntityTypes.PILLAGER.create(level, EntitySpawnReason.COMMAND), "pillager"); pillager.setNoAi(true);
                 score(player, 10); check(!pillager.canAttack(player), "Illagers ignore players at ten");
                 pillager.setTarget(player); check(pillager.getTarget() == null, "Direct retaliation target also rejected");
                 score(player, 11); check(pillager.canAttack(player), "Illagers hostile above ten");
                 score(player, 0);
-                var golem = EntityTypes.IRON_GOLEM.create(level, EntitySpawnReason.COMMAND); golem.setPos(5, 101, 0);
+                var golem = TestFixtures.require(EntityTypes.IRON_GOLEM.create(level, EntitySpawnReason.COMMAND), "golem"); golem.setPos(5, 101, 0);
                 golem.tickCount = 20; level.addFreshEntity(golem); Reputation.react(level, golem);
                 check(golem.getTarget() == player, "Village golem targets zero-reputation player");
                 score(player, 1); Reputation.react(level, golem);
                 check(golem.getTarget() == null, "Reputation hostility clears after recovering above zero"); score(player, 0);
-                var built = EntityTypes.IRON_GOLEM.create(level, EntitySpawnReason.COMMAND); built.setPlayerCreated(true); built.tickCount = 20;
+                var built = TestFixtures.require(EntityTypes.IRON_GOLEM.create(level, EntitySpawnReason.COMMAND), "built"); built.setPlayerCreated(true); built.tickCount = 20;
                 Reputation.react(level, built); check(built.getTarget() == null, "Player-built golem excluded from reputation hostility");
                 body.tickCount = 10; Reputation.react(level, body);
                 check(Reputation.state(body).fleeing && body.getBrain().hasMemoryValue(net.minecraft.world.entity.ai.memory.MemoryModuleType.WALK_TARGET),
@@ -300,7 +299,7 @@ public final class ReputationGameTest implements FabricClientGameTest {
                 body.discard(); golem.discard(); built.discard(); pillager.discard();
                 score(player, 50);
                 var theftPos = new BlockPos(10, 101, 0);
-                var chest = (ChestBlockEntity)level.getBlockEntity(theftPos); chest.setItem(0, new ItemStack(Items.EMERALD));
+                var chest = TestFixtures.require((ChestBlockEntity)level.getBlockEntity(theftPos), "chest"); chest.setItem(0, new ItemStack(Items.EMERALD));
                 player.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
                 check(player.gameMode.destroyBlock(theftPos) && Reputation.score(player) == 47, "Breaking a stocked village chest also counts as theft");
                 var donor = UUID.randomUUID(); var data = ReputationData.get(s);
@@ -331,7 +330,7 @@ public final class ReputationGameTest implements FabricClientGameTest {
                 pois.add(raidCenter, level.registryAccess().lookupOrThrow(Registries.POINT_OF_INTEREST_TYPE)
                     .getOrThrow(net.minecraft.world.entity.ai.village.poi.PoiTypes.HOME));
                 pois.take(type -> type.is(net.minecraft.world.entity.ai.village.poi.PoiTypes.HOME),
-                    (type, pos) -> pos.equals(raidCenter), raidCenter, 1);
+                    (_, pos) -> pos.equals(raidCenter), raidCenter, 1);
                 for (int starting : new int[]{50, 90}) {
                     score(player, starting);
                     var encoded = net.minecraft.world.entity.raid.Raid.MAP_CODEC.codec().encodeStart(com.mojang.serialization.JsonOps.INSTANCE,
@@ -386,7 +385,7 @@ public final class ReputationGameTest implements FabricClientGameTest {
                 check(Reputation.state(restored).recoveryUntil == 96000, "Recovery sleep deadline persists");
             });
             context.waitTicks(20);
-            server.runOnServer(s -> check(exhausted[0].isSleeping(), "Daytime schedule does not interrupt recovery sleep"));
+            server.runOnServer(_ -> check(exhausted[0].isSleeping(), "Daytime schedule does not interrupt recovery sleep"));
             server.runCommand("time set 96000");
             server.runOnServer(s -> {
                 VillagerSleep.tick(s.overworld(), exhausted[0]);
@@ -419,14 +418,14 @@ public final class ReputationGameTest implements FabricClientGameTest {
             context.waitTicks(100);
             server.runOnServer(s -> {
                 check(doorSleeper[0].isSleeping(), "Exhausted villager opens wooden door and reaches recovery bed through real AI");
-                var zombie = EntityTypes.ZOMBIE.create(s.overworld(), EntitySpawnReason.COMMAND);
+                var zombie = TestFixtures.require(EntityTypes.ZOMBIE.create(s.overworld(), EntitySpawnReason.COMMAND), "zombie");
                 zombie.setNoAi(true); zombie.setPos(-9.5, 101, 3.5);
                 s.overworld().addFreshEntity(zombie);
             });
             boolean[] noticedZombie = {false};
             for (int attempt = 0; attempt < 20 && !noticedZombie[0]; attempt++) {
                 context.waitTicks(2);
-                server.runOnServer(s -> noticedZombie[0] = !doorSleeper[0].isSleeping()
+                server.runOnServer(_ -> noticedZombie[0] = !doorSleeper[0].isSleeping()
                     && doorSleeper[0].getBrain().isActive(net.minecraft.world.entity.schedule.Activity.PANIC));
             }
             check(noticedZombie[0], "Recovery sleeper senses zombie, wakes and prioritizes panic without being hit");

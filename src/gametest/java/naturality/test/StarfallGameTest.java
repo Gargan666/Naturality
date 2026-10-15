@@ -1,6 +1,5 @@
 package naturality.test;
 
-import java.util.UUID;
 import naturality.starfall.*;
 import naturality.weather.*;
 import naturality.client.entity.FallingStarRenderer;
@@ -35,7 +34,7 @@ public final class StarfallGameTest implements FabricClientGameTest {
             server.runCommand("execute in minecraft:the_end run fill -12 120 -12 12 150 12 air");
             server.runCommand("execute in minecraft:the_end run fill -10 130 -10 10 130 10 end_stone");
             server.runOnServer(s->{
-                var level=s.getLevel(Level.END);
+                var level=TestFixtures.require(s.getLevel(Level.END), "level");
                 var down=launch(level,false,new Vec3(0,134,0),new Vec3(0,-6,0),30);down.tick();
                 check(down.isRemoved(),"Downward star hits terrain");
                 var up=launch(level,false,new Vec3(3,127,0),new Vec3(0,6,0),30);up.tick();
@@ -44,8 +43,8 @@ public final class StarfallGameTest implements FabricClientGameTest {
                 var distant=launch(level,false,new Vec3(-8,264,0),new Vec3(0,-.6,0),30);
                 for(int tick=0;tick<280 && !distant.isRemoved();tick++)distant.tick();
                 check(distant.isRemoved() && Math.abs(distant.getY()-131)<.01,"High stars reach the top face of terrain: "+distant.getY());
-                var cow=EntityTypes.COW.create(level,EntitySpawnReason.COMMAND);cow.setNoAi(true);
-                cow.getAttribute(Attributes.MAX_HEALTH).setBaseValue(1000);cow.setHealth(1000);cow.setPos(6,131,0);level.addFreshEntity(cow);
+                var cow=TestFixtures.require(EntityTypes.COW.create(level,EntitySpawnReason.COMMAND), "cow");cow.setNoAi(true);
+                TestFixtures.require(cow.getAttribute(Attributes.MAX_HEALTH), "cow.getAttribute(Attributes.MAX_HEALTH)").setBaseValue(1000);cow.setHealth(1000);cow.setPos(6,131,0);level.addFreshEntity(cow);
                 float health=cow.getHealth();
                 var fizzle=launch(level,true,new Vec3(6,135,0),new Vec3(0,-6,0),30);fizzle.tick();
                 check(fizzle.isRemoved() && cow.getHealth()==health,"Fizzles burn out before entity impacts without damage");
@@ -84,11 +83,11 @@ public final class StarfallGameTest implements FabricClientGameTest {
                 try {
                     var field=naturality.client.particle.StarTrailParticle.class.getDeclaredField("attached");field.setAccessible(true);
                     var trails=(java.util.Map<?,?>)field.get(null);
-                    for(var entity:c.level.entitiesForRendering())if(entity instanceof FallingStar star) {
+                    for(var entity:TestFixtures.level(c).entitiesForRendering())if(entity instanceof FallingStar star) {
                         check(c.getEntityRenderDispatcher().getRenderer(star) instanceof FallingStarRenderer,"Both stars and fizzles use the authored model renderer");
                         var particle=(net.minecraft.client.particle.Particle)trails.get(star);
                         check(particle!=null && particle.isAlive(),"Each tracked star owns a live attached star-trail particle");
-                        check(naturality.client.particle.WindParticleControl.immune(particle),"Star trail remains anchored despite weather wind");found++;
+                        check(naturality.client.particle.WindParticleControl.immune(TestFixtures.require(particle, "particle")),"Star trail remains anchored despite weather wind");found++;
                     }
                 }catch(ReflectiveOperationException e){throw new AssertionError(e);}
                 check(found==2,"Both visual variants are tracked and rendered");

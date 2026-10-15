@@ -18,7 +18,8 @@ classes/
 
 # vscode
 
-.settings/
+.settings/*
+!.settings/org.eclipse.jdt.core.prefs
 .vscode/*
 !.vscode/tasks.json
 !.vscode/extensions.json

@@ -24,7 +24,7 @@ public final class FlameGameTest implements FabricClientGameTest {
                         ParticleTypes.SOUL_FIRE_FLAME}) {
                     var particle = client.particleEngine.createParticle(type, 0, 101, 0, 0, 0, 0);
                     check(particle instanceof AnimatedFlameParticle, "Animated flame provider must be registered");
-                    var flame = (AnimatedFlameParticle) particle;
+                    var flame = TestFixtures.require((AnimatedFlameParticle) particle, "flame");
                     float size = flame.getQuadSize(0);
                     Quaternionf pose = new Quaternionf();
                     flame.getFacingCameraMode().setRotation(pose, client.gameRenderer.mainCamera(), 0);

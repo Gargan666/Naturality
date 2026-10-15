@@ -24,27 +24,27 @@ public final class LavaEffectsGameTest implements FabricClientGameTest {
             server.runCommand("setblock -5 100 -5 water");
             world.getConnection().waitForClientboundPackets();context.waitTicks(30);
             context.runOnClient(c->{
-                check(LavaSurface.at(c.level,new BlockPos(0,100,0))!=null,"Lava surface recognized");
-                check(WaterSurface.at(c.level,new BlockPos(0,100,0))==null,"Water effects must reject lava");
-                check(LavaSurface.at(c.level,new BlockPos(6,101,6)).cauldron(),"Lava cauldron supported");
+                check(LavaSurface.at(TestFixtures.level(c),new BlockPos(0,100,0))!=null,"Lava surface recognized");
+                check(WaterSurface.at(TestFixtures.level(c),new BlockPos(0,100,0))==null,"Water effects must reject lava");
+                check(TestFixtures.require(LavaSurface.at(TestFixtures.level(c),new BlockPos(6,101,6)), "LavaSurface.at(c.level,new BlockPos(6,101,6))").cauldron(),"Lava cauldron supported");
                 check(LavaImpactColumn.heightFor(12)==WaterImpactColumn.heightFor(12)*.5,"Lava splash half height");
-                check(LavaImpactColumn.RISE_TICKS==WaterImpactColumn.RISE_TICKS*2 && LavaImpactColumn.FALL_TICKS==WaterImpactColumn.FALL_TICKS*2,"Lava splash twice as slow");
-                check(LavaRipples.impact(c.level,0,102,0,0,100.5,0),"Lava drip impact ring");
+                check(Double.compare(LavaImpactColumn.RISE_TICKS,WaterImpactColumn.RISE_TICKS*2)==0 && Double.compare(LavaImpactColumn.FALL_TICKS,WaterImpactColumn.FALL_TICKS*2)==0,"Lava splash twice as slow");
+                check(LavaRipples.impact(TestFixtures.level(c),0,102,0,0,100.5,0),"Lava drip impact ring");
                 check(LavaRipples.activeCount()>0,"Lava rings work with water disabled");
-                var p=c.particleEngine.createParticle(naturality.NaturalityParticles.LAVA_SPLASH,0,103,0,0,.1,0);
+                var p=TestFixtures.require(c.particleEngine.createParticle(naturality.NaturalityParticles.LAVA_SPLASH,0,103,0,0,.1,0), "lava splash");
                 check(p instanceof naturality.client.particle.LavaSplashParticle,"Molten droplet provider registered");
                 for(int i=0;i<100 && p.isAlive();i++)p.tick();
                 check(!p.isAlive(),"Molten droplet terminates on contact");
                 int rings=LavaRipples.activeCount();
-                var pop=c.particleEngine.createParticle(net.minecraft.core.particles.ParticleTypes.LAVA,1,101,1,0,0,0);
+                var pop=TestFixtures.require(c.particleEngine.createParticle(net.minecraft.core.particles.ParticleTypes.LAVA,1,101,1,0,0,0), "pop");
                 pop.setParticleSpeed(0,-.15,0);
                 for(int i=0;i<8 && pop.isAlive();i++)pop.tick();
                 check(LavaRipples.activeCount()>rings,"Vanilla lava pop creates a ring when landing");
                 int before=LavaRipples.activeCount();
-                check(LiquidDropletContact.impact(c.level,false,2,102,2,2,100.5,2),"Water drop quenches on lava");
+                check(LiquidDropletContact.impact(TestFixtures.level(c),false,2,102,2,2,100.5,2),"Water drop quenches on lava");
                 check(LavaRipples.activeCount()==before,"Water drop into lava must not create a lava ring");
-                check(LiquidDropletContact.impact(c.level,true,-5,102,-5,-5,100.5,-5),"Lava drop quenches on water even with water effects disabled");
-                var drip=c.particleEngine.createParticle(net.minecraft.core.particles.ParticleTypes.FALLING_LAVA,3,101.2,3,0,0,0);
+                check(LiquidDropletContact.impact(TestFixtures.level(c),true,-5,102,-5,-5,100.5,-5),"Lava drop quenches on water even with water effects disabled");
+                var drip=TestFixtures.require(c.particleEngine.createParticle(net.minecraft.core.particles.ParticleTypes.FALLING_LAVA,3,101.2,3,0,0,0), "drip");
                 for(int i=0;i<15 && drip.isAlive();i++)drip.tick();
                 check(LavaRipples.activeCount()>before,"Vanilla lava drips create lava rings");
             });
@@ -54,7 +54,7 @@ public final class LavaEffectsGameTest implements FabricClientGameTest {
                 world.getConnection().waitForClientboundPackets();
                 int[] impacts={0};
                 for(int i=0;i<60;i++) {
-                    context.waitTicks(1);context.runOnClient(c->impacts[0]+=LavaEntrySplash.lastSplashCount);
+                    context.waitTicks(1);context.runOnClient(_->impacts[0]+=LavaEntrySplash.lastSplashCount);
                     if(impacts[0]>0){context.waitTicks(5);context.takeScreenshot("lava-impact-"+oit);break;}
                 }
                 check(impacts[0]==1,"High fall into lava creates one splash");
@@ -62,18 +62,18 @@ public final class LavaEffectsGameTest implements FabricClientGameTest {
             }
             server.runCommand("summon pig 0 100.5 0 {NoAI:1b,NoGravity:1b,Invulnerable:1b,Tags:[\"lava_rim\"]}");
             // Naturality's profile overrides the vanilla weather timer; allow its 0.5/tick transition.
-            server.runOnServer(s -> weather.rain=100);context.waitTicks(220);
-            context.runOnClient(c->{check(LavaIntersection.lastPixelCount>0,"Lava model rim rendered");check(LavaRipples.rainSmokeSpawnCount>0,"Sky exposed lava receives rain smoke");});
+            server.runOnServer(_ -> weather.rain=100);context.waitTicks(220);
+            context.runOnClient(_->{check(LavaIntersection.lastPixelCount>0,"Lava model rim rendered");check(LavaRipples.rainSmokeSpawnCount>0,"Sky exposed lava receives rain smoke");});
             context.takeScreenshot("lava-rim-rain");
             server.runCommand("kill @e[tag=lava_rim]");
-            server.runOnServer(s -> weather.rain=0);
-            context.runOnClient(c->naturality.client.portal.FlatModelAlpha.lastCutPixels=0);
+            server.runOnServer(_ -> weather.rain=0);
+            context.runOnClient(_->naturality.client.portal.FlatModelAlpha.lastCutPixels=0);
             server.runCommand("summon strider 0 100.2 0 {NoAI:1b,NoGravity:1b,Invulnerable:1b,Tags:[\"alpha_strider\"]}");
             world.getConnection().waitForClientboundPackets();context.waitTicks(12);
-            context.runOnClient(c->check(naturality.client.portal.FlatModelAlpha.lastCutPixels>0,"Strider flat planes must use their texture alpha mask"));
+            context.runOnClient(_->check(naturality.client.portal.FlatModelAlpha.lastCutPixels>0,"Strider flat planes must use their texture alpha mask"));
             context.takeScreenshot("lava-strider-alpha-border");
-            context.runOnClient(c->NaturalityConfig.get().liquids.lava=false);context.waitTicks(3);
-            context.runOnClient(c->{check(LavaIntersection.lastPixelCount==0,"Lava toggle disables geometry");check(LavaRipples.activeCount()==0,"Lava toggle clears rings");});
+            context.runOnClient(_->NaturalityConfig.get().liquids.lava=false);context.waitTicks(3);
+            context.runOnClient(_->{check(LavaIntersection.lastPixelCount==0,"Lava toggle disables geometry");check(LavaRipples.activeCount()==0,"Lava toggle clears rings");});
         } finally {
             context.runOnClient(c->{NaturalityConfig.get().liquids.water=saved[0];NaturalityConfig.get().liquids.lava=saved[1];c.options.improvedTransparency().set(saved[2]);});
         }

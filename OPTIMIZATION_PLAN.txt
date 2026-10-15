@@ -10,7 +10,7 @@ Reduce CPU frame time, GPU render time, client/server tick cost, allocation
 pressure and movement/reload stutters while preserving the current features,
 appearance, gameplay, configuration and supported renderer behavior.
 
-This plan is based on PROJECT_REFERENCE.txt and inspection of the current
+This historical plan was based on the retired project reference and inspection of the then-current
 working tree, including its existing uncommitted work. The production inventory
 contains 307 Java files and 62 shader files. The review followed initialization,
 tick callbacks, model wrappers, render passes, major shaders, shared geometry,
@@ -867,7 +867,7 @@ For each batch keep:
 22. VALIDATION COMMANDS AND FINAL COMPLETION CRITERIA
 ----------------------------------------------------
 These are proposed commands for implementation, not checks run for this plan.
-Run from the project root using the local JDK 25 setup in PROJECT_REFERENCE.txt.
+Run from the project root using the local JDK 25 setup in AGENTS.md.
 
 Routine compile/package:
   .\gradlew.bat assemble

@@ -129,6 +129,7 @@ tasks.named('runClientGameTest') {
         valid.add('water-light-performance')
         valid.add('overworld-loading')
         valid.add('forest-performance')
+        valid.addAll(['cloud-geometry', 'darkness-config', 'portal-metadata'])
         valid.add('render-redundancy')
         valid.add('cave-ambience')
 		if (selection.any { !valid.contains(it) }) {
@@ -183,6 +184,15 @@ def generateEntityGeometry = { taskName, exportName, className, partNames, alias
         }
         if (depth != 0) throw new GradleException('Unbalanced createBodyLayer() in ' + exportName + ' export.')
         def geometry = source.substring(start, cursor)
+        // Blockbench names every part, even leaves never referenced again. Keep
+        // addOrReplaceChild calls but omit unused bindings in generated Java.
+        def geometryCode = geometry.replaceAll(/"(?:\\.|[^"\\])*"/, '""')
+        def partBindings = (geometry =~ /\bPartDefinition\s+(\w+)\s*=/).collect { it[1] }
+        partBindings.each { name ->
+            if ((geometryCode =~ /\b${java.util.regex.Pattern.quote(name)}\b/).count == 1) {
+                geometry = geometry.replaceFirst(/\bPartDefinition\s+${java.util.regex.Pattern.quote(name)}\s*=\s*/, '')
+            }
+        }
         partNames.each { name ->
             if (!geometry.contains('"' + name + '"'))
                 throw new GradleException(exportName + ' export must retain animated part name: ' + name)
@@ -270,14 +280,19 @@ tasks.withType(JavaCompile).configureEach {
 
 tasks.register('writeJavaAuditClasspath') {
 	group = 'verification'
-	description = 'Exports the production classpath for scripts/check-java-warnings.ps1.'
+	description = 'Exports each Java source set and its classpath for the warning audit.'
 	dependsOn tasks.named('clientClasses')
-	inputs.files(sourceSets.client.compileClasspath, sourceSets.client.output)
-	outputs.file(layout.buildDirectory.file('java-audit/classpath.txt'))
+	def auditSets = sourceSets.collect { set ->
+		[name: set.name, sourceDirs: set.allJava.srcDirs.collect { it.absolutePath }, classpath: set.compileClasspath]
+	}
+	inputs.files(auditSets.collect { it.classpath })
+	inputs.property('sourceRoots', auditSets.collect { [name: it.name, sourceDirs: it.sourceDirs] })
+	outputs.file(layout.buildDirectory.file('java-audit/source-sets.json'))
 	doLast {
 		def output = outputs.files.singleFile
 		output.parentFile.mkdirs()
-		output.text = inputs.files.asPath
+		def manifest = auditSets.collect { [name: it.name, sourceDirs: it.sourceDirs, classpath: it.classpath.asPath] }
+		output.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(manifest)) + '\n'
 	}
 }
 

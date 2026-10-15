@@ -62,11 +62,12 @@ public final class VillagerGateGameTest implements FabricClientGameTest {
                     runner[0] = villager(level, -4.5);
                     var path = runner[0].getNavigation().createPath(destination, 0);
                     check(path != null && path.canReach(), "Villager can plan through closed " + block);
+                path=TestFixtures.require(path, "path");
                     boolean through = false;
                     for (int i = 0; i < path.getNodeCount(); i++) through |= path.getNode(i).asBlockPos().equals(gate);
                     check(through, "Path passes through the opening rather than over it");
                     if (block instanceof FenceGateBlock) {
-                        var cow = EntityTypes.COW.create(level, EntitySpawnReason.COMMAND);
+                        var cow = TestFixtures.require(EntityTypes.COW.create(level, EntitySpawnReason.COMMAND), "cow");
                         cow.setPos(.5, 101, -4.5); cow.setOnGround(true);
                         var cowPath = cow.getNavigation().createPath(destination, 0);
                         check(cowPath == null || !cowPath.canReach(), "Livestock cannot plan through closed gates");
@@ -94,8 +95,8 @@ public final class VillagerGateGameTest implements FabricClientGameTest {
                         + " memory=" + runner[0].getBrain().getMemory(MemoryModuleType.DOORS_TO_CLOSE)
                         + " id=" + runner[0].getId() + " noAI=" + runner[0].isNoAi() + " ticks=" + runner[0].tickCount
                         + " removed=" + runner[0].isRemoved() + " live=" + (s.overworld().getEntity(runner[0].getId()) == runner[0])
-                        + " activities=" + runner[0].getBrain().getActiveActivities()
-                        + " behavior=" + runner[0].getBrain().getRunningBehaviors().stream().map(b -> b.debugString()).toList());
+                        + " activities=" + TestFixtures.brainActivity(runner[0])
+                        + " behavior=" + TestFixtures.brainActivity(runner[0]));
                     runner[0].discard();
                 });
             }
@@ -145,7 +146,7 @@ public final class VillagerGateGameTest implements FabricClientGameTest {
             boolean[] bothEntered = {false};
             for (int attempt = 0; attempt < 60 && !bothEntered[0]; attempt++) {
                 context.waitTicks(4);
-                server.runOnServer(s -> {
+                server.runOnServer(_ -> {
                     bothEntered[0] = crowd[0].getZ() > 2 && crowd[1].getZ() > 2;
                     for (var body : crowd) {
                         naturality.villager.Reputation.state(body).conversationPartner = null;
@@ -156,7 +157,7 @@ public final class VillagerGateGameTest implements FabricClientGameTest {
                 });
             }
             check(bothEntered[0], "Side-by-side villagers take turns and both pass through a real wooden door");
-            server.runOnServer(s -> { crowd[0].discard(); crowd[1].discard(); });
+            server.runOnServer(_ -> { crowd[0].discard(); crowd[1].discard(); });
             context.takeScreenshot("villager-fence-gates");
         }
     }

@@ -3,7 +3,6 @@ package naturality.test;
 import naturality.client.particle.BlockFragmentPixels;
 import naturality.client.particle.SandParticleSprites;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.particle.Particle;
 import net.minecraft.client.particle.SingleQuadParticle;
 import net.minecraft.client.particle.TerrainParticle;
 import net.minecraft.core.BlockPos;
@@ -16,15 +15,15 @@ final class SandParticleChecks {
         var pos = new BlockPos(0, 105, 8);
         for (var block : new net.minecraft.world.level.block.Block[]{Blocks.SAND, Blocks.RED_SAND}) {
             var state = block.defaultBlockState();
-            var sand = new TerrainParticle(client.level, 0, 105, 8, 0.2, 0.4, -0.3, state, pos);
-            var stone = new TerrainParticle(client.level, 0, 105, 8, 0.2, 0.4, -0.3, Blocks.STONE.defaultBlockState(), pos);
+            var sand = new TerrainParticle(TestFixtures.level(client), 0, 105, 8, 0.2, 0.4, -0.3, state, pos);
+            var stone = new TerrainParticle(TestFixtures.level(client), 0, 105, 8, 0.2, 0.4, -0.3, Blocks.STONE.defaultBlockState(), pos);
             require(((BlockFragmentPixels) sand).naturality$cropWidth() == 0, "Sand bypasses block texture fragments");
             require(((BlockFragmentPixels) stone).naturality$cropWidth() > 0, "Stone retains block texture fragments");
             require(sand.getLayer() == SingleQuadParticle.Layer.OPAQUE, "Sand uses falling dust atlas");
             var sprite = (net.minecraft.client.renderer.texture.TextureAtlasSprite) field(sand, "sprite");
             require(uv(sand, "getU0") == sprite.getU0() && uv(sand, "getU1") == sprite.getU1(), "Full falling dust U range");
             require(uv(sand, "getV0") == sprite.getV0() && uv(sand, "getV1") == sprite.getV1(), "Full falling dust V range");
-            int color = ((net.minecraft.world.level.block.FallingBlock) block).getDustColor(state, client.level, pos);
+            int color = ((net.minecraft.world.level.block.FallingBlock) block).getDustColor(state, TestFixtures.level(client), pos);
             require(field(sand, "rCol").equals((color >> 16 & 255) / 255F), "Correct sand color");
             require(field(sand, "gCol").equals((color >> 8 & 255) / 255F), "Correct sand color");
             require(field(sand, "bCol").equals((color & 255) / 255F), "Correct sand color");
@@ -37,11 +36,11 @@ final class SandParticleChecks {
             for (int tick = 0; tick < 20; tick++) {
                 for (String name : new String[]{"x", "y", "z", "xd", "yd", "zd"})
                     require(field(sand, name).equals(field(stone, name)), "Vanilla terrain motion retained: " + name);
-                require(field(sand, "sprite") == SandParticleSprites.sprites.get(tick, 25), "Falling dust animation follows age");
+                require(field(sand, "sprite") == TestFixtures.require(SandParticleSprites.sprites, "SandParticleSprites.sprites").get(tick, 25), "Falling dust animation follows age");
                 sand.tick();
                 stone.tick();
             }
-            var pillar = client.particleEngine.createParticle(new BlockParticleOption(ParticleTypes.DUST_PILLAR, state), 0, 105, 8, 0, 0.8, 0);
+            var pillar = TestFixtures.require(client.particleEngine.createParticle(new BlockParticleOption(ParticleTypes.DUST_PILLAR, state), 0, 105, 8, 0, 0.8, 0), "pillar");
             require(pillar instanceof TerrainParticle && ((BlockFragmentPixels) pillar).naturality$cropWidth() == 0,
                 "Mace dust pillar uses animated sand");
             require(pillar.getLifetime() >= 20 && pillar.getLifetime() < 40, "Mace retains provider lifetime");
@@ -49,7 +48,7 @@ final class SandParticleChecks {
             require(step instanceof TerrainParticle && ((BlockFragmentPixels) step).naturality$cropWidth() == 0,
                 "Walking block provider uses animated sand");
             client.particleEngine.clearParticles();
-            client.level.levelEvent(0x4E5301, pos, net.minecraft.world.level.block.Block.getId(state));
+            TestFixtures.level(client).levelEvent(0x4E5301, pos, net.minecraft.world.level.block.Block.getId(state));
             var queued = (java.util.Queue<?>) field(client.particleEngine, "particlesToAdd");
             require(queued.size() == 64, "Placement event retains the 64-particle breaking burst");
             var faces = new java.util.HashSet<String>();
@@ -68,7 +67,7 @@ final class SandParticleChecks {
                     && field(particle, "z").equals(field(particle, "zo")), "First frame starts outside without interpolation through the block");
             }
             require(faces.size() == 6, "Placement burst covers all six block faces");
-            client.level.addDestroyBlockEffect(pos, state);
+            TestFixtures.level(client).addDestroyBlockEffect(pos, state);
         }
     }
 

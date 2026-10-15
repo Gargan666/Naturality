@@ -18,8 +18,7 @@ public final class CrowdPanicGameTest implements FabricClientGameTest {
     }
 
     private static <T extends Mob> T spawn(ServerLevel level, EntityType<T> type, double x, double z) {
-        T mob = type.create(level, EntitySpawnReason.COMMAND);
-        if (mob == null) throw new AssertionError("Could not create mob");
+        T mob = TestFixtures.require(type.create(level, EntitySpawnReason.COMMAND), "type.create(level, EntitySpawnReason.COMMAND)");
         mob.setPos(x, 101, z);
         level.addFreshEntity(mob);
         return mob;
@@ -67,7 +66,7 @@ public final class CrowdPanicGameTest implements FabricClientGameTest {
                 check(protectedNeighbor.getLastDamageSource() == null, "Rejected hits do not signal");
             });
             context.waitTicks(25);
-            server.runOnServer(s -> {
+            server.runOnServer(_ -> {
                 check(!crowd[0].getNavigation().isDone(), "Sheep crowd actually flees");
                 check(!crowd[1].getNavigation().isDone(), "Cow crowd actually flees");
                 check(VillagerPanicTrigger.isHurt(crowd[2]), "Villager sensor retains the shared damage source");
@@ -75,7 +74,7 @@ public final class CrowdPanicGameTest implements FabricClientGameTest {
                 for (Mob mob : crowd) check(mob.getHealth() == mob.getMaxHealth(), "Panicking neighbors remain unharmed");
             });
             context.waitTicks(30);
-            server.runOnServer(s -> {
+            server.runOnServer(_ -> {
                 for (Mob mob : crowd) check(mob.getLastDamageSource() == null, "Shared stimulus expires on vanilla timeout");
             });
         }

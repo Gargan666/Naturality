@@ -20,7 +20,7 @@ public final class FluidsGameTest implements FabricClientGameTest {
         });
         try (var world = context.worldBuilder().create()) {
             context.runOnClient(client -> {
-                client.gui.setScreen(new naturality.client.config.NaturalityConfigScreen(null));
+                client.gui.setScreen(new naturality.client.config.NaturalityConfigScreen(new net.minecraft.client.gui.screens.TitleScreen()));
                 press(client.gui.screen(), "Blocks and Effects");
                 press(client.gui.screen(), "Liquids");
                 press(client.gui.screen(), "Water changes:");
@@ -33,9 +33,9 @@ public final class FluidsGameTest implements FabricClientGameTest {
             });
             context.takeScreenshot("fluids-settings");
             context.runOnClient(client -> {
-                client.gui.screen().onClose();
-                client.gui.screen().onClose();
-                client.gui.screen().onClose();
+                TestFixtures.screen(client).onClose();
+                TestFixtures.screen(client).onClose();
+                TestFixtures.screen(client).onClose();
             });
             var server = world.getServer();
             server.runCommand("gamemode spectator @a");
@@ -59,9 +59,9 @@ public final class FluidsGameTest implements FabricClientGameTest {
             context.waitTicks(100);
             world.getConnection().waitForChunksRender();
             long[] before = new long[1];
-            context.runOnClient(client -> before[0] = ProceduralFluids.ticks());
+            context.runOnClient(_ -> before[0] = ProceduralFluids.ticks());
             context.waitTicks(40);
-            context.runOnClient(client -> {
+            context.runOnClient(_ -> {
                 if (ProceduralFluids.ticks() <= before[0]) throw new AssertionError("Fluid simulation is not ticking");
             });
             for (boolean oit : new boolean[]{false, true}) {
@@ -80,10 +80,10 @@ public final class FluidsGameTest implements FabricClientGameTest {
                 before[0] = ProceduralFluids.ticks();
                 reload.set(client.reloadResourcePacks());
             });
-            context.waitFor(client -> reload.get().isDone());
+            context.waitFor(_ -> reload.get().isDone());
             reload.get().join();
             context.waitFor(client -> client.gui.overlay() == null);
-            context.runOnClient(client -> {
+            context.runOnClient(_ -> {
                 if (ProceduralFluids.ticks() < before[0]) throw new AssertionError("Reload reset the fluid simulation");
             });
             context.waitTicks(10);
@@ -98,7 +98,7 @@ public final class FluidsGameTest implements FabricClientGameTest {
             context.takeScreenshot("fluids-lava-close");
             for (int mode = 0; mode < 3; mode++) {
                 final int choice = mode;
-                context.runOnClient(client -> {
+                context.runOnClient(_ -> {
                     var settings = naturality.config.NaturalityConfig.get().liquids;
                     settings.water = choice != 0;
                     settings.lava = choice != 1;
@@ -109,7 +109,7 @@ public final class FluidsGameTest implements FabricClientGameTest {
                 context.waitTicks(3);
                 context.takeScreenshot("fluids-disabled-" + mode);
             }
-            context.runOnClient(client -> naturality.config.NaturalityConfig.get().liquids = new naturality.config.NaturalityConfig.Liquids());
+            context.runOnClient(_ -> naturality.config.NaturalityConfig.get().liquids = new naturality.config.NaturalityConfig.Liquids());
             server.runCommand("fill -25 98 33 25 99 47 stone");
             server.runCommand("setblock -14 100 40 water");
             server.runCommand("setblock 14 100 40 lava");
@@ -130,20 +130,20 @@ public final class FluidsGameTest implements FabricClientGameTest {
                     var pos = new net.minecraft.core.BlockPos(x, 110, 0);
                     int local = x & 15;
                     int localY = pos.getY() & 15;
-                    if (naturality.client.fluid.FluidGeometry.connectedHeight(client.level, pos, localY + 0.001F) != localY
-                        || naturality.client.fluid.FluidGeometry.connectedHeight(client.level, pos, localY + 0.999F) != localY + 1)
+                    if (naturality.client.fluid.FluidGeometry.connectedHeight(TestFixtures.level(client), pos, localY + 0.001F) != localY
+                        || naturality.client.fluid.FluidGeometry.connectedHeight(TestFixtures.level(client), pos, localY + 0.999F) != localY + 1)
                         throw new AssertionError("Exposed vertical liquid edges remain inset");
                     for (boolean axis : new boolean[]{false, true}) {
                         int base = axis ? local : 0;
-                        if (naturality.client.fluid.FluidGeometry.connectedCoordinate(client.level, pos, base + 0.001F, axis) != base
-                            || naturality.client.fluid.FluidGeometry.connectedCoordinate(client.level, pos, base + 0.999F, axis) != base + 1)
+                        if (naturality.client.fluid.FluidGeometry.connectedCoordinate(TestFixtures.level(client), pos, base + 0.001F, axis) != base
+                            || naturality.client.fluid.FluidGeometry.connectedCoordinate(TestFixtures.level(client), pos, base + 0.999F, axis) != base + 1)
                             throw new AssertionError("Exposed liquid faces do not meet at the block boundary");
                     }
                 }
                 var solid = new net.minecraft.core.BlockPos(0, 99, 0);
-                if (naturality.client.fluid.FluidGeometry.connectedHeight(client.level, solid, 3.001F) != 3.001F)
+                if (naturality.client.fluid.FluidGeometry.connectedHeight(TestFixtures.level(client), solid, 3.001F) != 3.001F)
                     throw new AssertionError("Liquid bottom inset against solid geometry was removed");
-                if (naturality.client.fluid.FluidGeometry.connectedCoordinate(client.level, solid, 0.001F, true) != 0.001F)
+                if (naturality.client.fluid.FluidGeometry.connectedCoordinate(TestFixtures.level(client), solid, 0.001F, true) != 0.001F)
                     throw new AssertionError("Liquid inset against solid geometry was removed");
             });
             for (int x : new int[]{-14, 14}) {
@@ -256,7 +256,7 @@ public final class FluidsGameTest implements FabricClientGameTest {
 
     private static void resetControls(net.minecraft.client.gui.components.events.GuiEventListener node) {
         if (node instanceof net.minecraft.client.gui.components.Button button
-                && button.getMessage().getString().equals("Reset")) button.onPress(null);
+                && button.getMessage().getString().equals("Reset")) button.onPress(TestFixtures.CONFIRM);
         else if (node instanceof net.minecraft.client.gui.components.events.ContainerEventHandler parent)
             for (var child : parent.children()) resetControls(child);
     }

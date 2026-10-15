@@ -48,7 +48,7 @@ New events can be added as additional entries in sounds.json, but the mod must
 also call those events to play them; dropping an audio file here does not make
 it play automatically. Other resource JSON files remain in src/main/resources.
 
-See PROJECT_REFERENCE.txt in the project root for the rest of the project.
+See AGENTS.md in the project root for the current project map and working rules.
 
 WEATHER PARTICLE PLACEHOLDERS
 Replace textures/particle/rain_cluster{,_1,_2}.png and snow_cluster{,_1,_2}.png with transparent

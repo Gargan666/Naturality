@@ -11,7 +11,7 @@ public final class ProximityGameTest implements FabricClientGameTest {
         var cycle = new ProximityCycle(17);
         for (int i = 0; i < 100000; i++) cycle.tick(true, false);
         check(cycle.strength() == 0, "Proximity cannot start during day");
-        check(ProximityCycle.START_CHANCE == .05, "Proximity has a 5% chance at nightfall");
+        check(Double.compare(ProximityCycle.START_CHANCE, .05) == 0, "Proximity has a 5% chance at nightfall");
         cycle.tick(true, true);
         var firstNight = cycle.snapshot();
         check(cycle.strength() == 0, "Fixture's first nightfall roll is unsuccessful");
@@ -55,7 +55,7 @@ public final class ProximityGameTest implements FabricClientGameTest {
             for (int planet = 1; planet <= 7; planet++) {
                 server.runCommand("skyevent minecraft:overworld proximity " + planet);
                 context.waitTicks(12);
-                context.runOnClient(client -> check(ProximityRenderer.opacity() > 0 && ProximityRenderer.opacity() < .8F,
+                context.runOnClient(_ -> check(ProximityRenderer.opacity() > 0 && ProximityRenderer.opacity() < .8F,
                     "Newly selected planets fade in from zero opacity"));
                 context.waitTicks(20);
                 final int index = planet;
@@ -65,30 +65,30 @@ public final class ProximityGameTest implements FabricClientGameTest {
                         "Planet override synchronizes exactly without easing through other planets");
                     var texture = naturality.Naturality.id("textures/sky/" + ProximityCycle.PLANETS[index - 1] + ".png");
                     check(client.getResourceManager().getResource(texture).isPresent(), "Supplied planet sprite is packaged");
-                    long seed = SkyEventsClient.appearance(client.level, SkyEventType.PROXIMITY) ^ index * 341873128712L;
-                    var direction = ProximityRenderer.direction(seed, client.level.getGameTime());
+                    long seed = SkyEventsClient.appearance(TestFixtures.level(client), SkyEventType.PROXIMITY) ^ index * 341873128712L;
+                    var direction = ProximityRenderer.direction(seed, TestFixtures.level(client).getGameTime());
                     heading[0] = (float)Math.toDegrees(Math.atan2(-direction.x, direction.z));
                     heading[1] = (float)-Math.toDegrees(Math.asin(direction.y));
                 });
                 server.runCommand("tp @a 0 220 0 " + heading[0] + " " + heading[1]);
                 context.waitTicks(3);
-                context.runOnClient(client -> check(ProximityRenderer.drawn() == 1, "One planet sprite draws at night"));
+                context.runOnClient(_ -> check(ProximityRenderer.drawn() == 1, "One planet sprite draws at night"));
                 context.takeScreenshot("proximity-" + ProximityCycle.PLANETS[planet - 1]);
             }
             server.runCommand("skyevent minecraft:overworld status");
             float[] nightOpacity = new float[1];
-            context.runOnClient(client -> nightOpacity[0] = ProximityRenderer.opacity());
+            context.runOnClient(_ -> nightOpacity[0] = ProximityRenderer.opacity());
             server.runCommand("time set noon"); context.waitTicks(5);
-            context.runOnClient(client -> check(ProximityRenderer.opacity() > 0 && ProximityRenderer.opacity() < nightOpacity[0],
+            context.runOnClient(_ -> check(ProximityRenderer.opacity() > 0 && ProximityRenderer.opacity() < nightOpacity[0],
                 "Planet fades gradually when daytime arrives instead of disappearing"));
             context.waitTicks(45);
-            context.runOnClient(client -> check(ProximityRenderer.drawn() == 0,
+            context.runOnClient(_ -> check(ProximityRenderer.drawn() == 0,
                 "Daylight hides the planet without changing its selection"));
             server.runCommand("time set midnight"); context.waitTicks(15);
-            context.runOnClient(client -> check(ProximityRenderer.drawn() == 1,
+            context.runOnClient(_ -> check(ProximityRenderer.drawn() == 1,
                 "The same planet returns on the next night"));
             server.runCommand("skyevent minecraft:overworld proximity 0"); context.waitTicks(20);
-            context.runOnClient(client -> check(ProximityRenderer.drawn() == 0, "Zero disables Proximity"));
+            context.runOnClient(_ -> check(ProximityRenderer.drawn() == 0, "Zero disables Proximity"));
             server.runCommand("skyevent minecraft:overworld proximity auto");
             server.runOnServer(s -> check(!SkyEventWorldData.get(s).settings(s.overworld(), SkyEventType.PROXIMITY).override,
                 "Automatic scheduling can be restored"));

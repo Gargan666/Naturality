@@ -18,7 +18,7 @@ public final class OverworldFogGameTest implements FabricClientGameTest {
             boolean originalFog = naturality.config.NaturalityConfig.get().fog.enabled;
             try {
                 for (boolean customFog : new boolean[] {true, false}) {
-                    context.runOnClient(client -> naturality.config.NaturalityConfig.get().fog.enabled = customFog);
+                    context.runOnClient(_ -> naturality.config.NaturalityConfig.get().fog.enabled = customFog);
                     reload(context);
                     server.runCommand("time set 6000");
                     server.runCommand("tp @a 0.5 150 0.5 0 0");
@@ -34,13 +34,13 @@ public final class OverworldFogGameTest implements FabricClientGameTest {
                     Path terrainOpen = context.takeScreenshot("shade-terrain-open-" + customFog);
                     server.runCommand("fill -20 155 -20 20 155 20 stone");
                     world.getConnection().waitForClientboundPackets();
-                    context.waitFor(client -> client.level.getBrightness(net.minecraft.world.level.LightLayer.SKY,
+                    context.waitFor(client -> TestFixtures.level(client).getBrightness(net.minecraft.world.level.LightLayer.SKY,
                         client.gameRenderer.mainCamera().blockPosition()) < 15);
                     context.waitTicks(15);
                     world.getConnection().waitForChunksRender();
                     context.runOnClient(client -> {
-                        float factor = naturality.client.lighting.HardcoreDarkness.caveFog(client.level, client.gameRenderer.mainCamera());
-                        if (factor >= 1) throw new AssertionError("Roof did not produce shade: pos=" + client.gameRenderer.mainCamera().blockPosition() + ", sky=" + client.level.getBrightness(net.minecraft.world.level.LightLayer.SKY, client.gameRenderer.mainCamera().blockPosition()) + ", block=" + client.level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, client.gameRenderer.mainCamera().blockPosition()));
+                        float factor = naturality.client.lighting.HardcoreDarkness.caveFog(TestFixtures.level(client), client.gameRenderer.mainCamera());
+                        if (factor >= 1) throw new AssertionError("Roof did not produce shade: pos=" + client.gameRenderer.mainCamera().blockPosition() + ", sky=" + TestFixtures.level(client).getBrightness(net.minecraft.world.level.LightLayer.SKY, client.gameRenderer.mainCamera().blockPosition()) + ", block=" + TestFixtures.level(client).getBrightness(net.minecraft.world.level.LightLayer.BLOCK, client.gameRenderer.mainCamera().blockPosition()));
                     });
                     Path terrainShaded = context.takeScreenshot("shade-terrain-roof-" + customFog);
                     if (Math.abs(centerBrightness(terrainOpen) - centerBrightness(terrainShaded)) > 2)
@@ -54,7 +54,7 @@ public final class OverworldFogGameTest implements FabricClientGameTest {
                         throw new AssertionError("Local shade changed sky brightness (custom fog=" + customFog + ")");
                 }
             } finally {
-                context.runOnClient(client -> naturality.config.NaturalityConfig.get().fog.enabled = originalFog);
+                context.runOnClient(_ -> naturality.config.NaturalityConfig.get().fog.enabled = originalFog);
                 reload(context);
                 server.runCommand("fill -20 155 -20 20 155 20 air");
             }
@@ -84,14 +84,14 @@ public final class OverworldFogGameTest implements FabricClientGameTest {
             context.takeScreenshot("overworld-fog-sunset-terrain");
             var horizon = new org.joml.Vector3f();
             context.runOnClient(client -> horizon.set(new net.minecraft.client.renderer.fog.environment.AtmosphericFogEnvironment()
-                .getBaseColor(client.level, client.gameRenderer.mainCamera(), 5, 1.0F)));
+                .getBaseColor(TestFixtures.level(client), client.gameRenderer.mainCamera(), 5, 1.0F)));
             server.runCommand("tp @a 0.5 150 0.5 60 0");
             world.getConnection().waitForClientboundPackets();
             context.waitTicks(10);
             world.getConnection().waitForChunksRender();
             context.runOnClient(client -> {
                 var turned = new net.minecraft.client.renderer.fog.environment.AtmosphericFogEnvironment()
-                    .getBaseColor(client.level, client.gameRenderer.mainCamera(), 5, 1.0F);
+                    .getBaseColor(TestFixtures.level(client), client.gameRenderer.mainCamera(), 5, 1.0F);
                 if (horizon.distance(turned) > 0.001F)
                     throw new AssertionError("Sunset horizon changed color when turning the camera");
             });
@@ -110,7 +110,7 @@ public final class OverworldFogGameTest implements FabricClientGameTest {
     private static void reload(ClientGameTestContext context) {
         var future = new java.util.concurrent.atomic.AtomicReference<java.util.concurrent.CompletableFuture<Void>>();
         context.runOnClient(client -> future.set(client.reloadResourcePacks()));
-        context.waitFor(client -> future.get().isDone());
+        context.waitFor(_ -> future.get().isDone());
         future.get().join();
         context.waitFor(client -> client.gui.overlay() == null);
         context.waitTicks(5);

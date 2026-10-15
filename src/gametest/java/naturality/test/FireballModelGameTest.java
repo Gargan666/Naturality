@@ -33,7 +33,7 @@ public final class FireballModelGameTest implements FabricClientGameTest {
             context.waitTicks(15);
             context.runOnClient(client -> {
                 int found = 0;
-                for (var entity : client.level.entitiesForRendering()) {
+                for (var entity : TestFixtures.level(client).entitiesForRendering()) {
                     if (!(entity instanceof AbstractHurtingProjectile ball)) continue;
                     if (ball.isOnFire()) throw new AssertionError("Fireball must not automatically ignite");
                     var renderer = client.getEntityRenderDispatcher().getRenderer(ball);
@@ -41,7 +41,7 @@ public final class FireballModelGameTest implements FabricClientGameTest {
                         throw new AssertionError("Both fireball types must use the model renderer");
                     if (((FireballModelRenderer<?>)renderer).hasFireShell() == (ball instanceof DragonFireball))
                         throw new AssertionError("Only ordinary fireballs should have a fire shell");
-                    var state = renderer.createRenderState(ball, .5F);
+                    var state = TestFixtures.require(renderer.createRenderState(ball, .5F), "state");
                     if (state.displayFireAnimation) throw new AssertionError("Separate entity flames must be suppressed");
                     found++;
                 }

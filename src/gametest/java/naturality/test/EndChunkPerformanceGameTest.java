@@ -31,12 +31,12 @@ public final class EndChunkPerformanceGameTest implements FabricClientGameTest {
             var server = world.getServer();
             server.runCommand("gamerule minecraft:random_tick_speed 0");
             server.runOnServer(s -> {
-                var end = s.getLevel(Level.END);
+                var end = TestFixtures.require(s.getLevel(Level.END), "end");
                 var generator = (NoiseBasedChunkGenerator)end.getChunkSource().getGenerator();
                 var random = end.getChunkSource().randomState();
                 var sampler = random.samplersWithContext(SamplerContext.builder().build()).get(
                     new EndTerrainDensity(generator.generatorSettings().value().noiseRouter().finalDensity()));
-                report.append("seed=").append(random.seed()).append('\n');
+                report.append("seed=").append(end.getSeed()).append('\n');
                 // Warm the sampling path and hash the full-resolution density of varied fixed chunks.
                 int[][] probes = {{2,0},{65,0},{76,0},{80,0},{246,292},{203,236},{169,263},{202,296},{228,266},{-203,-236}};
                 try {
@@ -58,7 +58,7 @@ public final class EndChunkPerformanceGameTest implements FabricClientGameTest {
                     report.append("solid_sha256=").append(solidFingerprint).append('\n');
                     // Geometry baseline for the connected-ledge redesign. Covers 655,360 block
                     // decisions across central, transition, outer and negative-coordinate chunks.
-                    if(random.seed()==1 && !solidFingerprint.equals("1d82078f5e6df8307e5e34388eeec385170047f46e12e1e615a139e7a55aacdc"))
+                    if(end.getSeed()==1 && !solidFingerprint.equals("1d82078f5e6df8307e5e34388eeec385170047f46e12e1e615a139e7a55aacdc"))
                         throw new AssertionError("Terrain changed the connected-ledge geometry baseline");
                 } catch (java.security.NoSuchAlgorithmException e) { throw new AssertionError(e); }
                 for (int pass=0;pass<4;pass++) {

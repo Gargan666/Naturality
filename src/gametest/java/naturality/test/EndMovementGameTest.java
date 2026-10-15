@@ -28,9 +28,9 @@ public final class EndMovementGameTest implements FabricClientGameTest {
     }
     private static void expect(List<String> failures, boolean value, String message) { if (!value) failures.add(message); }
     private static void stepChecks(ServerLevel end, ServerLevel normal, List<String> failures) {
-        var inverted = EntityTypes.COW.create(end, EntitySpawnReason.COMMAND);
+        var inverted = TestFixtures.require(EntityTypes.COW.create(end, EntitySpawnReason.COMMAND), "inverted");
         DistortionFixtures.invert(inverted);
-        var upright = EntityTypes.COW.create(normal, EntitySpawnReason.COMMAND);
+        var upright = TestFixtures.require(EntityTypes.COW.create(normal, EntitySpawnReason.COMMAND), "upright");
         for (int x = 0; x <= 7; x++) for (int z = 0; z <= 4; z++) {
             normal.setBlockAndUpdate(new BlockPos(x, 100, z), Blocks.END_STONE.defaultBlockState());
             end.setBlockAndUpdate(new BlockPos(x, 145, z), Blocks.END_STONE.defaultBlockState());
@@ -86,7 +86,7 @@ public final class EndMovementGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
         try (var world = context.worldBuilder().create()) {
             var server = world.getServer();
-            server.runOnServer(s -> s.getLevel(Level.END).setDragonFight(null));
+            server.runOnServer(s -> TestFixtures.disableDragonFight(TestFixtures.require(s.getLevel(Level.END), "End world")));
             server.runCommand("gamerule minecraft:advance_weather false");
             server.runCommand("gamemode spectator @a");
             server.runCommand("execute in minecraft:the_end run tp @a 0 140 0 0 0");
@@ -100,7 +100,7 @@ public final class EndMovementGameTest implements FabricClientGameTest {
             context.waitTicks(120);
             var failures = new ArrayList<String>();
             server.runOnServer(s -> {
-                var end = s.getLevel(Level.END);
+                var end = TestFixtures.require(s.getLevel(Level.END), "end");
                 var player = end.players().getFirst();
                 check(EndGravity.inverted(player) && player.onGround(), "Movement fixture starts grounded upside down");
                 stepChecks(end, s.overworld(), failures);
@@ -114,17 +114,17 @@ public final class EndMovementGameTest implements FabricClientGameTest {
             context.runOnClient(c -> { c.options.autoJump().set(false); c.options.keyUp.setDown(true); c.options.keyJump.setDown(true); });
             context.waitTicks(3);
             context.runOnClient(c -> {
-                check(c.player.getDeltaMovement().y < 0 && !c.player.onGround(), "Real jump key leaves the ceiling");
+                check(TestFixtures.player(c).getDeltaMovement().y < 0 && !TestFixtures.player(c).onGround(), "Real jump key leaves the ceiling");
                 c.options.keyJump.setDown(false);
             });
             context.waitTicks(25);
             context.runOnClient(c -> {
                 c.options.keyUp.setDown(false);
-                check(c.player.onGround() && Math.abs(c.player.getBoundingBox().maxY - 145) < .01, "Moving jump lands back on the ceiling");
-                check(c.level.noCollision(c.player, c.player.getBoundingBox().deflate(1e-7)), "Walking jump remains outside solid blocks");
-                check(c.player.getZ() > 1, "Walking continues through the jump");
+                check(TestFixtures.player(c).onGround() && Math.abs(TestFixtures.player(c).getBoundingBox().maxY - 145) < .01, "Moving jump lands back on the ceiling");
+                check(TestFixtures.level(c).noCollision(c.player, TestFixtures.player(c).getBoundingBox().deflate(1e-7)), "Walking jump remains outside solid blocks");
+                check(TestFixtures.player(c).getZ() > 1, "Walking continues through the jump");
             });
-            server.runOnServer(s -> check(s.getLevel(Level.END).players().getFirst().onGround(), "Server agrees with ceiling landing"));
+            server.runOnServer(s -> check(TestFixtures.require(s.getLevel(Level.END), "s.getLevel(Level.END)").players().getFirst().onGround(), "Server agrees with ceiling landing"));
         }
     }
 }

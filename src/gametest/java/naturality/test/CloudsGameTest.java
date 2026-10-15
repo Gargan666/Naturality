@@ -50,14 +50,14 @@ public final class CloudsGameTest implements FabricClientGameTest {
                 world.getConnection().waitForClientboundPackets();
                 context.waitTicks(8);
                 context.takeScreenshot("clouds-pixels-" + oit);
-                context.runOnClient(client -> {
+                context.runOnClient(_ -> {
                     var origin = new net.minecraft.world.phys.Vec3(edge[0], 180, edge[1] + 8);
                     float transmission = naturality.client.cloud.CloudSunOcclusion.transmission(origin, origin.add(0, 200, 0));
                     if (transmission >= 0.7F)
                         throw new AssertionError("Rendered cloud occupancy must reach the sun-flare overlay: " + transmission);
                 });
                 boolean fogEnabled = NaturalityConfig.get().fog.enabled;
-                context.runOnClient(client -> {
+                context.runOnClient(_ -> {
                     var c = NaturalityConfig.get().clouds;
                     c.base.thickness = 16;
                     c.upper.thickness = 16;
@@ -69,10 +69,10 @@ public final class CloudsGameTest implements FabricClientGameTest {
                 world.getConnection().waitForClientboundPackets();
                 context.waitTicks(8);
                 context.takeScreenshot("clouds-overlap-occluded-" + oit);
-                context.runOnClient(client -> NaturalityConfig.get().fog.enabled = false);
+                context.runOnClient(_ -> NaturalityConfig.get().fog.enabled = false);
                 context.waitTicks(8);
                 context.takeScreenshot("clouds-overlap-no-fog-" + oit);
-                context.runOnClient(client -> {
+                context.runOnClient(_ -> {
                     NaturalityConfig.get().fog.enabled = fogEnabled;
                     var c = NaturalityConfig.get().clouds;
                     c.base.thickness = 4;
@@ -126,7 +126,7 @@ public final class CloudsGameTest implements FabricClientGameTest {
                     context.waitTicks(8);
                     context.takeScreenshot("clouds-" + (oit ? "oit-" : "classic-") + height);
                 }
-                context.runOnClient(client -> {
+                context.runOnClient(_ -> {
                     var c = NaturalityConfig.get().clouds;
                     c.base.style = 2;
                     c.upper.style = 1;
@@ -136,7 +136,7 @@ public final class CloudsGameTest implements FabricClientGameTest {
                 });
                 context.waitTicks(8);
                 context.takeScreenshot("clouds-mixed-" + oit);
-                context.runOnClient(client -> {
+                context.runOnClient(_ -> {
                     var c = NaturalityConfig.get().clouds;
                     c.base.style = 0;
                     c.upper = NaturalityConfig.Clouds.upperDefaults();
@@ -155,12 +155,12 @@ public final class CloudsGameTest implements FabricClientGameTest {
                 if (time == 18000) opaqueMoon = capture;
             }
             server.runCommand("time set 18000");
-            context.runOnClient(client -> NaturalityConfig.get().clouds.base.opacityPercent = 50);
+            context.runOnClient(_ -> NaturalityConfig.get().clouds.base.opacityPercent = 50);
             context.waitTicks(10);
             var halfMoon = context.takeScreenshot("clouds-moon-half-opacity");
             if (centerVariation(java.util.Objects.requireNonNull(opaqueMoon)) > 2 || centerVariation(halfMoon) < 10)
                 throw new AssertionError("100% cloud base must block the moon/stars; 50% must reveal them");
-            context.runOnClient(client -> NaturalityConfig.get().clouds.base.opacityPercent = 100);
+            context.runOnClient(_ -> NaturalityConfig.get().clouds.base.opacityPercent = 100);
             for (int time : new int[]{15000, 21000}) {
                 server.runCommand("time set " + time);
                 server.runCommand("tp @a 0.5 164 0.5 " + (time == 15000 ? -90 : 90) + " -30");
@@ -190,10 +190,10 @@ public final class CloudsGameTest implements FabricClientGameTest {
                 }
             }
             server.runCommand("time set 6000");
-            context.runOnClient(client -> NaturalityConfig.get().clouds.enabled = false);
+            context.runOnClient(_ -> NaturalityConfig.get().clouds.enabled = false);
             context.waitTicks(8);
             context.takeScreenshot("clouds-vanilla-fallback");
-            context.runOnClient(client -> {
+            context.runOnClient(_ -> {
                 NaturalityConfig.get().clouds.enabled = true;
                 NaturalityConfig.get().clouds.upper.enabled = false;
             });
@@ -201,16 +201,16 @@ public final class CloudsGameTest implements FabricClientGameTest {
             context.takeScreenshot("clouds-single-layer");
             var reload = new java.util.concurrent.atomic.AtomicReference<java.util.concurrent.CompletableFuture<Void>>();
             context.runOnClient(client -> reload.set(client.reloadResourcePacks()));
-            context.waitFor(client -> reload.get().isDone());
+            context.waitFor(_ -> reload.get().isDone());
             reload.get().join();
             context.waitFor(client -> client.gui.overlay() == null);
             context.waitTicks(5);
             context.takeScreenshot("clouds-after-reload");
             context.runOnClient(client -> client.gui.setScreen(new naturality.client.config.NaturalityCategoryScreen(
-                null, naturality.client.config.NaturalityCategoryScreen.Category.CLOUDS)));
+                new net.minecraft.client.gui.screens.TitleScreen(), naturality.client.config.NaturalityCategoryScreen.Category.CLOUDS)));
             context.waitTicks(2);
             context.takeScreenshot("clouds-settings");
-            context.runOnClient(client -> client.gui.screen().onClose());
+            context.runOnClient(client -> TestFixtures.screen(client).onClose());
         } finally {
             context.runOnClient(client -> {
                 NaturalityConfig.get().clouds = saved;
@@ -237,7 +237,7 @@ public final class CloudsGameTest implements FabricClientGameTest {
         } catch (java.io.IOException exception) { throw new AssertionError(exception); }
     }
 
-    private static void checkGeometry() {
+    static void checkGeometry() {
         if (Math.abs(naturality.client.cloud.CloudMoonLighting.phaseStrength(0) - 1) > 0.0001
                 || Math.abs(naturality.client.cloud.CloudMoonLighting.phaseStrength(4) - 0.1) > 0.0001)
             throw new AssertionError("Cloud moonlight must range from 100% at full moon to 10% at new moon");
@@ -263,9 +263,7 @@ public final class CloudsGameTest implements FabricClientGameTest {
             buffer.clear();
             for (var direction : net.minecraft.core.Direction.values()) encode.invoke(renderer, buffer, 0, 0, direction, 0);
             if (buffer.position() != 24) throw new AssertionError("Solid style must retain the top");
-            var clouds = new NaturalityConfig.Clouds();
-            clouds.base.width = 0;
-            clouds.upper = null;
+            var clouds = new com.google.gson.Gson().fromJson("{\"base\":{\"width\":0},\"upper\":null}", NaturalityConfig.Clouds.class);
             clouds.sanitize();
             if (clouds.base.width != 4 || clouds.upper.heightOffset != new NaturalityConfig.Clouds().upper.heightOffset) {
                 throw new AssertionError("Cloud config validation failed");

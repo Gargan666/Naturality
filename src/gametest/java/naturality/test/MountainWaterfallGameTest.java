@@ -27,7 +27,7 @@ public final class MountainWaterfallGameTest implements FabricClientGameTest {
             server.runOnServer(instance -> {
                 var level=instance.overworld();
                 long started=System.nanoTime();
-                var plan=MountainWaterfallFeature.plan(level,center,7,3,Direction.EAST,10);
+                var plan=TestFixtures.require(MountainWaterfallFeature.plan(level,center,7,3,Direction.EAST,10), "plan");
                 System.out.println("Mountain waterfall plan: "+(System.nanoTime()-started)/1_000_000.0+" ms, blocks="+(plan==null?0:plan.size()));
                 check(plan!=null,"Controlled cliff produces lake and waterfall");
                 check(plan.entrySet().stream().filter(e -> e.getKey().getY()==159 && e.getValue().getFluidState().isSource()).count()>90,"Large source-water lake");
@@ -70,7 +70,7 @@ public final class MountainWaterfallGameTest implements FabricClientGameTest {
             server.runCommand("fill 17 120 -16 21 128 31 stone");
             server.runOnServer(instance -> {
                 var level=instance.overworld();
-                var plan=MountainWaterfallFeature.plan(level,center,7,5,Direction.EAST,10);
+                var plan=TestFixtures.require(MountainWaterfallFeature.plan(level,center,7,5,Direction.EAST,10), "plan");
                 check(plan!=null,"Wide fall on stepped terrain produces a complete plan");
                 for(var entry:plan.entrySet())level.setBlock(entry.getKey(),entry.getValue(),2);
                 var prepared=new LinkedHashMap<BlockPos,BlockState>();
@@ -93,7 +93,7 @@ public final class MountainWaterfallGameTest implements FabricClientGameTest {
             for(int y=112;y<176;y+=8)server.runCommand("fillbiome -16 "+y+" -16 31 "+(y+7)+" 31 snowy_slopes");
             server.runOnServer(instance -> {
                 var level=instance.overworld();
-                var plan=MountainWaterfallFeature.plan(level,center,7,3,Direction.EAST,10);
+                var plan=TestFixtures.require(MountainWaterfallFeature.plan(level,center,7,3,Direction.EAST,10), "plan");
                 check(plan!=null,"Frozen mountain retains an open underwater spillway");
                 check(plan.values().stream().anyMatch(s -> s.is(Blocks.ICE)),"Frozen lake has a native ice lid");
                 var prepared=new LinkedHashMap<BlockPos,BlockState>();

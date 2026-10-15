@@ -27,7 +27,7 @@ public final class OverlayEdgeGameTest implements FabricClientGameTest {
     private static final RenderPipeline[] PIPELINES={pipeline(false,false),pipeline(true,false),pipeline(false,true),pipeline(true,true)};
 
     @Override public void runTest(ClientGameTestContext context) {
-        context.runOnClient(c -> checkGpu());
+        context.runOnClient(_ -> checkGpu());
         try(var world=context.worldBuilder().create()) {
             var server=world.getServer();
             server.runCommand("gamemode spectator @a");server.runCommand("time set midnight");
@@ -48,7 +48,7 @@ public final class OverlayEdgeGameTest implements FabricClientGameTest {
         try(var image=new NativeImage(2,1,false)) {
             image.setPixel(0,0,0xff408020);image.setPixel(1,0,0x00ffffff);
             var encoder=RenderSystem.getDevice().createCommandEncoder();
-            encoder.writeToTexture(source.getColorTexture(),image);
+            encoder.writeToTexture(TestFixtures.require(source.getColorTexture(), "source.getColorTexture()"),image);
             int[] original=render(source,0),fixed=render(source,1);
             int pixel=128;
             int before=original[pixel]&255,after=fixed[pixel]&255;
@@ -58,7 +58,7 @@ public final class OverlayEdgeGameTest implements FabricClientGameTest {
             if(!Arrays.equals(render(source,2),render(source,3)))
                 throw new AssertionError("Distant filtering changed");
             image.setPixel(0,0,0x66408020);image.setPixel(1,0,0x99ffffff);
-            encoder.writeToTexture(source.getColorTexture(),image);
+            encoder.writeToTexture(TestFixtures.require(source.getColorTexture(), "source.getColorTexture()"),image);
             if(!Arrays.equals(render(source,0),render(source,1)))
                 throw new AssertionError("Authored partial alpha changed");
             System.out.println("Overlay GPU regression: bright-edge red "+before+" -> "+after+"; distant and partial-alpha outputs unchanged");
@@ -69,13 +69,13 @@ public final class OverlayEdgeGameTest implements FabricClientGameTest {
         var target=new TextureTarget("Overlay edge oracle",width,height,GpuFormat.RGBA8_UNORM,null);
         var encoder=RenderSystem.getDevice().createCommandEncoder();
         try(var buffer=RenderSystem.getDevice().createBuffer(() -> "Overlay edge readback",9,width*height*4L)) {
-            try(var pass=encoder.createRenderPass(() -> "Overlay edge test",target.getColorTextureView(),
+            try(var pass=encoder.createRenderPass(() -> "Overlay edge test",TestFixtures.require(target.getColorTextureView(), "target.getColorTextureView()"),
                     Optional.of(new Vector4f(.02F,.02F,.02F,1)))) {
                 pass.setPipeline(RenderSystem.getCompiledPipeline(PIPELINES[variant]));
                 pass.setUniform("Sampler0",source.getColorTextureView(),RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
                 pass.draw(3,1,0,0);
             }
-            encoder.copyTextureToBuffer(target.getColorTexture(),buffer,0,() -> {},0);
+            encoder.copyTextureToBuffer(TestFixtures.require(target.getColorTexture(), "target.getColorTexture()"),buffer,0,() -> {},0);
             try(var fence=encoder.createFence()){encoder.submit();fence.awaitCompletion(-1);}
             int[] pixels=new int[width*height];
             try(var mapped=buffer.map(true,false)){mapped.data().asIntBuffer().get(pixels);}

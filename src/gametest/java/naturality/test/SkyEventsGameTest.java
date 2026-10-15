@@ -68,10 +68,10 @@ public final class SkyEventsGameTest implements FabricClientGameTest {
             server.runCommand("skyevent minecraft:the_end status");
             server.runOnServer(s -> {
                 check(SkyEvents.strength(s.overworld(), SkyEventType.METEOR_SHOWER) == 20, "Server override");
-                check(SkyEvents.strength(s.getLevel(Level.END), SkyEventType.METEOR_SHOWER) == 0, "Meteor showers remain Overworld-only");
-                check(SkyEvents.strength(s.getLevel(Level.NETHER), SkyEventType.METEOR_SHOWER) == 0, "No Nether event");
+                check(SkyEvents.strength(TestFixtures.require(s.getLevel(Level.END), "s.getLevel(Level.END)"), SkyEventType.METEOR_SHOWER) == 0, "Meteor showers remain Overworld-only");
+                check(SkyEvents.strength(TestFixtures.require(s.getLevel(Level.NETHER), "s.getLevel(Level.NETHER)"), SkyEventType.METEOR_SHOWER) == 0, "No Nether event");
             });
-            context.runOnClient(client -> {
+            context.runOnClient(_ -> {
                 check(MeteorShower.strength() == 20, "Strength synchronized");
                 check(MeteorShower.count() >= 5 && MeteorShower.count() <= 128, "Bounded active sprites");
             });
@@ -81,12 +81,12 @@ public final class SkyEventsGameTest implements FabricClientGameTest {
             context.takeScreenshot("sky-events-meteor-shower-rotated");
             server.runCommand("skyevent minecraft:overworld meteor_shower 0");
             context.waitTicks(120);
-            context.runOnClient(client -> check(MeteorShower.count() == 0, "Zero strength stops spawning; outro expires"));
+            context.runOnClient(_ -> check(MeteorShower.count() == 0, "Zero strength stops spawning; outro expires"));
             server.runCommand("skyevent minecraft:overworld meteor_shower 20");
             context.waitTicks(50);
             server.runCommand("execute in minecraft:the_end run tp @a 0 100 0");
             context.waitTicks(30);
-            context.runOnClient(client -> check(MeteorShower.count() == 0 && MeteorShower.strength() == 0, "Dimension transition clears sprites"));
+            context.runOnClient(_ -> check(MeteorShower.count() == 0 && MeteorShower.strength() == 0, "Dimension transition clears sprites"));
         }
         try (var otherWorld = context.worldBuilder().create()) {
             var server = otherWorld.getServer();
@@ -98,7 +98,7 @@ public final class SkyEventsGameTest implements FabricClientGameTest {
                     "Previous world's active meteor shower does not transfer");
             });
             context.waitTicks(20);
-            context.runOnClient(client -> check(MeteorShower.strength() == 0 && MeteorShower.count() == 0,
+            context.runOnClient(_ -> check(MeteorShower.strength() == 0 && MeteorShower.count() == 0,
                 "Client clears the previous world's meteor visuals"));
         }
     }

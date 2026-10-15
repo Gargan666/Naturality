@@ -47,7 +47,7 @@ public final class WaterfallGameTest implements FabricClientGameTest {
             world.getConnection().waitForClientboundPackets();context.waitTicks(3);
             context.runOnClient(c->{
 
-                var droplet=c.particleEngine.createParticle(net.minecraft.core.particles.ParticleTypes.SPLASH,5,180,5,0,0,0);
+                var droplet=TestFixtures.require(c.particleEngine.createParticle(net.minecraft.core.particles.ParticleTypes.SPLASH,5,180,5,0,0,0), "droplet");
                 check(droplet instanceof naturality.client.particle.ImpactDroplet,"Impact spray must support landing lifetime");
                 ((naturality.client.particle.ImpactDroplet)droplet).naturality$landBeforeExpiring();
                 droplet.setParticleSpeed(0,0,0);
@@ -59,19 +59,19 @@ public final class WaterfallGameTest implements FabricClientGameTest {
             server.runCommand("tp @a 4.5 102.5 -5.5 35 12");
             world.getConnection().waitForClientboundPackets();context.waitTicks(3);
             context.runOnClient(c->{
-                check(naturality.client.fluid.FallImpactDroplets.vertical(c.level,new BlockPos(0,100,0),false),"Vertical water impact emits droplets");
-                check(!naturality.client.fluid.FallImpactDroplets.vertical(c.level,new BlockPos(5,100,5),false),"Resting pool must not emit droplets");
-                check(!naturality.client.fluid.FallImpactDroplets.vertical(c.level,new BlockPos(0,100,0),true),"Water fall must not emit lava droplets");
-                check(WaterfallSplash.impactColumn(c.level,new BlockPos(0,100,0)),"Waterfall must enter a source pool");
-                check(WaterfallSplash.validBorder(c.level,new WaterfallSplash.Border(new BlockPos(0,100,0),Direction.NORTH)),"Direct waterfall splashes at the adjacent source pool");
-                check(!WaterfallSplash.validBorder(c.level,new WaterfallSplash.Border(new BlockPos(0,100,-1),Direction.NORTH)),"Source surface smoothing must not move spray one block outward");
-                check(!WaterfallSplash.validBorder(c.level,new WaterfallSplash.Border(new BlockPos(0,100,0),Direction.EAST)),"No spray inside adjacent falling columns");
-                check(!WaterfallSplash.impactColumn(c.level,new BlockPos(5,100,5)),"Resting water alone must not splash");
-                check(!WaterfallSplash.impactColumn(c.level,new BlockPos(0,104,0)),"No spray halfway down a waterfall");
+                check(naturality.client.fluid.FallImpactDroplets.vertical(TestFixtures.level(c),new BlockPos(0,100,0),false),"Vertical water impact emits droplets");
+                check(!naturality.client.fluid.FallImpactDroplets.vertical(TestFixtures.level(c),new BlockPos(5,100,5),false),"Resting pool must not emit droplets");
+                check(!naturality.client.fluid.FallImpactDroplets.vertical(TestFixtures.level(c),new BlockPos(0,100,0),true),"Water fall must not emit lava droplets");
+                check(WaterfallSplash.impactColumn(TestFixtures.level(c),new BlockPos(0,100,0)),"Waterfall must enter a source pool");
+                check(WaterfallSplash.validBorder(TestFixtures.level(c),new WaterfallSplash.Border(new BlockPos(0,100,0),Direction.NORTH)),"Direct waterfall splashes at the adjacent source pool");
+                check(!WaterfallSplash.validBorder(TestFixtures.level(c),new WaterfallSplash.Border(new BlockPos(0,100,-1),Direction.NORTH)),"Source surface smoothing must not move spray one block outward");
+                check(!WaterfallSplash.validBorder(TestFixtures.level(c),new WaterfallSplash.Border(new BlockPos(0,100,0),Direction.EAST)),"No spray inside adjacent falling columns");
+                check(!WaterfallSplash.impactColumn(TestFixtures.level(c),new BlockPos(5,100,5)),"Resting water alone must not splash");
+                check(!WaterfallSplash.impactColumn(TestFixtures.level(c),new BlockPos(0,104,0)),"No spray halfway down a waterfall");
                 // Provider checks must not compete with naturally spawned spray for its shared quota.
                 c.particleEngine.clearParticles();
-                var small=c.particleEngine.createParticle(NaturalityParticles.WATERFALL,0,101,0,0.02,0,0);
-                var big=c.particleEngine.createParticle(NaturalityParticles.WATERFALL_BIG,0,101,0,0.02,0,0);
+                var small=TestFixtures.require(c.particleEngine.createParticle(NaturalityParticles.WATERFALL,0,101,0,0.02,0,0), "small");
+                var big=TestFixtures.require(c.particleEngine.createParticle(NaturalityParticles.WATERFALL_BIG,0,101,0,0.02,0,0), "big");
                 check(small instanceof WaterfallParticle && big instanceof WaterfallParticle,"Both providers registered");
                 check(((WaterfallParticle)big).getQuadSize(0)>1.8*((WaterfallParticle)small).getQuadSize(0),"Distinct large variant despite independent size variation");
                 check(small.getLifetime()==24 && big.getLifetime()==24,"Twelve two-tick animation frames");
@@ -99,7 +99,7 @@ public final class WaterfallGameTest implements FabricClientGameTest {
             int[] loud=new int[1];
             for(int i=0;i<50;i++) {
                 context.waitTicks(1);
-                context.runOnClient(c->loud[0]+=naturality.client.fluid.WaterEntrySplash.lastSplashCount);
+                context.runOnClient(_->loud[0]+=naturality.client.fluid.WaterEntrySplash.lastSplashCount);
                 if(loud[0]==1 && i<30) {
                     context.waitTicks(4);
                     context.takeScreenshot("water-impact-column");
@@ -113,7 +113,7 @@ public final class WaterfallGameTest implements FabricClientGameTest {
             loud[0]=0;
             for(int i=0;i<35;i++) {
                 context.waitTicks(1);
-                context.runOnClient(c->loud[0]+=naturality.client.fluid.WaterEntrySplash.lastSplashCount);
+                context.runOnClient(_->loud[0]+=naturality.client.fluid.WaterEntrySplash.lastSplashCount);
                 if(loud[0]==1 && i<30) {
                     context.waitTicks(4);
                     context.takeScreenshot("water-impact-column");
@@ -127,14 +127,14 @@ public final class WaterfallGameTest implements FabricClientGameTest {
             loud[0]=0;
             for(int i=0;i<60;i++) {
                 context.waitTicks(1);
-                context.runOnClient(c->loud[0]+=naturality.client.fluid.WaterEntrySplash.lastSplashCount);
+                context.runOnClient(_->loud[0]+=naturality.client.fluid.WaterEntrySplash.lastSplashCount);
             }
             check(loud[0]==1,"A boat falling into water must produce one large splash");
             server.runCommand("kill @e[tag=boat_splash_test]");
             int[] counts=new int[2];
             for(int i=0;i<50;i++) {
                 context.waitTicks(1);
-                context.runOnClient(c->{counts[0]+=WaterfallSplash.lastSmallSpawns;counts[1]+=WaterfallSplash.lastBigSpawns;});
+                context.runOnClient(_->{counts[0]+=WaterfallSplash.lastSmallSpawns;counts[1]+=WaterfallSplash.lastBigSpawns;});
             }
             check(counts[0]>0 && counts[1]>0,"Waterfall must automatically emit both variants");
             for(boolean oit:new boolean[]{false,true}) {
@@ -151,22 +151,22 @@ public final class WaterfallGameTest implements FabricClientGameTest {
             world.getConnection().waitForClientboundPackets();context.waitTicks(3);
             context.runOnClient(c->{
                 var foot=new BlockPos(0,101,0);
-                check(!WaterfallSplash.impactColumn(c.level,foot),"Supported falling foot without resting water must not emit");
-                check(!c.level.getFluidState(foot.north()).isSource(),"Regression scene must contain flowing runoff");
-                check(!WaterfallSplash.validBorder(c.level,new WaterfallSplash.Border(foot,Direction.NORTH)),"Flowing-to-sloping transition must not emit");
-                check(!WaterfallSplash.impactColumn(c.level,new BlockPos(0,104,0)),"Slope support must not enable midair spray");
-                check(!WaterfallSplash.validBorder(c.level,new WaterfallSplash.Border(foot.north(),Direction.NORTH)),"Runoff-to-runoff transition must not emit");
+                check(!WaterfallSplash.impactColumn(TestFixtures.level(c),foot),"Supported falling foot without resting water must not emit");
+                check(!TestFixtures.level(c).getFluidState(foot.north()).isSource(),"Regression scene must contain flowing runoff");
+                check(!WaterfallSplash.validBorder(TestFixtures.level(c),new WaterfallSplash.Border(foot,Direction.NORTH)),"Flowing-to-sloping transition must not emit");
+                check(!WaterfallSplash.impactColumn(TestFixtures.level(c),new BlockPos(0,104,0)),"Slope support must not enable midair spray");
+                check(!WaterfallSplash.validBorder(TestFixtures.level(c),new WaterfallSplash.Border(foot.north(),Direction.NORTH)),"Runoff-to-runoff transition must not emit");
                 naturality.client.fluid.WaterSurface runoff=null;
                 for(int offset=1;offset<=8;offset++) {
-                    var candidate=naturality.client.fluid.WaterSurface.at(c.level,foot.north(offset));
+                    var candidate=naturality.client.fluid.WaterSurface.at(TestFixtures.level(c),foot.north(offset));
                     if(candidate!=null && candidate.height(.5,.5)<candidate.pos().getY()+.85){runoff=candidate;break;}
                 }
                 var surface=java.util.Objects.requireNonNull(runoff,"Runoff scene needs an exposed shallow water surface");
                 double x=surface.pos().getX()+.5,z=surface.pos().getZ()+.5,h=surface.height(.5,.5);
-                var above=c.particleEngine.createParticle(net.minecraft.core.particles.ParticleTypes.BUBBLE,x,h+.04,z,0,0,0);
+                var above=TestFixtures.require(c.particleEngine.createParticle(net.minecraft.core.particles.ParticleTypes.BUBBLE,x,h+.04,z,0,0,0), "above");
                 above.setParticleSpeed(0,0,0);above.tick();
                 check(!above.isAlive(),"Bubble must pop above a sloped surface even inside a water-tagged block");
-                var below=c.particleEngine.createParticle(net.minecraft.core.particles.ParticleTypes.BUBBLE,x,h-.04,z,0,0,0);
+                var below=TestFixtures.require(c.particleEngine.createParticle(net.minecraft.core.particles.ParticleTypes.BUBBLE,x,h-.04,z,0,0,0), "below");
                 below.setParticleSpeed(0,0,0);below.tick();
                 check(below.isAlive(),"Bubble just below the rendered runoff surface remains submerged");
                 below.remove();
@@ -174,7 +174,7 @@ public final class WaterfallGameTest implements FabricClientGameTest {
             counts[0]=counts[1]=0;
             for(int i=0;i<40;i++) {
                 context.waitTicks(1);
-                context.runOnClient(c->{counts[0]+=WaterfallSplash.lastSmallSpawns;counts[1]+=WaterfallSplash.lastBigSpawns;});
+                context.runOnClient(_->{counts[0]+=WaterfallSplash.lastSmallSpawns;counts[1]+=WaterfallSplash.lastBigSpawns;});
             }
             check(counts[0]==0 && counts[1]==0,"Runoff without resting water must not emit either variant");
             // Restore the pool: its first row is source water with surface smoothing; the
@@ -187,15 +187,15 @@ public final class WaterfallGameTest implements FabricClientGameTest {
                 context.runOnClient(c->c.options.improvedTransparency().set(oit));context.waitTicks(15);
                 context.takeScreenshot("waterfall-sloped-runoff-"+oit);
             }
-            context.runOnClient(c->NaturalityConfig.get().liquids.waterfallParticles=false);context.waitTicks(2);
-            context.runOnClient(c->check(WaterfallSplash.lastSmallSpawns+WaterfallSplash.lastBigSpawns==0,"Toggle stops spawning"));
+            context.runOnClient(_->NaturalityConfig.get().liquids.waterfallParticles=false);context.waitTicks(2);
+            context.runOnClient(_->check(WaterfallSplash.lastSmallSpawns+WaterfallSplash.lastBigSpawns==0,"Toggle stops spawning"));
             context.runOnClient(c->{NaturalityConfig.get().liquids.waterfallParticles=true;c.options.particles().set(ParticleStatus.MINIMAL);});
             context.waitTicks(2);
-            context.runOnClient(c->check(WaterfallSplash.lastSmallSpawns+WaterfallSplash.lastBigSpawns==0,"Minimal particles respected"));
+            context.runOnClient(_->check(WaterfallSplash.lastSmallSpawns+WaterfallSplash.lastBigSpawns==0,"Minimal particles respected"));
             context.runOnClient(c->c.options.particles().set(ParticleStatus.ALL));
             server.runCommand("fill -1 101 0 1 107 0 stone");
             world.getConnection().waitForClientboundPackets();context.waitTicks(30);
-            context.runOnClient(c->check(WaterfallSplash.lastSmallSpawns+WaterfallSplash.lastBigSpawns==0,"Removed waterfall must stop spawning"));
+            context.runOnClient(_->check(WaterfallSplash.lastSmallSpawns+WaterfallSplash.lastBigSpawns==0,"Removed waterfall must stop spawning"));
             context.takeScreenshot("waterfall-removed");
         } finally {
             context.runOnClient(c->{var cfg=NaturalityConfig.get().liquids;cfg.water=saved[0];cfg.waterfallParticles=saved[1];

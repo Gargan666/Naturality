@@ -55,7 +55,7 @@ public final class ConfigMenuGameTest implements FabricClientGameTest {
 
     @Override public void runTest(ClientGameTestContext context) {
         context.runOnClient(client -> {
-            client.gui.setScreen(new NaturalityConfigScreen(null));
+            client.gui.setScreen(new NaturalityConfigScreen(new net.minecraft.client.gui.screens.TitleScreen()));
             if (list(client.gui.screen()).children().size() != 6) throw new AssertionError("Expected epilepsy mode, presets, visuals, content, gameplay and audio");
             press(client.gui.screen(), "Config Presets");
             for (String name : List.of("Default", "Clientside Only", "No Visual Overhaul"))
@@ -77,21 +77,21 @@ public final class ConfigMenuGameTest implements FabricClientGameTest {
             press(client.gui.screen(), "Default");
             if (!NaturalityConfig.get().lighting.enabled || NaturalityConfig.get().clouds.upper.enabled)
                 throw new AssertionError("Default button must use exact shipped defaults");
-            client.gui.screen().onClose();
+            TestFixtures.screen(client).onClose();
             press(client.gui.screen(), "Gameplay");
             press(client.gui.screen(), "Block and Snow Rules");
             if (resets(client.gui.screen()) != 8) throw new AssertionError("Block rules must include snow generation, sand, three local server settings and three sleep controls");
-            client.gui.screen().onClose();
+            TestFixtures.screen(client).onClose();
             press(client.gui.screen(), "Weather and Sky Rules");
             if (resets(client.gui.screen()) != 6) throw new AssertionError("Weather rules must include simulation and snow accumulation");
-            client.gui.screen().onClose();
+            TestFixtures.screen(client).onClose();
             press(client.gui.screen(), "Movement and Portal Travel");
             if (resets(client.gui.screen()) != 5) throw new AssertionError("Travel rules must include wind, elytra, navigation instruments and both portal settings");
-            client.gui.screen().onClose();
-            client.gui.screen().onClose();
+            TestFixtures.screen(client).onClose();
+            TestFixtures.screen(client).onClose();
             press(client.gui.screen(), "Audio");
             if (resets(client.gui.screen()) != 8) throw new AssertionError("Audio must collect all ambience, wind, splash and portal volume settings");
-            client.gui.screen().onClose();
+            TestFixtures.screen(client).onClose();
             press(client.gui.screen(), "Visuals");
             press(client.gui.screen(), "Portals");
             if (resets(client.gui.screen()) != 8) throw new AssertionError("Portal appearance should exclude relocated audio");
@@ -131,7 +131,7 @@ public final class ConfigMenuGameTest implements FabricClientGameTest {
                 throw new AssertionError("No-results state must replace the list");
             search(client.gui.screen()).setValue("");
             if (resets(client.gui.screen()) != 8) throw new AssertionError("Clearing search must restore Portals");
-            client.gui.screen().onClose();
+            TestFixtures.screen(client).onClose();
             press(client.gui.screen(), "Sky and Atmosphere");
             press(client.gui.screen(), "Weather");
             if (resets(client.gui.screen()) != 6) throw new AssertionError("Weather appearance must combine startup visuals and live controls");
@@ -142,7 +142,7 @@ public final class ConfigMenuGameTest implements FabricClientGameTest {
             search(client.gui.screen()).setValue("glint");
             if (resets(client.gui.screen()) != 5) throw new AssertionError("All glint controls must be searchable");
             search(client.gui.screen()).setValue("");
-            client.gui.screen().onClose();
+            TestFixtures.screen(client).onClose();
             press(client.gui.screen(), "Clouds");
             var options = list(client.gui.screen());
             options.setScrollAmount(140);
@@ -163,9 +163,9 @@ public final class ConfigMenuGameTest implements FabricClientGameTest {
         context.takeScreenshot("config-global-search");
         context.runOnClient(client -> {
             search(client.gui.screen()).setValue("");
-            client.gui.screen().onClose();
-            client.gui.screen().onClose();
-            client.gui.screen().onClose();
+            TestFixtures.screen(client).onClose();
+            TestFixtures.screen(client).onClose();
+            TestFixtures.screen(client).onClose();
         });
         context.takeScreenshot("config-main-categories");
         context.runOnClient(client -> press(client.gui.screen(), "Config Presets"));
@@ -231,29 +231,29 @@ public final class ConfigMenuGameTest implements FabricClientGameTest {
         });
         context.waitTicks(3);
         context.takeScreenshot("config-performance-estimate");
-        context.runOnClient(client -> { client.gui.screen().onClose(); client.gui.screen().onClose(); });
+        context.runOnClient(client -> { TestFixtures.screen(client).onClose(); TestFixtures.screen(client).onClose(); });
 
         // Exercise compilation of both sides of the newly configurable shader paths.
         context.runOnClient(client -> {
-            client.gui.setScreen(new NaturalityCategoryScreen(null, NaturalityCategoryScreen.Category.ROOT));
+            client.gui.setScreen(new NaturalityCategoryScreen(new net.minecraft.client.gui.screens.TitleScreen(), NaturalityCategoryScreen.Category.ROOT));
             NaturalityConfig.get().lighting.enabled = false;
             NaturalityConfig.get().effects.starPulses = false;
             NaturalityConfig.get().effects.pixelGlint = false;
             NaturalityConfig.get().liquids.emissiveLava = false;
             NaturalityConfig.get().effects.fireAnimation = false;
             NaturalityConfig.get().portalChanges.endParallax = false;
-            client.gui.screen().onClose();
+            TestFixtures.screen(client).onClose();
         });
         context.waitFor(client -> client.gui.overlay() == null);
         context.runOnClient(client -> {
-            client.gui.setScreen(new NaturalityCategoryScreen(null, NaturalityCategoryScreen.Category.ROOT));
+            client.gui.setScreen(new NaturalityCategoryScreen(new net.minecraft.client.gui.screens.TitleScreen(), NaturalityCategoryScreen.Category.ROOT));
             NaturalityConfig.get().lighting.enabled = true;
             NaturalityConfig.get().effects.starPulses = true;
             NaturalityConfig.get().effects.pixelGlint = true;
             NaturalityConfig.get().liquids.emissiveLava = true;
             NaturalityConfig.get().effects.fireAnimation = true;
             NaturalityConfig.get().portalChanges.endParallax = true;
-            client.gui.screen().onClose();
+            TestFixtures.screen(client).onClose();
         });
         context.waitFor(client -> client.gui.overlay() == null);
 
@@ -287,7 +287,7 @@ public final class ConfigMenuGameTest implements FabricClientGameTest {
                 try {
                     effects.worldGlintContours=effects.handGlintContours=effects.previewGlintContours=false;
                     effects.weatherParticles=false;
-                    if (naturality.client.weather.ParticleWeather.enabled(client.level)) throw new AssertionError("Disabled precipitation must restore vanilla sheets");
+                    if (naturality.client.weather.ParticleWeather.enabled(TestFixtures.level(client))) throw new AssertionError("Disabled precipitation must restore vanilla sheets");
                     var texture=net.minecraft.resources.Identifier.withDefaultNamespace("textures/item/diamond_sword.png");
                     naturality.client.glint.GlintContours.beginFrame();
                     if (naturality.client.glint.GlintContours.armor(texture,true)!=null) throw new AssertionError("Disabled world outlines captured geometry");
@@ -321,7 +321,7 @@ public final class ConfigMenuGameTest implements FabricClientGameTest {
                             throw new AssertionError("Disabled flames must use vanilla behavior");
                     }
                     NaturalityConfig.get().portalChanges.eyeGlow = false;
-                    naturality.client.portal.end.EndEyeGlow.start(client.level, net.minecraft.core.BlockPos.ZERO);
+                    naturality.client.portal.end.EndEyeGlow.start(TestFixtures.level(client), net.minecraft.core.BlockPos.ZERO);
                     if (naturality.client.portal.end.EndEyeGlow.isActive(net.minecraft.core.BlockPos.ZERO))
                         throw new AssertionError("Disabled eye glow must reject new flashes");
                 } finally {

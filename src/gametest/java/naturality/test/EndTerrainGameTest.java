@@ -77,7 +77,7 @@ public final class EndTerrainGameTest implements FabricClientGameTest {
             double[][][] viewpoints = new double[1][][];
             server.runCommand("gamerule minecraft:random_tick_speed 0");
             server.runOnServer(s -> {
-                var end = s.getLevel(Level.END);
+                var end = TestFixtures.require(s.getLevel(Level.END), "end");
                 var generator = (NoiseBasedChunkGenerator)end.getChunkSource().getGenerator();
                 var random = end.getChunkSource().randomState();
                 var input = generator.generatorSettings().value().noiseRouter().finalDensity();
@@ -96,10 +96,10 @@ public final class EndTerrainGameTest implements FabricClientGameTest {
                                 var terrain = (EndTerrainDensity.Sampler)random.getSampler(custom);
                 var sameSeed = net.minecraft.world.level.levelgen.RandomState.create(
                     end.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.NOISE),
-                    random.seed(),generator.generatorSettings().value());
+                    end.getSeed(),generator.generatorSettings().value());
                 var otherSeed = net.minecraft.world.level.levelgen.RandomState.create(
                     end.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.NOISE),
-                    random.seed()+1,generator.generatorSettings().value());
+                    end.getSeed()+1,generator.generatorSettings().value());
                 var repeat = (EndTerrainDensity.Sampler)sameSeed.getSampler(custom);
                 var different = (EndTerrainDensity.Sampler)otherSeed.getSampler(custom);
                 check(java.util.Arrays.equals(terrain.weights(2700,3500),repeat.weights(2700,3500)),"Style map is not seed reproducible");
@@ -250,10 +250,10 @@ public final class EndTerrainGameTest implements FabricClientGameTest {
                     final int targetX=(int)point[0]>>4, targetZ=(int)point[1]>>4;
                     int[] probes={0};
                     context.waitFor(client -> {
-                        if(probes[0]++%100==0 && client.level!=null) System.out.println("Terrain camera: "+client.level.dimension()+" at "+client.player.position()+" target "+targetX+","+targetZ+" cache "+(client.level.getChunkSource().getChunk(targetX,targetZ,net.minecraft.world.level.chunk.status.ChunkStatus.FULL,false)!=null));
+                        if(probes[0]++%100==0 && client.level!=null) System.out.println("Terrain camera: "+client.level.dimension()+" at "+TestFixtures.player(client).position()+" target "+targetX+","+targetZ+" cache "+(TestFixtures.level(client).getChunkSource().getChunk(targetX,targetZ,net.minecraft.world.level.chunk.status.ChunkStatus.FULL,false)!=null));
                         if(client.level==null || client.level.dimension()!=Level.END) return false;
                         for(int dz=-5;dz<=5;dz++) for(int dx=-5;dx<=5;dx++)
-                            if(client.level.getChunkSource().getChunk(targetX+dx,targetZ+dz,
+                            if(TestFixtures.level(client).getChunkSource().getChunk(targetX+dx,targetZ+dz,
                                 net.minecraft.world.level.chunk.status.ChunkStatus.FULL,false)==null) return false;
                         return true;
                     }, 1200);

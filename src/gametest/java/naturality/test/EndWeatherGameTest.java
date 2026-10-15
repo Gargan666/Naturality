@@ -35,7 +35,7 @@ public final class EndWeatherGameTest implements FabricClientGameTest {
         try(var world=context.worldBuilder().create()) {
             save=world.getWorldSave();
             var server=world.getServer();
-            server.runOnServer(s -> s.getLevel(Level.END).setDragonFight(null));
+            server.runOnServer(s -> TestFixtures.disableDragonFight(TestFixtures.require(s.getLevel(Level.END), "End world")));
             server.runCommand("gamerule minecraft:advance_weather false");
             server.runCommand("gamemode spectator @a");
             server.runCommand("execute in minecraft:the_end run tp @a 0 100 0 0 0");
@@ -48,13 +48,13 @@ public final class EndWeatherGameTest implements FabricClientGameTest {
             server.runCommand("weather minecraft:the_end gravity 100");
             context.waitTicks(410);
             server.runOnServer(s -> {
-                var end=s.getLevel(Level.END);
-                var cow=EntityTypes.COW.create(end,EntitySpawnReason.COMMAND);
+                var end=TestFixtures.require(s.getLevel(Level.END), "end");
+                var cow=TestFixtures.require(EntityTypes.COW.create(end,EntitySpawnReason.COMMAND), "cow");
                 cow.setNoAi(true);cow.setPos(3,99,3);end.addFreshEntity(cow);
                 check(Math.abs(cow.getGravity()-.008)<1e-6,"Mobs receive reduced End gravity");
-                var enderman=EntityTypes.ENDERMAN.create(end,EntitySpawnReason.COMMAND);
+                var enderman=TestFixtures.require(EntityTypes.ENDERMAN.create(end,EntitySpawnReason.COMMAND), "enderman");
                 enderman.setNoAi(true);enderman.setPersistenceRequired();enderman.setPos(6,106,6);end.addFreshEntity(enderman);endermanId[0]=enderman.getUUID();
-                var normal=EntityTypes.COW.create(s.overworld(),EntitySpawnReason.COMMAND);
+                var normal=TestFixtures.require(EntityTypes.COW.create(s.overworld(),EntitySpawnReason.COMMAND), "normal");
                 check(Math.abs(normal.getGravity()-.08)<1e-6,"Other dimensions retain normal gravity");
                 check(SpawnPlacements.checkSpawnRules(EntityTypes.ENDERMAN,end,EntitySpawnReason.TRIAL_SPAWNER,
                     new BlockPos(8,106,8),end.getRandom()),"Ordinary End gravity permits mob spawning");
@@ -65,24 +65,24 @@ public final class EndWeatherGameTest implements FabricClientGameTest {
             world.getConnection().waitForClientboundPackets();
             context.waitTicks(5);
             server.runOnServer(s -> {
-                var end=s.getLevel(Level.END);var enderman=end.getEntity(endermanId[0]);
+                var end=TestFixtures.require(s.getLevel(Level.END), "end");var enderman=end.getEntity(endermanId[0]);
                 check(enderman!=null && Math.abs(enderman.getBoundingBox().maxY-105)<.05,
                     "Enderman seeks the underside within five ticks of the flip starting");
-                check(!EndGravity.inverted(enderman),"Early escape precedes the gravity midpoint");
+                check(!EndGravity.inverted(TestFixtures.require(enderman, "enderman")),"Early escape precedes the gravity midpoint");
             });
             context.waitTicks(25);
-            server.runOnServer(s -> check(Math.abs(s.getLevel(Level.END).getEntity(endermanId[0]).getBoundingBox().maxY-105)<.05,
+            server.runOnServer(s -> check(Math.abs(TestFixtures.require(TestFixtures.require(s.getLevel(Level.END), "s.getLevel(Level.END)").getEntity(endermanId[0]), "s.getLevel(Level.END).getEntity(endermanId[0])").getBoundingBox().maxY-105)<.05,
                 "Enderman keeps its footing while gravity is still turning"));
             context.waitTicks(120);
             server.runOnServer(s -> {
-                var end=s.getLevel(Level.END);var p=end.players().getFirst();
+                var end=TestFixtures.require(s.getLevel(Level.END), "end");var p=end.players().getFirst();
                 check(EndGravity.inverted(p),"The affected player is inverted");
                 var enderman=end.getEntity(endermanId[0]);
                 check(enderman!=null && Math.abs(enderman.getBoundingBox().maxY-105)<.05,
                     "Enderman teleports from the island top to its underside on a flip");
                 check(EndGravity.softenUpwardMotion(p,-1)==-1,"Soft ceiling never changes downward falling");
 check(p.onGround() && Math.abs(p.getBoundingBox().maxY-105)<.05,"Player stands on the ceiling without clipping: "+p.position()+" grounded="+p.onGround());
-                var cow=EntityTypes.COW.create(end,EntitySpawnReason.COMMAND);
+                var cow=TestFixtures.require(EntityTypes.COW.create(end,EntitySpawnReason.COMMAND), "cow");
                 DistortionFixtures.invert(cow); cow.setPos(4,103,4);cow.setDeltaMovement(0,1,0);cow.move(MoverType.SELF,new Vec3(0,2,0));
                 check(cow.onGround() && Math.abs(cow.getBoundingBox().maxY-105)<.001,"Mobs recognize ceiling contact as ground");
                 cow.jumpFromGround();check(cow.getDeltaMovement().y<0,"Jumping pushes away from the ceiling");
@@ -97,16 +97,16 @@ check(p.onGround() && Math.abs(p.getBoundingBox().maxY-105)<.05,"Player stands o
                 end.setBlockAndUpdate(new BlockPos(8,105,10),Blocks.GRASS_BLOCK.defaultBlockState());
                 check(SpawnPlacements.checkSpawnRules(EntityTypes.PIG,end,EntitySpawnReason.TRIAL_SPAWNER,
                     new BlockPos(8,106,10),end.getRandom()),"Tagged mobs keep normal spawn eligibility");
-                var immune=EntityTypes.PIG.create(end,EntitySpawnReason.COMMAND);
+                var immune=TestFixtures.require(EntityTypes.PIG.create(end,EntitySpawnReason.COMMAND), "immune");
                 check(!EndGravity.affected(immune) && Math.abs(immune.getGravity()-.08)<1e-6,
                     "Tagged mobs retain ordinary gravity strength and direction");
             });
             context.runOnClient(c -> {
-                check(c.level.dimension().equals(Level.END),"Client is in the End");
+                check(TestFixtures.level(c).dimension().equals(Level.END),"Client is in the End");
                 check(c.gameRenderer.mainCamera().rotation().transform(new org.joml.Vector3f(0,1,0)).y<-.99,
                     "Camera is smoothly rotated upside down");
-                var p=c.particleEngine.createParticle(new net.minecraft.core.particles.BlockParticleOption(
-                    net.minecraft.core.particles.ParticleTypes.BLOCK,net.minecraft.world.level.block.Blocks.END_STONE.defaultBlockState()),4,101,4,0,0,0);
+                var p=TestFixtures.require(c.particleEngine.createParticle(new net.minecraft.core.particles.BlockParticleOption(
+                    net.minecraft.core.particles.ParticleTypes.BLOCK,net.minecraft.world.level.block.Blocks.END_STONE.defaultBlockState()),4,101,4,0,0,0), "p");
                 try {
                     var yd=net.minecraft.client.particle.Particle.class.getDeclaredField("yd");yd.setAccessible(true);yd.setDouble(p,0);
                     p.tick();check(yd.getDouble(p)<0,"Unowned particles retain downward gravity despite an affected player");p.remove();
@@ -117,68 +117,68 @@ check(p.onGround() && Math.abs(p.getBoundingBox().maxY-105)<.05,"Player stands o
             context.runOnClient(c -> c.options.keyShift.setDown(true));
             context.waitTicks(12);
             context.runOnClient(c -> {
-                check(c.player.getPose()==Pose.CROUCHING,"Crouch remains available on a ceiling");
-                check(Math.abs(c.player.getBoundingBox().maxY-105)<.01,"Crouching keeps the feet anchored at the ceiling");
-                check(c.level.noCollision(c.player,c.player.getBoundingBox().deflate(1.0e-7)),"Crouching does not clip into the ceiling");
+                check(TestFixtures.player(c).getPose()==Pose.CROUCHING,"Crouch remains available on a ceiling");
+                check(Math.abs(TestFixtures.player(c).getBoundingBox().maxY-105)<.01,"Crouching keeps the feet anchored at the ceiling");
+                check(TestFixtures.level(c).noCollision(c.player,TestFixtures.player(c).getBoundingBox().deflate(1.0e-7)),"Crouching does not clip into the ceiling");
             });
             context.runOnClient(c -> c.options.keyShift.setDown(false));
             context.waitTicks(12);
-            context.runOnClient(c -> check(c.player.getPose()==net.minecraft.world.entity.Pose.STANDING,
-                "Releasing crouch on a ceiling restores standing instead of forcing crawling: "+c.player.getPose()));
-            server.runOnServer(s -> check(s.getLevel(Level.END).players().getFirst().getPose()==net.minecraft.world.entity.Pose.STANDING,
+            context.runOnClient(c -> check(TestFixtures.player(c).getPose()==net.minecraft.world.entity.Pose.STANDING,
+                "Releasing crouch on a ceiling restores standing instead of forcing crawling: "+TestFixtures.player(c).getPose()));
+            server.runOnServer(s -> check(TestFixtures.require(s.getLevel(Level.END), "s.getLevel(Level.END)").players().getFirst().getPose()==net.minecraft.world.entity.Pose.STANDING,
                 "Server also restores the standing ceiling pose"));
-            context.runOnClient(c -> c.player.setPose(Pose.SWIMMING));
+            context.runOnClient(c -> TestFixtures.player(c).setPose(Pose.SWIMMING));
             context.waitTicks(12);
-            context.runOnClient(c -> check(c.player.getPose()==Pose.STANDING && Math.abs(c.player.getBoundingBox().maxY-105)<.01,
+            context.runOnClient(c -> check(TestFixtures.player(c).getPose()==Pose.STANDING && Math.abs(TestFixtures.player(c).getBoundingBox().maxY-105)<.01,
                 "An already crawling player can recover to standing below a clear ceiling"));
             double[] startZ={0};
-            context.runOnClient(c -> { startZ[0]=c.player.getZ();c.options.keyUp.setDown(true); });
+            context.runOnClient(c -> { startZ[0]=TestFixtures.player(c).getZ();c.options.keyUp.setDown(true); });
             context.waitTicks(12);
             context.runOnClient(c -> {
                 c.options.keyUp.setDown(false);
-                check(c.player.getZ()>startZ[0]+.1 && c.player.onGround(),"Player can walk while attached to a ceiling");
+                check(TestFixtures.player(c).getZ()>startZ[0]+.1 && TestFixtures.player(c).onGround(),"Player can walk while attached to a ceiling");
                 c.options.keyJump.setDown(true);
             });
             context.waitTicks(3);
             context.runOnClient(c -> {
                 c.options.keyJump.setDown(false);
-                check(c.player.getDeltaMovement().y<0,"Player jump control moves away from the ceiling");
+                check(TestFixtures.player(c).getDeltaMovement().y<0,"Player jump control moves away from the ceiling");
             });
             context.waitTicks(60);
             server.runOnServer(s -> {
-                var p=s.getLevel(Level.END).players().getFirst();
+                var p=TestFixtures.require(s.getLevel(Level.END), "s.getLevel(Level.END)").players().getFirst();
                 p.teleportTo(p.getX(),EndGravity.upwardLimit(p)-5,p.getZ());
             });
             world.getConnection().waitForClientboundPackets();
-            context.runOnClient(c -> c.player.setDeltaMovement(0,1,0));
+            context.runOnClient(c -> TestFixtures.player(c).setDeltaMovement(0,1,0));
             context.waitTicks(100);
             context.runOnClient(c -> {
-                double top=EndGravity.upwardLimit(c.player);
-                check(c.player.getY()<top && c.player.getY()>top-5,"Upward spring holds the player below its ceiling");
-                check(c.player.getDeltaMovement().y<.1,"Upward fall slows near the soft limit");
+                double top=EndGravity.upwardLimit(TestFixtures.player(c));
+                check(TestFixtures.player(c).getY()<top && TestFixtures.player(c).getY()>top-5,"Upward spring holds the player below its ceiling");
+                check(TestFixtures.player(c).getDeltaMovement().y<.1,"Upward fall slows near the soft limit");
             });
             server.runCommand("execute in minecraft:the_end run tp @a 0 102 0 0 0");
             server.runCommand("execute in minecraft:the_end run effect clear @e naturality:distortion");
             context.waitTicks(140);
             server.runOnServer(s -> {
-                var p=s.getLevel(Level.END).players().getFirst();
-                var enderman=s.getLevel(Level.END).getEntity(endermanId[0]);
+                var p=TestFixtures.require(s.getLevel(Level.END), "s.getLevel(Level.END)").players().getFirst();
+                var enderman=TestFixtures.require(s.getLevel(Level.END), "s.getLevel(Level.END)").getEntity(endermanId[0]);
                 check(enderman!=null && enderman.getY()>105,"Enderman returns to island top when normal gravity resumes: "+(enderman==null?"missing":enderman.position()));
                 check(!EndGravity.inverted(p) && p.onGround() && Math.abs(p.getY()-99)<.05,"Distortion end returns player safely to ordinary ground");
-                check(SpawnPlacements.checkSpawnRules(EntityTypes.ENDERMAN,s.getLevel(Level.END),EntitySpawnReason.TRIAL_SPAWNER,
-                    new BlockPos(8,106,8),s.getLevel(Level.END).getRandom()),"Normal spawning resumes after distortion ends");
+                check(SpawnPlacements.checkSpawnRules(EntityTypes.ENDERMAN,TestFixtures.require(s.getLevel(Level.END), "s.getLevel(Level.END)"),EntitySpawnReason.TRIAL_SPAWNER,
+                    new BlockPos(8,106,8),TestFixtures.require(s.getLevel(Level.END), "s.getLevel(Level.END)").getRandom()),"Normal spawning resumes after distortion ends");
             });
             context.runOnClient(c -> check(c.gameRenderer.mainCamera().rotation().transform(new org.joml.Vector3f(0,1,0)).y>.99,
                 "Camera returns upright when distortion ends"));
             context.runOnClient(EndFootstepParticleChecks::upright);
-            server.runOnServer(s -> saved.putAll(EndWeatherSystem.cycle(s.getLevel(Level.END)).snapshot()));
+            server.runOnServer(s -> saved.putAll(EndWeatherSystem.cycle(TestFixtures.require(s.getLevel(Level.END), "s.getLevel(Level.END)")).snapshot()));
         }
         try(var other=context.worldBuilder().create()) {
-            other.getServer().runOnServer(s -> check(EndWeatherSystem.state(s.getLevel(Level.END)).equals(EndWeatherState.CLEAR),
+            other.getServer().runOnServer(s -> check(EndWeatherSystem.state(TestFixtures.require(s.getLevel(Level.END), "s.getLevel(Level.END)")).equals(EndWeatherState.CLEAR),
                 "Another world does not inherit End weather"));
         }
         try(var reopened=save.open()) {
-            reopened.getServer().runOnServer(s -> check(EndWeatherSystem.cycle(s.getLevel(Level.END)).snapshot().equals(saved),
+            reopened.getServer().runOnServer(s -> check(EndWeatherSystem.cycle(TestFixtures.require(s.getLevel(Level.END), "s.getLevel(Level.END)")).snapshot().equals(saved),
                 "End gravity, overrides and event clocks survive real world reopen"));
         }
     }

@@ -19,7 +19,7 @@ public final class EndWildsGameTest implements FabricClientGameTest {
             var server=world.getServer();BlockPos[] view={null};
             server.runCommand("gamerule minecraft:random_tick_speed 0");
             server.runOnServer(s -> {
-                var end=s.getLevel(Level.END);
+                var end=TestFixtures.require(s.getLevel(Level.END), "end");
                 var generator=(NoiseBasedChunkGenerator)end.getChunkSource().getGenerator();
                 var random=end.getChunkSource().randomState();
                 var source=generator.getBiomeSource();
@@ -36,8 +36,8 @@ public final class EndWildsGameTest implements FabricClientGameTest {
                     net.minecraft.world.level.chunk.PalettedContainerFactory.create(end.registryAccess()),null);
                 for(int x=0;x<16;x++)for(int z=0;z<16;z++)for(int y=80;y<=100;y++)
                     fixture.setBlockState(new BlockPos(x,y,z),(x%2==0?Blocks.END_STONE:NaturalityBlocks.SMOOTH_ENDSTONE).defaultBlockState());
-                naturality.worldgen.EndStoneLayers.apply(fixture,1,null,(x,y,z)->crags,
-                    new net.minecraft.world.level.biome.BiomeManager((x,y,z)->biome,0L));
+                naturality.worldgen.EndStoneLayers.apply(fixture,1,null,(_,_,_)->crags,
+                    new net.minecraft.world.level.biome.BiomeManager((_,_,_)->biome,0L));
                 for(int x=0;x<16;x++)for(int z=0;z<16;z++) {
                     if(heathMask.contains(x,z))collisions++;
                     var cap=fixture.getBlockState(new BlockPos(x,100,z));
@@ -74,6 +74,7 @@ public final class EndWildsGameTest implements FabricClientGameTest {
                     for(int y=224;y>=48;y--)if(!column.getBlock(y).isAir()) {region=new BlockPos(x,y,z);break search;}
                 }
                 check(region!=null,"No populated End Wilds region found");
+                region=TestFixtures.require(region, "region");
                 check(source.findBiomeHorizontal(region.getX(),region.getY(),region.getZ(),256,4,
                     holder->holder.is(EndWilds.BIOME),RandomSource.create(1),true,random)!=null,"Wilds cannot be located");
                 int cx=region.getX()>>4,cz=region.getZ()>>4;

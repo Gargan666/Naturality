@@ -28,7 +28,7 @@ public final class MaddenedZombieGameTest implements FabricClientGameTest {
             context.waitTicks(20);
             context.runOnClient(client -> {
                 int count = 0;
-                for (var e : client.level.entitiesForRendering()) if (e instanceof MaddenedZombie zombie) {
+                for (var e : TestFixtures.level(client).entitiesForRendering()) if (e instanceof MaddenedZombie zombie) {
                     count++;
                     check(zombie.getMaxHealth() == 40 && zombie.getHealth() == 40, "Adult and baby spawn with double health");
                     var renderer = (MaddenedZombieRenderer)client.getEntityRenderDispatcher().getRenderer(zombie);
@@ -47,7 +47,7 @@ public final class MaddenedZombieGameTest implements FabricClientGameTest {
             });
             context.waitTicks(5);
             context.runOnClient(client -> {
-                for (var e : client.level.entitiesForRendering()) if (e instanceof MaddenedZombie zombie) {
+                for (var e : TestFixtures.level(client).entitiesForRendering()) if (e instanceof MaddenedZombie zombie) {
                     var renderer = (MaddenedZombieRenderer)client.getEntityRenderDispatcher().getRenderer(zombie);
                     check(zombie.isEnraged() && ((MaddenedZombieRenderer.State)renderer.createRenderState(zombie, 1)).enraged,
                         "Rage shiver state synchronizes to adult and baby renderers");
@@ -65,12 +65,12 @@ public final class MaddenedZombieGameTest implements FabricClientGameTest {
             context.takeScreenshot("maddened-zombie-rage-shivering");
             server.runOnServer(s -> {
                 var level = s.overworld();
-                var zombie = MaddenedZombies.TYPE.create(level, EntitySpawnReason.COMMAND);
+                var zombie = TestFixtures.require(MaddenedZombies.TYPE.create(level, EntitySpawnReason.COMMAND), "zombie");
                 zombie.setPos(12, 101, 0); zombie.setNoAi(true); level.addFreshEntity(zombie);
-                var ordinary = EntityTypes.ZOMBIE.create(level, EntitySpawnReason.COMMAND);
+                var ordinary = TestFixtures.require(EntityTypes.ZOMBIE.create(level, EntitySpawnReason.COMMAND), "ordinary");
                 zombie.playSound(net.minecraft.sounds.SoundEvents.ZOMBIE_AMBIENT, 1, 1.4F);
                 check(Math.abs(MaddenedSoundProbe.pitch - .7F) < .0001, "Zombie sound pitch is halved");
-                var creeper = naturality.entity.MaddenedCreepers.TYPE.create(level, EntitySpawnReason.COMMAND);
+                var creeper = TestFixtures.require(naturality.entity.MaddenedCreepers.TYPE.create(level, EntitySpawnReason.COMMAND), "creeper");
                 creeper.playSound(net.minecraft.sounds.SoundEvents.CREEPER_PRIMED, 1, .8F);
                 check(Math.abs(MaddenedSoundProbe.pitch - .4F) < .0001, "Creeper priming sound pitch is halved");
                 creeper.playSound(net.minecraft.sounds.SoundEvents.GENERIC_EXPLODE.value(), 1, .8F);
@@ -84,9 +84,9 @@ public final class MaddenedZombieGameTest implements FabricClientGameTest {
                     && zombie.is(net.minecraft.tags.EntityTypeTags.SENSITIVE_TO_SMITE), "Normal zombie undead classification");
                 check(!zombie.canBeAffected(new net.minecraft.world.effect.MobEffectInstance(net.minecraft.world.effect.MobEffects.POISON, 20)),
                     "Zombie retains poison immunity");
-                var victim = EntityTypes.PIG.create(level, EntitySpawnReason.COMMAND);
+                var victim = TestFixtures.require(EntityTypes.PIG.create(level, EntitySpawnReason.COMMAND), "victim");
                 victim.setPos(13, 101, 0); victim.setNoAi(true);
-                victim.getAttribute(Attributes.MAX_HEALTH).setBaseValue(100); victim.setHealth(100);
+                TestFixtures.require(victim.getAttribute(Attributes.MAX_HEALTH), "victim.getAttribute(Attributes.MAX_HEALTH)").setBaseValue(100); victim.setHealth(100);
                 level.addFreshEntity(victim);
                 double speed = zombie.getAttributeValue(Attributes.MOVEMENT_SPEED);
                 double attack = zombie.getAttributeValue(Attributes.ATTACK_DAMAGE);
@@ -124,7 +124,7 @@ public final class MaddenedZombieGameTest implements FabricClientGameTest {
                     "Further damage refreshes timer without stacking multipliers");
                 var saved = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, s.registryAccess());
                 zombie.saveWithoutId(saved);
-                var restored = MaddenedZombies.TYPE.create(level, EntitySpawnReason.COMMAND);
+                var restored = TestFixtures.require(MaddenedZombies.TYPE.create(level, EntitySpawnReason.COMMAND), "restored");
                 restored.load(TagValueInput.create(ProblemReporter.DISCARDING, s.registryAccess(), saved.buildResult()));
                 restored.setId(-3_000_000);
                 check(restored.rageTicks() == 200 && restored.getAttributeValue(Attributes.MOVEMENT_SPEED) == speed * 2,

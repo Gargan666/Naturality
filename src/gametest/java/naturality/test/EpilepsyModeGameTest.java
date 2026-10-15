@@ -28,14 +28,14 @@ public final class EpilepsyModeGameTest implements FabricClientGameTest {
                 var config=NaturalityConfig.get();config.epilepsyWarningAcknowledged=false;config.epilepsyMode=false;
                 c.gui.setScreen(new TitleScreen());EpilepsyWarning.showIfNeeded(c);
                 check(c.gui.screen() instanceof ConfirmScreen,"First main menu shows the warning");
-                check(c.gui.screen().getTitle().getString().equals("!EPILEPSY WARNING!"),"Exact warning title");
+                check(TestFixtures.screen(c).getTitle().getString().equals("!EPILEPSY WARNING!"),"Exact warning title");
             });
             if(!yes){context.waitTicks(2);context.takeScreenshot("naturality-first-launch-epilepsy-warning");}
             context.runOnClient(c->{
                 var config=NaturalityConfig.get();String label=yes?"YES":"NO";
-                var button=c.gui.screen().children().stream().filter(Button.class::isInstance).map(Button.class::cast)
+                var button=TestFixtures.screen(c).children().stream().filter(Button.class::isInstance).map(Button.class::cast)
                     .filter(b->b.getMessage().getString().equals(label)).findFirst().orElseThrow();
-                button.onPress(null);
+                button.onPress(TestFixtures.CONFIRM);
                 check(config.epilepsyMode==yes && config.epilepsyWarningAcknowledged,"Warning choice applies and is acknowledged");
                 try {
                     var file=net.fabricmc.loader.api.FabricLoader.getInstance().getConfigDir().resolve("naturality.json");
@@ -46,13 +46,13 @@ public final class EpilepsyModeGameTest implements FabricClientGameTest {
                 EpilepsyWarning.showIfNeeded(c);check(c.gui.screen() instanceof TitleScreen,"Acknowledged warning does not recur");
             });
         }
-        context.runOnClient(c->{NaturalityConfig.get().epilepsyMode=false;NaturalityConfig.get().save();});
+        context.runOnClient(_->{NaturalityConfig.get().epilepsyMode=false;NaturalityConfig.get().save();});
         try(var world=context.worldBuilder().create()) {
             world.getServer().runCommand("gamemode spectator @a");world.getServer().runCommand("tp @a 0 120 0");
             context.waitTicks(30);
-            context.runOnClient(c->{NaturalityConfig.get().epilepsyMode=true;LightningFlashes.strike();});
+            context.runOnClient(_->{NaturalityConfig.get().epilepsyMode=true;LightningFlashes.strike();});
             context.waitTicks(5);context.takeScreenshot("lightning-epilepsy-blue-tint");
-            context.runOnClient(c->{NaturalityConfig.get().epilepsyMode=false;NaturalityConfig.get().save();});
+            context.runOnClient(_->{NaturalityConfig.get().epilepsyMode=false;NaturalityConfig.get().save();});
         }
     }
 }

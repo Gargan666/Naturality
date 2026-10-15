@@ -74,12 +74,12 @@ public final class ShaderStallGameTest implements FabricClientGameTest {
     }
 
     @Override public void runTest(ClientGameTestContext context) {
-        context.runOnClient(c -> coldPipeline(0));
+        context.runOnClient(_ -> coldPipeline(0));
         var reload = context.computeOnClient(c -> c.reloadResourcePacks());
-        context.waitFor(c -> reload.isDone());
+        context.waitFor(_ -> reload.isDone());
         reload.join();
-        context.runOnClient(c -> coldPipeline(1));
-        int previous = context.computeOnClient(c -> c.options.renderDistance().get());
+        context.runOnClient(_ -> coldPipeline(1));
+        int previous = TestFixtures.require(context.computeOnClient(c -> c.options.renderDistance().get()), "context.computeOnClient(c -> c.options.renderDistance().get())");
         try (var world = context.worldBuilder().setUseConsistentSettings(false)
                 .adjustSettings(s -> s.setSeed("84219871")).create()) {
             var server = world.getServer();

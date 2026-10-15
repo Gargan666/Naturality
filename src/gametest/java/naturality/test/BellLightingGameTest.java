@@ -67,8 +67,8 @@ public final class BellLightingGameTest implements FabricClientGameTest {
             original = (BlockStateModel)field.get(model);
         } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
         var pos = new BlockPos(0, 101, 0);
-        var baseKey = original.createGeometryKey(client.level, pos, state, RandomSource.create(0));
-        var markedKey = model.createGeometryKey(client.level, pos, state, RandomSource.create(0));
+        var baseKey = original.createGeometryKey(TestFixtures.level(client), pos, state, RandomSource.create(0));
+        var markedKey = model.createGeometryKey(TestFixtures.level(client), pos, state, RandomSource.create(0));
         if (baseKey != null && (markedKey == null || markedKey.equals(baseKey)))
             throw new AssertionError("Bell tagged geometry must have its own cache key");
         var marked = collect(client, state, model, true);
@@ -91,7 +91,7 @@ public final class BellLightingGameTest implements FabricClientGameTest {
             }
             output.add(values);
         });
-        model.emitQuads(emitter, client.level, new BlockPos(0, 101, 0), state, RandomSource.create(0), direction -> false);
+        model.emitQuads(emitter, TestFixtures.level(client), new BlockPos(0, 101, 0), state, RandomSource.create(0), _ -> false);
         return output;
     }
 
@@ -100,10 +100,10 @@ public final class BellLightingGameTest implements FabricClientGameTest {
         var target = new TextureTarget("Bell lighting grid oracle", width, height, GpuFormat.RGBA8_UNORM, null);
         var encoder = RenderSystem.getDevice().createCommandEncoder();
         try (var buffer = RenderSystem.getDevice().createBuffer(() -> "Bell lighting readback", 9, width * height * 4L)) {
-            try (var pass = encoder.createRenderPass(() -> "Bell stretched UV lighting", target.getColorTextureView(), Optional.empty())) {
+            try (var pass = encoder.createRenderPass(() -> "Bell stretched UV lighting", TestFixtures.require(target.getColorTextureView(), "target.getColorTextureView()"), Optional.empty())) {
                 pass.setPipeline(RenderSystem.getCompiledPipeline(PIPELINE)); pass.draw(3, 1, 0, 0);
             }
-            encoder.copyTextureToBuffer(target.getColorTexture(), buffer, 0, () -> {}, 0);
+            encoder.copyTextureToBuffer(TestFixtures.require(target.getColorTexture(), "target.getColorTexture()"), buffer, 0, () -> {}, 0);
             try (var fence = encoder.createFence()) { encoder.submit(); fence.awaitCompletion(-1); }
             try (var mapped = buffer.map(true, false)) {
                 int corrected = 0;

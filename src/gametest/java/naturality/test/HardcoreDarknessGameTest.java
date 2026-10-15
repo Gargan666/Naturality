@@ -10,7 +10,7 @@ public final class HardcoreDarknessGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
         checkConfig();
         context.runOnClient(client -> {
-            client.gui.setScreen(new naturality.client.config.NaturalityConfigScreen(null));
+            client.gui.setScreen(new naturality.client.config.NaturalityConfigScreen(new net.minecraft.client.gui.screens.TitleScreen()));
             press(client.gui.screen(), "Lighting and Atmosphere");
             press(client.gui.screen(), "Hardcore Darkness");
         });
@@ -18,12 +18,12 @@ public final class HardcoreDarknessGameTest implements FabricClientGameTest {
         for (String page : new String[] {"Cave Darkness", "Moon Phase Darkness"}) {
             context.runOnClient(client -> press(client.gui.screen(), page));
             context.takeScreenshot("hardcore-settings-" + page.replace(' ', '-'));
-            context.runOnClient(client -> client.gui.screen().onClose());
+            context.runOnClient(client -> TestFixtures.screen(client).onClose());
         }
         context.runOnClient(client -> {
-            client.gui.screen().onClose();
-            client.gui.screen().onClose();
-            client.gui.screen().onClose();
+            TestFixtures.screen(client).onClose();
+            TestFixtures.screen(client).onClose();
+            TestFixtures.screen(client).onClose();
         });
         try (var world = context.worldBuilder().create()) {
             var server = world.getServer();
@@ -38,7 +38,7 @@ public final class HardcoreDarknessGameTest implements FabricClientGameTest {
                 context.waitTicks(10);
                 final float expected = (4 - phase) / 4.0F;
                 context.runOnClient(client -> {
-                    float actual = HardcoreDarkness.atmosphere(client.level, client.gameRenderer.mainCamera(), 0);
+                    float actual = HardcoreDarkness.atmosphere(TestFixtures.level(client), client.gameRenderer.mainCamera(), 0);
                     if (Math.abs(actual - expected) > 0.001F) throw new AssertionError("Moon factor " + actual + " != " + expected);
                     var extractor = new LightmapRenderStateExtractor(client.gameRenderer, client);
                     extractor.tick();
@@ -82,7 +82,7 @@ public final class HardcoreDarknessGameTest implements FabricClientGameTest {
                         var vanillaAmbient = camera.attributeProbe().getValue(net.minecraft.world.attribute.EnvironmentAttributes.AMBIENT_LIGHT_COLOR, 0);
                         float vanillaSky = camera.attributeProbe().getValue(net.minecraft.world.attribute.EnvironmentAttributes.SKY_LIGHT_FACTOR, 0);
                         if (!state.ambientColor.equals(vanillaAmbient) || state.skyFactor != vanillaSky
-                                || HardcoreDarkness.sky(client.level, camera, 0) != 1)
+                                || HardcoreDarkness.sky(TestFixtures.level(client), camera, 0) != 1)
                             throw new AssertionError("Excluded dimension changed: " + dimension);
                         config.hardcoreDarkness.caves.dimensions.nether = true;
                         config.hardcoreDarkness.caves.dimensions.end = true;
@@ -91,13 +91,13 @@ public final class HardcoreDarknessGameTest implements FabricClientGameTest {
                         extractor.tick();
                         extractor.extract(state, 0);
                         if (state.ambientColor.lengthSquared() != 0 || state.skyFactor != 0
-                                || HardcoreDarkness.sky(client.level, camera, 0) != 0)
+                                || HardcoreDarkness.sky(TestFixtures.level(client), camera, 0) != 0)
                             throw new AssertionError("Dimension opt-in not applied: " + dimension);
                     });
                     context.waitTicks(5);
                     context.takeScreenshot("hardcore-opt-in-" + dimension.identifier().getPath());
                 } finally {
-                    context.runOnClient(client -> naturality.config.NaturalityConfig.get().hardcoreDarkness = original);
+                    context.runOnClient(_ -> naturality.config.NaturalityConfig.get().hardcoreDarkness = original);
                 }
             }
         }
@@ -110,7 +110,7 @@ public final class HardcoreDarknessGameTest implements FabricClientGameTest {
     private static boolean findAndPress(net.minecraft.client.gui.components.events.GuiEventListener node, String label) {
         if (node instanceof net.minecraft.client.gui.components.Button button
                 && button.getMessage().getString().equals(label)) {
-            button.onPress(null);
+            button.onPress(TestFixtures.CONFIRM);
             return true;
         }
         if (node instanceof net.minecraft.client.gui.components.events.ContainerEventHandler container)
@@ -118,7 +118,7 @@ public final class HardcoreDarknessGameTest implements FabricClientGameTest {
         return false;
     }
 
-    private static void checkConfig() {
+    static void checkConfig() {
         var gson = new com.google.gson.Gson();
         var defaults = gson.fromJson("{}", naturality.config.NaturalityConfig.class);
         if (!defaults.hardcoreDarkness.caves.enabled || !defaults.hardcoreDarkness.moon.enabled)
@@ -149,8 +149,7 @@ public final class HardcoreDarknessGameTest implements FabricClientGameTest {
         var restored = gson.fromJson(gson.toJson(settings), naturality.config.NaturalityConfig.HardcoreDarkness.class);
         if (restored.caves.enabled || restored.moon.darkenClouds || restored.moon.newPercent != 100)
             throw new AssertionError("Darkness settings did not round-trip");
-        restored.caves = null;
-        restored.moon = null;
+        restored = gson.fromJson("{\"caves\":null,\"moon\":null}", naturality.config.NaturalityConfig.HardcoreDarkness.class);
         restored.sanitize();
         if (restored.caves == null || restored.moon == null) throw new AssertionError("Missing child settings not restored");
     }
@@ -177,17 +176,17 @@ public final class HardcoreDarknessGameTest implements FabricClientGameTest {
             if (new org.joml.Vector3f(vanillaAmbient).mul(0.5F).distance(state.ambientColor) > 0.00001F)
                 throw new AssertionError("Ambient percentage not applied");
             settings.moon.newPercent = 35;
-            if (Math.abs(HardcoreDarkness.atmosphere(client.level, camera, 0) - 0.35F) > 0.001F)
+            if (Math.abs(HardcoreDarkness.atmosphere(TestFixtures.level(client), camera, 0) - 0.35F) > 0.001F)
                 throw new AssertionError("Custom phase brightness not applied");
             settings.moon.darkenSky = false;
             settings.moon.darkenClouds = false;
-            if (HardcoreDarkness.sky(client.level, camera, 0) != 1 || HardcoreDarkness.clouds(client.level, camera, 0) != 1)
+            if (HardcoreDarkness.sky(TestFixtures.level(client), camera, 0) != 1 || HardcoreDarkness.clouds(TestFixtures.level(client), camera, 0) != 1)
                 throw new AssertionError("Sky/cloud toggles not applied");
             settings.moon.enabled = false;
             extractor.tick();
             extractor.extract(state, 0);
             float vanillaSky = camera.attributeProbe().getValue(net.minecraft.world.attribute.EnvironmentAttributes.SKY_LIGHT_FACTOR, 0);
-            if (state.skyFactor != vanillaSky || HardcoreDarkness.ambientMultiplier(client.level) != 0.5F)
+            if (state.skyFactor != vanillaSky || HardcoreDarkness.ambientMultiplier(TestFixtures.level(client)) != 0.5F)
                 throw new AssertionError("Moon toggle must restore skylight without disabling cave darkness");
             settings.caves.dimensions.overworld = false;
             settings.moon.enabled = true;

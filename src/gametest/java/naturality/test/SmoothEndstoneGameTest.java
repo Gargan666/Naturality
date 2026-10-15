@@ -25,10 +25,10 @@ public final class SmoothEndstoneGameTest implements FabricClientGameTest {
             server.runCommand("give @a naturality:smooth_endstone");
             server.runCommand("setblock 2 100 0 naturality:lirestone");
             server.runCommand("give @a naturality:lirestone");
-            server.runOnServer(s -> { for (int cx = 8; cx <= 11; cx++) for (int cz = -2; cz <= 1; cz++) s.getLevel(Level.OVERWORLD).getChunk(cx, cz); });
+            server.runOnServer(s -> { for (int cx = 8; cx <= 11; cx++) for (int cz = -2; cz <= 1; cz++) TestFixtures.require(s.getLevel(Level.OVERWORLD), "s.getLevel(Level.OVERWORLD)").getChunk(cx, cz); });
             server.runCommand("fillbiome 144 92 -16 176 108 16 minecraft:forest");
             server.runOnServer(s -> {
-                var level = s.getLevel(Level.OVERWORLD);
+                var level = TestFixtures.require(s.getLevel(Level.OVERWORLD), "level");
                 BlockPos pos = new BlockPos(0, 100, 0);
                 var state = level.getBlockState(pos);
                 var vanilla = Blocks.END_STONE.defaultBlockState();
@@ -48,7 +48,7 @@ public final class SmoothEndstoneGameTest implements FabricClientGameTest {
                     "Silk Touch pickaxe must drop Smooth End Stone");
                 BlockPos furnacePos = pos.offset(0, 0, 3);
                 level.setBlockAndUpdate(furnacePos, Blocks.FURNACE.defaultBlockState());
-                var furnace = (net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity)level.getBlockEntity(furnacePos);
+                var furnace = TestFixtures.require((net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity)level.getBlockEntity(furnacePos), "furnace");
                 furnace.setItem(0, new ItemStack(Items.END_STONE));
                 furnace.setItem(1, new ItemStack(Items.COAL));
                 for (int tick = 0; tick < 205; tick++)
@@ -285,7 +285,7 @@ public final class SmoothEndstoneGameTest implements FabricClientGameTest {
                 check(rareClovers > 10 && rareClovers < 100, "Rare Clovers drop rate must be approximately 1%");
                 BlockPos brewingPos = cloverPos.offset(0, 0, 3);
                 level.setBlockAndUpdate(brewingPos, Blocks.BREWING_STAND.defaultBlockState());
-                var brewing = (net.minecraft.world.level.block.entity.BrewingStandBlockEntity)level.getBlockEntity(brewingPos);
+                var brewing = TestFixtures.require((net.minecraft.world.level.block.entity.BrewingStandBlockEntity)level.getBlockEntity(brewingPos), "brewing");
                 var bottleItems = new net.minecraft.world.item.Item[]{Items.POTION, Items.SPLASH_POTION, Items.LINGERING_POTION};
                 for (int slot = 0; slot < 3; slot++) brewing.setItem(slot,
                     net.minecraft.world.item.alchemy.PotionContents.createItemStack(bottleItems[slot], net.minecraft.world.item.alchemy.Potions.AWKWARD));
@@ -293,14 +293,14 @@ public final class SmoothEndstoneGameTest implements FabricClientGameTest {
                 brewing.setItem(4, new ItemStack(Items.BLAZE_POWDER));
                 for (int tick = 0; tick < 405; tick++) net.minecraft.world.level.block.entity.BrewingStandBlockEntity.serverTick(level, brewingPos, level.getBlockState(brewingPos), brewing);
                 for (int slot = 0; slot < 3; slot++) check(brewing.getItem(slot).is(bottleItems[slot])
-                    && brewing.getItem(slot).get(net.minecraft.core.component.DataComponents.POTION_CONTENTS).is(net.minecraft.world.item.alchemy.Potions.LUCK), "Four Leaf Clover must brew Luck in every bottle type");
+                    && TestFixtures.require(brewing.getItem(slot).get(net.minecraft.core.component.DataComponents.POTION_CONTENTS), "brewing.getItem(slot).get(net.minecraft.core.component.DataComponents.POTION_CONTENTS)").is(net.minecraft.world.item.alchemy.Potions.LUCK), "Four Leaf Clover must brew Luck in every bottle type");
                 brewing.setItem(3, new ItemStack(Items.GUNPOWDER));
                 for (int tick = 0; tick < 405; tick++) net.minecraft.world.level.block.entity.BrewingStandBlockEntity.serverTick(level, brewingPos, level.getBlockState(brewingPos), brewing);
                 check(brewing.getItem(0).is(Items.SPLASH_POTION), "Gunpowder must turn Luck into splash Luck");
                 brewing.setItem(3, new ItemStack(Items.DRAGON_BREATH));
                 for (int tick = 0; tick < 405; tick++) net.minecraft.world.level.block.entity.BrewingStandBlockEntity.serverTick(level, brewingPos, level.getBlockState(brewingPos), brewing);
                 check(brewing.getItem(0).is(Items.LINGERING_POTION)
-                    && brewing.getItem(0).get(net.minecraft.core.component.DataComponents.POTION_CONTENTS).is(net.minecraft.world.item.alchemy.Potions.LUCK), "Dragon breath must turn splash Luck into lingering Luck");
+                    && TestFixtures.require(brewing.getItem(0).get(net.minecraft.core.component.DataComponents.POTION_CONTENTS), "brewing.getItem(0).get(net.minecraft.core.component.DataComponents.POTION_CONTENTS)").is(net.minecraft.world.item.alchemy.Potions.LUCK), "Dragon breath must turn splash Luck into lingering Luck");
 
                 level.setBlockAndUpdate(cloverPos, clovers);
                 ((net.minecraft.world.level.block.FlowerBedBlock)NaturalityBlocks.CLOVERS).performBonemeal(level, RandomSource.create(1), cloverPos, clovers, net.minecraft.world.level.block.BonemealSource.INTERACTION);
@@ -347,7 +347,7 @@ public final class SmoothEndstoneGameTest implements FabricClientGameTest {
                 level.setBlockAndUpdate(sproutBase, Blocks.DIRT.defaultBlockState());
                 check(level.getBlockState(sproutBase.above()).isAir() && !sprout.canSurvive(level, sproutBase.above()), "Chorus Sprout must break when its End substrate is removed");
 
-                var end = s.getLevel(Level.END);
+                var end = TestFixtures.require(s.getLevel(Level.END), "end");
                 var island = end.getChunk(2, 0);
                 int regular = 0;
                 int smooth = 0;
@@ -394,9 +394,9 @@ public final class SmoothEndstoneGameTest implements FabricClientGameTest {
                         end.getChunkSource().getGenerator(), RandomSource.create(42), outer),
                         "Vanilla disc feature still generates in the outer End");
             });
-            context.runOnClient(client -> check(new ItemStack(NaturalityBlocks.SMOOTH_ENDSTONE_ITEM).getHoverName().getString()
+            context.runOnClient(_ -> check(new ItemStack(NaturalityBlocks.SMOOTH_ENDSTONE_ITEM).getHoverName().getString()
                 .equals("Smooth End Stone"), "Block name did not load"));
-            context.runOnClient(client -> check(new ItemStack(NaturalityBlocks.LIRESTONE_ITEM).getHoverName().getString()
+            context.runOnClient(_ -> check(new ItemStack(NaturalityBlocks.LIRESTONE_ITEM).getHoverName().getString()
                 .equals("Lirestone"), "Lirestone name did not load"));
         }
     }

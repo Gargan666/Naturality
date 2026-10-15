@@ -87,13 +87,13 @@ public final class EndFlashesGameTest implements FabricClientGameTest {
             server.runCommand("execute in minecraft:the_end run tp @a 3000 110 0");
             server.runCommand("skyevent minecraft:the_end end_flashes 0");
             context.waitTicks(30);
-            server.runOnServer(s -> check(SkyEvents.strength(s.getLevel(Level.END), SkyEventType.END_FLASHES) == 0,
+            server.runOnServer(s -> check(SkyEvents.strength(TestFixtures.require(s.getLevel(Level.END), "s.getLevel(Level.END)"), SkyEventType.END_FLASHES) == 0,
                 "Zero override suppresses the End event"));
-            context.runOnClient(client -> check(EndFlashes.strength() == 0,
+            context.runOnClient(_ -> check(EndFlashes.strength() == 0,
                 "End event reaches the client as quiet"));
             var before = new java.util.concurrent.atomic.AtomicReference<java.util.Map<String, Long>>();
             server.runOnServer(s -> {
-                s.getLevel(Level.END).getGameRules().set(
+                TestFixtures.require(s.getLevel(Level.END), "s.getLevel(Level.END)").getGameRules().set(
                     net.minecraft.world.level.gamerules.GameRules.ADVANCE_WEATHER, false, s);
                 before.set(naturality.weather.EnvironmentWorldData.get(s)
                     .read("sky/minecraft:the_end/end_flashes"));
@@ -105,10 +105,10 @@ public final class EndFlashesGameTest implements FabricClientGameTest {
             server.runCommand("skyevent minecraft:the_end end_flashes 10");
             context.waitTicks(20);
             context.runOnClient(client -> {
-                check(client.level.endFlashState() instanceof EndFlashes.State,
+                check(TestFixtures.level(client).endFlashState() instanceof EndFlashes.State,
                     "The event replaces the world's vanilla state for every consumer");
                 var vanilla = new net.minecraft.client.renderer.EndFlashState();
-                var event = new EndFlashes.State(client.level);
+                var event = new EndFlashes.State(TestFixtures.level(client));
                 int starts = 0;
                 try {
                     for (long time = 600; time < 4200; time++) {
@@ -131,18 +131,18 @@ public final class EndFlashesGameTest implements FabricClientGameTest {
             server.runCommand("skyevent minecraft:the_end end_flashes 20");
             // Strength changes no longer reveal already-started, previously disabled streams.
             context.waitTicks(635);
-            server.runOnServer(s -> check(SkyEvents.strength(s.getLevel(Level.END), SkyEventType.END_FLASHES) == 20,
+            server.runOnServer(s -> check(SkyEvents.strength(TestFixtures.require(s.getLevel(Level.END), "s.getLevel(Level.END)"), SkyEventType.END_FLASHES) == 20,
                 "End override reaches full strength"));
             context.runOnClient(client -> check(SkyEventsClient.strength(client.level, SkyEventType.END_FLASHES) == 20,
                 "End strength synchronizes to the client"));
-            context.waitFor(client -> EndFlashes.visible(0, 1).stream()
+            context.waitFor(_ -> EndFlashes.visible(0, 1).stream()
                 .anyMatch(flash -> flash.intensity() > .7F));
             context.runOnClient(client -> {
                 var flashes = EndFlashes.visible(0, 1);
                 check(flashes.stream().map(f -> f.xAngle() + ":" + f.yAngle()).distinct().count() == flashes.size(),
                     "Additional flashes use distinct seed positions");
                 float visible = (float)flashes.stream().mapToDouble(EndFlashes.Flash::lightIntensity).max().orElse(0);
-                check(Math.abs(client.level.endFlashState().getIntensity(0) - visible) < .00001F,
+                check(Math.abs(TestFixtures.require(TestFixtures.level(client).endFlashState(), "client.level.endFlashState()").getIntensity(0) - visible) < .00001F,
                     "World light intensity follows the strongest actual event flash");
                 var extractor = new net.minecraft.client.renderer.LightmapRenderStateExtractor(client.gameRenderer, client);
                 var light = new net.minecraft.client.renderer.state.LightmapRenderState();
@@ -153,13 +153,13 @@ public final class EndFlashesGameTest implements FabricClientGameTest {
                     float without = light.skyFactor;
                     client.options.hideLightningFlash().set(false);
                     extractor.tick(); extractor.extract(light, 0);
-                    float factor = naturality.client.lighting.HardcoreDarkness.atmosphere(client.level, client.gameRenderer.mainCamera(), 0);
+                    float factor = naturality.client.lighting.HardcoreDarkness.atmosphere(TestFixtures.level(client), client.gameRenderer.mainCamera(), 0);
                     check(Math.abs(light.skyFactor - without - visible * factor) < .0001F,
                         "Real lightmap receives event intensity and respects Hide Sky Flashes");
                 } finally { client.options.hideLightningFlash().set(hidden); }
             });
             float[] heading = new float[2];
-            context.runOnClient(client -> {
+            context.runOnClient(_ -> {
                 var flash = EndFlashes.visible(0, 1).stream()
                     .max(java.util.Comparator.comparingDouble(EndFlashes.Flash::intensity)).orElseThrow();
                 heading[0] = flash.yAngle();
@@ -167,17 +167,17 @@ public final class EndFlashesGameTest implements FabricClientGameTest {
             });
             server.runCommand("execute in minecraft:the_end run tp @a 3000 110 0 " + heading[0] + " " + heading[1]);
             context.waitTicks(4);
-            context.runOnClient(client -> check(client.level.dimension().equals(Level.END),
+            context.runOnClient(client -> check(TestFixtures.level(client).dimension().equals(Level.END),
                 "Visual captures stay in the End"));
-            context.runOnClient(client -> check(EndFlashes.drawnFlashes() > 0,
+            context.runOnClient(_ -> check(EndFlashes.drawnFlashes() > 0,
                 "Active End flashes draw through vanilla's sky renderer"));
             context.takeScreenshot("end-flashes-strength-20");
             server.runCommand("skyevent minecraft:the_end end_flashes 0");
             context.waitTicks(400);
-            context.runOnClient(client -> check(EndFlashes.visible(0, 1).isEmpty() && EndFlashes.drawnFlashes() == 0,
+            context.runOnClient(_ -> check(EndFlashes.visible(0, 1).isEmpty() && EndFlashes.drawnFlashes() == 0,
                 "Zero strength stops new flashes after existing pulses finish"));
-            context.runOnClient(client -> check(client.level.endFlashState().getIntensity(0) == 0
-                && client.level.endFlashState().getIntensity(1) == 0,
+            context.runOnClient(client -> check(TestFixtures.require(TestFixtures.level(client).endFlashState(), "client.level.endFlashState()").getIntensity(0) == 0
+                && TestFixtures.require(TestFixtures.level(client).endFlashState(), "client.level.endFlashState()").getIntensity(1) == 0,
                 "Zero strength also removes the vanilla terrain-light pulse"));
             context.takeScreenshot("end-flashes-strength-0");
             server.runCommand("skyevent minecraft:the_end end_flashes auto");

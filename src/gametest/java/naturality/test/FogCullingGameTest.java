@@ -30,7 +30,7 @@ public final class FogCullingGameTest implements FabricClientGameTest {
                 var camera = client.gameRenderer.mainCamera();
                 var eye = camera.position();
                 check(FogCulling.hidden(eye.x + 40,eye.y,eye.z,eye.x + 42,eye.y + 2,eye.z + 2), "Current rain fog is captured");
-                var cow = EntityTypes.COW.create(client.level, EntitySpawnReason.COMMAND);
+                var cow = TestFixtures.require(EntityTypes.COW.create(TestFixtures.level(client), EntitySpawnReason.COMMAND), "cow");
                 // Bypass Sodium's independent section occlusion for this isolated fog test.
                 cow.setCustomName(net.minecraft.network.chat.Component.literal("Fog test"));
                 cow.setCustomNameVisible(true);
@@ -44,10 +44,10 @@ public final class FogCullingGameTest implements FabricClientGameTest {
                 fog.color.set(1,1,1,1);
                 fog.environmentalStart = 12; fog.environmentalEnd = 15;
                 fog.renderDistanceStart = 100; fog.renderDistanceEnd = 128;
-                FogCulling.capture(client.level,camera,fog,false);
+                FogCulling.capture(TestFixtures.level(client),camera,fog,false);
                 check(renderer.shouldRender(cow,frustum,eye.x,eye.y,eye.z,1), "Disabled fog restores same entity");
                 check(cow.isAlive(), "Render culling does not delete entity");
-                FogCulling.capture(client.level,camera,fog,true);
+                FogCulling.capture(TestFixtures.level(client),camera,fog,true);
                 int sectionY=((int)eye.y>>4)+2;
                 check(FogCulling.sectionHidden(0,sectionY<<4,0,0), "Distant owner section is behind fog");
                 check(!FogCulling.sectionHidden(0,sectionY<<4,0,34), "Displaced snow near camera keeps its owner section");

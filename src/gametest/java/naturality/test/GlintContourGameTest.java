@@ -21,7 +21,7 @@ public final class GlintContourGameTest implements FabricClientGameTest {
             world.getConnection().waitForClientboundPackets();
             world.getConnection().waitForChunksRender();
             context.waitTicks(20);
-            context.runOnClient(client -> {
+            context.runOnClient(_ -> {
                 if (GlintContours.lastItemDraws == 0 || GlintContours.lastArmorDraws == 0)
                     throw new AssertionError("Expected item and armor contours; draws="
                         + GlintContours.lastItemDraws + "/" + GlintContours.lastArmorDraws);
@@ -33,7 +33,7 @@ public final class GlintContourGameTest implements FabricClientGameTest {
             server.runCommand("item replace entity @e[tag=glint_test] armor.head with minecraft:diamond_helmet");
             world.getConnection().waitForClientboundPackets();
             context.waitTicks(10);
-            context.runOnClient(client -> {
+            context.runOnClient(_ -> {
                 if (GlintContours.lastItemDraws != 0 || GlintContours.lastArmorDraws != 0)
                     throw new AssertionError("Unenchanted equipment must not produce contours");
             });
@@ -43,7 +43,7 @@ public final class GlintContourGameTest implements FabricClientGameTest {
             server.runCommand("item replace entity @e[tag=glint_mob] weapon.mainhand with minecraft:diamond_sword[minecraft:enchantments={\"minecraft:sharpness\":1}]");
             world.getConnection().waitForClientboundPackets();
             context.waitTicks(20);
-            context.runOnClient(client -> {
+            context.runOnClient(_ -> {
                 if (GlintContours.lastItemDraws == 0 || GlintContours.lastArmorDraws == 0)
                     throw new AssertionError("Expected mob held-item and armor contours; draws="
                         + GlintContours.lastItemDraws + "/" + GlintContours.lastArmorDraws);
@@ -57,7 +57,7 @@ public final class GlintContourGameTest implements FabricClientGameTest {
             server.runCommand("summon item_frame -1 101 0 {block_pos:[I;-1,101,0],Facing:2b,Fixed:1b,Item:{id:\"minecraft:diamond_sword\",count:1,components:{\"minecraft:enchantments\":{\"minecraft:sharpness\":1}}}}");
             world.getConnection().waitForClientboundPackets();
             context.waitTicks(10);
-            context.runOnClient(client -> {
+            context.runOnClient(_ -> {
                 if (GlintContours.lastItemDraws == 0) throw new AssertionError("Enchanted frame item must have a contour");
             });
             verifyMask(context, 50, "item-frame-glint");
@@ -82,10 +82,10 @@ public final class GlintContourGameTest implements FabricClientGameTest {
             context.waitTicks(5);
             context.runOnClient(client -> {
                 if (client.getWindow().getGuiScale() != 3) throw new AssertionError("GUI scale 3 regression coverage required");
-                client.gui.setScreen(new net.minecraft.client.gui.screens.inventory.InventoryScreen(client.player));
+                client.gui.setScreen(new net.minecraft.client.gui.screens.inventory.InventoryScreen(TestFixtures.player(client)));
             });
             context.waitTicks(10);
-            context.runOnClient(client -> {
+            context.runOnClient(_ -> {
                 if (GlintContours.lastArmorDraws == 0) throw new AssertionError("Inventory player armor must have a contour");
             });
             verifyMask(context, 50, "inventory-glint");
@@ -108,13 +108,13 @@ public final class GlintContourGameTest implements FabricClientGameTest {
 
     private static void verifyMask(ClientGameTestContext context, int minimumPixels, String label) {
             var maskRead = new java.util.concurrent.CompletableFuture<Integer>();
-            context.runOnClient(client -> {
+            context.runOnClient(_ -> {
                 try {
                     var field = GlintContours.class.getDeclaredField(
                         label.equals("inventory-glint") ? "previewMask" : "worldMask");
                     field.setAccessible(true);
                     var target = (com.mojang.blaze3d.pipeline.RenderTarget) field.get(null);
-                    var texture = target.getColorTexture();
+                    var texture = TestFixtures.require(target.getColorTexture(), "texture");
                     int count = target.width * target.height;
                     var device = com.mojang.blaze3d.systems.RenderSystem.getDevice();
                     var buffer = device.createBuffer(() -> "Glint mask verification", 9, (long) count * 16);
@@ -142,7 +142,7 @@ public final class GlintContourGameTest implements FabricClientGameTest {
                     }, 0);
                 } catch (Exception e) { throw new RuntimeException(e); }
             });
-            context.waitFor(client -> maskRead.isDone());
+            context.waitFor(_ -> maskRead.isDone());
             if (maskRead.join() < minimumPixels) throw new AssertionError("Silhouette mask has no visible geometry");
     }
 }

@@ -4,7 +4,6 @@ import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.*;
-import net.minecraft.world.level.block.*;
 import net.minecraft.world.phys.*;
 
 public final class WindShapesGameTest implements FabricClientGameTest {
@@ -84,7 +83,7 @@ public final class WindShapesGameTest implements FabricClientGameTest {
                 WeatherWorldData.get(s).setProfile("minecraft:overworld",profile);
             });
             world.getConnection().waitForClientboundPackets();context.waitTicks(420);
-            context.waitFor(c -> WeatherSystem.state(c.level)!=null && WeatherSystem.state(c.level).wind()==100 && Math.abs(WeatherSystem.state(c.level).direction())<.01);
+            context.waitFor(c -> WeatherSystem.state(TestFixtures.level(c))!=null && TestFixtures.require(WeatherSystem.state(TestFixtures.level(c)), "WeatherSystem.state(c.level)").wind()==100 && Math.abs(TestFixtures.require(WeatherSystem.state(TestFixtures.level(c)), "WeatherSystem.state(c.level)").direction())<.01);
             server.runOnServer(s -> { shapes(s.overworld()); pushing(s.getPlayerList().getPlayers().getFirst()); climbing(s.getPlayerList().getPlayers().getFirst()); });
             context.runOnClient(c -> { shapes(c.level); pushing(c.player); climbing(c.player); });
         }

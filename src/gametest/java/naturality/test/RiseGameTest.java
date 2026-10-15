@@ -31,14 +31,14 @@ public final class RiseGameTest implements FabricClientGameTest {
             server.runCommand("execute in minecraft:the_end run fill -12 20 -15 12 55 12 air");
             server.runCommand("weather minecraft:the_end rise 100");
             context.waitTicks(205);
-            server.runOnServer(s->check(EndWeatherSystem.state(s.getLevel(Level.END)).rise()==100,"Rise command addresses the End pool"));
+            server.runOnServer(s->check(EndWeatherSystem.state(TestFixtures.require(s.getLevel(Level.END), "s.getLevel(Level.END)")).rise()==100,"Rise command addresses the End pool"));
             context.runOnClient(c->{
-                check(EndWeatherSystem.state(c.level).rise()==100,"Rise strength is synchronized to the client");
+                check(EndWeatherSystem.state(TestFixtures.level(c)).rise()==100,"Rise strength is synchronized to the client");
                 try {
                     var field=RiseWeather.class.getDeclaredField("live");field.setAccessible(true);
                     var particles=(java.util.List<?>)field.get(null);
                     check(particles.size()>50 && particles.size()<=600,"Weather creates a bounded rising particle population");
-                    var p=(RiseParticle)particles.getFirst();
+                    var p=TestFixtures.require((RiseParticle)particles.getFirst(), "p");
                     check(p.upwardSpeed()>0 && p.widthRatio()<.5,"Particles rise with a velocity-aligned elongated footprint");
                     check(p.colorCoordinate(20)!=p.colorCoordinate(0),"Hue traverses palette columns");
                     check(Math.abs(p.brightnessCoordinate(20)-p.brightnessCoordinate(0))>.0001,"Brightness pulses independently through palette rows");
@@ -48,17 +48,17 @@ public final class RiseGameTest implements FabricClientGameTest {
                 var orientation=naturality.client.particle.PortalMoteGeometry.orientation(velocity,new Vec3(2,3,5));
                 var axis=orientation.transform(new org.joml.Vector3f(1,0,0));
                 check(new Vec3(axis.x,axis.y,axis.z).dot(velocity.normalize())>.999,"Long edge is locked to velocity");
-                var pos=new BlockPos(4,25,4);c.level.setBlock(pos,Blocks.END_STONE.defaultBlockState(),3);
-                var blocked=new RiseParticle(c.level,4.5,24.99,4.5);blocked.tick();
+                var pos=new BlockPos(4,25,4);TestFixtures.level(c).setBlock(pos,Blocks.END_STONE.defaultBlockState(),3);
+                var blocked=new RiseParticle(TestFixtures.level(c),4.5,24.99,4.5);blocked.tick();
                 check(!blocked.isAlive(),"Rising particles stop at island terrain");
                 for(int x=-4;x<=4;x++)for(int y=0;y<4;y++) {
-                    var visual=new RiseParticle(c.level,x,30+y*2,0);
+                    var visual=new RiseParticle(TestFixtures.level(c),x,30+y*2,0);
                     naturality.client.particle.WindParticleControl.mark(visual,true);c.particleEngine.add(visual);
                 }
             });
             context.waitTicks(20);context.takeScreenshot("rise-aurora-colored-rectangles");
             server.runCommand("weather minecraft:the_end rise 0");context.waitTicks(205);
-            context.runOnClient(c->check(EndWeatherSystem.state(c.level).rise()==0,"Rise can be disabled by command"));
+            context.runOnClient(c->check(EndWeatherSystem.state(TestFixtures.level(c)).rise()==0,"Rise can be disabled by command"));
         }
     }
 }

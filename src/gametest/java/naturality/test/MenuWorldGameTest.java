@@ -68,11 +68,11 @@ public final class MenuWorldGameTest implements FabricClientGameTest {
             MenuPreview.stop(client);
             client.gui.setScreen(new TitleScreen());
         });
-        context.waitFor(client -> MenuPreview.starting() && !MenuPreview.active(), 1200);
+        context.waitFor(_ -> MenuPreview.starting() && !MenuPreview.active(), 1200);
         var navigationScreen = new AtomicReference<net.minecraft.client.gui.screens.Screen>();
         context.runOnClient(client -> {
             check(client.gui.canInterruptScreen(), "Preview preparation leaves menu controls interruptible");
-            var options = new OptionsScreen(client.gui.screen(), client.options);
+            var options = new OptionsScreen(TestFixtures.screen(client), client.options);
             navigationScreen.set(options);
             client.gui.setScreen(options);
             check(!MenuPreview.starting(), "Leaving the requesting screen cancels preparation immediately");
@@ -88,14 +88,14 @@ public final class MenuWorldGameTest implements FabricClientGameTest {
         context.runOnClient(client -> {
             MenuSurfaceChecks.verify();
             checkCloudAngles();
-            check(client.getSingleplayerServer().overworld().getChunkSource().getGenerator() instanceof NoiseBasedChunkGenerator,
+            check(TestFixtures.require(client.getSingleplayerServer(), "client.getSingleplayerServer()").overworld().getChunkSource().getGenerator() instanceof NoiseBasedChunkGenerator,
                     "Preview uses real normal world generation");
-            for (var entity : client.getSingleplayerServer().overworld().getAllEntities())
+            for (var entity : TestFixtures.require(client.getSingleplayerServer(), "client.getSingleplayerServer()").overworld().getAllEntities())
                 check(!(entity instanceof net.minecraft.world.entity.Mob), "Preview does not spawn any mobs");
-            check(client.level.getChunkSource().hasChunk(MenuPreview.spawn().getX() >> 4, MenuPreview.spawn().getZ() >> 4),
+            check(TestFixtures.level(client).getChunkSource().hasChunk(MenuPreview.spawn().getX() >> 4, MenuPreview.spawn().getZ() >> 4),
                     "Preview includes the actual spawn region");
-            var surface = client.level.getChunk(MenuPreview.spawn().getX() >> 4, MenuPreview.spawn().getZ() >> 4);
-            var lake = new net.minecraft.world.level.chunk.LevelChunk(client.level, surface.getPos());
+            var surface = TestFixtures.level(client).getChunk(MenuPreview.spawn().getX() >> 4, MenuPreview.spawn().getZ() >> 4);
+            var lake = new net.minecraft.world.level.chunk.LevelChunk(TestFixtures.level(client), surface.getPos());
             var lakePos = new net.minecraft.core.BlockPos.MutableBlockPos();
             for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) for (int y = 0; y <= 70; y++) {
                 var state = (y < 50 ? net.minecraft.world.level.block.Blocks.STONE : net.minecraft.world.level.block.Blocks.WATER).defaultBlockState();
@@ -115,9 +115,9 @@ public final class MenuWorldGameTest implements FabricClientGameTest {
             check(lakeShell.getBlockState(lakePos.set(lx, 22, lz)).isAir(), "Lake shell excludes buried geometry");
             // A tall cliff crosses the packet boundary while its lower neighbor is
             // available to lighting but not yet a FULL/player-visible chunk.
-            var cliff = new net.minecraft.world.level.chunk.LevelChunk(client.level, surface.getPos());
+            var cliff = new net.minecraft.world.level.chunk.LevelChunk(TestFixtures.level(client), surface.getPos());
             var valleyPos = new net.minecraft.world.level.ChunkPos(surface.getPos().x() + 1, surface.getPos().z());
-            var valley = new net.minecraft.world.level.chunk.LevelChunk(client.level, valleyPos);
+            var valley = new net.minecraft.world.level.chunk.LevelChunk(TestFixtures.level(client), valleyPos);
             for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
                 for (int y = 0; y <= 100; y++)
                     cliff.getSection(cliff.getSectionIndex(y)).setBlockState(x, y & 15, z, net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(), false);
@@ -141,7 +141,7 @@ public final class MenuWorldGameTest implements FabricClientGameTest {
                     "Recessed cliff support is retained behind the outer edge");
             // A wide roof / thin overhang must not become a ground cutoff. Its
             // center is deliberately beyond the neighbor envelope's reach.
-            var roofed = new net.minecraft.world.level.chunk.LevelChunk(client.level, surface.getPos());
+            var roofed = new net.minecraft.world.level.chunk.LevelChunk(TestFixtures.level(client), surface.getPos());
             for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
                 for (int y = 0; y <= 64; y++)
                     roofed.getSection(roofed.getSectionIndex(y)).setBlockState(x, y & 15, z,
@@ -152,7 +152,7 @@ public final class MenuWorldGameTest implements FabricClientGameTest {
             }
             net.minecraft.world.level.levelgen.Heightmap.primeHeightmaps(roofed,
                     java.util.EnumSet.of(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE));
-            var roofShell = naturality.client.menu.MenuSurface.snapshot(roofed, (x, z) -> null);
+            var roofShell = naturality.client.menu.MenuSurface.snapshot(roofed, (_, _) -> null);
             check(naturality.client.menu.MenuSurface.surface(roofed, 8, 8) == 64,
                     "Thin roofs do not replace the supported ground surface");
             check(naturality.client.menu.MenuSurface.surface(roofShell, 8, 8) == 64,
@@ -174,8 +174,8 @@ public final class MenuWorldGameTest implements FabricClientGameTest {
             int cx = MenuPreview.spawn().getX() >> 4, cz = MenuPreview.spawn().getZ() >> 4;
             int emptyBoundaryChunks = 0;
             for (int z = cz - 7; z <= cz + 7; z++) for (int x = cx - 7; x <= cx + 7; x++) {
-                if (MenuPreview.containsChunk(x, z) || !client.level.getChunkSource().hasChunk(x, z)) continue;
-                var outside = client.level.getChunk(x, z);
+                if (MenuPreview.containsChunk(x, z) || !TestFixtures.level(client).getChunkSource().hasChunk(x, z)) continue;
+                var outside = TestFixtures.level(client).getChunk(x, z);
                 for (var section : outside.getSections())
                     check(section.hasOnlyAir(), "Outer neighbors must expose the fog-wall perimeter");
                 emptyBoundaryChunks++;
@@ -184,16 +184,16 @@ public final class MenuWorldGameTest implements FabricClientGameTest {
             int cliffBlocks = 0;
             for (int z = cz - 7; z <= cz + 7; z++) for (int x = cx - 7; x <= cx + 7; x++)
                 if (MenuPreview.containsChunk(x, z)) {
-                    var received = client.level.getChunk(x, z);
+                    var received = TestFixtures.level(client).getChunk(x, z);
                     check(received.getSection(0).hasOnlyAir(),
                             "No preview payload in the fog footprint contains underground geometry at " + x + "," + z);
-                    var original = client.getSingleplayerServer().overworld().getChunkSource().getChunkForLighting(x, z);
+                    var original = TestFixtures.require(client.getSingleplayerServer(), "client.getSingleplayerServer()").overworld().getChunkSource().getChunkForLighting(x, z);
                     if (!(original instanceof net.minecraft.world.level.chunk.ChunkAccess full)) continue;
                     for (int dz = 0; dz < 16; dz++) for (int dx = 0; dx < 16; dx++) {
                         int top = naturality.client.menu.MenuSurface.surface(full, dx, dz);
                         for (var direction : net.minecraft.core.Direction.Plane.HORIZONTAL) {
                             int wx = (x << 4) + dx + direction.getStepX(), wz = (z << 4) + dz + direction.getStepZ();
-                            var neighbor = client.getSingleplayerServer().overworld().getChunkSource().getChunkForLighting(wx >> 4, wz >> 4);
+                            var neighbor = TestFixtures.require(client.getSingleplayerServer(), "client.getSingleplayerServer()").overworld().getChunkSource().getChunkForLighting(wx >> 4, wz >> 4);
                             if (!(neighbor instanceof net.minecraft.world.level.chunk.ChunkAccess adjacent)) continue;
                             int foot = naturality.client.menu.MenuSurface.surface(adjacent, wx & 15, wz & 15);
                             for (int y = foot + 1; y <= top; y++) {
@@ -237,7 +237,7 @@ public final class MenuWorldGameTest implements FabricClientGameTest {
                     + " sections=" + client.levelExtractor.sectionStatistics()
                     + " visible=" + client.gameRenderer.mainCamera().getCullFrustum().isVisible(
                             new net.minecraft.world.phys.AABB(MenuPreview.spawn()).inflate(16)));
-            var screen = client.gui.screen();
+            var screen = TestFixtures.require(client.gui.screen(), "screen");
             float yaw = MenuWorld.camera().yaw(), pitch = MenuWorld.camera().pitch();
             screen.mouseClicked(mouse(15, 15), false);
             screen.mouseDragged(mouse(75, 50), 60, 35);
@@ -252,13 +252,13 @@ public final class MenuWorldGameTest implements FabricClientGameTest {
             check(client.gui.screen() == screen, "Dragging over buttons does not activate them");
             screen.mouseClicked(mouse(x, y), false); screen.mouseReleased(mouse(x, y));
             check(client.gui.screen() instanceof OptionsScreen, "Short clicks activate buttons");
-            client.gui.screen().onClose();
+            TestFixtures.screen(client).onClose();
             MenuWorld.camera().suspend();
         });
         context.waitTicks(10);
         context.takeScreenshot("menu-native-spawn-day");
         context.runOnClient(client -> {
-            var screen = client.gui.screen();
+            var screen = TestFixtures.require(client.gui.screen(), "screen");
             MenuWorld.camera().drag(0, (70 - MenuWorld.camera().pitch()) * screen.height / 120.0,
                     screen.width, screen.height);
             MenuWorld.camera().suspend();
@@ -269,7 +269,7 @@ public final class MenuWorldGameTest implements FabricClientGameTest {
         context.takeScreenshot("menu-native-cloud-orbit");
         for (float pitch : new float[]{3, 0, -3, -20}) {
             context.runOnClient(client -> {
-                var screen = client.gui.screen();
+                var screen = TestFixtures.require(client.gui.screen(), "screen");
                 MenuWorld.camera().drag(0, (pitch - MenuWorld.camera().pitch()) * screen.height / 120.0, screen.width, screen.height);
                 MenuWorld.camera().suspend();
             });
@@ -277,17 +277,17 @@ public final class MenuWorldGameTest implements FabricClientGameTest {
             context.takeScreenshot("menu-surface-side-" + pitch);
         }
         context.runOnClient(client -> {
-            var screen = client.gui.screen();
+            var screen = TestFixtures.require(client.gui.screen(), "screen");
             MenuWorld.camera().drag(0, (70 - MenuWorld.camera().pitch()) * screen.height / 120.0, screen.width, screen.height);
             MenuWorld.camera().suspend();
         });
         var reload = new AtomicReference<CompletableFuture<Void>>();
         context.runOnClient(client -> reload.set(client.reloadResourcePacks()));
-        context.waitFor(client -> reload.get().isDone()); reload.get().join();
+        context.waitFor(_ -> reload.get().isDone()); reload.get().join();
         context.waitFor(client -> client.gui.overlay() == null); context.waitTicks(10);
         context.takeScreenshot("menu-native-spawn-reload");
         context.runOnClient(client -> {
-            var server = client.getSingleplayerServer();
+            var server = TestFixtures.require(client.getSingleplayerServer(), "server");
             server.execute(() -> {
                 server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), "time set 18000");
                 server.getCommands().performPrefixedCommand(server.createCommandSourceStack(), "skyevent minecraft:overworld aurora_borealis 20");
@@ -296,19 +296,19 @@ public final class MenuWorldGameTest implements FabricClientGameTest {
         context.waitTicks(40);
         context.takeScreenshot("menu-native-spawn-night");
         context.runOnClient(client -> {
-            var screen = client.gui.screen();
+            var screen = TestFixtures.require(client.gui.screen(), "screen");
             MenuWorld.camera().drag(0, (-15 - MenuWorld.camera().pitch()) * screen.height / 120.0, screen.width, screen.height);
             MenuWorld.camera().suspend();
         });
         context.waitTicks(20);
-        context.runOnClient(client -> {
+        context.runOnClient(_ -> {
             check(naturality.client.sky.AuroraRenderer.strength() > 0, "Native sky event reaches the menu world");
             check(naturality.client.sky.AuroraRenderer.drawnPanels() > 0, "Native aurora renderer submits its panels");
         });
         context.takeScreenshot("menu-native-aurora-sky");
         context.runOnClient(client -> {
-            check(naturality.weather.PreviewEnvironment.rate(client.getSingleplayerServer()) == 4, "Only registered previews use boosted climate");
-            var server = client.getSingleplayerServer();
+            check(naturality.weather.PreviewEnvironment.rate(TestFixtures.require(client.getSingleplayerServer(), "client.getSingleplayerServer()")) == 4, "Only registered previews use boosted climate");
+            var server = TestFixtures.require(client.getSingleplayerServer(), "server");
             var spawn = MenuPreview.spawn();
             server.execute(() -> {
                 var profile = new naturality.weather.WeatherProfile(true);
@@ -322,17 +322,17 @@ public final class MenuWorldGameTest implements FabricClientGameTest {
         });
         context.waitTicks(70);
         context.runOnClient(client -> {
-            check(naturality.weather.WeatherSystem.state(client.level).rain() == 50, "Preview rain approaches its target faster");
+            check(TestFixtures.require(naturality.weather.WeatherSystem.state(TestFixtures.level(client)), "naturality.weather.WeatherSystem.state(client.level)").rain() == 50, "Preview rain approaches its target faster");
             check(naturality.client.weather.ParticleWeather.activeCount() > 0, "Preview precipitation survives outside loaded camera chunks");
             check(naturality.client.weather.ParticleWeather.snowCount() == 0, "Warm preview displays rain");
         });
         context.takeScreenshot("menu-foreground-rain");
         context.runOnClient(client -> {
-            var server = client.getSingleplayerServer();
+            var server = TestFixtures.require(client.getSingleplayerServer(), "server");
             server.execute(() -> naturality.weather.WeatherSystem.profile(server.overworld()).temperature = 0);
         });
         context.waitTicks(90);
-        context.runOnClient(client -> check(naturality.client.weather.ParticleWeather.snowCount() > 0, "Cold preview displays near-camera snow"));
+        context.runOnClient(_ -> check(naturality.client.weather.ParticleWeather.snowCount() > 0, "Cold preview displays near-camera snow"));
         context.takeScreenshot("menu-foreground-snow");
         var retiring = new AtomicReference<net.minecraft.client.server.IntegratedServer>();
         var registryStamp = new AtomicReference<java.nio.file.attribute.FileTime>();
@@ -349,7 +349,7 @@ public final class MenuWorldGameTest implements FabricClientGameTest {
             check(client.level == null && client.getSingleplayerServer() == null && client.gui.canInterruptScreen(),
                     "Closing detaches the preview immediately and leaves navigation enabled");
         });
-        context.waitFor(client -> retiring.get().isShutdown(), 1200);
+        context.waitFor(_ -> retiring.get().isShutdown(), 1200);
         try (var paths = java.nio.file.Files.walk(retiring.get().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT))) {
             var persisted = paths.filter(path -> path.toString().endsWith(".dat") || path.toString().endsWith(".mca"))
                     .filter(path -> !path.endsWith(java.nio.file.Path.of("data/fabric/registry_entries.dat"))).toList();
@@ -360,39 +360,39 @@ public final class MenuWorldGameTest implements FabricClientGameTest {
         } catch (java.io.IOException error) { throw new RuntimeException(error); }
         context.waitFor(client -> client.level == null && client.getSingleplayerServer() == null && client.gui.screen() instanceof TitleScreen);
         context.waitTicks(20);
-        context.runOnClient(client -> check(naturality.client.menu.MenuPresetSky.frames > 0, "World-independent native preset sky rendered"));
+        context.runOnClient(_ -> check(naturality.client.menu.MenuPresetSky.frames > 0, "World-independent native preset sky rendered"));
         context.takeScreenshot("menu-native-preset-sky");
         context.runOnClient(client -> net.minecraft.client.gui.screens.worldselection.CreateWorldScreen.openFresh(client,
                 () -> client.gui.setScreen(new TitleScreen())));
         context.waitFor(client -> client.gui.screen() instanceof net.minecraft.client.gui.screens.worldselection.CreateWorldScreen, 1200);
-        context.runOnClient(client -> ((naturality.client.mixin.MenuCreateWorldAccess)client.gui.screen()).naturality$uiState().setSeed("111"));
+        context.runOnClient(client -> (TestFixtures.require((naturality.client.mixin.MenuCreateWorldAccess)client.gui.screen(), "(naturality.client.mixin.MenuCreateWorldAccess)client.gui.screen()")).naturality$uiState().setSeed("111"));
         context.waitFor(client -> MenuPreview.starting() && MenuPreview.seed() == 111 && client.getSingleplayerServer() != null, 1200);
         var superseded = new AtomicReference<net.minecraft.client.server.IntegratedServer>();
         context.runOnClient(client -> {
             check(client.gui.canInterruptScreen(), "World creation controls remain usable while preview generation starts");
             superseded.set(client.getSingleplayerServer());
-            ((naturality.client.mixin.MenuCreateWorldAccess)client.gui.screen()).naturality$uiState().setSeed("8675309");
+            (TestFixtures.require((naturality.client.mixin.MenuCreateWorldAccess)client.gui.screen(), "(naturality.client.mixin.MenuCreateWorldAccess)client.gui.screen()")).naturality$uiState().setSeed("8675309");
         });
-        context.waitFor(client -> MenuPreview.ready() && MenuPreview.seed() == 8675309 && MenuPreview.frozen(), 1600);
+        context.waitFor(_ -> MenuPreview.ready() && MenuPreview.seed() == 8675309 && MenuPreview.frozen(), 1600);
         context.runOnClient(client -> check(client.getSingleplayerServer() != superseded.get(), "Changing the seed replaces the in-flight preview"));
         var time = new long[1];
         var frozenWeather = new naturality.weather.WeatherState[1];
         var frozenEvent = new AtomicReference<java.util.Map<String,Long>>();
         context.waitTicks(20);
         context.runOnClient(client -> {
-            time[0] = client.level.getGameTime();
-            frozenWeather[0] = naturality.weather.WeatherSystem.state(client.level);
-            frozenEvent.set(naturality.weather.EnvironmentWorldData.get(client.getSingleplayerServer())
+            time[0] = TestFixtures.level(client).getGameTime();
+            frozenWeather[0] = naturality.weather.WeatherSystem.state(TestFixtures.level(client));
+            frozenEvent.set(naturality.weather.EnvironmentWorldData.get(TestFixtures.require(client.getSingleplayerServer(), "client.getSingleplayerServer()"))
                     .read("sky/minecraft:overworld/meteor_shower"));
         });
         context.waitTicks(30);
         context.runOnClient(client -> {
-            check(client.level.getGameTime() == time[0], "Creation preview is frozen");
-            check(naturality.weather.PreviewEnvironment.frozen(client.getSingleplayerServer()), "Preview environment also stays frozen");
-            check(java.util.Objects.equals(frozenWeather[0], naturality.weather.WeatherSystem.state(client.level)), "Creation weather values stay frozen");
-            check(frozenEvent.get().equals(naturality.weather.EnvironmentWorldData.get(client.getSingleplayerServer())
+            check(TestFixtures.level(client).getGameTime() == time[0], "Creation preview is frozen");
+            check(naturality.weather.PreviewEnvironment.frozen(TestFixtures.require(client.getSingleplayerServer(), "client.getSingleplayerServer()")), "Preview environment also stays frozen");
+            check(java.util.Objects.equals(frozenWeather[0], naturality.weather.WeatherSystem.state(TestFixtures.level(client))), "Creation weather values stay frozen");
+            check(frozenEvent.get().equals(naturality.weather.EnvironmentWorldData.get(TestFixtures.require(client.getSingleplayerServer(), "client.getSingleplayerServer()"))
                     .read("sky/minecraft:overworld/meteor_shower")), "Creation sky-event clocks stay frozen");
-            check(((naturality.client.mixin.MenuCreateWorldAccess)client.gui.screen()).naturality$uiState().getSettings().options().seed() == MenuPreview.seed(),
+            check((TestFixtures.require((naturality.client.mixin.MenuCreateWorldAccess)client.gui.screen(), "(naturality.client.mixin.MenuCreateWorldAccess)client.gui.screen()")).naturality$uiState().getSettings().options().seed() == MenuPreview.seed(),
                     "Preview and actual creation share the chosen seed");
         });
         context.takeScreenshot("menu-create-seed-preview");
@@ -405,7 +405,7 @@ public final class MenuWorldGameTest implements FabricClientGameTest {
                 fixture[0] = client.getLevelSource().getBaseDir().resolve(fixtureId).toAbsolutePath().normalize();
                 java.nio.file.Files.createDirectories(fixture[0]);
                 var root = new net.minecraft.nbt.CompoundTag();
-                root.put("Data", client.getSingleplayerServer().getWorldData().createTag(null));
+                root.put("Data", TestFixtures.require(client.getSingleplayerServer(), "client.getSingleplayerServer()").getWorldData().createTag(null));
                 selectedSpawn[0] = MenuPreview.spawn().offset(8, 0, 8);
                 var player = new net.minecraft.nbt.CompoundTag();
                 player.put("respawn", net.minecraft.server.level.ServerPlayer.RespawnConfig.CODEC.encodeStart(net.minecraft.nbt.NbtOps.INSTANCE,
@@ -421,8 +421,8 @@ public final class MenuWorldGameTest implements FabricClientGameTest {
                 var generation = new net.minecraft.nbt.CompoundTag();
                 net.minecraft.nbt.NbtUtils.addCurrentDataVersion(generation);
                 generation.put("data", net.minecraft.world.level.levelgen.WorldGenSettings.CODEC.encodeStart(
-                        client.getSingleplayerServer().registryAccess().createSerializationContext(net.minecraft.nbt.NbtOps.INSTANCE),
-                        client.getSingleplayerServer().getWorldGenSettings()).getOrThrow());
+                        TestFixtures.require(client.getSingleplayerServer(), "client.getSingleplayerServer()").registryAccess().createSerializationContext(net.minecraft.nbt.NbtOps.INSTANCE),
+                        TestFixtures.require(client.getSingleplayerServer(), "client.getSingleplayerServer()").getWorldGenSettings()).getOrThrow());
                 net.minecraft.nbt.NbtIo.writeCompressed(generation, fixture[0].resolve("data/minecraft/world_gen_settings.dat"));
                 net.minecraft.nbt.NbtIo.writeCompressed(weather, fixture[0].resolve("data/minecraft/weather.dat"));
                 // Use vanilla rain for this fixture; the mod's regional weather otherwise takes precedence.
@@ -434,7 +434,7 @@ public final class MenuWorldGameTest implements FabricClientGameTest {
                 java.nio.file.Files.createDirectories(fixture[0].resolve("data/naturality"));
                 net.minecraft.nbt.NbtIo.writeCompressed(weatherProfiles, fixture[0].resolve("data/naturality/weather.dat"));
                 var events = new naturality.sky.SkyEventWorldData();
-                events.override(client.getSingleplayerServer().overworld(), naturality.sky.SkyEventType.AURORA_BOREALIS, true, 13);
+                events.override(TestFixtures.require(client.getSingleplayerServer(), "client.getSingleplayerServer()").overworld(), naturality.sky.SkyEventType.AURORA_BOREALIS, true, 13);
                 var savedEvents = new net.minecraft.nbt.CompoundTag();
                 net.minecraft.nbt.NbtUtils.addCurrentDataVersion(savedEvents);
                 savedEvents.put("data", naturality.sky.SkyEventWorldData.TYPE.codec().encodeStart(net.minecraft.nbt.NbtOps.INSTANCE, events).getOrThrow());
@@ -446,24 +446,24 @@ public final class MenuWorldGameTest implements FabricClientGameTest {
         context.waitFor(client -> client.level == null && client.getSingleplayerServer() == null && client.gui.canInterruptScreen());
         context.waitTicks(10);
         context.runOnClient(client -> client.gui.setScreen(new net.minecraft.client.gui.screens.worldselection.SelectWorldScreen(new TitleScreen())));
-        context.waitFor(client -> client.gui.screen().children().stream().filter(e -> e instanceof net.minecraft.client.gui.screens.worldselection.WorldSelectionList)
+        context.waitFor(client -> TestFixtures.screen(client).children().stream().filter(e -> e instanceof net.minecraft.client.gui.screens.worldselection.WorldSelectionList)
                 .map(net.minecraft.client.gui.screens.worldselection.WorldSelectionList.class::cast).anyMatch(list -> list.children().stream()
                         .anyMatch(entry -> entry instanceof net.minecraft.client.gui.screens.worldselection.WorldSelectionList.WorldListEntry world
-                                && world.getLevelSummary().getLevelId().equals(fixtureId))), 1200);
+                                && TestFixtures.require(world.getLevelSummary(), "world.getLevelSummary()").getLevelId().equals(fixtureId))), 1200);
         context.runOnClient(client -> {
-            var list = client.gui.screen().children().stream().filter(e -> e instanceof net.minecraft.client.gui.screens.worldselection.WorldSelectionList)
+            var list = TestFixtures.screen(client).children().stream().filter(e -> e instanceof net.minecraft.client.gui.screens.worldselection.WorldSelectionList)
                     .map(net.minecraft.client.gui.screens.worldselection.WorldSelectionList.class::cast).findFirst().orElseThrow();
             list.setSelected(list.children().stream().filter(entry -> entry instanceof net.minecraft.client.gui.screens.worldselection.WorldSelectionList.WorldListEntry world
-                    && world.getLevelSummary().getLevelId().equals(fixtureId)).findFirst().orElseThrow());
+                    && TestFixtures.require(world.getLevelSummary(), "world.getLevelSummary()").getLevelId().equals(fixtureId)).findFirst().orElseThrow());
         });
-        context.waitFor(client -> MenuPreview.ready() && MenuPreview.spawn().equals(selectedSpawn[0]), 1600);
+        context.waitFor(_ -> MenuPreview.ready() && MenuPreview.spawn().equals(selectedSpawn[0]), 1600);
         context.waitTicks(25);
         context.runOnClient(client -> {
             try { check(java.util.Arrays.equals(originalData[0], java.nio.file.Files.readAllBytes(fixture[0].resolve("level.dat"))), "Preview leaves original save byte-for-byte unchanged"); }
             catch (java.io.IOException error) { throw new RuntimeException(error); }
-            check(client.level.isRaining(), "Selected preview retains saved rain state");
-            var event = naturality.sky.SkyEventWorldData.get(client.getSingleplayerServer()).settings(
-                    client.getSingleplayerServer().overworld(), naturality.sky.SkyEventType.AURORA_BOREALIS);
+            check(TestFixtures.level(client).isRaining(), "Selected preview retains saved rain state");
+            var event = naturality.sky.SkyEventWorldData.get(TestFixtures.require(client.getSingleplayerServer(), "client.getSingleplayerServer()")).settings(
+                    TestFixtures.require(client.getSingleplayerServer(), "client.getSingleplayerServer()").overworld(), naturality.sky.SkyEventType.AURORA_BOREALIS);
             check(event.override && event.strength == 13, "Selected preview retains saved sky events");
         });
         context.takeScreenshot("menu-selected-saved-spawn");

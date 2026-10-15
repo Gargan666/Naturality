@@ -46,14 +46,15 @@ public final class WaterVisualsGameTest implements FabricClientGameTest {
                 if (Math.abs(surface - 102.875F) > 0.01 || Float.isNaN(surface))
                     throw new AssertionError("Incorrect elevated water surface: " + surface);
                 if (!WaterVisuals.ready()) throw new AssertionError("Water rendering must be active for missing-buffer regression");
-                var shieldBearer=net.minecraft.world.entity.EntityTypes.ZOMBIE.create(client.level,net.minecraft.world.entity.EntitySpawnReason.COMMAND);
+                var shieldBearer=TestFixtures.require(net.minecraft.world.entity.EntityTypes.ZOMBIE.create(TestFixtures.level(client),net.minecraft.world.entity.EntitySpawnReason.COMMAND), "shieldBearer");
                 shieldBearer.setId(-9100);
-                shieldBearer.setPos(client.player.position());
+                shieldBearer.setPos(TestFixtures.player(client).position());
                 shieldBearer.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND,
                     new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.SHIELD));
                 if(naturality.client.portal.PortalModelCapture.mesh(shieldBearer,shieldBearer.position(),client.gameRenderer.mainCamera(),1).isEmpty())
                     throw new AssertionError("Shield-bearing models must support outline capture");
                 // Reproduce replacement terrain renderers which omit vanilla's UBO.
+                @SuppressWarnings("null") // Deliberately emulate a third-party renderer violating the vanilla UBO contract.
                 var unavailable = new net.minecraft.client.renderer.chunk.ChunkSectionsToRender.DrawSeparate(
                     null, java.util.Map.of(), 0, new com.mojang.renderpearl.api.buffers.GpuBufferSlice[0]);
                 naturality.client.fluid.WaterComposite.render(client.gameRenderer.mainRenderTarget(), unavailable);
@@ -67,7 +68,7 @@ public final class WaterVisualsGameTest implements FabricClientGameTest {
                 server.runCommand("summon pig 0 102.35 0 {NoAI:1b,NoGravity:1b,Tags:[\"water_rim_test\"]}");
                 world.getConnection().waitForClientboundPackets();
                 context.waitTicks(10);
-                context.runOnClient(client -> {
+                context.runOnClient(_ -> {
                     if (naturality.client.fluid.WaterComposite.maskView()==null)
                         throw new AssertionError("Water mask must render, including with Sodium, OIT="+oit);
                     if (naturality.client.fluid.WaterIntersection.lastPixelCount == 0)
@@ -79,9 +80,9 @@ public final class WaterVisualsGameTest implements FabricClientGameTest {
                 world.getConnection().waitForClientboundPackets();
                 context.waitTicks(8);
                 context.takeScreenshot("water-model-rim-legs-"+oit);
-                context.runOnClient(client -> NaturalityConfig.get().liquids.water=false);
+                context.runOnClient(_ -> NaturalityConfig.get().liquids.water=false);
                 context.waitTicks(3);
-                context.runOnClient(client -> {
+                context.runOnClient(_ -> {
                     if(naturality.client.fluid.WaterIntersection.lastPixelCount!=0)
                         throw new AssertionError("Water changes OFF must disable the rim");
                     NaturalityConfig.get().liquids.water=true;
@@ -89,14 +90,14 @@ public final class WaterVisualsGameTest implements FabricClientGameTest {
                 server.runCommand("tp @e[tag=water_rim_test] 0 100 0");
                 world.getConnection().waitForClientboundPackets();
                 context.waitTicks(12);
-                context.runOnClient(client -> {
+                context.runOnClient(_ -> {
                     if (naturality.client.fluid.WaterIntersection.lastPixelCount != 0)
                         throw new AssertionError("Fully submerged models must not leave a rim");
                 });
                 server.runCommand("tp @e[tag=water_rim_test] 0 105 0");
                 world.getConnection().waitForClientboundPackets();
                 context.waitTicks(12);
-                context.runOnClient(client -> {
+                context.runOnClient(_ -> {
                     if (naturality.client.fluid.WaterIntersection.lastPixelCount != 0)
                         throw new AssertionError("Models above water must not leave a rim");
                 });
@@ -105,7 +106,7 @@ public final class WaterVisualsGameTest implements FabricClientGameTest {
                 server.runCommand("tp @a -13.5 104 -2.5 45 40");
                 world.getConnection().waitForClientboundPackets();
                 context.waitTicks(8);
-                context.runOnClient(client -> {
+                context.runOnClient(_ -> {
                     if(naturality.client.fluid.WaterIntersection.lastPixelCount==0)
                         throw new AssertionError("Boat model must make a water rim across the negative chunk boundary");
                 });
@@ -131,12 +132,12 @@ public final class WaterVisualsGameTest implements FabricClientGameTest {
             world.getConnection().waitForClientboundPackets();
             context.waitTicks(12);
             float[] openDepth = new float[1];
-            context.runOnClient(client -> openDepth[0] = WaterVisuals.cameraDepth());
+            context.runOnClient(_ -> openDepth[0] = WaterVisuals.cameraDepth());
             server.runCommand("fill -3 87 -3 3 87 3 stone");
             world.getConnection().waitForClientboundPackets();
             context.waitTicks(40);
             world.getConnection().waitForChunksRender();
-            context.runOnClient(client -> {
+            context.runOnClient(_ -> {
                 if (Math.abs(WaterVisuals.cameraDepth() - openDepth[0]) > 0.1F)
                     throw new AssertionError("Overhang changed water depth: " + openDepth[0] + " -> " + WaterVisuals.cameraDepth());
             });
@@ -145,9 +146,9 @@ public final class WaterVisualsGameTest implements FabricClientGameTest {
             server.runCommand("tp @a -16 101 -8 0 22");
             world.getConnection().waitForClientboundPackets();
             context.waitTicks(12);
-            context.runOnClient(client -> NaturalityConfig.get().liquids.waterShimmer = false);
+            context.runOnClient(_ -> NaturalityConfig.get().liquids.waterShimmer = false);
             context.takeScreenshot("water-shimmer-off");
-            context.runOnClient(client -> NaturalityConfig.get().liquids.waterShimmer = true);
+            context.runOnClient(_ -> NaturalityConfig.get().liquids.waterShimmer = true);
             context.takeScreenshot("water-shimmer-on");
             server.runCommand("fill -24 100 -24 -8 100 24 smooth_sandstone");
             world.getConnection().waitForClientboundPackets();
@@ -157,9 +158,9 @@ public final class WaterVisualsGameTest implements FabricClientGameTest {
             server.runCommand("fill -24 100 -24 -8 100 24 water");
             world.getConnection().waitForClientboundPackets();
             context.waitTicks(40);
-            context.runOnClient(client -> NaturalityConfig.get().liquids.waterDistortion = false);
+            context.runOnClient(_ -> NaturalityConfig.get().liquids.waterDistortion = false);
             context.takeScreenshot("water-distortion-off");
-            context.runOnClient(client -> NaturalityConfig.get().liquids.waterDistortion = true);
+            context.runOnClient(_ -> NaturalityConfig.get().liquids.waterDistortion = true);
             server.runCommand("time set 18000");
             world.getConnection().waitForClientboundPackets();
             context.waitTicks(15);
@@ -169,7 +170,7 @@ public final class WaterVisualsGameTest implements FabricClientGameTest {
                 server.runCommand("fillbiome 0 " + y + " -24 24 " + (y + 7) + " 24 minecraft:swamp");
             world.getConnection().waitForClientboundPackets();
             context.waitTicks(40);
-            context.runOnClient(client -> {
+            context.runOnClient(_ -> {
                 float left = WaterVisuals.turbidityAt(-10, 0), middle = WaterVisuals.turbidityAt(0, 0), right = WaterVisuals.turbidityAt(10, 0);
                 if (!(left < middle && middle < right && middle > 0.25F && middle < 0.75F))
                     throw new AssertionError("Abrupt biome turbidity: " + left + ", " + middle + ", " + right);
@@ -200,7 +201,7 @@ public final class WaterVisualsGameTest implements FabricClientGameTest {
                 server.runCommand("tp @a 0 88 0 0 -65");
                 world.getConnection().waitForClientboundPackets();
                 context.waitTicks(40);
-                context.runOnClient(client -> {
+                context.runOnClient(_ -> {
                     if (WaterVisuals.turbidityAt(0, 0) < 0.99F)
                         throw new AssertionError("Missing swamp turbidity for " + biome);
                 });
@@ -234,7 +235,7 @@ public final class WaterVisualsGameTest implements FabricClientGameTest {
             context.waitTicks(12);
             context.takeScreenshot("water-biome-overlay-first-person");
             server.runCommand("gamemode spectator @a");
-            context.runOnClient(client -> {
+            context.runOnClient(_ -> {
                 var c = NaturalityConfig.get().liquids;
                 c.waterDepth = c.waterDistortion = c.waterShimmer = false;
             });
@@ -253,7 +254,7 @@ public final class WaterVisualsGameTest implements FabricClientGameTest {
             world.getConnection().waitForClientboundPackets();
             context.waitTicks(140);
             world.getConnection().waitForChunksRender();
-            context.runOnClient(client -> {
+            context.runOnClient(_ -> {
                 float surface = WaterVisuals.surface(12, 0);
                 if (!Float.isFinite(surface) || Math.abs(surface - 102.875F) > 0.01F)
                     throw new AssertionError("Waterfall must retain receiving pool surface: " + surface);

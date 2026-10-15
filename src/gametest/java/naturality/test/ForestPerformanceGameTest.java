@@ -21,10 +21,11 @@ import net.minecraft.world.phys.*;
 import net.minecraft.world.phys.shapes.*;
 
 public final class ForestPerformanceGameTest implements FabricClientGameTest {
+    @SuppressWarnings("unused") // Volatile benchmark sink prevents dead-code elimination; deliberately never read.
     private static volatile Object sink;
     private static void check(boolean value,String message) {if(!value)throw new AssertionError(message);}
     @Override public void runTest(ClientGameTestContext context) {
-        context.runOnClient(c -> checkPortalMetadata());
+        context.runOnClient(_ -> checkPortalMetadata());
         try(var world=context.worldBuilder().create()) {
             var server=world.getServer();
             server.runCommand("gamemode spectator @a");
@@ -43,21 +44,21 @@ public final class ForestPerformanceGameTest implements FabricClientGameTest {
                 WeatherWorldData.get(s).setProfile("minecraft:overworld",profile);
             });
             world.getConnection().waitForClientboundPackets();context.waitTicks(420);
-            context.waitFor(c -> WeatherSystem.state(c.level)!=null && WeatherSystem.state(c.level).wind()==100);
+            context.waitFor(c -> WeatherSystem.state(TestFixtures.level(c))!=null && TestFixtures.require(WeatherSystem.state(TestFixtures.level(c)), "WeatherSystem.state(c.level)").wind()==100);
             server.runOnServer(s -> {compareRays(s.overworld());checkPresence(s.overworld());checkShapes(s.overworld());});
             context.runOnClient(c -> {
                 compareRays(c.level);checkPresence(c.level);checkShapes(c.level);
-                var probe=new ClipContext(new Vec3(-8.5,123,-8.5),new Vec3(8.5,123,8.5),ClipContext.Block.COLLIDER,ClipContext.Fluid.NONE,c.player);
+                var probe=new ClipContext(new Vec3(-8.5,123,-8.5),new Vec3(8.5,123,8.5),ClipContext.Block.COLLIDER,ClipContext.Fluid.NONE,TestFixtures.player(c));
                 for(int round=0;round<3;round++) {
                     measure("ray-original",2000,() -> sink=originalRay(c.level,probe));
-                    measure("ray-optimized",2000,() -> sink=c.level.clip(probe));
+                    measure("ray-optimized",2000,() -> sink=TestFixtures.level(c).clip(probe));
                 }
                 System.out.println("FOREST_PERFORMANCE: portal identity, 1536 exact rays, palette lifetime and wind shape variants passed");
             });
         }
     }
 
-    private static void checkPortalMetadata() {
+    static void checkPortalMetadata() {
         try {
             var current=PortalClippedCollector.class.getDeclaredField("current");current.setAccessible(true);
             Object previous=current.get(null);
@@ -76,7 +77,10 @@ public final class ForestPerformanceGameTest implements FabricClientGameTest {
                 current.set(null,b);
                 var second=new ItemFeatureRenderer.Submit(pose,ItemDisplayContext.GUI,0,0,0,tint,quads,ItemStackRenderState.FoilType.NONE);
                 // This record is used only to exercise constructor metadata, never rendered.
-                var model=new net.minecraft.client.renderer.feature.ModelFeatureRenderer.Submit<>(null,pose,null,new Object(),0,0,0,null,null);
+                var renderType=net.minecraft.client.renderer.rendertype.RenderTypes.entitySolid(naturality.client.AtlasLocations.BLOCKS);
+                var emptyModel=new net.minecraft.client.model.Model.Simple(
+                    new net.minecraft.client.model.geom.ModelPart(java.util.List.of(),java.util.Map.of()), _ -> renderType);
+                var model=new net.minecraft.client.renderer.feature.ModelFeatureRenderer.Submit<>(renderType,pose,emptyModel,net.minecraft.util.Unit.INSTANCE,0,0,0,null,null);
                 check(PortalClippedCollector.plane(model)==b,"Model constructor did not capture its clipping plane");
                 current.set(null,null);
                 var ordinary=new ItemFeatureRenderer.Submit(pose,ItemDisplayContext.GUI,0,0,0,tint,quads,ItemStackRenderState.FoilType.NONE);

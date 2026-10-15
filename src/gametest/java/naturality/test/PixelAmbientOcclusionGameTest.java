@@ -6,11 +6,11 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 /** Small isolated scene for shader compilation and block-grid visual regression checks. */
 public final class PixelAmbientOcclusionGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
-        context.runOnClient(client -> client.gui.setScreen(new naturality.client.config.NaturalityConfigScreen(client.gui.screen())));
+        context.runOnClient(client -> client.gui.setScreen(new naturality.client.config.NaturalityConfigScreen(TestFixtures.screen(client))));
         context.waitTicks(2);
         context.takeScreenshot("lighting-settings");
         for (var category : naturality.client.config.NaturalityCategoryScreen.Category.values()) {
-            context.runOnClient(client -> {
+            context.runOnClient(_ -> {
                 if (category == naturality.client.config.NaturalityCategoryScreen.Category.LIGHTING) {
                     naturality.config.NaturalityConfig.get().lighting.darkStepPercent = 3;
                 } else if (category == naturality.client.config.NaturalityCategoryScreen.Category.FOG) {
@@ -20,7 +20,7 @@ public final class PixelAmbientOcclusionGameTest implements FabricClientGameTest
                 }
             });
             context.runOnClient(client -> client.gui.setScreen(
-                new naturality.client.config.NaturalityCategoryScreen(client.gui.screen(), category)));
+                new naturality.client.config.NaturalityCategoryScreen(TestFixtures.screen(client), category)));
             context.runOnClient(client -> {
                 int count = pressResets(client.gui.screen());
                 int expected = switch (category) { case LIGHTING -> 7; case DYNAMIC_LIGHTING -> 10 + naturality.config.NaturalityConfig.DynamicLighting.defaultEntityLights().size(); case CAVE_DARKNESS -> 7; case MOON_DARKNESS -> 12; case CLOUDS -> 23; case LIQUIDS -> 25; case FOG -> 5; case PORTAL -> 11; case SKY -> 3; case FIRE -> 2; case PARTICLES -> 7; case GAMEPLAY -> 7; case WEATHER, GLINT -> 5; case SNOW -> 1; default -> 0; };
@@ -38,16 +38,16 @@ public final class PixelAmbientOcclusionGameTest implements FabricClientGameTest
             });
             context.waitTicks(2);
             context.takeScreenshot("settings-" + category.name().toLowerCase(java.util.Locale.ROOT));
-            context.runOnClient(client -> client.gui.screen().onClose());
+            context.runOnClient(client -> TestFixtures.screen(client).onClose());
             context.waitFor(client -> client.gui.overlay() == null);
-            context.runOnClient(client -> {
+            context.runOnClient(_ -> {
                 var config = naturality.config.NaturalityConfig.get();
                 if (category == naturality.client.config.NaturalityCategoryScreen.Category.LIGHTING
                         && config.lighting.darkStepPercent != new naturality.config.NaturalityConfig.Lighting().darkStepPercent)
                     throw new AssertionError("Closing the page overwrote the reset slider value");
             });
         }
-        context.runOnClient(client -> client.gui.screen().onClose());
+        context.runOnClient(client -> TestFixtures.screen(client).onClose());
         try (var world = context.worldBuilder().create()) {
             var server = world.getServer();
             server.runCommand("time set noon");
@@ -111,7 +111,7 @@ public final class PixelAmbientOcclusionGameTest implements FabricClientGameTest
     private static void reloadLighting(ClientGameTestContext context) {
         var future = new java.util.concurrent.atomic.AtomicReference<java.util.concurrent.CompletableFuture<Void>>();
         context.runOnClient(client -> future.set(client.reloadResourcePacks()));
-        context.waitFor(client -> future.get().isDone());
+        context.waitFor(_ -> future.get().isDone());
         future.get().join();
         context.waitTicks(5);
     }
@@ -119,7 +119,7 @@ public final class PixelAmbientOcclusionGameTest implements FabricClientGameTest
     private static int pressResets(net.minecraft.client.gui.components.events.GuiEventListener element) {
         if (element instanceof net.minecraft.client.gui.components.Button button
                 && button.getMessage().getString().equals("Reset")) {
-            button.onPress(null);
+            button.onPress(TestFixtures.CONFIRM);
             return 1;
         }
         int count = 0;

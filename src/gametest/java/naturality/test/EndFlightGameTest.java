@@ -42,7 +42,7 @@ public final class EndFlightGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
         try(var world=context.worldBuilder().create()) {
             var server=world.getServer();
-            server.runOnServer(s -> s.getLevel(Level.END).setDragonFight(null));
+            server.runOnServer(s -> TestFixtures.disableDragonFight(TestFixtures.require(s.getLevel(Level.END), "End world")));
             server.runCommand("gamerule minecraft:advance_weather false");
             server.runCommand("gamemode spectator @a");
             server.runCommand("execute in minecraft:the_end run tp @a 0 140 0 0 0");
@@ -56,10 +56,10 @@ public final class EndFlightGameTest implements FabricClientGameTest {
             context.waitTicks(110);
             var failures=new ArrayList<String>();
             server.runOnServer(s -> {
-                var end=s.getLevel(Level.END);
-                var inverted=EntityTypes.COW.create(end,EntitySpawnReason.COMMAND);
+                var end=TestFixtures.require(s.getLevel(Level.END), "end");
+                var inverted=TestFixtures.require(EntityTypes.COW.create(end,EntitySpawnReason.COMMAND), "inverted");
                 DistortionFixtures.invert(inverted);
-                var upright=EntityTypes.COW.create(s.overworld(),EntitySpawnReason.COMMAND);
+                var upright=TestFixtures.require(EntityTypes.COW.create(s.overworld(),EntitySpawnReason.COMMAND), "upright");
                 upright.setXRot(0);upright.setYRot(0);
                 var fastGlide=new Vec3(0,0,4);
                 fastGlide=glide(upright,fastGlide);
@@ -103,7 +103,7 @@ public final class EndFlightGameTest implements FabricClientGameTest {
                 wings.setupAnim(capeState);
                 check(Math.abs(wings.root().xRot)+Math.abs(wings.root().yRot)+Math.abs(wings.root().zRot)<1.0e-6,
                         "Flight clears cape motion from the shared model");
-                var p=c.player;
+                var p=TestFixtures.require(c.player, "p");
                 check(p.onGround(),"Player starts on the underside");
                 var savedMovement=p.getDeltaMovement();
                 p.startFallFlying();
@@ -116,7 +116,8 @@ public final class EndFlightGameTest implements FabricClientGameTest {
                 p.stopFallFlying();
                 check(Math.abs(p.getFieldOfViewModifier(true,1)-slowFov)<1.0e-6,"Landing restores normal FOV target");
                 p.setDeltaMovement(savedMovement);
-                var renderer=(AvatarRenderer<net.minecraft.client.player.LocalPlayer>)(Object)c.getEntityRenderDispatcher().getRenderer(p);
+                var renderer=c.getEntityRenderDispatcher().getRenderer(p);
+                if (!(renderer instanceof AvatarRenderer<?> avatar)) throw new AssertionError("Expected player avatar renderer");
                 for(float yaw:new float[]{-135,35,135})for(float pitch:new float[]{-40,20,50}) {
                     p.setYRot(yaw);p.yRotO=yaw;p.yHeadRot=p.yHeadRotO=yaw;p.yBodyRot=p.yBodyRotO=yaw-25;
                     p.setXRot(pitch);p.xRotO=pitch;
@@ -125,10 +126,10 @@ public final class EndFlightGameTest implements FabricClientGameTest {
                         c.options.setCameraType(cameraType);align(c.gameRenderer.mainCamera());
                         var forward=new Vec3(c.gameRenderer.mainCamera().forwardVector());
                         if(cameraType.isMirrored())forward=forward.scale(-1);
-                        if(headDirection(renderer,state).dot(forward)<.999)
+                        if(headDirection(avatar,state).dot(forward)<.999)
                             failures.add("Third-person model look disagrees with camera: "+cameraType);
                     }
-                    if(headDirection(renderer,state).dot(p.getViewVector(1))<.999)
+                    if(headDirection(avatar,state).dot(p.getViewVector(1))<.999)
                         failures.add("Rendered head faces away from the camera look: yaw="+yaw+" pitch="+pitch);
                 }
                 p.setYRot(0);p.yRotO=0;p.yHeadRot=p.yHeadRotO=0;p.yBodyRot=p.yBodyRotO=0;p.setXRot(0);p.xRotO=0;
@@ -140,26 +141,26 @@ public final class EndFlightGameTest implements FabricClientGameTest {
             });
             check(failures.isEmpty(),String.join("\n",failures));
             context.runOnClient(c -> {
-                c.player.setYRot(35);c.player.setXRot(20);c.options.setCameraType(CameraType.THIRD_PERSON_BACK);
+                TestFixtures.player(c).setYRot(35);TestFixtures.player(c).setXRot(20);c.options.setCameraType(CameraType.THIRD_PERSON_BACK);
             });
             context.waitTicks(3);
             context.takeScreenshot("end-standing-inverted-back");
             context.runOnClient(c -> c.options.setCameraType(CameraType.THIRD_PERSON_FRONT));
             context.waitTicks(3);
             context.takeScreenshot("end-standing-inverted-front");
-            context.runOnClient(c -> {c.player.setYRot(0);c.player.setXRot(0);c.options.setCameraType(CameraType.FIRST_PERSON);});
+            context.runOnClient(c -> {TestFixtures.player(c).setYRot(0);TestFixtures.player(c).setXRot(0);c.options.setCameraType(CameraType.FIRST_PERSON);});
             context.runOnClient(c -> c.options.keyJump.setDown(true));
             context.waitTicks(2);
             context.runOnClient(c -> c.options.keyJump.setDown(false));
             context.waitTicks(2);
             context.runOnClient(c -> c.options.keyJump.setDown(true));
             context.waitTicks(2);
-            context.runOnClient(c -> {c.options.keyJump.setDown(false);check(c.player.isFallFlying(),"Double jump activates elytra off the ceiling");});
+            context.runOnClient(c -> {c.options.keyJump.setDown(false);check(TestFixtures.player(c).isFallFlying(),"Double jump activates elytra off the ceiling");});
             context.waitTicks(2);
-            server.runOnServer(s -> check(s.getLevel(Level.END).players().getFirst().isFallFlying(),"Server accepts upside-down elytra activation"));
+            server.runOnServer(s -> check(TestFixtures.require(s.getLevel(Level.END), "s.getLevel(Level.END)").players().getFirst().isFallFlying(),"Server accepts upside-down elytra activation"));
             server.runOnServer(s -> {
-                var inverted=s.getLevel(Level.END).players().getFirst();
-                var upright=EntityTypes.COW.create(s.overworld(),EntitySpawnReason.COMMAND);
+                var inverted=TestFixtures.require(s.getLevel(Level.END), "s.getLevel(Level.END)").players().getFirst();
+                var upright=TestFixtures.require(EntityTypes.COW.create(s.overworld(),EntitySpawnReason.COMMAND), "upright");
                 try {
                     var flag=Entity.class.getDeclaredMethod("setSharedFlag",int.class,boolean.class);
                     flag.setAccessible(true);flag.invoke(upright,7,true);
@@ -174,10 +175,10 @@ public final class EndFlightGameTest implements FabricClientGameTest {
             });
             server.runCommand("execute in minecraft:the_end run tp @a 0 165 0 0 0");
             world.getConnection().waitForClientboundPackets();
-            context.runOnClient(c -> {c.player.setDeltaMovement(0,.35,0);c.player.setOnGround(false);c.player.startFallFlying();});
+            context.runOnClient(c -> {TestFixtures.player(c).setDeltaMovement(0,.35,0);TestFixtures.player(c).setOnGround(false);TestFixtures.player(c).startFallFlying();});
             context.waitTicks(8);
             context.runOnClient(c -> {
-                check(c.player.isFallFlying() && c.player.getDeltaMovement().horizontalDistance()>.03,
+                check(TestFixtures.player(c).isFallFlying() && TestFixtures.player(c).getDeltaMovement().horizontalDistance()>.03,
                     "Upward falling converts into forward glide instead of stalling");
                 c.options.setCameraType(CameraType.THIRD_PERSON_BACK);
             });
@@ -190,7 +191,7 @@ public final class EndFlightGameTest implements FabricClientGameTest {
             server.runCommand("effect clear @e naturality:distortion");
             context.waitTicks(90);
             context.runOnClient(c -> {
-                check(!c.player.isFallFlying(),"Removing elytra still ends flight");
+                check(!TestFixtures.player(c).isFallFlying(),"Removing elytra still ends flight");
                 c.options.setCameraType(CameraType.FIRST_PERSON);
             });
         }

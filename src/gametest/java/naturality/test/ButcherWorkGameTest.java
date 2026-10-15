@@ -85,7 +85,7 @@ public final class ButcherWorkGameTest implements FabricClientGameTest {
                         && butcher[0].getInventory().countItem(Items.BEEF) > 0;
                 });
             }
-            server.runOnServer(s -> {
+            server.runOnServer(_ -> {
                 check(finished[0], "Butcher breeds cows, harvests one parent, and collects their drops");
                 check(swordUsed[0], "Butcher equips an iron sword when harvesting parents");
                 check(parents[0].isAlive() ^ parents[1].isAlive(), "Butcher leaves one cow parent alive");
@@ -105,7 +105,7 @@ public final class ButcherWorkGameTest implements FabricClientGameTest {
             boolean[] switched = {false};
             for (int tick = 0; tick < 600 && !switched[0]; tick += 10) {
                 context.waitTicks(10);
-                server.runOnServer(s -> switched[0] = (!chickens[0].isAlive() ^ !chickens[1].isAlive())
+                server.runOnServer(_ -> switched[0] = (!chickens[0].isAlive() ^ !chickens[1].isAlive())
                     && butcher[0].getInventory().countItem(Items.CHICKEN) > 0);
             }
             server.runOnServer(s -> {
@@ -114,7 +114,7 @@ public final class ButcherWorkGameTest implements FabricClientGameTest {
                     + " chicken0pos=" + chickens[0].position() + " food=" + chickens[0].isFood(new net.minecraft.world.item.ItemStack(Items.WHEAT_SEEDS)) + " path=" + butcher[0].getNavigation().createPath(chickens[0], 2) + " chicken0=" + chickens[0].getHealth() + "/" + chickens[0].getAge() + "/" + chickens[0].isInLove()
                     + " chicken1pos=" + chickens[1].position() + " chicken1=" + chickens[1].getHealth() + "/" + chickens[1].getAge() + "/" + chickens[1].isInLove()
                     + " work=" + butcher[0].getBrain().isActive(net.minecraft.world.entity.schedule.Activity.WORK)
-                    + " worldItems=" + s.overworld().getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class, butcher[0].getBoundingBox().inflate(40)).stream().map(item -> item.getItem() + "@" + item.position()).toList() + " behaviors=" + butcher[0].getBrain().getRunningBehaviors().stream().map(b -> b.debugString()).toList());
+                    + " worldItems=" + s.overworld().getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class, butcher[0].getBoundingBox().inflate(40)).stream().map(item -> item.getItem() + "@" + item.position()).toList() + " behaviors=" + TestFixtures.brainActivity(butcher[0]));
                 check(chickens[0].isAlive() ^ chickens[1].isAlive(), "Butcher leaves one chicken parent alive");
                 check(butcher[0].getInventory().countItem(Items.WHEAT_SEEDS) == 2,
                     "The new animal pair consumes two seeds");
@@ -135,11 +135,11 @@ public final class ButcherWorkGameTest implements FabricClientGameTest {
             boolean[] restocked = {false};
             for (int tick = 0; tick < 500 && !restocked[0]; tick += 10) {
                 context.waitTicks(10);
-                server.runOnServer(s -> restocked[0] = butcher[0].getInventory().countItem(Items.WHEAT) == 8
+                server.runOnServer(_ -> restocked[0] = butcher[0].getInventory().countItem(Items.WHEAT) == 8
                     && butcher[0].getInventory().countItem(Items.CARROT) == 12
                     && butcher[0].getInventory().countItem(Items.WHEAT_SEEDS) == 8);
             }
-            server.runOnServer(s -> {
+            server.runOnServer(_ -> {
                 check(restocked[0], "Missing selected food triggers eight of each supply even with carrots remaining");
                 for (Animal chicken : chickens) chicken.discard();
             });
@@ -172,14 +172,14 @@ public final class ButcherWorkGameTest implements FabricClientGameTest {
                 boolean[] harvested = {false};
                 for (int tick = 0; tick < 1000 && !harvested[0]; tick += 10) {
                     context.waitTicks(10);
-                    server.runOnServer(s -> harvested[0] = (pair[0].isAlive() ^ pair[1].isAlive())
+                    server.runOnServer(_ -> harvested[0] = (pair[0].isAlive() ^ pair[1].isAlive())
                         && butcher[0].getInventory().countItem(meat) > 0);
                 }
                 server.runOnServer(s -> {
                     check(harvested[0], "Butcher breeds and harvests " + type + " inventory=" + butcher[0].getInventory()
                         + " body=" + butcher[0].position() + " pair=" + pair[0].getHealth() + "/" + pair[0].getAge() + "@" + pair[0].position()
                         + "," + pair[1].getHealth() + "/" + pair[1].getAge() + "@" + pair[1].position()
-                        + " behavior=" + butcher[0].getBrain().getRunningBehaviors().stream().map(b -> b.debugString()).toList());
+                        + " behavior=" + TestFixtures.brainActivity(butcher[0]));
                     check(butcher[0].getInventory().countItem(food) == previousFood[0] - 2, "Each parent consumes its correct breeding food");
                     check(s.overworld().getEntitiesOfClass(Animal.class, butcher[0].getBoundingBox().inflate(40),
                         animal -> animal.getType() == type && animal.isBaby()).size() == 1, "Baby survives harvesting");
@@ -200,9 +200,9 @@ public final class ButcherWorkGameTest implements FabricClientGameTest {
             boolean[] selected = {false};
             for (int tick = 0; tick < 100 && !selected[0]; tick++) {
                 context.waitTicks(1);
-                server.runOnServer(s -> selected[0] = butcher[0].getMainHandItem().is(Items.WHEAT_SEEDS));
+                server.runOnServer(_ -> selected[0] = butcher[0].getMainHandItem().is(Items.WHEAT_SEEDS));
             }
-            server.runOnServer(s -> {
+            server.runOnServer(_ -> {
                 check(selected[0], "Nearby chickens take priority over distant cows despite previous wheat selection");
                 for (Animal animal : nearby) animal.discard();
                 butcher[0].setNoAi(true);
@@ -220,9 +220,9 @@ public final class ButcherWorkGameTest implements FabricClientGameTest {
                 boolean[] followed = {false};
                 for (int tick = 0; tick < 160 && !followed[0]; tick += 5) {
                     context.waitTicks(5);
-                    server.runOnServer(s -> followed[0] = attracted[0].distanceToSqr(butcher[0]) < 12);
+                    server.runOnServer(_ -> followed[0] = attracted[0].distanceToSqr(butcher[0]) < 12);
                 }
-                server.runOnServer(s -> {
+                server.runOnServer(_ -> {
                     check(followed[0], "Held breeding food attracts " + type + " to a stationary butcher");
                     attracted[0].discard();
                 });

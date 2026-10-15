@@ -103,7 +103,7 @@ public final class VillagerBreadGameTest implements FabricClientGameTest {
                         .stream().anyMatch(body -> body.getInventory().countItem(Items.BREAD) > 0);
                 });
             }
-            server.runOnServer(s -> {
+            server.runOnServer(_ -> {
                 check(pickedUp[0] && tossed[0], "Farmer tosses real bread that another villager picks up");
                 check(furthest[0] > 1, "Farmer walks to villagers after work");
                 check(farmer[0].getInventory().countItem(Items.WHEAT) < 12, "Shared bread is made from harvested wheat");

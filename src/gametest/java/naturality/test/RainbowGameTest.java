@@ -67,7 +67,7 @@ public final class RainbowGameTest implements FabricClientGameTest {
             context.waitTicks(110);
             server.runOnServer(s -> check(SkyEvents.strength(s.overworld(), SkyEventType.RAINBOW) == 20,
                 "Rainbow override is allowed in daytime rain ten"));
-            context.runOnClient(client -> check(RainbowRenderer.strength() == 20,
+            context.runOnClient(_ -> check(RainbowRenderer.strength() == 20,
                 "Rainbow strength reaches the client"));
             context.takeScreenshot("rainbow-morning");
             server.runCommand("skyevent minecraft:overworld rainbow 5");
@@ -112,7 +112,7 @@ public final class RainbowGameTest implements FabricClientGameTest {
             context.waitTicks(90);
             server.runOnServer(s -> check(SkyEvents.strength(s.overworld(), SkyEventType.RAINBOW) == 0,
                 "Rainbow is unavailable at night even with an override"));
-            context.runOnClient(client -> check(RainbowRenderer.strength() == 0,
+            context.runOnClient(_ -> check(RainbowRenderer.strength() == 0,
                 "Nighttime rainbow fades away"));
             context.takeScreenshot("rainbow-night");
             server.runCommand("time set 1000");

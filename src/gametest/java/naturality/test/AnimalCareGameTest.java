@@ -67,7 +67,7 @@ public final class AnimalCareGameTest implements FabricClientGameTest {
                 var toolsmith = worker(level, VillagerProfession.TOOLSMITH, .5);
                 var weaponsmith = worker(level, VillagerProfession.WEAPONSMITH, 3.5);
                 toolsmith.setNoAi(true); weaponsmith.setNoAi(true);
-                var golem = EntityTypes.IRON_GOLEM.create(level, EntitySpawnReason.COMMAND);
+                var golem = TestFixtures.require(EntityTypes.IRON_GOLEM.create(level, EntitySpawnReason.COMMAND), "golem");
                 golem.setPos(1.5, 101, .5); golem.setNoAi(true); golem.setHealth(20); level.addFreshEntity(golem);
                 var first = new AnimalCareWork(false); var second = new AnimalCareWork(false);
                 check(first.tryStart(level, toolsmith, 1000) && second.tryStart(level, weaponsmith, 1000), "Both smith professions can repair");
@@ -107,13 +107,13 @@ public final class AnimalCareGameTest implements FabricClientGameTest {
             });
             for (int tick = 0; tick < 300 && !repaired[0]; tick += 2) {
                 context.waitTicks(2);
-                server.runOnServer(s -> {
+                server.runOnServer(_ -> {
                     walked[0] |= walkingSmith[0].getX() > 3;
                     ingot[0] |= walkingSmith[0].getMainHandItem().is(Items.IRON_INGOT);
                     repaired[0] = damaged[0].getHealth() == damaged[0].getMaxHealth();
                 });
             }
-            server.runOnServer(s -> {
+            server.runOnServer(_ -> {
                 check(walked[0] && ingot[0] && repaired[0], "Live armorer walks to damaged golem, holds ingots and repairs fully");
                 walkingSmith[0].discard(); damaged[0].discard();
             });

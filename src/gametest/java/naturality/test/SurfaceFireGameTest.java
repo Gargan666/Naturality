@@ -30,7 +30,7 @@ public final class SurfaceFireGameTest implements FabricClientGameTest {
             world.getConnection().waitForClientboundPackets();
             world.getConnection().waitForChunksRender();
             context.runOnClient(client -> {
-                var level = client.level;
+                var level = TestFixtures.require(client.level, "level");
                 var fire = Blocks.FIRE.defaultBlockState();
                 var model = client.getModelManager().getBlockStateModelSet().get(fire);
                 check(model instanceof SurfaceFireModel, "Fire model wrapper registered");
@@ -63,7 +63,7 @@ public final class SurfaceFireGameTest implements FabricClientGameTest {
                                 heightRange[0]=Math.min(heightRange[0],q.y(v));
                                 heightRange[1]=Math.max(heightRange[1],q.y(v));
                             }
-                        }),level,new BlockPos(2,101,0),flame,RandomSource.create(0),f->false);
+                        }),level,new BlockPos(2,101,0),flame,RandomSource.create(0),_->false);
                     near(heightRange[1]-heightRange[0],naturality.fire.FireGeometry.HEIGHT / 4,
                         "Normal and soul fence flames render at the fitted height");
                 }
@@ -90,7 +90,7 @@ public final class SurfaceFireGameTest implements FabricClientGameTest {
                         maxY[0] = Math.max(maxY[0], q.y(v));
                     }
                 });
-                model.emitQuads(emitter, level, new BlockPos(-6, 101, 0), fire, RandomSource.create(0), f -> false);
+                model.emitQuads(emitter, level, new BlockPos(-6, 101, 0), fire, RandomSource.create(0), _ -> false);
                 check(minY[0] >= -0.55F && minY[0] <= -0.42F, "Vanilla fire planes move down to bottom slab");
                 check(maxY[0] > .7F && maxY[0] < 1.0F,"Full-width fire uses the tilted vanilla height");
                 var changing = new BlockPos(10, 100, 0);
@@ -121,7 +121,7 @@ public final class SurfaceFireGameTest implements FabricClientGameTest {
                     client.getModelManager().getBlockStateModelSet().get(flame).emitQuads(
                         Renderer.get().quadEmitter(q->{for(int v=0;v<4;v++) {
                             range[0]=Math.min(range[0],q.y(v));range[1]=Math.max(range[1],q.y(v));
-                        }}),level,changing.above(),flame,RandomSource.create(0),d->false);
+                        }}),level,changing.above(),flame,RandomSource.create(0),_->false);
                     near(range[0],-1,"Normal and soul fire merge into fern at ground level");
                     near(range[1]-range[0],(float)naturality.fire.FireGeometry.floorHeight(merged.getFirst()),
                         "Merged flames keep their original height");
@@ -195,7 +195,7 @@ public final class SurfaceFireGameTest implements FabricClientGameTest {
             // Reproduce the reported stacked fence-post side placement, plus unique normal/soul flames.
             context.runOnClient(client -> {
                 for (var p : BlockPos.betweenClosed(-8, 100, -1, 10, 103, 6))
-                    client.level.setBlock(p, Blocks.AIR.defaultBlockState(), 2);
+                    TestFixtures.level(client).setBlock(p, Blocks.AIR.defaultBlockState(), 2);
             });
             server.runCommand("tp @a 1 102 -6 0 8");
             server.runCommand("fill -8 100 -1 10 103 6 air");
@@ -211,10 +211,10 @@ public final class SurfaceFireGameTest implements FabricClientGameTest {
             world.getConnection().waitForClientboundPackets();
             world.getConnection().waitForChunksRender();
             long[] ticks = new long[1];
-            context.runOnClient(client -> ticks[0] = naturality.client.fire.ProceduralFire.ticks());
+            context.runOnClient(_ -> ticks[0] = naturality.client.fire.ProceduralFire.ticks());
             context.takeScreenshot("fire-side-posts-and-soul");
             context.waitTicks(15);
-            context.runOnClient(client -> check(naturality.client.fire.ProceduralFire.ticks() > ticks[0], "Heat simulation animates"));
+            context.runOnClient(_ -> check(naturality.client.fire.ProceduralFire.ticks() > ticks[0], "Heat simulation animates"));
             context.takeScreenshot("fire-side-posts-and-soul-later");
             server.runCommand("tp @a 0.5 101 -1.5 0 0");
             world.getConnection().waitForClientboundPackets();
@@ -258,14 +258,14 @@ public final class SurfaceFireGameTest implements FabricClientGameTest {
                     net.minecraft.world.level.ClipContext.Block.COLLIDER, net.minecraft.world.level.ClipContext.Fluid.NONE,
                     net.minecraft.world.phys.shapes.CollisionContext.empty()));
                 check(passThrough.getType() == net.minecraft.world.phys.HitResult.Type.MISS, "Collision rays still pass through fire");
-                var pig = net.minecraft.world.entity.EntityTypes.PIG.create(level, net.minecraft.world.entity.EntitySpawnReason.COMMAND);
+                var pig = TestFixtures.require(net.minecraft.world.entity.EntityTypes.PIG.create(level, net.minecraft.world.entity.EntitySpawnReason.COMMAND), "pig");
                 pig.setNoAi(true); pig.setNoGravity(true);
                 pig.setPos(0.5, 101.1, 1.1);
                 pig.setRemainingFireTicks(0);
                 float health = pig.getHealth();
                 pig.applyEffectsFromBlocks(pig.position(), pig.position());
                 check(pig.getHealth() < health && pig.isOnFire(), "Inset flame burns entities outside its owning voxel");
-                var safe = net.minecraft.world.entity.EntityTypes.PIG.create(level, net.minecraft.world.entity.EntitySpawnReason.COMMAND);
+                var safe = TestFixtures.require(net.minecraft.world.entity.EntityTypes.PIG.create(level, net.minecraft.world.entity.EntitySpawnReason.COMMAND), "safe");
                 safe.setNoAi(true); safe.setNoGravity(true);
                 safe.setPos(0.5, 101.1, 0.5);
                 float safeHealth = safe.getHealth();
@@ -300,17 +300,17 @@ public final class SurfaceFireGameTest implements FabricClientGameTest {
             world.getConnection().waitForChunksRender();
             context.runOnClient(client -> {
                 var pos = new BlockPos(-1, 102, 0);
-                var state = client.level.getBlockState(pos);
-                var sheet = naturality.fire.FireGeometry.sides(client.level, pos, state).getFirst();
-                int color = naturality.client.fire.ConnectedFire.color(client.level, pos, state, sheet);
+                var state = TestFixtures.level(client).getBlockState(pos);
+                var sheet = naturality.fire.FireGeometry.sides(TestFixtures.level(client), pos, state).getFirst();
+                int color = naturality.client.fire.ConnectedFire.color(TestFixtures.level(client), pos, state, sheet);
                 check(((color >>> 20) & 15) == 15, "Interior wall fire connects on four edges");
                 var isolated = new BlockPos(3, 104, 0);
-                var isolatedState = client.level.getBlockState(isolated);
-                var single = naturality.fire.FireGeometry.sides(client.level, isolated, isolatedState).getFirst();
-                check(((naturality.client.fire.ConnectedFire.color(client.level, isolated, isolatedState, single)
+                var isolatedState = TestFixtures.level(client).getBlockState(isolated);
+                var single = naturality.fire.FireGeometry.sides(TestFixtures.level(client), isolated, isolatedState).getFirst();
+                check(((naturality.client.fire.ConnectedFire.color(TestFixtures.level(client), isolated, isolatedState, single)
                     >>> 20) & 15) == 0, "Detached fire retains its vanilla sprite");
-                client.level.setBlock(pos.above(), Blocks.AIR.defaultBlockState(), 3);
-                color = naturality.client.fire.ConnectedFire.color(client.level, pos, state, sheet);
+                TestFixtures.level(client).setBlock(pos.above(), Blocks.AIR.defaultBlockState(), 3);
+                color = naturality.client.fire.ConnectedFire.color(TestFixtures.level(client), pos, state, sheet);
                 check(((color >>> 20) & 4) == 0, "Removing a neighbour opens the flame edge");
             });
             context.waitTicks(5);
@@ -323,7 +323,7 @@ public final class SurfaceFireGameTest implements FabricClientGameTest {
             context.runOnClient(client -> client.options.improvedTransparency().set(false));
             var reload = new java.util.concurrent.atomic.AtomicReference<java.util.concurrent.CompletableFuture<Void>>();
             context.runOnClient(client -> reload.set(client.reloadResourcePacks()));
-            context.waitFor(client -> reload.get().isDone());
+            context.waitFor(_ -> reload.get().isDone());
             reload.get().join();
             context.waitFor(client -> client.gui.overlay() == null);
             context.waitTicks(5);
@@ -339,14 +339,14 @@ public final class SurfaceFireGameTest implements FabricClientGameTest {
             context.waitTicks(10);
             context.runOnClient(client -> {
                 int burning = 0;
-                for (var entity : client.level.entitiesForRendering()) {
+                for (var entity : TestFixtures.level(client).entitiesForRendering()) {
                     if (!entity.displayFireAnimation()) continue;
                     var renderState = client.getEntityRenderDispatcher().getRenderer(entity).createRenderState(entity, 0.5F);
-                    var data = (naturality.client.fire.EntityFireState) renderState;
+                    var data = TestFixtures.require((naturality.client.fire.EntityFireState) renderState, "data");
                     check(data.naturality$fireBox() != null, "Burning entity extracts its actual hitbox");
-                    var bounds = naturality.client.fire.EntityFireRenderer.envelope(data.naturality$fireBox());
-                    check(bounds.maxY > data.naturality$fireBox().maxY, "Flames extend above entity hitbox");
-                    near((float) bounds.minY, (float) data.naturality$fireBox().minY, "Flame root follows feet");
+                    var bounds = naturality.client.fire.EntityFireRenderer.envelope(TestFixtures.require(data.naturality$fireBox(), "data.naturality$fireBox()"));
+                    check(bounds.maxY > TestFixtures.require(data.naturality$fireBox(), "data.naturality$fireBox()").maxY, "Flames extend above entity hitbox");
+                    near((float) bounds.minY, (float) TestFixtures.require(data.naturality$fireBox(), "data.naturality$fireBox()").minY, "Flame root follows feet");
                     burning++;
                 }
                 check(burning >= 3, "Short, tall and wide burning entities rendered");
@@ -374,12 +374,12 @@ public final class SurfaceFireGameTest implements FabricClientGameTest {
             world.getConnection().waitForClientboundPackets();
             context.waitTicks(25);
             context.runOnClient(client -> {
-                check(client.level.getRainLevel(0) > 0, "Rain is active during fire visual test");
+                check(TestFixtures.level(client).getRainLevel(0) > 0, "Rain is active during fire visual test");
                 int burningRavagers = 0;
-                for (var entity : client.level.entitiesForRendering()) {
+                for (var entity : TestFixtures.level(client).entitiesForRendering()) {
                     if (net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).getPath().equals("ravager")) {
                         check(entity.isInLava(), "Ravager remains in lava during rain");
-                        var renderState = client.getEntityRenderDispatcher().getRenderer(entity).createRenderState(entity, 0.5F);
+                        var renderState = TestFixtures.require(client.getEntityRenderDispatcher().getRenderer(entity).createRenderState(entity, 0.5F), "renderState");
                         check(renderState.displayFireAnimation, "Ravager in rainy lava submits fire geometry");
                         burningRavagers++;
                     }
@@ -392,7 +392,7 @@ public final class SurfaceFireGameTest implements FabricClientGameTest {
             server.runCommand("tp @a 0.5 101 -2 0 10");
             world.getConnection().waitForClientboundPackets();
             context.waitTicks(10);
-            context.runOnClient(client -> check(client.player.isInLava(), "Player in rainy lava has an active fire source"));
+            context.runOnClient(client -> check(TestFixtures.player(client).isInLava(), "Player in rainy lava has an active fire source"));
             context.takeScreenshot("fire-player-lava-overlay");
         }
     }

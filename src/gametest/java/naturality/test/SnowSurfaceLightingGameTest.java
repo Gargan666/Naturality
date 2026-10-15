@@ -27,7 +27,7 @@ public final class SnowSurfaceLightingGameTest implements FabricClientGameTest {
                 var lighter = new net.fabricmc.fabric.impl.client.indigo.renderer.render.AltModelBlockRendererImpl(true,true,c.getBlockColors());
                 for (var sample : new BlockPos[]{new BlockPos(1,101,0),new BlockPos(-1,101,0),
                         new BlockPos(0,101,1),new BlockPos(0,101,-1),new BlockPos(0,102,0)}) {
-                    var state = c.level.getBlockState(sample);
+                    var state = TestFixtures.level(c).getBlockState(sample);
                     var vertices = sample.getY()==102 ? fitted : ordinary;
                     var sink = Renderer.get().quadEmitter(q -> {
                         if (q.lightFace()!=Direction.UP) return;
@@ -37,7 +37,7 @@ public final class SnowSurfaceLightingGameTest implements FabricClientGameTest {
                             vertices.put(key,q.lightmap(i));
                         }
                     });
-                    lighter.tesselateBlock(sink,sample.getX(),sample.getY(),sample.getZ(),c.level,sample,state,
+                    lighter.tesselateBlock(sink,sample.getX(),sample.getY(),sample.getZ(),TestFixtures.level(c),sample,state,
                         c.getModelManager().getBlockStateModelSet().get(state),0);
                 }
                 int shared=0;
@@ -49,14 +49,14 @@ public final class SnowSurfaceLightingGameTest implements FabricClientGameTest {
                 if(shared<4)throw new AssertionError("Fixture must compare at least four shared snow corners");
                 for (var pos : new BlockPos[]{new BlockPos(1,101,0),new BlockPos(0,102,0)}) {
                     var modes = new java.util.HashSet<String>();
-                    var state = c.level.getBlockState(pos);
+                    var state = TestFixtures.level(c).getBlockState(pos);
                     c.getModelManager().getBlockStateModelSet().get(state).emitQuads(Renderer.get().quadEmitter(q -> {
                         if (q.lightFace() == Direction.UP) {
                             modes.add(q.shadeMode() + " AO=" + q.ambientOcclusion());
                             if (q.shadeMode() != net.fabricmc.fabric.api.client.renderer.v1.mesh.ShadeMode.VANILLA)
                                 throw new AssertionError("Fitted snow must share the ordinary snow lighting stencil");
                         }
-                    }),c.level,pos,state,RandomSource.create(0),d -> false);
+                    }),TestFixtures.level(c),pos,state,RandomSource.create(0),_ -> false);
                     System.out.println("Snow lighting modes at " + pos + ": " + modes);
                 }
             });

@@ -41,9 +41,9 @@ public final class TerrainCullingGameTest implements FabricClientGameTest {
                 world.getConnection().waitForClientboundPackets();
                 context.waitTicks(100);
                 context.runOnClient(client -> {
-                    var level = client.level;
+                    var level = TestFixtures.require(client.level, "level");
                     var renderer = client.levelRenderer;
-                    var view = renderer.viewArea();
+                    var view = TestFixtures.require(renderer.viewArea(), "view");
                     var graph = renderer.sectionOcclusionGraph();
                     var eye = client.gameRenderer.mainCamera().position();
                     if (!client.smartCull || level.getBlockState(BlockPos.containing(eye)).isSolidRender())

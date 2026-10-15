@@ -36,22 +36,22 @@ public final class FishSwimGameTest implements FabricClientGameTest {
                 check(fish[0].getNavigation().moveTo(fish[0].getX(),fish[0].getY()+3,fish[0].getZ()+4,1),"Ascending swimming path exists");
             });
             for(int tick=0;tick<18;tick++) {
-                server.runOnServer(s -> {
+                server.runOnServer(_ -> {
                     fish[0].getNavigation().tick();fish[0].getMoveControl().tick();
                     fish[0].travel(Vec3.ZERO);fish[0].needsSync=true;fish[0].syncPosition=true;
                 });context.waitTicks(1);
             }
-            server.runOnServer(s -> check(fish[0].getY()>start[0].y+.2 && fish[0].getZ()>start[0].z+.2 && fish[0].position().distanceTo(start[0])>1.5,"Fish actually travels toward an ascending waypoint"));
+            server.runOnServer(_ -> check(fish[0].getY()>start[0].y+.2 && fish[0].getZ()>start[0].z+.2 && fish[0].position().distanceTo(start[0])>1.5,"Fish actually travels toward an ascending waypoint"));
             context.runOnClient(client -> {
-                for(var e:client.level.entitiesForRendering()) if(e instanceof AbstractFish f) {
-                    var state=(LivingEntityRenderState)client.getEntityRenderDispatcher().getRenderer(f).createRenderState(f,1);
+                for(var e:TestFixtures.level(client).entitiesForRendering()) if(e instanceof AbstractFish f) {
+                    var state=TestFixtures.require((LivingEntityRenderState)client.getEntityRenderDispatcher().getRenderer(f).createRenderState(f,1), "(FishSwimState)state");
                     var pose=((FishSwimState)state).naturality$swim();
                     check(pose!=null && pose.pitch()<-5,"Rendered fish faces its upward movement");
                 }
             });
             server.runCommand("tp @a -3 104 2 -90 0");context.waitTicks(2);
             context.takeScreenshot("fish-directional-swimming");
-            server.runOnServer(s -> {
+            server.runOnServer(_ -> {
                 fish[0].getNavigation().stop();fish[0].getMoveControl().setWait();
                 fish[0].setDeltaMovement(Vec3.ZERO);fish[0].needsSync=true;
             });
@@ -61,28 +61,28 @@ public final class FishSwimGameTest implements FabricClientGameTest {
             context.waitTicks(110);
             var phases=new java.util.HashMap<Integer,Float>();
             context.runOnClient(client -> {
-                for(var e:client.level.entitiesForRendering()) if(e instanceof AbstractFish f) {
-                    var state=(LivingEntityRenderState)client.getEntityRenderDispatcher().getRenderer(f).createRenderState(f,1);
+                for(var e:TestFixtures.level(client).entitiesForRendering()) if(e instanceof AbstractFish f) {
+                    var state=TestFixtures.require((LivingEntityRenderState)client.getEntityRenderDispatcher().getRenderer(f).createRenderState(f,1), "(FishSwimState)state");
                     var pose=((FishSwimState)state).naturality$swim();
                     check(pose!=null && state.ageInTicks==pose.phase(),"All fish models use the eased animation phase");
-                    phases.put(f.getId(),pose.phase());
+                    phases.put(f.getId(),TestFixtures.require(pose, "pose").phase());
                 }
                 check(phases.size()==4,"All four vanilla fish renderers covered");
             });
             context.waitTicks(5);
             context.runOnClient(client -> {
-                for(var e:client.level.entitiesForRendering()) if(e instanceof AbstractFish f)
+                for(var e:TestFixtures.level(client).entitiesForRendering()) if(e instanceof AbstractFish f)
                     check(Math.abs(FishSwim.pose(f,1).phase()-phases.get(f.getId()))<.0001,"Stationary fish animation remains paused");
             });
             Vec3[] idleStart=new Vec3[1];float[] initialYaw=new float[1];double[] peakUp={0};
-            server.runOnServer(s -> {idleStart[0]=fish[0].position();initialYaw[0]=fish[0].getYRot();});
+            server.runOnServer(_ -> {idleStart[0]=fish[0].position();initialYaw[0]=fish[0].getYRot();});
             for(int tick=0;tick<100;tick++) {
-                server.runOnServer(s -> {
+                server.runOnServer(_ -> {
                     fish[0].getMoveControl().tick();fish[0].travel(Vec3.ZERO);
                     fish[0].needsSync=true;fish[0].syncPosition=true;
                 });context.waitTicks(1);
             }
-            server.runOnServer(s -> {
+            server.runOnServer(_ -> {
                 double fall=idleStart[0].y-fish[0].getY();
                 check(fall>.05 && fall<.4,"Idle fish sinks very slowly");
                 check(Math.abs(net.minecraft.util.Mth.wrapDegrees(fish[0].getYRot()-initialYaw[0]))>.1,"Idle fish readjusts its looking direction");
@@ -90,18 +90,18 @@ public final class FishSwimGameTest implements FabricClientGameTest {
                 idleStart[0]=fish[0].position();
             });
             for(int tick=0;tick<18;tick++) {
-                server.runOnServer(s -> {
+                server.runOnServer(_ -> {
                     fish[0].getMoveControl().tick();peakUp[0]=Math.max(peakUp[0],fish[0].getDeltaMovement().y);
                     fish[0].travel(Vec3.ZERO);fish[0].needsSync=true;fish[0].syncPosition=true;
                 });context.waitTicks(1);
             }
-            server.runOnServer(s -> check(peakUp[0]>.04 && fish[0].getY()>idleStart[0].y+.2
+            server.runOnServer(_ -> check(peakUp[0]>.04 && fish[0].getY()>idleStart[0].y+.2
                 && fish[0].position().subtract(idleStart[0]).horizontalDistance()>.1,"Sunken idle fish makes an upward-forward recovery burst"));
             server.runOnServer(s -> {
                 fish[0].setNoAi(false);
                 fish[0].hurtServer(s.overworld(),s.overworld().damageSources().playerAttack(s.overworld().players().getFirst()),.5F);
             });context.waitTicks(5);
-            server.runOnServer(s -> check(fish[0].isPanicking() && fish[0].getDeltaMovement().length()>.31,"Hurt fish enters panic and exceeds regular swimming speed"));
+            server.runOnServer(_ -> check(fish[0].isPanicking() && fish[0].getDeltaMovement().length()>.31,"Hurt fish enters panic and exceeds regular swimming speed"));
         }
     }
 }

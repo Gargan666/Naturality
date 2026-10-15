@@ -129,14 +129,14 @@ public final class SnowStormGameTest implements FabricClientGameTest {
             }
             if(total[0]==0)throw new AssertionError("Heavy snow stopped accumulating");
             world.getConnection().waitForClientboundPackets();
-            var saved=server.computeOnServer(s -> {
+            var saved=TestFixtures.require(server.computeOnServer(s -> {
                 int[] layers=new int[512];
                 for(int x=0;x<32;x++)for(int z=0;z<16;z++)layers[x*16+z]=s.overworld().getBlockState(new BlockPos(x,102,z)).getValue(SnowLayerBlock.LAYERS);
                 return layers;
-            });
+            }), "saved");
             context.runOnClient(c -> {
                 for(int x=0;x<32;x++)for(int z=0;z<16;z++) {
-                    int layers=c.level.getBlockState(new BlockPos(x,102,z)).getValue(SnowLayerBlock.LAYERS);
+                    int layers=TestFixtures.level(c).getBlockState(new BlockPos(x,102,z)).getValue(SnowLayerBlock.LAYERS);
                     if(layers!=saved[x*16+z])throw new AssertionError("Client snow height is stale");
                 }
             });

@@ -58,7 +58,7 @@ public final class RenderDetailGameTest implements FabricClientGameTest {
                 context.waitTicks(5);
                 context.runOnClient(client -> {
                     var pos = new BlockPos(1, 101, 1);
-                    var state = client.level.getBlockState(pos);
+                    var state = TestFixtures.level(client).getBlockState(pos);
                     var model = client.getModelManager().getBlockStateModelSet().get(state);
                     check(model instanceof DistanceModel, "Leaf model has the LOD wrapper");
                     BlockStateModel original = unwrap(model);
@@ -71,7 +71,7 @@ public final class RenderDetailGameTest implements FabricClientGameTest {
                     check(near == 162 && far == 54, "A 3x3x3 leaf cube removes all 108 internal faces: " + near + " -> " + far);
                     System.out.println("Distant leaf mesh: " + near + " -> " + far + " quads (same outer surface)");
                     var stone = new BlockPos(5, 100, 0);
-                    var stoneState = client.level.getBlockState(stone);
+                    var stoneState = TestFixtures.level(client).getBlockState(stone);
                     var stoneModel = client.getModelManager().getBlockStateModelSet().get(stoneState);
                     view(client, new Vec3(1, 101, -400));
                     var distantStone = collect(client, stone, stoneState, stoneModel);
@@ -102,13 +102,13 @@ public final class RenderDetailGameTest implements FabricClientGameTest {
                 server.runCommand("fill 30 100 310 54 110 320 stone");
                 server.runCommand("tp @a 0 108 0 0 0");
                 world.getConnection().waitForClientboundPackets();
-                context.waitFor(client -> client.level.getBlockState(new BlockPos(40, 105, 310)).is(Blocks.STONE), 1200);
+                context.waitFor(client -> TestFixtures.level(client).getBlockState(new BlockPos(40, 105, 310)).is(Blocks.STONE), 1200);
                 context.waitTicks(40);
                 world.getConnection().waitForChunksRender(false);
                 context.takeScreenshot("render-detail-distant-leaves");
                 var reload = new java.util.concurrent.atomic.AtomicReference<java.util.concurrent.CompletableFuture<Void>>();
                 context.runOnClient(c -> reload.set(c.reloadResourcePacks()));
-                context.waitFor(c -> reload.get().isDone());
+                context.waitFor(_ -> reload.get().isDone());
                 reload.get().join();
                 context.runOnClient(TextureLodChecks::verify);
                 if (!net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("sodium")) {
@@ -117,7 +117,7 @@ public final class RenderDetailGameTest implements FabricClientGameTest {
                     server.runCommand("setblock 0 103 2 stone");
                     int[] id = {0};
                     server.runOnServer(s -> {
-                        var pig = net.minecraft.world.entity.EntityTypes.PIG.create(s.overworld(), net.minecraft.world.entity.EntitySpawnReason.COMMAND);
+                        var pig = TestFixtures.require(net.minecraft.world.entity.EntityTypes.PIG.create(s.overworld(), net.minecraft.world.entity.EntitySpawnReason.COMMAND), "pig");
                         pig.setPos(.5, 103, 60.5); pig.setNoAi(true); pig.setNoGravity(true);
                         s.overworld().addFreshEntity(pig); id[0] = pig.getId();
                     });
@@ -127,7 +127,7 @@ public final class RenderDetailGameTest implements FabricClientGameTest {
                     // Resource reload uploads fresh meshes; their arrival fade
                     // uses wall time rather than gametest's accelerated ticks.
                     context.waitFor(client -> {
-                        var pig = client.level.getEntity(id[0]);
+                        var pig = TestFixtures.level(client).getEntity(id[0]);
                         if (pig == null) return false;
                         for (int attempt = 0; attempt < 4; attempt++) {
                             OcclusionCulling.beginFrame();
@@ -136,7 +136,7 @@ public final class RenderDetailGameTest implements FabricClientGameTest {
                         return false;
                     }, 600);
                     context.runOnClient(client -> {
-                        var pig = client.level.getEntity(id[0]);
+                        var pig = TestFixtures.require(TestFixtures.level(client).getEntity(id[0]), "pig");
                         check(pig != null, "Occlusion fixture arrived on client");
                         boolean hidden = false;
                         for (int attempt = 0; attempt < 4; attempt++) { OcclusionCulling.beginFrame(); hidden |= OcclusionCulling.hidden(pig, pig.getBoundingBox()); }
@@ -144,9 +144,9 @@ public final class RenderDetailGameTest implements FabricClientGameTest {
                         pig.setCustomName(net.minecraft.network.chat.Component.literal("Visible name"));
                         check(!OcclusionCulling.hidden(pig, pig.getBoundingBox()), "Nameplates retain their original visibility");
                         pig.setCustomName(null);
-                        client.level.setBlock(new BlockPos(0, 103, 2), Blocks.GLASS.defaultBlockState(), 3);
+                        TestFixtures.level(client).setBlock(new BlockPos(0, 103, 2), Blocks.GLASS.defaultBlockState(), 3);
                         check(!OcclusionCulling.hidden(pig, pig.getBoundingBox()), "Replacing the blocker with glass reveals the entity immediately");
-                        client.level.setBlock(new BlockPos(0, 103, 2), Blocks.STONE.defaultBlockState(), 3);
+                        TestFixtures.level(client).setBlock(new BlockPos(0, 103, 2), Blocks.STONE.defaultBlockState(), 3);
                         for (int attempt = 0; attempt < 4; attempt++) {
                             OcclusionCulling.beginFrame();
                             check(!OcclusionCulling.hidden(pig, pig.getBoundingBox()), "An edited blocker cannot cull until its replacement mesh uploads");
@@ -180,8 +180,8 @@ public final class RenderDetailGameTest implements FabricClientGameTest {
                 u+=Float.intBitsToFloat(a.get(4+i*7));v+=Float.intBitsToFloat(a.get(5+i*7));
                 sourceU+=Float.intBitsToFloat(b.get(4+i*7));sourceV+=Float.intBitsToFloat(b.get(5+i*7));
             }
-            var source=DistantTextures.find(sourceU/4,sourceV/4);
-            var copied=SnowTextureAtlas.findComposite(u/4,v/4);
+            var source=TestFixtures.require(DistantTextures.find(sourceU/4,sourceV/4), "source");
+            var copied=TestFixtures.require(SnowTextureAtlas.findComposite(u/4,v/4), "copied");
             check(source!=null && copied!=null,"Static block has a paired atlas image");
             var sourceImage=((SnowSpritePixels)source.contents()).naturality$image();
             var image=((SnowSpritePixels)copied.contents()).naturality$image();
@@ -206,7 +206,7 @@ public final class RenderDetailGameTest implements FabricClientGameTest {
     private static int countCube(Minecraft client) {
         int count = 0;
         for (var pos : BlockPos.betweenClosed(0, 100, 0, 2, 102, 2)) {
-            var state = client.level.getBlockState(pos);
+            var state = TestFixtures.level(client).getBlockState(pos);
             count += collect(client, pos, state, client.getModelManager().getBlockStateModelSet().get(state)).size();
         }
         return count;
@@ -221,7 +221,7 @@ public final class RenderDetailGameTest implements FabricClientGameTest {
             }
             result.add(values);
         });
-        model.emitQuads(emitter, client.level, pos, state, RandomSource.create(0), _ -> false);
+        model.emitQuads(emitter, TestFixtures.level(client), pos, state, RandomSource.create(0), _ -> false);
         return result;
     }
 }

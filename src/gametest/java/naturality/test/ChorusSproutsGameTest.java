@@ -19,7 +19,7 @@ public final class ChorusSproutsGameTest implements FabricClientGameTest {
             BlockPos[] view={null};
             server.runCommand("gamerule minecraft:random_tick_speed 0");
             server.runOnServer(s -> {
-                var end=s.getLevel(Level.END);
+                var end=TestFixtures.require(s.getLevel(Level.END), "end");
                 var generator=end.getChunkSource().getGenerator();
                 var feature=new ChorusPlantFeature();
                 int total=0,largest=0,smallest=5,stepped=0;
@@ -100,7 +100,7 @@ public final class ChorusSproutsGameTest implements FabricClientGameTest {
                 server.runCommand("gamemode spectator @a");
                 server.runCommand("execute in minecraft:the_end run tp @a "+(point.getX()+7)+" "+(point.getY()+4)+" "+(point.getZ()+7)+" 135 20");
                 context.waitFor(client -> client.level!=null && client.level.dimension()==Level.END
-                    && client.level.getChunkSource().getChunk(point.getX()>>4,point.getZ()>>4,
+                    && TestFixtures.level(client).getChunkSource().getChunk(point.getX()>>4,point.getZ()>>4,
                         net.minecraft.world.level.chunk.status.ChunkStatus.FULL,false)!=null,600);
                 context.waitTicks(100);context.takeScreenshot("chorus-plant-base-sprouts");
             } finally {

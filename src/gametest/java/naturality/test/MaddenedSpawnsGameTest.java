@@ -42,7 +42,7 @@ public final class MaddenedSpawnsGameTest implements FabricClientGameTest {
                 check(natural(level, EntityTypes.SKELETON).getType() == EntityTypes.SKELETON, "Enemy without counterpart unchanged");
                 check(MaddenedVariants.forSpawn(level, EntityTypes.COW) == EntityTypes.COW, "Passive mobs unchanged");
                 check(MaddenedVariants.forSpawn(level, MaddenedCreepers.TYPE) == MaddenedCreepers.TYPE, "No recursive replacement");
-                check(EntityTypes.ZOMBIE.create(level, EntitySpawnReason.COMMAND).getType() == EntityTypes.ZOMBIE,
+                check(TestFixtures.require(EntityTypes.ZOMBIE.create(level, EntitySpawnReason.COMMAND), "EntityTypes.ZOMBIE.create(level, EntitySpawnReason.COMMAND)").getType() == EntityTypes.ZOMBIE,
                     "Explicit summons retain requested type");
                 check(MaddenedVariants.forSpawn(s.getLevel(net.minecraft.world.level.Level.NETHER), EntityTypes.ZOMBIE) == EntityTypes.ZOMBIE,
                     "Dimension without Blood Moon unchanged");
@@ -60,7 +60,7 @@ public final class MaddenedSpawnsGameTest implements FabricClientGameTest {
     @SuppressWarnings("unchecked")
     private static void checkSpawnMultiplier(ServerLevel level) {
         try {
-            var local=new net.minecraft.world.level.LocalMobCapCalculator(null);
+            var local=new net.minecraft.world.level.LocalMobCapCalculator(level.getChunkSource().chunkMap);
             var chunk=(net.minecraft.world.level.chunk.LevelChunk)level.getChunk(new net.minecraft.core.BlockPos(0,101,0));
             var playersField=local.getClass().getDeclaredField("playersNearChunk");playersField.setAccessible(true);
             ((it.unimi.dsi.fastutil.longs.Long2ObjectMap<java.util.List<net.minecraft.server.level.ServerPlayer>>)playersField.get(local))
@@ -72,7 +72,7 @@ public final class MaddenedSpawnsGameTest implements FabricClientGameTest {
             for(int i=0;i<category.getMaxInstancesPerChunk();i++) add.invoke(counts,category);
             var mapField=local.getClass().getDeclaredField("playerMobCounts");mapField.setAccessible(true);
             var map=(java.util.Map<Object,Object>)mapField.get(local);map.put(level.players().getFirst(),counts);
-            var state=NaturalSpawner.createState(289,level,(key,consumer)->consumer.accept(chunk),local);
+            var state=NaturalSpawner.createState(289,level,(_,consumer)->consumer.accept(chunk),local);
             var globalField=state.getClass().getDeclaredField("mobCategoryCounts");globalField.setAccessible(true);
             ((it.unimi.dsi.fastutil.objects.Object2IntMap<net.minecraft.world.entity.MobCategory>)globalField.get(state)).put(category,category.getMaxInstancesPerChunk());
             var global=state.getClass().getDeclaredMethod("canSpawnForCategoryGlobal",net.minecraft.world.entity.MobCategory.class);global.setAccessible(true);
@@ -81,8 +81,8 @@ public final class MaddenedSpawnsGameTest implements FabricClientGameTest {
             NaturalSpawner.spawnForChunk(level,chunk,state,java.util.List.of(category));
             check(BloodMoonSpawnProbe.calls==2,"Two independent natural spawn passes during Blood Moon");
             check(BloodMoonSpawning.LOCAL_MULTIPLIER.get()==1,"Local cap context restored after lookup");
-            var settings=SkyEventWorldData.get(level.getServer()).settings(level,SkyEventType.BLOOD_MOON);settings.strength=0;
-            state=NaturalSpawner.createState(289,level,(key,consumer)->consumer.accept(chunk),local);
+            var settings=SkyEventWorldData.get(TestFixtures.require(level.getServer(), "level.getServer()")).settings(level,SkyEventType.BLOOD_MOON);settings.strength=0;
+            state=NaturalSpawner.createState(289,level,(_,consumer)->consumer.accept(chunk),local);
             ((it.unimi.dsi.fastutil.objects.Object2IntMap<net.minecraft.world.entity.MobCategory>)globalField.get(state)).put(category,category.getMaxInstancesPerChunk());
             check(!(Boolean)global.invoke(state,category) && !local.canSpawn(category,chunk.getPos()),"Both caps restore after event ends");
             map.put(level.players().getFirst(),constructor.newInstance());BloodMoonSpawnProbe.calls=0;

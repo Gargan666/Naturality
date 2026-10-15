@@ -64,7 +64,7 @@ public final class FeatureStartupGameTest implements FabricClientGameTest {
                     "Tracked entity data must follow Distortion setting");
                 check((client.player instanceof naturality.ghast.GhastCrashBody) == Feature.GHAST_PHYSICS.enabled(),
                     "Ghast physics must not add tracked data with Clientside Only or No Visual Overhaul");
-                var ball = client.level.entitiesForRendering().iterator();
+                var ball = TestFixtures.level(client).entitiesForRendering().iterator();
                 boolean found = false;
                 while (ball.hasNext()) {
                     var entity = ball.next();
@@ -74,7 +74,7 @@ public final class FeatureStartupGameTest implements FabricClientGameTest {
                     found = true;
                 }
                 check(found, "Fireball fixture must reach the client");
-                var ghast = client.level.entitiesForRendering().iterator();
+                var ghast = TestFixtures.level(client).entitiesForRendering().iterator();
                 while (ghast.hasNext()) {
                     var entity = ghast.next();
                     if (!(entity instanceof net.minecraft.world.entity.monster.Ghast mob)) continue;
@@ -90,7 +90,7 @@ public final class FeatureStartupGameTest implements FabricClientGameTest {
                 if (!content) {
                     check(!GameplaySettings.clientPhysicalPortalEntry() && !GameplaySettings.clientFireWrapping()
                         && !GameplaySettings.clientSnowWrapping(), "Clientside preset must use vanilla gameplay");
-                    check(client.level.getBlockState(new net.minecraft.core.BlockPos(2,101,0)).is(Blocks.CHORUS_FLOWER),
+                    check(TestFixtures.level(client).getBlockState(new net.minecraft.core.BlockPos(2,101,0)).is(Blocks.CHORUS_FLOWER),
                         "Vanilla state IDs must survive chunk/packet decoding");
                 }
             });

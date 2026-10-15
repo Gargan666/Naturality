@@ -1,10 +1,8 @@
 package naturality.test;
 
-import naturality.weather.EndGravity;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.minecraft.world.entity.Pose;
-import net.minecraft.world.level.Level;
 
 public final class DistortionInteractionGameTest implements FabricClientGameTest {
     public static volatile boolean captureLanding;
@@ -19,7 +17,7 @@ public final class DistortionInteractionGameTest implements FabricClientGameTest
             server.runCommand("gamemode survival @a");
             server.runCommand("effect give @a naturality:distortion infinite 0 true");context.waitTicks(120);
             context.runOnClient(c->{
-                var p=c.player;var camera=c.gameRenderer.mainCamera();
+                var p=TestFixtures.require(c.player, "p");var camera=c.gameRenderer.mainCamera();
                 try {
                     var align=net.minecraft.client.Camera.class.getDeclaredMethod("alignWithEntity",float.class);align.setAccessible(true);
                     for(var pose:new Pose[]{Pose.CROUCHING,Pose.STANDING,Pose.FALL_FLYING,Pose.STANDING}) {
@@ -36,22 +34,22 @@ public final class DistortionInteractionGameTest implements FabricClientGameTest
                     check(((naturality.client.weather.EndGravityRenderState)preview).naturality$inversion()==0,"Inventory preview uses its own upright orientation");
                     check(!naturality.client.weather.GravityPreviewContext.active(),"Inventory rendering restores the world context");
                     var renderer=c.getEntityRenderDispatcher().getRenderer(p);
-                    var state=(net.minecraft.client.renderer.entity.state.AvatarRenderState)renderer.createRenderState(p,1);
+                    var state=TestFixtures.require((net.minecraft.client.renderer.entity.state.AvatarRenderState)renderer.createRenderState(p,1), "(naturality.client.weather.EndGravityRenderState)state");
                     check(((naturality.client.weather.EndGravityRenderState)state).naturality$inversion()>.99,"World rendering remains inverted after inventory extraction");
                     state.isCrouching=true;
-                    check(((net.minecraft.client.renderer.entity.player.AvatarRenderer)renderer).getRenderOffset(state).y>0,"Inverted crouch model offset points toward the ceiling");
+                    check(((net.minecraft.client.renderer.entity.player.AvatarRenderer<?>)renderer).getRenderOffset(state).y>0,"Inverted crouch model offset points toward the ceiling");
                 }catch(ReflectiveOperationException e){throw new AssertionError(e);}
             });
             for(int iteration=0;iteration<4;iteration++) {
                 context.runOnClient(c->c.options.keyShift.setDown(true));context.waitTicks(5);
-                context.runOnClient(c->check(c.player.getPose()==Pose.CROUCHING && Math.abs(c.player.getBoundingBox().maxY-145)<.01,"Sneaking keeps ceiling footing"));
+                context.runOnClient(c->check(TestFixtures.player(c).getPose()==Pose.CROUCHING && Math.abs(TestFixtures.player(c).getBoundingBox().maxY-145)<.01,"Sneaking keeps ceiling footing"));
                 if(iteration==0) {
                     context.runOnClient(c->{if(!c.gui.hud.isHidden())c.gui.hud.toggle();c.options.setCameraType(net.minecraft.client.CameraType.THIRD_PERSON_BACK);});
                     context.waitTicks(2);context.takeScreenshot("distortion-crouch-ceiling-contact");
                     context.runOnClient(c->{if(c.gui.hud.isHidden())c.gui.hud.toggle();c.options.setCameraType(net.minecraft.client.CameraType.FIRST_PERSON);});
                 }
                 context.runOnClient(c->c.options.keyShift.setDown(false));context.waitTicks(5);
-                context.runOnClient(c->check(c.player.getPose()==Pose.STANDING && c.player.onGround(),"Uncrouching does not produce a phantom jump"));
+                context.runOnClient(c->check(TestFixtures.player(c).getPose()==Pose.STANDING && TestFixtures.player(c).onGround(),"Uncrouching does not produce a phantom jump"));
                 server.runOnServer(s->check(s.overworld().players().getFirst().onGround(),"Server preserves footing across rapid crouch changes"));
             }
             server.runOnServer(s->{
@@ -77,7 +75,7 @@ public final class DistortionInteractionGameTest implements FabricClientGameTest
             context.runOnClient(c->c.options.keyJump.setDown(false));context.waitTicks(2);
             server.runCommand("item replace entity @a armor.chest with elytra");world.getConnection().waitForClientboundPackets();
             context.runOnClient(c->c.options.keyJump.setDown(true));context.waitTicks(2);
-            context.runOnClient(c->{c.options.keyJump.setDown(false);check(c.player.isFallFlying(),"Second jump press activates inverted elytra");});
+            context.runOnClient(c->{c.options.keyJump.setDown(false);check(TestFixtures.player(c).isFallFlying(),"Second jump press activates inverted elytra");});
             context.waitTicks(6);
             server.runOnServer(s->check(s.overworld().players().getFirst().isFallFlying(),"Server accepts and keeps inverted elytra active"));
         }

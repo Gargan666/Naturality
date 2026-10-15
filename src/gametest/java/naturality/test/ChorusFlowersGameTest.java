@@ -40,7 +40,7 @@ public final class ChorusFlowersGameTest implements FabricClientGameTest {
             server.runCommand("gamemode creative @a");
             server.runCommand("tp @a 0 103 -8 0 15");
             server.runOnServer(s -> {
-                var level = s.getLevel(Level.OVERWORLD);
+                var level = TestFixtures.require(s.getLevel(Level.OVERWORLD), "level");
                 var player = level.players().getFirst();
                 int i = 0;
                 for (Direction facing : Direction.values()) {
@@ -284,7 +284,7 @@ public final class ChorusFlowersGameTest implements FabricClientGameTest {
             server.runCommand("tp @a 0 104 -17 0 0");
             context.waitTicks(8);
             server.runOnServer(s -> {
-                var level = s.getLevel(Level.OVERWORLD);
+                var level = TestFixtures.require(s.getLevel(Level.OVERWORLD), "level");
                 int i = 0;
                 for (Direction facing : Direction.values()) {
                     BlockPos pos = new BlockPos(i++ * 5, 100, 0);
@@ -296,10 +296,10 @@ public final class ChorusFlowersGameTest implements FabricClientGameTest {
                 int i = 0;
                 for (Direction facing : Direction.values()) {
                     BlockPos pos = new BlockPos(-8 + i++ * 3, 101, -5);
-                    var state = client.level.getBlockState(pos);
+                    var state = TestFixtures.level(client).getBlockState(pos);
                     check(state.getValue(ChorusFlowers.FACING) == facing && !state.getValue(ChorusFlowers.BLOOM),
                         "Client did not receive orientation/normal variant");
-                    check(client.level.getBlockState(pos.above(4)).getValue(ChorusFlowers.BLOOM),
+                    check(TestFixtures.level(client).getBlockState(pos.above(4)).getValue(ChorusFlowers.BLOOM),
                         "Client did not receive bloom variant");
                 }
             });

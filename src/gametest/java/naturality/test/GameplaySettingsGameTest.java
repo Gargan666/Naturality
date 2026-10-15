@@ -29,12 +29,12 @@ public final class GameplaySettingsGameTest implements FabricClientGameTest {
             server.runCommand("gamemode survival @a");
             server.runCommand("tp @a 0 104 -5");
             server.runCommand("setblock 0 100 0 stone_slab[type=bottom]");
-            server.runOnServer(s -> {
+            server.runOnServer(_ -> {
                 config.snowWrapping = config.snowCompaction = config.weatherThaw = config.weatherSnowAccumulation = false;
                 config.fireWrapping = false;
                 config.vanillaPortalEntry = true;
             });
-            context.waitFor(client -> !GameplaySettings.clientFireWrapping() && !GameplaySettings.clientPhysicalPortalEntry()
+            context.waitFor(_ -> !GameplaySettings.clientFireWrapping() && !GameplaySettings.clientPhysicalPortalEntry()
                 && !GameplaySettings.clientSnowWrapping() && !GameplaySettings.clientSnowCompaction()
                 && !GameplaySettings.clientWeatherThaw() && !GameplaySettings.clientWeatherSnowAccumulation());
             world.getConnection().waitForClientboundPackets();
@@ -66,20 +66,20 @@ public final class GameplaySettingsGameTest implements FabricClientGameTest {
                 }
                 processor.setAsInsidePortalThisTick(true);
                 check(processor.processPortalTeleportation(level, player, true), "Vanilla entry must travel after its timer");
-                var pig = EntityTypes.PIG.create(level, EntitySpawnReason.COMMAND);
+                var pig = TestFixtures.require(EntityTypes.PIG.create(level, EntitySpawnReason.COMMAND), "pig");
                 check(new PortalProcessor(portal, pos).processPortalTeleportation(level, pig, true), "Vanilla mobs must retain zero-delay travel");
                 PortalCrossing.enter(pig, pos, Direction.Axis.X);
                 check(PortalCrossing.get(pig) == null, "Vanilla mode must not create physical crossings");
             });
             context.runOnClient(client -> {
                 var snow = Blocks.SNOW.defaultBlockState();
-                check(snow.getShape(client.level, pos).min(Direction.Axis.Y) == 0, "Client snow outline follows server OFF");
+                check(snow.getShape(TestFixtures.level(client), pos).min(Direction.Axis.Y) == 0, "Client snow outline follows server OFF");
                 var snowModel = client.getModelManager().getBlockStateModelSet().get(snow);
                 float[] snowBottom = {Float.POSITIVE_INFINITY};
                 var snowEmitter = Renderer.get().quadEmitter(q -> {
                     for (int i=0;i<4;i++) snowBottom[0] = Math.min(snowBottom[0], q.y(i));
                 });
-                snowModel.emitQuads(snowEmitter,client.level,pos,snow,net.minecraft.util.RandomSource.create(0),face -> false);
+                snowModel.emitQuads(snowEmitter,TestFixtures.level(client),pos,snow,net.minecraft.util.RandomSource.create(0),_ -> false);
                 check(snowBottom[0] == 0, "Disabled snow wrapping emits vanilla model");
                 var fire = Blocks.FIRE.defaultBlockState();
                 var model = client.getModelManager().getBlockStateModelSet().get(fire);
@@ -87,7 +87,7 @@ public final class GameplaySettingsGameTest implements FabricClientGameTest {
                 var emitter = Renderer.get().quadEmitter(q -> {
                     for (int i = 0; i < 4; i++) bottom[0] = Math.min(bottom[0], q.y(i));
                 });
-                model.emitQuads(emitter, client.level, pos, fire, net.minecraft.util.RandomSource.create(0), face -> false);
+                model.emitQuads(emitter, TestFixtures.level(client), pos, fire, net.minecraft.util.RandomSource.create(0), _ -> false);
                 var parts = new java.util.ArrayList<net.minecraft.client.renderer.block.dispatch.BlockStateModelPart>();
                 model.collectParts(net.minecraft.util.RandomSource.create(0), parts);
                 float vanillaBottom = Float.POSITIVE_INFINITY;
@@ -96,12 +96,12 @@ public final class GameplaySettingsGameTest implements FabricClientGameTest {
                 check(Float.isFinite(bottom[0]) && Math.abs(bottom[0] - vanillaBottom) < 0.0001,
                     "Disabled wrapping must emit the original model, including its rotated flame sheets");
             });
-            server.runOnServer(s -> {
+            server.runOnServer(_ -> {
                 config.snowWrapping = config.snowCompaction = config.weatherThaw = config.weatherSnowAccumulation = true;
                 config.fireWrapping = true;
                 config.vanillaPortalEntry = false;
             });
-            context.waitFor(client -> GameplaySettings.clientFireWrapping() && GameplaySettings.clientPhysicalPortalEntry() && GameplaySettings.clientSnowWrapping());
+            context.waitFor(_ -> GameplaySettings.clientFireWrapping() && GameplaySettings.clientPhysicalPortalEntry() && GameplaySettings.clientSnowWrapping());
             server.runOnServer(s -> {
                 var level = s.overworld();
                 var fire = Blocks.FIRE.defaultBlockState();
@@ -115,7 +115,7 @@ public final class GameplaySettingsGameTest implements FabricClientGameTest {
                 check(fire.getShape(level, pos).min(Direction.Axis.Y) == -0.5, "Wrapping must fit the slab outline");
                 var anchor = pos.offset(5, 0, 0);
                 level.setBlock(anchor, Blocks.NETHER_PORTAL.defaultBlockState(), 2);
-                var pig = EntityTypes.PIG.create(level, EntitySpawnReason.COMMAND);
+                var pig = TestFixtures.require(EntityTypes.PIG.create(level, EntitySpawnReason.COMMAND), "pig");
                 pig.setPos(anchor.getX() + 0.5, anchor.getY(), anchor.getZ() + 0.375);
                 pig.xo = pig.getX(); pig.zo = pig.getZ();
                 PortalCrossing.enter(pig, anchor, Direction.Axis.X);
@@ -125,7 +125,7 @@ public final class GameplaySettingsGameTest implements FabricClientGameTest {
                 check(((naturality.portal.PortalCrossingAccess) pig).naturality$getCrossing() == null,
                     "Switching to vanilla must clear an in-progress physical crossing");
             });
-            context.waitFor(client -> !GameplaySettings.clientPhysicalPortalEntry());
+            context.waitFor(_ -> !GameplaySettings.clientPhysicalPortalEntry());
         } finally {
             config.snowWrapping = snowWrapping; config.snowCompaction = compaction; config.weatherThaw = thaw; config.weatherSnowAccumulation = depth;
             config.fireWrapping = wrapping;

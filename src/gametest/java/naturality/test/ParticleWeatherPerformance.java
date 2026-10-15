@@ -10,6 +10,7 @@ import net.minecraft.client.renderer.state.level.QuadParticleRenderState;
 
 /** Repeatable CPU/allocation probe, not a GPU or whole-game FPS benchmark. */
 final class ParticleWeatherPerformance {
+    @SuppressWarnings("unused") // Volatile benchmark sink prevents dead-code elimination; deliberately never read.
     private static volatile float sink;
     private static final class Output extends QuadParticleRenderState {
         float value;

@@ -76,7 +76,7 @@ public final class PortalGlowGeometryTest {
             require(fade >= previousFade, "Fade must increase monotonically");
             previousFade = fade;
         }
-        require(PortalGlowGeometry.SLICES_PER_BLOCK == 16, "Use one slice per standard texture pixel");
+        require(Integer.compare(PortalGlowGeometry.SLICES_PER_BLOCK, 16) == 0, "Use one slice per standard texture pixel");
         int shortestTip = Integer.MAX_VALUE;
         int longestTip = Integer.MIN_VALUE;
         for (int sample = 0; sample < 1000; sample++) {

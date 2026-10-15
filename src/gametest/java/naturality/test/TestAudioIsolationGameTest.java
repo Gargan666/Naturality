@@ -9,7 +9,7 @@ import org.lwjgl.openal.AL10;
 public final class TestAudioIsolationGameTest implements FabricClientGameTest {
     @Override public void runTest(ClientGameTestContext context) {
         UnderwaterAudioGameTest.run(context);
-        context.runOnClient(client -> {
+        context.runOnClient(_ -> {
             String original = System.getProperty("naturality.test.muteAudio");
             var listener = new Listener();
             try {

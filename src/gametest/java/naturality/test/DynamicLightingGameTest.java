@@ -22,7 +22,7 @@ public final class DynamicLightingGameTest implements FabricClientGameTest {
         NaturalityConfig.get().dynamicLighting = config;
         try {
             config.updateTicks = 20;
-            context.runOnClient(client -> client.gui.setScreen(new NaturalityCategoryScreen(client.gui.screen(),
+            context.runOnClient(client -> client.gui.setScreen(new NaturalityCategoryScreen(TestFixtures.screen(client),
                 NaturalityCategoryScreen.Category.DYNAMIC_LIGHTING)));
             context.waitTicks(2);
             context.runOnClient(client -> {
@@ -30,7 +30,7 @@ public final class DynamicLightingGameTest implements FabricClientGameTest {
                 if (config.updateTicks != new NaturalityConfig.DynamicLighting().updateTicks) throw new AssertionError("Update interval reset failed");
             });
             context.takeScreenshot("dynamic-lighting-settings");
-            context.runOnClient(client -> client.gui.screen().onClose());
+            context.runOnClient(client -> TestFixtures.screen(client).onClose());
             config.droppedItems = false;
             try (var world = context.worldBuilder().create()) {
                 var server = world.getServer();
@@ -53,11 +53,11 @@ public final class DynamicLightingGameTest implements FabricClientGameTest {
                 BlockPos side = new BlockPos(3, 102, 0);
                 int before = smooth(context, side);
                 server.runCommand("tp @a 0.75 101 0.5 0 25");
-                context.waitFor(client -> DynamicLighting.smoothLight(client.level.getLightEngine()
+                context.waitFor(client -> DynamicLighting.smoothLight(TestFixtures.level(client).getLightEngine()
                     .getLayerListener(LightLayer.BLOCK), side.asLong()) > before);
                 context.runOnClient(client -> {
-                    int precise = DynamicLighting.smoothLight(client.level.getLightEngine().getLayerListener(LightLayer.BLOCK), side.asLong());
-                    int rendered = net.minecraft.util.LightCoordsUtil.getLightCoords(client.level, side);
+                    int precise = DynamicLighting.smoothLight(TestFixtures.level(client).getLightEngine().getLayerListener(LightLayer.BLOCK), side.asLong());
+                    int rendered = net.minecraft.util.LightCoordsUtil.getLightCoords(TestFixtures.level(client), side);
                     if (net.minecraft.util.LightCoordsUtil.smoothBlock(rendered) < precise)
                         throw new AssertionError("Fractional light must reach rendered lightmap coordinates");
                 });
@@ -76,7 +76,7 @@ public final class DynamicLightingGameTest implements FabricClientGameTest {
                 if (smooth(context, side) != 0) throw new AssertionError("Block-snapped mode retained fractional lighting");
                 config.subBlockPrecision = true;
                 server.runCommand("tp @a 0.5 101 0.5 0 25");
-                context.waitFor(client -> DynamicLighting.smoothLight(client.level.getLightEngine()
+                context.waitFor(client -> DynamicLighting.smoothLight(TestFixtures.level(client).getLightEngine()
                     .getLayerListener(LightLayer.BLOCK), side.asLong()) > 0);
                 // A solid wall must stop the propagated light, not just dim it.
                 server.runCommand("fill 2 90 -20 2 120 20 stone");
@@ -128,15 +128,15 @@ public final class DynamicLightingGameTest implements FabricClientGameTest {
                     server.runCommand("item replace entity @a weapon." + (mainHand ? "mainhand" : "offhand") + " with minecraft:torch");
                     world.getConnection().waitForClientboundPackets();
                     context.runOnClient(client -> {
-                        Vec3 raw = DynamicLighting.handPosition(client.player, mainHand);
-                        if (!client.level.getBlockState(BlockPos.containing(raw)).is(Blocks.OAK_LEAVES))
+                        Vec3 raw = DynamicLighting.handPosition(TestFixtures.player(client), mainHand);
+                        if (!TestFixtures.level(client).getBlockState(BlockPos.containing(raw)).is(Blocks.OAK_LEAVES))
                             throw new AssertionError("Wall fixture must put the raw hand emitter inside leaves");
-                        var blocked = new FractionalLightField(client.level);
+                        var blocked = new FractionalLightField(TestFixtures.level(client));
                         blocked.add(raw, 14);
                         if (!blocked.seeds().isEmpty()) throw new AssertionError("Leaf fixture no longer reproduces the original loss of all seeds");
                         DynamicLighting.invalidate();
                         DynamicLighting.tick(client);
-                        if (DynamicLighting.smoothLight(client.level.getLightEngine().getLayerListener(LightLayer.BLOCK),
+                        if (DynamicLighting.smoothLight(TestFixtures.level(client).getLightEngine().getLayerListener(LightLayer.BLOCK),
                                 new BlockPos(3, 102, 0).asLong()) < 160)
                             throw new AssertionError("Held torch vanished against leaves, mainHand=" + mainHand);
                     });
@@ -155,18 +155,18 @@ public final class DynamicLightingGameTest implements FabricClientGameTest {
                     world.getConnection().waitForClientboundPackets();
                     // Packet delivery moves the player before the next rendered
                     // camera update. Source selection deliberately uses that camera.
-                    context.runOnClient(client -> client.player.getAbilities().flying = true);
+                    context.runOnClient(client -> TestFixtures.player(client).getAbilities().flying = true);
                     context.waitFor(client -> client.gameRenderer.mainCamera().position()
-                        .distanceToSqr(client.player.getEyePosition()) < 1.0);
+                        .distanceToSqr(TestFixtures.player(client).getEyePosition()) < 1.0);
                     context.runOnClient(client -> {
                         for (boolean precise : new boolean[] {true, false}) {
                             config.subBlockPrecision = precise;
                             DynamicLighting.invalidate();
                             DynamicLighting.tick(client);
-                            BlockPos sample = client.player.blockPosition().above();
-                            if (client.level.getBrightness(LightLayer.BLOCK, sample) < 10)
+                            BlockPos sample = TestFixtures.player(client).blockPosition().above();
+                            if (TestFixtures.level(client).getBrightness(LightLayer.BLOCK, sample) < 10)
                                 throw new AssertionError("Dynamic light vanished at Y=" + height + ", precise=" + precise);
-                            int packed = net.minecraft.util.LightCoordsUtil.getLightCoords(client.level, sample);
+                            int packed = net.minecraft.util.LightCoordsUtil.getLightCoords(TestFixtures.level(client), sample);
                             if (net.minecraft.util.LightCoordsUtil.smoothBlock(packed) < 160)
                                 throw new AssertionError("High-altitude light did not reach rendered coordinates");
                         }
@@ -178,17 +178,17 @@ public final class DynamicLightingGameTest implements FabricClientGameTest {
                 waitLight(context, near, true);
                 config.updateTicks = 20;
                 context.runOnClient(client -> {
-                    client.gameMode.dropItem(client.player, true);
-                    if (!client.player.getMainHandItem().isEmpty()) throw new AssertionError("Drop did not remove held torch");
+                    TestFixtures.require(client.gameMode, "client.gameMode").dropItem(TestFixtures.player(client), true);
+                    if (!TestFixtures.player(client).getMainHandItem().isEmpty()) throw new AssertionError("Drop did not remove held torch");
                     // No server spawn can be handled during this client callback.
                     for (int tick = 0; tick < 3; tick++) {
                         DynamicLighting.tick(client);
-                        if (DynamicLighting.blockLight(client.level.getLightEngine().getLayerListener(LightLayer.BLOCK), near.asLong()) == 0)
+                        if (DynamicLighting.blockLight(TestFixtures.level(client).getLightEngine().getLayerListener(LightLayer.BLOCK), near.asLong()) == 0)
                             throw new AssertionError("Held light went dark before the dropped entity arrived");
                     }
                 });
                 context.waitFor(client -> {
-                    for (var entity : client.level.entitiesForRendering())
+                    for (var entity : TestFixtures.level(client).entitiesForRendering())
                         if (entity instanceof ItemEntity item && item.getItem().is(Items.TORCH)) return true;
                     return false;
                 });
@@ -196,7 +196,7 @@ public final class DynamicLightingGameTest implements FabricClientGameTest {
                     DynamicLighting.tick(client);
                     if (DynamicLighting.sourceCount() != 1)
                         throw new AssertionError("Dropped item did not replace the temporary handoff light immediately");
-                    if (DynamicLighting.blockLight(client.level.getLightEngine().getLayerListener(LightLayer.BLOCK), near.asLong()) == 0)
+                    if (DynamicLighting.blockLight(TestFixtures.level(client).getLightEngine().getLayerListener(LightLayer.BLOCK), near.asLong()) == 0)
                         throw new AssertionError("Handoff waited for the configured update interval");
                 });
                 context.waitTicks(22);
@@ -204,7 +204,7 @@ public final class DynamicLightingGameTest implements FabricClientGameTest {
                 server.runCommand("kill @e[type=minecraft:item]");
                 waitLight(context, near, false);
                 context.runOnClient(client -> {
-                    DynamicLighting.beginDrop(client.player, new ItemStack(Items.TORCH));
+                    DynamicLighting.beginDrop(TestFixtures.player(client), new ItemStack(Items.TORCH));
                     DynamicLighting.tick(client);
                     if (DynamicLighting.sourceCount() != 1) throw new AssertionError("Missing handoff bridge");
                     for (int tick = 0; tick < 22; tick++) DynamicLighting.tick(client);
@@ -212,7 +212,7 @@ public final class DynamicLightingGameTest implements FabricClientGameTest {
                 });
                 config.enabled = false;
                 context.waitTicks(4);
-                context.runOnClient(client -> {
+                context.runOnClient(_ -> {
                     if (DynamicLighting.sourceCount() != 0) throw new AssertionError("Disabled lighting retained emitters");
                 });
             }
@@ -241,7 +241,7 @@ public final class DynamicLightingGameTest implements FabricClientGameTest {
         }
         level.setBlock(pos, Blocks.STONE_SLAB.defaultBlockState(), 3);
         Vec3 aboveSlab = new Vec3(4.5, 102.7, 4.5);
-        if (!aboveSlab.equals(LightSourcePlacement.resolve(level, aboveSlab, aboveSlab)))
+        if (!aboveSlab.equals(TestFixtures.require(LightSourcePlacement.resolve(level, aboveSlab, aboveSlab), "LightSourcePlacement.resolve(level, aboveSlab, aboveSlab)")))
             throw new AssertionError("Empty part of a slab cell must remain usable");
         Vec3 insideSlab = new Vec3(4.5, 102.45, 4.5);
         Vec3 escaped = LightSourcePlacement.resolve(level, insideSlab, insideSlab);
@@ -257,13 +257,13 @@ public final class DynamicLightingGameTest implements FabricClientGameTest {
     private static int smooth(ClientGameTestContext context, BlockPos position) {
         var result = new java.util.concurrent.atomic.AtomicInteger();
         context.runOnClient(client -> result.set(DynamicLighting.smoothLight(
-            client.level.getLightEngine().getLayerListener(LightLayer.BLOCK), position.asLong())));
+            TestFixtures.level(client).getLightEngine().getLayerListener(LightLayer.BLOCK), position.asLong())));
         return result.get();
     }
 
     private static int resetAll(net.minecraft.client.gui.components.events.GuiEventListener element) {
         if (element instanceof net.minecraft.client.gui.components.Button button && button.getMessage().getString().equals("Reset")) {
-            button.onPress(null);
+            button.onPress(TestFixtures.CONFIRM);
             return 1;
         }
         int count = 0;

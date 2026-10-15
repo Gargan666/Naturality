@@ -27,12 +27,12 @@ final class ParticleWindChecks {
         }
     }
     static void run(Minecraft client) {
-        var dimension = client.level.dimension().identifier();
-        var saved = WeatherSystem.state(client.level);
+        var dimension = TestFixtures.level(client).dimension().identifier();
+        var saved = WeatherSystem.state(TestFixtures.level(client));
         var waterPos = new BlockPos(0, 110, 0);
-        var oldBlock = client.level.getBlockState(waterPos);
+        var oldBlock = TestFixtures.level(client).getBlockState(waterPos);
         var group = new ParticleGroup<Probe>(client.particleEngine) {
-            @Override public ParticleGroupRenderState extractRenderState(Frustum f, Camera c, float t) { return null; }
+            @Override public ParticleGroupRenderState extractRenderState(Frustum f, Camera c, float t) { return (_, _) -> { throw new AssertionError("Tick-only fixture must not render"); }; }
         };
         try {
             WeatherSystem.receive(new WeatherPayload(dimension, true, new WeatherState(0, 75, 50, 0)));
@@ -45,7 +45,7 @@ final class ParticleWindChecks {
             group.tickParticles();
             near(p.getBoundingBox().getCenter().x, .2 + .007 + .2 + .007 * 1.96,
                 "Custom velocity replacement cannot erase accumulated wind");
-            client.level.setBlock(waterPos, Blocks.WATER.defaultBlockState(), 3);
+            TestFixtures.level(client).setBlock(waterPos, Blocks.WATER.defaultBlockState(), 3);
             p.setPos(.2, 110.2, .5);
             group.tickParticles();
             near(p.getBoundingBox().getCenter().x, .4, "Underwater particles receive no wind drift");
@@ -65,7 +65,7 @@ final class ParticleWindChecks {
                 particle.remove();
             }
         } finally {
-            client.level.setBlock(waterPos, oldBlock, 3);
+            TestFixtures.level(client).setBlock(waterPos, oldBlock, 3);
             WeatherSystem.receive(new WeatherPayload(dimension, saved != null,
                 saved != null ? saved : new WeatherState(0, 0, 50, 0)));
         }

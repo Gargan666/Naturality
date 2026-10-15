@@ -20,37 +20,37 @@ public final class CaveAmbienceGameTest implements FabricClientGameTest {
             world.getConnection().waitForClientboundPackets();
             context.waitTicks(80);
             context.runOnClient(c -> {
-                check(CaveAmbience.isLargeCave(c.level, c.player.getEyePosition(), c.player),
+                check(CaveAmbience.isLargeCave(TestFixtures.level(c), TestFixtures.player(c).getEyePosition(), TestFixtures.player(c)),
                     "Broad, tall underground chamber qualifies");
                 check(CaveAmbience.gain() > .99F, "Large chamber fades up to full gain");
-                int loaded = c.level.getChunkSource().getLoadedChunksCount();
-                check(!CaveAmbience.isLargeCave(c.level, new net.minecraft.world.phys.Vec3(1000000, 88, 1000000), c.player),
+                int loaded = TestFixtures.level(c).getChunkSource().getLoadedChunksCount();
+                check(!CaveAmbience.isLargeCave(TestFixtures.level(c), new net.minecraft.world.phys.Vec3(1000000, 88, 1000000), TestFixtures.player(c)),
                     "Unloaded terrain cannot qualify as a cave");
-                check(c.level.getChunkSource().getLoadedChunksCount() == loaded, "Cave detection does not load chunks");
+                check(TestFixtures.level(c).getChunkSource().getLoadedChunksCount() == loaded, "Cave detection does not load chunks");
             });
             server.runCommand("fill -11 87 -11 11 102 11 stone");
             server.runCommand("fill -1 87 -11 1 102 11 air");
             world.getConnection().waitForClientboundPackets();
             context.waitTicks(25);
             context.runOnClient(c -> {
-                check(!CaveAmbience.isLargeCave(c.level, c.player.getEyePosition(), c.player), "Narrow tunnel is rejected");
+                check(!CaveAmbience.isLargeCave(TestFixtures.level(c), TestFixtures.player(c).getEyePosition(), TestFixtures.player(c)), "Narrow tunnel is rejected");
                 check(CaveAmbience.gain() > 0 && CaveAmbience.gain() < .9F, "Entering a tunnel fades gradually");
             });
             context.waitTicks(65);
-            context.runOnClient(c -> check(CaveAmbience.gain() == 0, "Small cave becomes silent"));
+            context.runOnClient(_ -> check(CaveAmbience.gain() == 0, "Small cave becomes silent"));
             server.runCommand("fill -11 87 -11 11 102 11 stone");
             server.runCommand("fill -11 87 -11 11 90 11 air");
             world.getConnection().waitForClientboundPackets();
             context.waitTicks(20);
-            context.runOnClient(c -> check(!CaveAmbience.isLargeCave(c.level, c.player.getEyePosition(), c.player),
+            context.runOnClient(c -> check(!CaveAmbience.isLargeCave(TestFixtures.level(c), TestFixtures.player(c).getEyePosition(), TestFixtures.player(c)),
                 "Broad but low ceiling chamber is rejected"));
             server.runCommand("tp @a 0 114 0");
             context.waitTicks(20);
-            context.runOnClient(c -> check(!CaveAmbience.isLargeCave(c.level, c.player.getEyePosition(), c.player),
+            context.runOnClient(c -> check(!CaveAmbience.isLargeCave(TestFixtures.level(c), TestFixtures.player(c).getEyePosition(), TestFixtures.player(c)),
                 "Open surface is rejected"));
             server.runCommand("execute in minecraft:the_nether run tp @a 0 100 0");
             context.waitTicks(40);
-            context.runOnClient(c -> check(CaveAmbience.gain() == 0, "Dimension change clears ambience"));
+            context.runOnClient(_ -> check(CaveAmbience.gain() == 0, "Dimension change clears ambience"));
         }
     }
 }

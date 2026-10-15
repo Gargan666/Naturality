@@ -23,6 +23,7 @@ import net.minecraft.world.phys.Vec3;
 public final class WaterLightPerformanceGameTest implements FabricClientGameTest {
     private static final Method CURRENT_TICK = tickMethod(WaterVisuals.class);
     private static final Method ORIGINAL_TICK = tickMethod(ReferenceWaterVisuals.class);
+    @SuppressWarnings("unused") // Volatile benchmark sink prevents dead-code elimination; deliberately never read.
     private static volatile Object sink;
 
     @Override public void runTest(ClientGameTestContext context) {
@@ -75,7 +76,7 @@ public final class WaterLightPerformanceGameTest implements FabricClientGameTest
                 compareWater(client, "resource rebuild");
             });
             context.runOnClient(client -> {
-                client.level.getChunkSource().drop(new net.minecraft.world.level.ChunkPos(0, 0));
+                TestFixtures.level(client).getChunkSource().drop(new net.minecraft.world.level.ChunkPos(0, 0));
                 compareWater(client, "chunk unload");
                 if (!Float.isNaN(WaterVisuals.surface(10, 10))) throw new AssertionError("Unloaded water stayed mapped");
             });
@@ -92,7 +93,7 @@ public final class WaterLightPerformanceGameTest implements FabricClientGameTest
                     if (!Float.isFinite(WaterVisuals.surface(10, 10))) throw new AssertionError("Reloaded water disappeared");
                 });
                 if (replacement == 0) context.runOnClient(client -> {
-                    client.level.setBlock(new BlockPos(10, 103, 10), net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(), 3);
+                    TestFixtures.level(client).setBlock(new BlockPos(10, 103, 10), net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(), 3);
                     compareWater(client, "temporary local roof");
                     if (!Float.isNaN(WaterVisuals.surface(10, 10))) throw new AssertionError("Local roof did not obscure water");
                 });
@@ -105,7 +106,7 @@ public final class WaterLightPerformanceGameTest implements FabricClientGameTest
             world.getConnection().waitForClientboundPackets();
             context.runOnClient(client -> checkLighting(client.level));
         } finally {
-            context.runOnClient(client -> ReferenceWaterVisuals.close());
+            context.runOnClient(_ -> ReferenceWaterVisuals.close());
             NaturalityConfig.get().liquids = original;
         }
     }

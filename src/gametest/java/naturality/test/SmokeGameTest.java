@@ -22,7 +22,7 @@ public final class SmokeGameTest implements FabricClientGameTest {
                 ParticleWindChecks.run(client);
                 for (var type : new net.minecraft.core.particles.SimpleParticleType[] {
                         ParticleTypes.SMOKE, ParticleTypes.LARGE_SMOKE}) {
-                    var smoke = client.particleEngine.createParticle(type, 0, 101, 0, 0, 0, 0);
+                    var smoke = TestFixtures.require(client.particleEngine.createParticle(type, 0, 101, 0, 0, 0, 0), "smoke");
                     check(smoke instanceof SmokeParticle, "Vanilla smoke must use the replacement provider");
                     double start = smoke.getBoundingBox().minY;
                     int duration = smoke.getLifetime();

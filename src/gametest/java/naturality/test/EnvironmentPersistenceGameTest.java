@@ -88,7 +88,7 @@ public final class EnvironmentPersistenceGameTest implements FabricClientGameTes
             }));
         }
         try(var other=context.worldBuilder().create()) {
-            other.getServer().runOnServer(server -> check(WeatherSystem.state(server.overworld()).rain()==0 && WeatherSystem.state(server.overworld()).wind()==0,
+            other.getServer().runOnServer(server -> check(TestFixtures.require(WeatherSystem.state(server.overworld()), "WeatherSystem.state(server.overworld())").rain()==0 && TestFixtures.require(WeatherSystem.state(server.overworld()), "WeatherSystem.state(server.overworld())").wind()==0,
                 "A different world starts with calm weather"));
         }
         try(var reopened=save.open()) {
@@ -118,7 +118,7 @@ public final class EnvironmentPersistenceGameTest implements FabricClientGameTes
                 var player=server.getPlayerList().getPlayers().getFirst();
                 check(AuroraEvents.strength(server.overworld(),player.blockPosition())==EnvironmentWorldData.number(savedAurora,"strength"),"Local aurora survives reopen");
             });
-            context.runOnClient(client -> check(WeatherSystem.state(client.level).rain()==EnvironmentWorldData.number(expected.get("weather/minecraft:overworld"),"rain"),
+            context.runOnClient(client -> check(TestFixtures.require(WeatherSystem.state(TestFixtures.level(client)), "WeatherSystem.state(client.level)").rain()==EnvironmentWorldData.number(expected.get("weather/minecraft:overworld"),"rain"),
                 "Joining client receives restored weather"));
         }
     }

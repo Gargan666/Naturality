@@ -51,14 +51,14 @@ final class MenuSurfaceChecks {
                 for(float f:new float[]{0,0,63.36F,96, eye[0],100,eye[1],naturality.client.menu.MenuSurface.SURFACE_DEPTH, -120,-120,-64,240, 0,1,1,visibility})data.putFloat(f);
                 data.flip();
                 try(var region = device.createBuffer(() -> "Menu test region",128,data)) {
-                    try(var pass = encoder.createRenderPass(() -> "Menu surface test",target.getColorTextureView(),Optional.empty())) {
+                    try(var pass = encoder.createRenderPass(() -> "Menu surface test",TestFixtures.require(target.getColorTextureView(), "target.getColorTextureView()"),Optional.empty())) {
                         pass.setPipeline(RenderSystem.getCompiledPipeline(PIPELINE));
                         RenderSystem.bindDefaultUniforms(pass);
                         pass.setUniform("MenuRegion",region);
                         pass.setUniform("MenuFloorsLow",low); pass.setUniform("MenuFloorsHigh",high);
                         pass.setUniform("MenuChecks",checks); pass.draw(3,1,0,0);
                     }
-                    encoder.copyTextureToBuffer(target.getColorTexture(),readback,0,() -> {},0);
+                    encoder.copyTextureToBuffer(TestFixtures.require(target.getColorTexture(), "target.getColorTexture()"),readback,0,() -> {},0);
                     try(var fence=encoder.createFence()){encoder.submit();fence.awaitCompletion(-1);}
                     try(var mapped=readback.map(true,false)) {
                         double fog=1-Math.clamp((Math.hypot(80.5,.5)-63.36)/32.64,0,1);

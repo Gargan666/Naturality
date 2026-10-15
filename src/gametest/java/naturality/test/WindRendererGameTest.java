@@ -13,7 +13,7 @@ public final class WindRendererGameTest implements FabricClientGameTest {
         boolean[] roof={true};
         var reused=(net.minecraft.client.renderer.block.BlockAndTintGetter)java.lang.reflect.Proxy.newProxyInstance(
             net.minecraft.client.renderer.block.BlockAndTintGetter.class.getClassLoader(),
-            new Class<?>[]{net.minecraft.client.renderer.block.BlockAndTintGetter.class},(proxy,method,args)-> {
+            new Class<?>[]{net.minecraft.client.renderer.block.BlockAndTintGetter.class},(_,method,args)-> {
                 if(method.getName().equals("getBrightness"))return 15;
                 if(method.getName().equals("getBlockState"))return roof[0] && ((BlockPos)args[0]).getY()==3
                     ? net.minecraft.world.level.block.Blocks.STONE.defaultBlockState()
@@ -31,7 +31,7 @@ public final class WindRendererGameTest implements FabricClientGameTest {
                 }
             });
             client.getModelManager().getBlockStateModelSet().get(leaves).emitQuads(emitter,reused,BlockPos.ZERO,leaves,
-                net.minecraft.util.RandomSource.create(0),direction -> false);
+                net.minecraft.util.RandomSource.create(0),_ -> false);
             if((marked[0]==0)!=sheltered)throw new AssertionError("Stale wind exposure after snapshot reuse");
         }
         if(!net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("sodium")) return;
@@ -39,8 +39,8 @@ public final class WindRendererGameTest implements FabricClientGameTest {
             var sliceClass=Class.forName("net.caffeinemc.mods.sodium.client.world.LevelSlice");
             var cacheClass=Class.forName("net.caffeinemc.mods.sodium.client.world.cloned.ClonedChunkSectionCache");
             var cache=cacheClass.getConstructor(net.minecraft.world.level.Level.class).newInstance(client.level);
-            var slice=(net.minecraft.client.renderer.block.BlockAndTintGetter)sliceClass
-                .getConstructor(net.minecraft.client.multiplayer.ClientLevel.class).newInstance(client.level);
+            var slice=TestFixtures.require((net.minecraft.client.renderer.block.BlockAndTintGetter)sliceClass
+                .getConstructor(net.minecraft.client.multiplayer.ClientLevel.class).newInstance(client.level), "slice");
             var prepare=sliceClass.getMethod("prepare",net.minecraft.world.level.Level.class,
                 net.minecraft.core.SectionPos.class,cacheClass);
             var copy=sliceClass.getMethod("copyData",Class.forName("net.caffeinemc.mods.sodium.client.world.cloned.ChunkRenderContext"));
@@ -57,9 +57,9 @@ public final class WindRendererGameTest implements FabricClientGameTest {
                         if(tag>=160 && tag<=191 && naturality.client.snow.SnowTextureAtlas.isCompositeUv(q.u(0),q.v(0)))marked[1]++;
                     }
                 });
-                var state=client.level.getBlockState(pos);
+                var state=TestFixtures.level(client).getBlockState(pos);
                 client.getModelManager().getBlockStateModelSet().get(state).emitQuads(emitter,slice,pos,state,
-                    net.minecraft.util.RandomSource.create(0),direction -> false);
+                    net.minecraft.util.RandomSource.create(0),_ -> false);
                 if(marked[0]==0)throw new AssertionError("Snowy section-edge leaf lacks wind: "+pos);
                 // Sodium may omit all side quads of an interior leaf. Require
                 // decal tags on the exposed border, including section crossings.
@@ -124,69 +124,69 @@ public final class WindRendererGameTest implements FabricClientGameTest {
             // plus the next weather packet; do not spend the predicate timeout
             // on that intentional ramp (especially after another suite).
             context.waitTicks(220);
-            context.waitFor(client -> WeatherSystem.state(client.level)!=null && WeatherSystem.state(client.level).wind()==100);
+            context.waitFor(client -> WeatherSystem.state(TestFixtures.level(client))!=null && TestFixtures.require(WeatherSystem.state(TestFixtures.level(client)), "WeatherSystem.state(client.level)").wind()==100);
             context.runOnClient(client -> {
                 checkSnapshotEdges(client);
                 var leafVineTop=new BlockPos(-10,103,2);
-                var leafVine=client.level.getBlockState(leafVineTop);
-                if(naturality.client.weather.WindRendering.vertexTag(client.level,leafVineTop,leafVine,.5F,1,.9375F)!=232)
+                var leafVine=TestFixtures.level(client).getBlockState(leafVineTop);
+                if(naturality.client.weather.WindRendering.vertexTag(TestFixtures.level(client),leafVineTop,leafVine,.5F,1,.9375F)!=232)
                     throw new AssertionError("Vine top must follow its moving leaf support");
                 for(int h=0;h<3;h++) {
                     var hanging=leafVineTop.below(h);
-                    int bottom=naturality.client.weather.WindRendering.vertexTag(client.level,hanging,leafVine,.5F,0,.9375F);
-                    int nextTop=naturality.client.weather.WindRendering.vertexTag(client.level,hanging.below(),leafVine,.5F,1,.9375F);
+                    int bottom=naturality.client.weather.WindRendering.vertexTag(TestFixtures.level(client),hanging,leafVine,.5F,0,.9375F);
+                    int nextTop=naturality.client.weather.WindRendering.vertexTag(TestFixtures.level(client),hanging.below(),leafVine,.5F,1,.9375F);
                     if(bottom!=233+h || nextTop!=bottom)
                         throw new AssertionError("Unsupported vine joins must remain connected without wall constraints");
                 }
                 var wallEnd=new BlockPos(-12,103,2);
                 for(int h=0;h<3;h++) {
                     var pos=wallEnd.below(h);
-                    var state=client.level.getBlockState(pos);
-                    int bottom=naturality.client.weather.WindRendering.vertexTag(client.level,pos,state,.5F,0,.9375F);
-                    int nextTop=naturality.client.weather.WindRendering.vertexTag(client.level,pos.below(),client.level.getBlockState(pos.below()),.5F,1,.9375F);
+                    var state=TestFixtures.level(client).getBlockState(pos);
+                    int bottom=naturality.client.weather.WindRendering.vertexTag(TestFixtures.level(client),pos,state,.5F,0,.9375F);
+                    int nextTop=naturality.client.weather.WindRendering.vertexTag(TestFixtures.level(client),pos.below(),TestFixtures.level(client).getBlockState(pos.below()),.5F,1,.9375F);
                     if(bottom!=nextTop || bottom!=(h==0?110:193+h))
                         throw new AssertionError("Wall-to-hanging transition must stay joined while the free tail flows");
                 }
                 var vineTop=new BlockPos(-6,103,2);
-                var vine=client.level.getBlockState(vineTop);
-                if(naturality.client.weather.WindRendering.vertexTag(client.level,vineTop,vine,.5F,1,.9375F)!=101)
+                var vine=TestFixtures.level(client).getBlockState(vineTop);
+                if(naturality.client.weather.WindRendering.vertexTag(TestFixtures.level(client),vineTop,vine,.5F,1,.9375F)!=101)
                     throw new AssertionError("Attached vine top edge must stay pinned");
-                int vineJoin=naturality.client.weather.WindRendering.vertexTag(client.level,vineTop,vine,.5F,0,.9375F);
-                if(vineJoin==101 || vineJoin!=naturality.client.weather.WindRendering.vertexTag(client.level,vineTop.below(),vine,.5F,1,.9375F))
+                int vineJoin=naturality.client.weather.WindRendering.vertexTag(TestFixtures.level(client),vineTop,vine,.5F,0,.9375F);
+                if(vineJoin==101 || vineJoin!=naturality.client.weather.WindRendering.vertexTag(TestFixtures.level(client),vineTop.below(),vine,.5F,1,.9375F))
                     throw new AssertionError("Vines below the anchored edge must sway together at their join");
                 var cane=net.minecraft.world.level.block.Blocks.SUGAR_CANE.defaultBlockState();
                 var moss=net.minecraft.world.level.block.Blocks.PALE_HANGING_MOSS.defaultBlockState();
                 var mossRoot=new BlockPos(3,104,7);
                 for(int x:new int[]{5,7,9}) {
                     var root=new BlockPos(x,104,7);
-                    var rootState=client.level.getBlockState(root);
-                    if(naturality.client.weather.WindRendering.vertexTag(client.level,root,rootState,.5F,1,.5F)!=(x==9?118:193))
-                        throw new AssertionError("Leaf-supported hanging root must inherit leaf motion: "+root+" state="+rootState+" support="+client.level.getBlockState(root.above())+" tag="+naturality.client.weather.WindRendering.vertexTag(client.level,root,rootState,.5F,1,.5F));
+                    var rootState=TestFixtures.level(client).getBlockState(root);
+                    if(naturality.client.weather.WindRendering.vertexTag(TestFixtures.level(client),root,rootState,.5F,1,.5F)!=(x==9?118:193))
+                        throw new AssertionError("Leaf-supported hanging root must inherit leaf motion: "+root+" state="+rootState+" support="+TestFixtures.level(client).getBlockState(root.above())+" tag="+naturality.client.weather.WindRendering.vertexTag(TestFixtures.level(client),root,rootState,.5F,1,.5F));
                     for(int h=0;h<3;h++) {
                         var pos=root.below(h);
-                        int bottom=naturality.client.weather.WindRendering.vertexTag(client.level,pos,client.level.getBlockState(pos),.5F,0,.5F);
-                        int nextTop=naturality.client.weather.WindRendering.vertexTag(client.level,pos.below(),client.level.getBlockState(pos.below()),.5F,1,.5F);
+                        int bottom=naturality.client.weather.WindRendering.vertexTag(TestFixtures.level(client),pos,TestFixtures.level(client).getBlockState(pos),.5F,0,.5F);
+                        int nextTop=naturality.client.weather.WindRendering.vertexTag(TestFixtures.level(client),pos.below(),TestFixtures.level(client).getBlockState(pos.below()),.5F,1,.5F);
                         if(bottom!=(x==9?233:194)+h || bottom!=nextTop)
                             throw new AssertionError("Hanging head/body joins must share flowing motion and leaf attachment");
                     }
                 }
                 for(int h=0;h<3;h++) {
-                    int top=naturality.client.weather.WindRendering.vertexTag(client.level,mossRoot.below(h),moss,.5F,1,.5F);
-                    int bottom=naturality.client.weather.WindRendering.vertexTag(client.level,mossRoot.below(h),moss,.5F,0,.5F);
-                    int nextTop=naturality.client.weather.WindRendering.vertexTag(client.level,mossRoot.below(h+1),moss,.5F,1,.5F);
+                    int top=naturality.client.weather.WindRendering.vertexTag(TestFixtures.level(client),mossRoot.below(h),moss,.5F,1,.5F);
+                    int bottom=naturality.client.weather.WindRendering.vertexTag(TestFixtures.level(client),mossRoot.below(h),moss,.5F,0,.5F);
+                    int nextTop=naturality.client.weather.WindRendering.vertexTag(TestFixtures.level(client),mossRoot.below(h+1),moss,.5F,1,.5F);
                     if(top!=193+h || bottom!=194+h || bottom!=nextTop)
                         throw new AssertionError("Hanging moss must pin its top and bend progressively with connected joins");
                 }
                 var caneRoot=new BlockPos(6,100,3);
                 for(int h=0;h<3;h++) {
-                    int top=naturality.client.weather.WindRendering.vertexTag(client.level,caneRoot.above(h),cane,.5F,1,.5F);
-                    int bottom=naturality.client.weather.WindRendering.vertexTag(client.level,caneRoot.above(h+1),cane,.5F,0,.5F);
+                    int top=naturality.client.weather.WindRendering.vertexTag(TestFixtures.level(client),caneRoot.above(h),cane,.5F,1,.5F);
+                    int bottom=naturality.client.weather.WindRendering.vertexTag(TestFixtures.level(client),caneRoot.above(h+1),cane,.5F,0,.5F);
                     if(top!=h+1 || top!=bottom)throw new AssertionError("Cane must bend progressively with connected joints");
                 }
-                var weather=WeatherSystem.state(client.level);
+                var weather=WeatherSystem.state(TestFixtures.level(client));
                 if(weather==null || weather.wind()!=100) throw new AssertionError("Explicit strong wind must reach the renderer");
                 for(var pos:new BlockPos[]{mossRoot,new BlockPos(-4,103,4),new BlockPos(-4,100,0),new BlockPos(6,102,3),new BlockPos(-6,102,2),new BlockPos(8,100,0)}) {
-                    var state=client.level.getBlockState(pos);
+                    var state=TestFixtures.level(client).getBlockState(pos);
                     int[] marked={0,0,0};
                     float[] cropHeights={Float.POSITIVE_INFINITY,Float.NEGATIVE_INFINITY};
                     var emitter=net.fabricmc.fabric.api.client.renderer.v1.Renderer.get().quadEmitter(quad -> {
@@ -210,8 +210,8 @@ public final class WindRendererGameTest implements FabricClientGameTest {
                             }
                         }
                     });
-                    client.getModelManager().getBlockStateModelSet().get(state).emitQuads(emitter,client.level,pos,state,
-                        net.minecraft.util.RandomSource.create(0),direction -> false);
+                    client.getModelManager().getBlockStateModelSet().get(state).emitQuads(emitter,TestFixtures.level(client),pos,state,
+                        net.minecraft.util.RandomSource.create(0),_ -> false);
                     if(marked[0]==0) throw new AssertionError("Missing renderer-independent wind tags for "+state+" at "+pos);
                     if(state.getBlock() instanceof net.minecraft.world.level.block.CropBlock
                             && (Math.abs(cropHeights[0])>1e-5 || cropHeights[1]<.5F))
@@ -219,7 +219,7 @@ public final class WindRendererGameTest implements FabricClientGameTest {
                     if((state.is(net.minecraft.tags.BlockTags.LEAVES) || state.getBlock() instanceof net.minecraft.world.level.block.CropBlock)
                             && marked[1]==0)
                         throw new AssertionError("Missing shared-leaf or crop-root wind tags for "+state+" at "+pos);
-                    if(state.is(net.minecraft.tags.BlockTags.LEAVES) && client.level.getBlockState(pos.above()).is(net.minecraft.world.level.block.Blocks.SNOW)
+                    if(state.is(net.minecraft.tags.BlockTags.LEAVES) && TestFixtures.level(client).getBlockState(pos.above()).is(net.minecraft.world.level.block.Blocks.SNOW)
                             && marked[2]==0)
                         throw new AssertionError("Composited snow lacks the original leaf-wind tags at "+pos);
                 }
@@ -230,10 +230,10 @@ public final class WindRendererGameTest implements FabricClientGameTest {
                 context.takeScreenshot("wind-enabled-a-"+oit);
                 context.waitTicks(13);
                 context.takeScreenshot("wind-enabled-b-"+oit);
-                context.runOnClient(client -> NaturalityConfig.get().effects.foliageWind=false);
+                context.runOnClient(_ -> NaturalityConfig.get().effects.foliageWind=false);
                 context.waitTicks(3);
                 context.takeScreenshot("wind-disabled-"+oit);
-                context.runOnClient(client -> NaturalityConfig.get().effects.foliageWind=true);
+                context.runOnClient(_ -> NaturalityConfig.get().effects.foliageWind=true);
             }
         } finally {
             context.runOnClient(client -> {

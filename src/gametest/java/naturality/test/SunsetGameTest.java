@@ -75,7 +75,7 @@ public final class SunsetGameTest implements FabricClientGameTest {
             world.getConnection().waitForChunksRender();
             context.waitTicks(20);
             context.takeScreenshot("sunset-sun-base");
-            context.runOnClient(client -> NaturalityConfig.get().effects.sunBeams = true);
+            context.runOnClient(_ -> NaturalityConfig.get().effects.sunBeams = true);
             context.waitTicks(10);
             context.takeScreenshot("sunset-sun-beams");
             server.runCommand("time set noon");
@@ -96,7 +96,7 @@ public final class SunsetGameTest implements FabricClientGameTest {
             context.waitTicks(10);
             var reload = new java.util.concurrent.atomic.AtomicReference<java.util.concurrent.CompletableFuture<Void>>();
             context.runOnClient(client -> reload.set(client.reloadResourcePacks()));
-            context.waitFor(client -> reload.get() != null && reload.get().isDone());
+            context.waitFor(_ -> reload.get() != null && reload.get().isDone());
             reload.get().join();
             context.waitFor(client -> client.gui.overlay() == null);
             context.waitTicks(10);

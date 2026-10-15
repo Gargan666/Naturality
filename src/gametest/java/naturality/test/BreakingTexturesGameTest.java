@@ -74,11 +74,11 @@ public final class BreakingTexturesGameTest implements FabricClientGameTest {
                 for (int stage : new int[]{0, 4, 9}) {
                     context.runOnClient(client -> {
                         for (int x = -3; x <= 3; x++)
-                            client.level.destroyBlockProgress(200 + x, new BlockPos(x, 100, 8), stage);
+                            TestFixtures.level(client).destroyBlockProgress(200 + x, new BlockPos(x, 100, 8), stage);
                     });
                     context.waitTicks(5);
                     context.takeScreenshot("breaking-" + mode + "-" + stage);
-                    context.runOnClient(client -> {
+                    context.runOnClient(_ -> {
                         try {
                             var field = BreakingTextures.class.getDeclaredField("TYPES");
                             field.setAccessible(true);
@@ -94,14 +94,14 @@ public final class BreakingTexturesGameTest implements FabricClientGameTest {
             }
             var reload = new AtomicReference<CompletableFuture<Void>>();
             context.runOnClient(client -> reload.set(client.reloadResourcePacks()));
-            context.waitFor(client -> reload.get().isDone());
+            context.waitFor(_ -> reload.get().isDone());
             reload.get().join();
             context.waitTicks(10);
             context.takeScreenshot("breaking-reloaded");
             context.runOnClient(SandParticleChecks::run);
             context.runOnClient(client -> {
                 for (int x = -3; x <= 3; x++)
-                    client.level.destroyBlockProgress(200 + x, new BlockPos(x, 100, 8), -1);
+                    TestFixtures.level(client).destroyBlockProgress(200 + x, new BlockPos(x, 100, 8), -1);
             });
         } finally {
             context.runOnClient(client -> client.options.improvedTransparency().set(previous[0]));

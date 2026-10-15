@@ -31,7 +31,7 @@ public final class DistortionGameTest implements FabricClientGameTest {
             UUID[] ids = new UUID[2];
             server.runOnServer(s -> {
                 for (int i=0;i<2;i++) {
-                    var cow=EntityTypes.COW.create(s.overworld(),EntitySpawnReason.COMMAND);
+                    var cow=TestFixtures.require(EntityTypes.COW.create(s.overworld(),EntitySpawnReason.COMMAND), "cow");
                     cow.setNoAi(true);cow.setPersistenceRequired();cow.setPos(3+i*2,141,3);
                     s.overworld().addFreshEntity(cow);ids[i]=cow.getUUID();
                     if(i==0)cow.addEffect(new MobEffectInstance(NaturalityEffects.DISTORTION,12000));
@@ -42,10 +42,10 @@ public final class DistortionGameTest implements FabricClientGameTest {
             server.runOnServer(s -> {
                 var p=s.overworld().players().getFirst();
                 check(EndGravity.inversion(p,false)>0 && EndGravity.inversion(p,false)<.5,"Effect rotation eases into inversion");
-                var cow=(LivingEntity)s.overworld().getEntity(ids[0]);
+                var cow=TestFixtures.require((LivingEntity)s.overworld().getEntity(ids[0]), "cow");
                 var output=TagValueOutput.createWithContext(ProblemReporter.DISCARDING,s.registryAccess());
                 cow.saveWithoutId(output);
-                var restored=EntityTypes.COW.create(s.overworld(),EntitySpawnReason.COMMAND);
+                var restored=TestFixtures.require(EntityTypes.COW.create(s.overworld(),EntitySpawnReason.COMMAND), "restored");
                 restored.load(TagValueInput.create(ProblemReporter.DISCARDING,s.registryAccess(),output.buildResult()));
                 check(restored.hasEffect(NaturalityEffects.DISTORTION),"Potion effect is saved with the entity");
                 check(Math.abs(EndGravity.inversion(restored,false)-EndGravity.inversion(cow,false))<1e-6,"Partial rotation survives entity save/load");
@@ -54,14 +54,14 @@ public final class DistortionGameTest implements FabricClientGameTest {
             server.runOnServer(s -> {
                 var level=s.overworld();var p=level.players().getFirst();
                 check(EndGravity.inverted(p) && p.onGround(),"Affected Overworld player stands on a ceiling");
-                check(EndGravity.inverted(level.getEntity(ids[0])),"Affected mob has reversed gravity");
-                check(!EndGravity.inverted(level.getEntity(ids[1])) && level.getEntity(ids[1]).getGravity()>0,"Neighbor without the effect stays upright");
+                check(EndGravity.inverted(TestFixtures.require(level.getEntity(ids[0]), "level.getEntity(ids[0])")),"Affected mob has reversed gravity");
+                check(!EndGravity.inverted(TestFixtures.require(level.getEntity(ids[1]), "level.getEntity(ids[1])")) && TestFixtures.require(level.getEntity(ids[1]), "level.getEntity(ids[1])").getGravity()>0,"Neighbor without the effect stays upright");
             });
             context.runOnClient(c -> check(c.gameRenderer.mainCamera().rotation().transform(new org.joml.Vector3f(0,1,0)).y<-.99,"Effect rotates the Overworld camera"));
             server.runCommand("effect clear @e[type=cow] naturality:distortion");
             context.waitTicks(25);
             server.runOnServer(s -> {
-                float rotation=EndGravity.inversion(s.overworld().getEntity(ids[0]),false);
+                float rotation=EndGravity.inversion(TestFixtures.require(s.overworld().getEntity(ids[0]), "s.overworld().getEntity(ids[0])"),false);
                 check(rotation>0 && rotation<1,"Clearing a mob's effect eases upright");
                 check(EndGravity.inverted(s.overworld().players().getFirst()),"Clearing another entity leaves the player inverted");
             });
@@ -76,11 +76,11 @@ public final class DistortionGameTest implements FabricClientGameTest {
             server.runCommand("execute in minecraft:the_nether run tp @a 0 90 0");
             context.waitTicks(30);
             server.runOnServer(s -> {
-                var nether=s.getLevel(Level.NETHER);
+                var nether=TestFixtures.require(s.getLevel(Level.NETHER), "nether");
                 var mob=EntityTypes.COW.create(nether,EntitySpawnReason.COMMAND);
                 DistortionFixtures.invert(mob);
-                check(EndGravity.inverted(mob) && mob.getGravity()<0,"Distortion also works in the Nether");
-                var normal=EntityTypes.COW.create(nether,EntitySpawnReason.COMMAND);
+                check(EndGravity.inverted(TestFixtures.require(mob, "mob")) && TestFixtures.require(mob, "mob").getGravity()<0,"Distortion also works in the Nether");
+                var normal=TestFixtures.require(EntityTypes.COW.create(nether,EntitySpawnReason.COMMAND), "normal");
                 check(normal.getGravity()>0,"Unaffected Nether entities keep ordinary gravity");
             });
         }

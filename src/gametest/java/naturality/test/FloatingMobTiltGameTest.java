@@ -31,10 +31,10 @@ public final class FloatingMobTiltGameTest implements FabricClientGameTest {
             }
             context.runOnClient(client -> {
                 int count=0;
-                for(var e:client.level.entitiesForRendering()) if(e instanceof LivingEntity living) {
+                for(var e:TestFixtures.level(client).entitiesForRendering()) if(e instanceof LivingEntity living) {
                     String id=BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()).getPath();
                     var renderer=client.getEntityRenderDispatcher().getRenderer(living);
-                    var state=(LivingEntityRenderState)renderer.createRenderState(living,1);
+                    var state=TestFixtures.require((LivingEntityRenderState)renderer.createRenderState(living,1), "(FloatingMobTiltState)state");
                     var lean=((FloatingMobTiltState)state).naturality$floatLean();
                     double angle=Math.hypot(lean.x,lean.y);
                     if(ids.contains(id)) {

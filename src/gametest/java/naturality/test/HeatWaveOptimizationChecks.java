@@ -8,7 +8,6 @@ import com.mojang.renderpearl.api.GpuFormat;
 import java.lang.management.ManagementFactory;
 import java.util.*;
 import naturality.client.fluid.HeatWaves;
-import naturality.config.NaturalityConfig;
 import naturality.test.reference.ReferenceHeatWaves;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.Projection;
@@ -70,7 +69,7 @@ final class HeatWaveOptimizationChecks {
             net.minecraft.world.level.block.Blocks.SOUL_FIRE,
             net.minecraft.world.level.block.Blocks.STONE};
         for (int y : new int[]{96, 112, 128}) for (int z = -24; z <= 24; z += 3) for (int x = -24; x <= 24; x += 2)
-            client.level.setBlock(new BlockPos(x, y, z), sources[random.nextInt(sources.length)].defaultBlockState(), 2);
+            TestFixtures.level(client).setBlock(new BlockPos(x, y, z), sources[random.nextInt(sources.length)].defaultBlockState(), 2);
         scan(ORIGINAL, client);
         scan(CURRENT, client);
         require(((List<?>)field(CURRENT, "boxes")).size() == 64, "Dense fixture must reach source limit");
@@ -83,7 +82,7 @@ final class HeatWaveOptimizationChecks {
             var list = (List<AABB>)field(type, "boxes"); list.clear(); list.addAll(volumes);
             var set = (Set<AABB>)field(type, "fireBoxes"); set.clear(); set.addAll(fires);
             set(type, "world", client.level);
-            set(type, "scanned", client.level.getGameTime());
+            set(type, "scanned", TestFixtures.level(client).getGameTime());
             set(type, "origin", BlockPos.containing(client.gameRenderer.mainCamera().position()));
         }
     }
@@ -98,10 +97,10 @@ final class HeatWaveOptimizationChecks {
             if (skew) matrix.rotateZ(.17F).scale(.94F, 1, 1).translate(.03F, .02F, 0);
             RenderSystem.setProjectionMatrix(projection.getBuffer(matrix), ProjectionType.PERSPECTIVE);
             var encoder = RenderSystem.getDevice().createCommandEncoder();
-            encoder.writeToTexture(original.getColorTexture(), pattern);
+            encoder.writeToTexture(TestFixtures.require(original.getColorTexture(), "original.getColorTexture()"), pattern);
             current.copyColorFrom(original);
-            encoder.clearDepthTexture(original.getDepthTexture(), depth);
-            encoder.clearDepthTexture(current.getDepthTexture(), depth);
+            encoder.clearDepthTexture(TestFixtures.require(original.getDepthTexture(), "original.getDepthTexture()"), depth);
+            encoder.clearDepthTexture(TestFixtures.require(current.getDepthTexture(), "current.getDepthTexture()"), depth);
             ReferenceHeatWaves.render(original);
             HeatWaves.render(current);
             int[] a = read(original), b = read(current);
@@ -129,8 +128,8 @@ final class HeatWaveOptimizationChecks {
         try (var projection = new ProjectionMatrixBuffer("Heat benchmark"); var pattern = pattern(1920, 1080)) {
             RenderSystem.setProjectionMatrix(projection.getBuffer(projection(1920, 1080, 70)), ProjectionType.PERSPECTIVE);
             var encoder = RenderSystem.getDevice().createCommandEncoder();
-            encoder.writeToTexture(target.getColorTexture(), pattern);
-            encoder.clearDepthTexture(target.getDepthTexture(), 0);
+            encoder.writeToTexture(TestFixtures.require(target.getColorTexture(), "target.getColorTexture()"), pattern);
+            encoder.clearDepthTexture(TestFixtures.require(target.getDepthTexture(), "target.getDepthTexture()"), 0);
             for (int i = 0; i < 8; i++) {
                 ReferenceHeatWaves.render(target); HeatWaves.render(target); encoder.submit();
             }
@@ -171,7 +170,7 @@ final class HeatWaveOptimizationChecks {
     private static int[] read(TextureTarget target) {
         int[] pixels = new int[target.width * target.height];
         try (var buffer = RenderSystem.getDevice().createBuffer(() -> "Heat readback", 9, pixels.length * 4L)) {
-            RenderSystem.getDevice().createCommandEncoder().copyTextureToBuffer(target.getColorTexture(), buffer, 0, () -> {}, 0);
+            RenderSystem.getDevice().createCommandEncoder().copyTextureToBuffer(TestFixtures.require(target.getColorTexture(), "target.getColorTexture()"), buffer, 0, () -> {}, 0);
             finish();
             try (var mapped = buffer.map(true, false)) { mapped.data().asIntBuffer().get(pixels); }
         }

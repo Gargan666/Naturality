@@ -17,8 +17,8 @@ public final class RainSplashGameTest implements FabricClientGameTest {
             context.runOnClient(client -> {
                 for (int i=0;i<32;i++) {
                     double top=i%2==0?100:100.5;
-                    var rain=client.particleEngine.createParticle(ParticleTypes.RAIN,
-                        i%2==0?0.5:1.5,top+0.01,0.5,0,0,0);
+                    var rain=TestFixtures.require(client.particleEngine.createParticle(ParticleTypes.RAIN,
+                        i%2==0?0.5:1.5,top+0.01,0.5,0,0,0), "rain");
                     for(int tick=0;tick<45 && rain.isAlive();tick++) {
                         rain.tick();
                         if(rain.getBoundingBox().minY<=top)

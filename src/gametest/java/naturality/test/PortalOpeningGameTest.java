@@ -33,20 +33,20 @@ public final class PortalOpeningGameTest implements FabricClientGameTest {
             world.getConnection().waitForChunksRender();
             context.runOnClient(PortalOpeningGameTest::checkSoundLifecycle);
             var server = world.getServer();
-            BlockPos origin = server.computeOnServer(s -> world.getConnection().getServerPlayer().blockPosition().above(3));
+            BlockPos origin = server.computeOnServer(_ -> world.getConnection().getServerPlayer().blockPosition().above(3));
             server.runOnServer(s -> frame(s.overworld(), origin, Direction.Axis.X));
             server.runCommand("tp @a " + (origin.getX() + 1.5) + " " + (origin.getY() + 1) + " " + (origin.getZ() - 4) + " 0 0");
             world.getConnection().waitForClientboundPackets();
             world.getConnection().waitForChunksRender();
             BlockPos seed = origin.offset(1, 1, 0);
-            long start = server.computeOnServer(s -> {
+            long start = TestFixtures.require(server.computeOnServer(s -> {
                 var level = s.overworld();
                 level.setBlockAndUpdate(seed, Blocks.FIRE.defaultBlockState());
                 check(level.getBlockState(seed).is(Blocks.FIRE), "Ignition must retain fire");
                 check(PortalOpeningManager.isOpening(level, seed), "Opening must start on ignition");
                 return level.getGameTime();
-            });
-            context.waitFor(client -> PortalOpeningClient.isOpening(seed));
+            }), "portal opening start time");
+            context.waitFor(_ -> PortalOpeningClient.isOpening(seed));
             context.takeScreenshot("portal-opening-fire");
             server.waitFor(s -> s.overworld().getGameTime() - start >= 12);
             server.runOnServer(s -> {
@@ -89,7 +89,7 @@ public final class PortalOpeningGameTest implements FabricClientGameTest {
             });
             java.util.UUID pigUuid = server.computeOnServer(s -> {
                 var level=s.overworld();
-                var pig=net.minecraft.world.entity.EntityTypes.PIG.create(level,net.minecraft.world.entity.EntitySpawnReason.COMMAND);
+                var pig=TestFixtures.require(net.minecraft.world.entity.EntityTypes.PIG.create(level,net.minecraft.world.entity.EntitySpawnReason.COMMAND), "pig");
                 pig.setNoAi(true); pig.setNoGravity(true);
                 pig.setPos(seed.getX()+0.5,seed.getY(),seed.getZ()-0.1);
                 pig.xo=pig.getX(); pig.zo=pig.getZ();
@@ -102,7 +102,7 @@ public final class PortalOpeningGameTest implements FabricClientGameTest {
             world.getConnection().waitForClientboundPackets();
             context.takeScreenshot("portal-entity-entry-halfway");
             java.util.UUID boatUuid=server.computeOnServer(s -> {
-                var boat=net.minecraft.world.entity.EntityTypes.OAK_BOAT.create(s.overworld(),net.minecraft.world.entity.EntitySpawnReason.COMMAND);
+                var boat=TestFixtures.require(net.minecraft.world.entity.EntityTypes.OAK_BOAT.create(s.overworld(),net.minecraft.world.entity.EntitySpawnReason.COMMAND), "boat");
                 boat.setNoGravity(true);boat.setYRot(45);
                 boat.setPos(seed.getX()+1,seed.getY(),seed.getZ()+0.375);
                 s.overworld().addFreshEntity(boat);
@@ -116,13 +116,14 @@ public final class PortalOpeningGameTest implements FabricClientGameTest {
             context.takeScreenshot("portal-large-boat-clipped-oblique");
             context.runOnClient(client -> {
                 net.minecraft.world.entity.Entity subject=null;
-                for(var entity:client.level.entitiesForRendering()) if(entity.getUUID().equals(pigUuid)) subject=entity;
+                for(var entity:TestFixtures.level(client).entitiesForRendering()) if(entity.getUUID().equals(pigUuid)) subject=entity;
                 check(subject!=null,"Entering entity must be tracked by observers");
-                var crossing=naturality.portal.PortalCrossing.get(subject);
+                subject=TestFixtures.require(subject, "subject");
+                var crossing=TestFixtures.require(naturality.portal.PortalCrossing.get(subject), "crossing");
                 check(crossing!=null,"Entry side must be synchronized to observers");
                 var outline=naturality.client.portal.PortalModelCapture.capture(subject,crossing,client.gameRenderer.mainCamera(),1);
                 check(outline!=null && !outline.isEmpty(),"Pig must use its actual posed model intersection");
-                double area=outline.stream().mapToDouble(r->(r.right()-r.left())*(r.top()-r.bottom())).sum();
+                double area=TestFixtures.require(outline, "outline").stream().mapToDouble(r->(r.right()-r.left())*(r.top()-r.bottom())).sum();
                 check(area<subject.getBoundingBox().getXsize()*subject.getBoundingBox().getYsize(),
                     "Pig outline must exclude empty space inside the hitbox");
                 var renderState=client.getEntityRenderDispatcher().extractEntity(subject,1);
@@ -134,38 +135,38 @@ public final class PortalOpeningGameTest implements FabricClientGameTest {
             server.runOnServer(s -> {
                 var boat=s.overworld().getEntity(boatUuid);
                 check(boat!=null,"Large boat must remain in the source dimension while half entered");
-                boat.discard();
+                TestFixtures.require(boat, "boat").discard();
             });
             server.runOnServer(s -> {
                 var pig=s.overworld().getEntity(pigUuid);
                 check(pig!=null,"Half-entered entity must linger instead of teleporting on a timer");
-                check(Math.abs(naturality.portal.PortalCrossing.get(pig).progress(pig.getBoundingBox())-0.5)<0.001,"Glow must peak at half entry");
+                check(Math.abs(TestFixtures.require(naturality.portal.PortalCrossing.get(TestFixtures.require(pig, "pig")), "naturality.portal.PortalCrossing.get(pig)").progress(TestFixtures.require(pig, "pig").getBoundingBox())-0.5)<0.001,"Glow must peak at half entry");
             });
             server.runCommand("tp @a " + (origin.getX()+1.5) + " " + (origin.getY()+1) + " " + (origin.getZ()+5) + " 180 0");
             world.getConnection().waitForClientboundPackets(); context.waitTicks(4);
             context.takeScreenshot("portal-entity-exit-hidden");
             server.runOnServer(s -> {
-                var pig=s.overworld().getEntity(pigUuid);
+                var pig=TestFixtures.require(s.overworld().getEntity(pigUuid), "pig");
                 pig.setPos(pig.getX(),pig.getY(),seed.getZ()+0.625+pig.getBbWidth()/2+naturality.portal.PortalCrossing.HIDDEN_CLEARANCE+0.02);
             });
-            server.waitFor(s -> s.getLevel(net.minecraft.world.level.Level.NETHER).getEntity(pigUuid)!=null);
+            server.waitFor(s -> TestFixtures.require(s.getLevel(net.minecraft.world.level.Level.NETHER), "s.getLevel(net.minecraft.world.level.Level.NETHER)").getEntity(pigUuid)!=null);
             server.runCommand("tp @a " + (origin.getX()+1.5) + " " + (origin.getY()+1) + " " + (origin.getZ()-2) + " 0 0");
             world.getConnection().waitForClientboundPackets(); context.waitTicks(3);
             server.runCommand("tp @a " + (origin.getX()+1.5) + " " + (origin.getY()+1) + " " + (origin.getZ()+0.375) + " 0 0");
             world.getConnection().waitForClientboundPackets(); context.waitTicks(8);
             context.runOnClient(client -> {
-                check(client.player.portalEffectIntensity==1,"Overlay must be opaque before the camera crosses the surface");
+                check(TestFixtures.player(client).portalEffectIntensity==1,"Overlay must be opaque before the camera crosses the surface");
                 check(naturality.client.portal.PortalOverlay.cameraOpacity(0)==1,"Near-plane guard must cover the portal surface");
             });
             context.runOnClient(client -> {
-                var crossing=naturality.portal.PortalCrossing.get(client.player);
-                var outline=naturality.client.portal.PortalModelCapture.capture(client.player,crossing,client.gameRenderer.mainCamera(),1);
+                var crossing=TestFixtures.require(naturality.portal.PortalCrossing.get(TestFixtures.player(client)), "crossing");
+                var outline=naturality.client.portal.PortalModelCapture.capture(TestFixtures.player(client),crossing,client.gameRenderer.mainCamera(),1);
                 check(outline!=null && outline.size()>1,"Player outline must follow body parts rather than a single box");
             });
             context.takeScreenshot("portal-overlay-half-entry");
             server.runCommand("tp @a " + (origin.getX()+1.5) + " " + (origin.getY()+1) + " " + (origin.getZ()-2) + " 0 0");
             world.getConnection().waitForClientboundPackets(); context.waitTicks(12);
-            context.runOnClient(client -> check(client.player.portalEffectIntensity==0,"Overlay must fully fade after retreat"));
+            context.runOnClient(client -> check(TestFixtures.player(client).portalEffectIntensity==0,"Overlay must fully fade after retreat"));
             context.takeScreenshot("portal-overlay-retreated");
             server.runCommand("tp @a " + (origin.getX() + 2.5) + " " + (origin.getY() + 1) + " " + (origin.getZ() - 1) + " 15 -25");
             world.getConnection().waitForClientboundPackets();
@@ -218,7 +219,7 @@ public final class PortalOpeningGameTest implements FabricClientGameTest {
                 player.portalProcess = null;
             });
             // Fully crossing players use the same spatial rule, with no standing-in-portal timer.
-            server.runOnServer(s -> {
+            server.runOnServer(_ -> {
                 var player=world.getConnection().getServerPlayer();
                 naturality.portal.PortalCrossing.set(player,null);
                 player.setPos(seed.getX()+0.5,seed.getY(),seed.getZ()+0.1);
@@ -226,35 +227,35 @@ public final class PortalOpeningGameTest implements FabricClientGameTest {
                 naturality.portal.PortalCrossing.enter(player,seed,Direction.Axis.X);
                 player.setPos(player.getX(),player.getY(),seed.getZ()+0.625+player.getBbWidth()/2+naturality.portal.PortalCrossing.HIDDEN_CLEARANCE+0.02);
             });
-            server.waitFor(s -> world.getConnection().getServerPlayer().level().dimension()==net.minecraft.world.level.Level.NETHER);
+            server.waitFor(_ -> world.getConnection().getServerPlayer().level().dimension()==net.minecraft.world.level.Level.NETHER);
             context.waitFor(client -> client.level!=null && client.level.dimension()==net.minecraft.world.level.Level.NETHER);
             context.waitTicks(20);
-            server.runOnServer(s -> {
+            server.runOnServer(_ -> {
                 var player=world.getConnection().getServerPlayer();
-                var crossing=naturality.portal.PortalCrossing.get(player);
+                var crossing=TestFixtures.require(naturality.portal.PortalCrossing.get(player), "crossing");
                 check(player.level().dimension()==net.minecraft.world.level.Level.NETHER,"Arrival must not bounce back while stationary");
                 check(crossing!=null && !player.isOnPortalCooldown(),"Arrival must retain an active reversible crossing");
                 check(!crossing.fullyCrossed(player.getBoundingBox()),"Hidden arrival must not immediately return");
                 double normal=crossing.plane-crossing.side*(player.getBbWidth()/2+0.25+naturality.portal.PortalCrossing.HIDDEN_CLEARANCE+0.02);
                 player.setPos(crossing.axis==Direction.Axis.Z?normal:player.getX(),player.getY(),crossing.axis==Direction.Axis.X?normal:player.getZ());
             });
-            server.waitFor(s -> world.getConnection().getServerPlayer().level().dimension()==net.minecraft.world.level.Level.OVERWORLD);
+            server.waitFor(_ -> world.getConnection().getServerPlayer().level().dimension()==net.minecraft.world.level.Level.OVERWORLD);
             context.waitFor(client -> client.level!=null && client.level.dimension()==net.minecraft.world.level.Level.OVERWORLD);
             context.waitTicks(20);
-            String leaveCommand=server.computeOnServer(s -> {
+            String leaveCommand=TestFixtures.require(server.computeOnServer(_ -> {
                 var player=world.getConnection().getServerPlayer();
-                var crossing=naturality.portal.PortalCrossing.get(player);
+                var crossing=TestFixtures.require(naturality.portal.PortalCrossing.get(player), "crossing");
                 check(crossing!=null,"Return arrival must also retain its crossing");
                 // Clear the foreground obstruction installed by the earlier occlusion test.
                 double normal=crossing.plane+crossing.side*2;
                 return "tp @a "+(crossing.axis==Direction.Axis.Z?normal:player.getX())+" "+player.getY()+" "+(crossing.axis==Direction.Axis.X?normal:player.getZ());
-            });
+            }), "leaveCommand");
             server.runCommand(leaveCommand);
             world.getConnection().waitForClientboundPackets();
             context.waitTicks(20);
             context.runOnClient(client -> {
-                var c=naturality.portal.PortalCrossing.get(client.player);
-                check(client.player.portalEffectIntensity==0,"Overlay must fade fully after leaving the destination portal: alpha="+client.player.portalEffectIntensity+", pos="+client.player.position()+", crossing="+(c==null?"none":c.anchor+" side="+c.side+" signed="+c.signed(client.player.getX(),client.player.getZ())));
+                var c=naturality.portal.PortalCrossing.get(TestFixtures.player(client));
+                check(TestFixtures.player(client).portalEffectIntensity==0,"Overlay must fade fully after leaving the destination portal: alpha="+TestFixtures.player(client).portalEffectIntensity+", pos="+TestFixtures.player(client).position()+", crossing="+(c==null?"none":c.anchor+" side="+c.side+" signed="+c.signed(TestFixtures.player(client).getX(),TestFixtures.player(client).getZ())));
             });
         } finally {
             NaturalityConfig.get().portalChanges.portalBlockChanges = configured;
@@ -267,7 +268,7 @@ public final class PortalOpeningGameTest implements FabricClientGameTest {
         try {
             for(var axis:new Direction.Axis[]{Direction.Axis.X,Direction.Axis.Z}) for(int side:new int[]{-1,1}) {
                 level.setBlock(pos,Blocks.NETHER_PORTAL.defaultBlockState().setValue(net.minecraft.world.level.block.NetherPortalBlock.AXIS,axis),2);
-                var pig=subject!=null?subject:net.minecraft.world.entity.EntityTypes.PIG.create(level,net.minecraft.world.entity.EntitySpawnReason.COMMAND);
+                var pig=TestFixtures.require(subject!=null?subject:net.minecraft.world.entity.EntityTypes.PIG.create(level,net.minecraft.world.entity.EntitySpawnReason.COMMAND), "pig");
                 double plane=(axis==Direction.Axis.X?pos.getZ():pos.getX())+0.5+side*0.125;
                 double outside=plane+side*(pig.getBbWidth()/2+0.1);
                 pig.setPos(axis==Direction.Axis.X?pos.getX()+0.5:outside,pos.getY(),axis==Direction.Axis.X?outside:pos.getZ()+0.5);
@@ -276,12 +277,12 @@ public final class PortalOpeningGameTest implements FabricClientGameTest {
                 level.getBlockState(pos).entityInside(level,pos,pig,InsideBlockEffectApplier.NOOP,true);
                 check(naturality.portal.PortalCrossing.get(pig)==null,"Empty voxel contact must not start physical entry");
                 check(pig.portalProcess!=null,"Regression must exercise vanilla block-contact processing");
-                check(!pig.portalProcess.processPortalTeleportation(level,pig,true),"Mobs and creative players must not teleport before reaching the slab");
+                check(!TestFixtures.require(pig.portalProcess, "pig.portalProcess").processPortalTeleportation(level,pig,true),"Mobs and creative players must not teleport before reaching the slab");
                 double normal=plane+side*pig.getBbWidth()*0.49;
                 pig.setPos(axis==Direction.Axis.X?pos.getX()+0.5:normal,pos.getY(),axis==Direction.Axis.X?normal:pos.getZ()+0.5);
                 pig.xo=pig.getX();pig.zo=pig.getZ();
                 naturality.portal.PortalCrossing.enter(pig,pos,axis);
-                var c=naturality.portal.PortalCrossing.get(pig);
+                var c=TestFixtures.require(naturality.portal.PortalCrossing.get(pig), "c");
                 check(c!=null && c.side==side,"Entry side must work on both portal axes");
                 boolean xAxis=axis==Direction.Axis.X;
                 double hiddenNormal=plane-side*0.4, visibleNormal=plane+side*0.4;
@@ -307,13 +308,13 @@ public final class PortalOpeningGameTest implements FabricClientGameTest {
                 }
                 check(c.progress(pig.getBoundingBox())<0.02,"Leading edge must start at zero immersion");
                 naturality.portal.PortalCrossing.tick(pig);
-                check(!pig.portalProcess.processPortalTeleportation(level,pig,true),"First contact must not teleport entities");
+                check(!TestFixtures.require(pig.portalProcess, "pig.portalProcess").processPortalTeleportation(level,pig,true),"First contact must not teleport entities");
                 pig.setPos(axis==Direction.Axis.X?pig.getX():plane,pig.getY(),axis==Direction.Axis.X?plane:pig.getZ());
                 check(Math.abs(c.progress(pig.getBoundingBox())-0.5)<0.001,"Halfway is the glow peak");
-                check(!pig.portalProcess.processPortalTeleportation(level,pig,true),"Half entry must not teleport mobs or creative players");
+                check(!TestFixtures.require(pig.portalProcess, "pig.portalProcess").processPortalTeleportation(level,pig,true),"Half entry must not teleport mobs or creative players");
                 var destination=new net.minecraft.world.level.portal.TeleportTransition(level,
                     net.minecraft.world.phys.Vec3.atCenterOf(pos),net.minecraft.world.phys.Vec3.ZERO,
-                    0,0,false,false,java.util.Set.of(),arriving -> { });
+                    0,0,false,false,java.util.Set.of(),_ -> { });
                 var arrival=naturality.portal.PortalArrival.prepare(destination,c,pig);
                 var exit=new naturality.portal.PortalCrossing(pig,pos,axis,-side);
                 var arrivalBox=pig.getBoundingBox().move(arrival.position().subtract(pig.position()));
@@ -322,10 +323,10 @@ public final class PortalOpeningGameTest implements FabricClientGameTest {
                 normal=plane-side*(pig.getBbWidth()/2+0.001);
                 pig.setPos(axis==Direction.Axis.X?pig.getX():normal,pig.getY(),axis==Direction.Axis.X?normal:pig.getZ());
                 check(c.progress(pig.getBoundingBox())==1,"Full crossing uses the trailing hitbox edge");
-                check(!pig.portalProcess.processPortalTeleportation(level,pig,true),"Clearing the entry face must still wait for the far face");
+                check(!TestFixtures.require(pig.portalProcess, "pig.portalProcess").processPortalTeleportation(level,pig,true),"Clearing the entry face must still wait for the far face");
                 normal=plane-side*(pig.getBbWidth()/2+0.25+naturality.portal.PortalCrossing.HIDDEN_CLEARANCE+0.001);
                 pig.setPos(axis==Direction.Axis.X?pig.getX():normal,pig.getY(),axis==Direction.Axis.X?normal:pig.getZ());
-                check(pig.portalProcess.processPortalTeleportation(level,pig,true),"Clearing the far face must permit teleport immediately");
+                check(TestFixtures.require(pig.portalProcess, "pig.portalProcess").processPortalTeleportation(level,pig,true),"Clearing the far face must permit teleport immediately");
                 normal=plane+side*(pig.getBbWidth()/2+0.2);
                 pig.setPos(axis==Direction.Axis.X?pig.getX():normal,pig.getY(),axis==Direction.Axis.X?normal:pig.getZ());
                 naturality.portal.PortalCrossing.tick(pig);
@@ -337,12 +338,12 @@ public final class PortalOpeningGameTest implements FabricClientGameTest {
     private static void checkSoundLifecycle(net.minecraft.client.Minecraft client) {
         var settings = NaturalityConfig.get().portalChanges;
         double opening = settings.openingVolume, ambient = settings.ambientVolume, travel = settings.travelVolume;
-        var player = client.player;
+        var player = TestFixtures.require(client.player, "player");
         var position = player.position();
         BlockPos pos = player.blockPosition().above(10);
-        var oldState = client.level.getBlockState(pos);
+        var oldState = TestFixtures.level(client).getBlockState(pos);
         try {
-            client.level.setBlock(pos, Blocks.NETHER_PORTAL.defaultBlockState(), 2);
+            TestFixtures.level(client).setBlock(pos, Blocks.NETHER_PORTAL.defaultBlockState(), 2);
             player.setPos(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5);
             var ambience = managedSound(client, net.minecraft.sounds.SoundEvents.PORTAL_AMBIENT, pos);
             ambience.tick();
@@ -363,11 +364,11 @@ public final class PortalOpeningGameTest implements FabricClientGameTest {
                 "Aborted travel must fade before stopping");
             for (int i = 0; i < 4; i++) entering.tick();
             check(entering.isStopped() && entering.getVolume() == 0, "Aborted travel must stop after five ticks");
-            client.level.setBlock(pos, Blocks.AIR.defaultBlockState(), 2);
+            TestFixtures.level(client).setBlock(pos, Blocks.AIR.defaultBlockState(), 2);
             ambience.tick();
             check(ambience.isStopped(), "Destroyed portal must stop ambient immediately");
         } finally {
-            client.level.setBlock(pos, oldState, 2);
+            TestFixtures.level(client).setBlock(pos, oldState, 2);
             player.setPos(position);
             settings.openingVolume = opening; settings.ambientVolume = ambient; settings.travelVolume = travel;
         }

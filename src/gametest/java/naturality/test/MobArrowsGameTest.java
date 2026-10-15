@@ -51,10 +51,10 @@ public final class MobArrowsGameTest implements FabricClientGameTest {
             context.waitTicks(30);
             context.runOnClient(client -> {
                 int found = 0;
-                for (var entity : client.level.entitiesForRendering()) {
+                for (var entity : TestFixtures.level(client).entitiesForRendering()) {
                     if (!(entity instanceof LivingEntity mob) || mob == client.player || mob.getArrowCount() == 0) continue;
                     var renderer = client.getEntityRenderDispatcher().getRenderer(mob);
-                    var state = renderer.createRenderState(mob, 1);
+                    var state = TestFixtures.require(renderer.createRenderState(mob, 1), "(EmbeddedArrowState)state");
                     if (((EmbeddedArrowState)state).naturality$arrowCount() != mob.getArrowCount())
                         throw new AssertionError("Embedded arrow count must reach the render state");
                     var hits = ((EmbeddedArrowState)state).naturality$impacts();
@@ -73,24 +73,24 @@ public final class MobArrowsGameTest implements FabricClientGameTest {
             // Keep the live fixtures stationary while exercising the real death render path.
             for (int deathTick : new int[] {0, 10, 19}) {
                 context.runOnClient(client -> {
-                    for (var entity : client.level.entitiesForRendering()) {
+                    for (var entity : TestFixtures.level(client).entitiesForRendering()) {
                         if (!(entity instanceof net.minecraft.world.entity.Mob mob)) continue;
                         mob.deathTime = deathTick;
                         var state = client.getEntityRenderDispatcher().getRenderer(mob).createRenderState(mob, 0);
-                        int overlay = net.minecraft.client.renderer.entity.LivingEntityRenderer.getOverlayCoords((net.minecraft.client.renderer.entity.state.LivingEntityRenderState) state, 0);
+                        int overlay = net.minecraft.client.renderer.entity.LivingEntityRenderer.getOverlayCoords(TestFixtures.require((net.minecraft.client.renderer.entity.state.LivingEntityRenderState) state, "(net.minecraft.client.renderer.entity.state.LivingEntityRenderState) state"), 0);
                         int progress = (overlay & 65535) >> 4;
                         int expected = Math.round(deathTick / 19F * 2047);
                         if (progress != expected || (overlay & 15) != 0)
                             throw new AssertionError("Death mask progress or native overlay changed: " + overlay);
                     }
                     var playerState = client.getEntityRenderDispatcher().getRenderer(client.player).createRenderState(client.player, 0);
-                    if (((naturality.client.entity.MobDeathState) playerState).naturality$deathPixels() != 0)
+                    if ((TestFixtures.require((naturality.client.entity.MobDeathState) playerState, "(naturality.client.entity.MobDeathState) playerState")).naturality$deathPixels() != 0)
                         throw new AssertionError("Player must not inherit mob death pixels");
                 });
                 context.takeScreenshot("mob-death-pixels-" + deathTick);
             }
             context.runOnClient(client -> {
-                for (var entity : client.level.entitiesForRendering()) {
+                for (var entity : TestFixtures.level(client).entitiesForRendering()) {
                     if (!(entity instanceof net.minecraft.world.entity.Mob mob)) continue;
                     var shape = naturality.client.particle.DeathSmoke.shape(mob);
                     if (shape == null || shape.points().isEmpty()) throw new AssertionError("Missing posed death model");
@@ -119,7 +119,7 @@ public final class MobArrowsGameTest implements FabricClientGameTest {
                 var ordinary = client.particleEngine.createParticle(net.minecraft.core.particles.ParticleTypes.POOF, 0, 101, 0, 0, 0, 0);
                 if (ordinary instanceof naturality.client.particle.DeathSmokeParticle)
                     throw new AssertionError("Unrelated poof changed");
-                ordinary.remove();
+                TestFixtures.require(ordinary, "ordinary").remove();
             });
             // ParticleEngine integrates newly queued particles on the next tick.
             context.waitTicks(1);
@@ -131,12 +131,12 @@ public final class MobArrowsGameTest implements FabricClientGameTest {
             context.waitTicks(5);
             for (int tick : new int[] {1,7,19}) {
                 context.runOnClient(client -> {
-                    for (var entity : client.level.entitiesForRendering())
+                    for (var entity : TestFixtures.level(client).entitiesForRendering())
                         if (entity instanceof net.minecraft.world.entity.monster.spider.Spider spider) spider.deathTime=tick;
                 });
                 context.takeScreenshot("spider-death-lift-"+tick);
                 context.runOnClient(client -> {
-                    for (var entity : client.level.entitiesForRendering())
+                    for (var entity : TestFixtures.level(client).entitiesForRendering())
                         if (entity instanceof net.minecraft.world.entity.monster.spider.Spider spider) {
                             var shape=naturality.client.particle.DeathSmoke.shape(spider);
                             if (shape==null) throw new AssertionError("Spider death model must be captured");

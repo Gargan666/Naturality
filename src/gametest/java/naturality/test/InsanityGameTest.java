@@ -18,7 +18,7 @@ public final class InsanityGameTest implements FabricClientGameTest {
         if (!condition) throw new AssertionError(message);
     }
     private static Mob cow(net.minecraft.client.Minecraft client) {
-        for (var entity : client.level.entitiesForRendering()) if (entity.getType() == EntityTypes.COW) return (Mob)entity;
+        for (var entity : TestFixtures.level(client).entitiesForRendering()) if (entity.getType() == EntityTypes.COW) return (Mob)entity;
         throw new AssertionError("Missing cow fixture");
     }
     public void runTest(ClientGameTestContext context) {
@@ -61,13 +61,13 @@ public final class InsanityGameTest implements FabricClientGameTest {
             context.waitTicks(5);
             context.runOnClient(client -> {
                 var dispatcher=client.getEntityRenderDispatcher();
-                for(var entity:client.level.entitiesForRendering()) if(entity.getType()==EntityTypes.PIG)
+                for(var entity:TestFixtures.level(client).entitiesForRendering()) if(entity.getType()==EntityTypes.PIG)
                     check(((InsanityState)dispatcher.extractEntity(entity,1)).naturality$insanity().hallucination!=null,
                         "Mob spawned after effect starts is immediately affected");
                 // Exercise a live set larger than the old cache ceiling, then revisit an evicted mob.
                 var sources=new java.util.ArrayList<Mob>();
                 for(int i=0;i<320;i++) {
-                    var mob=EntityTypes.COW.create(client.level,net.minecraft.world.entity.EntitySpawnReason.COMMAND);
+                    var mob=TestFixtures.require(EntityTypes.COW.create(TestFixtures.level(client),net.minecraft.world.entity.EntitySpawnReason.COMMAND), "mob");
                     mob.setId(-4_000_000-i);mob.setPos(0,101,12);sources.add(mob);
                     check(((InsanityState)dispatcher.extractEntity(mob,1)).naturality$insanity().hallucination!=null,
                         "Every mob beyond 256 receives a model: "+i);
@@ -86,17 +86,17 @@ public final class InsanityGameTest implements FabricClientGameTest {
                     && ((InsanityState)dispatcher.extractEntity(mount,1)).naturality$insanity().hallucination!=null,
                     "Riders and ridden mobs both receive hallucinations");
                 rider.stopRiding();
-                var difficulty=client.level.getLevelData().getDifficulty();
-                client.level.getLevelData().setDifficulty(net.minecraft.world.Difficulty.PEACEFUL);
+                var difficulty=TestFixtures.level(client).getLevelData().getDifficulty();
+                TestFixtures.level(client).getLevelData().setDifficulty(net.minecraft.world.Difficulty.PEACEFUL);
                 try {
                     for(int i=0;i<32;i++) {
-                        var mob=EntityTypes.COW.create(client.level,net.minecraft.world.entity.EntitySpawnReason.COMMAND);
+                        var mob=TestFixtures.require(EntityTypes.COW.create(TestFixtures.level(client),net.minecraft.world.entity.EntitySpawnReason.COMMAND), "mob");
                         mob.setId(-4_002_000-i);mob.setPos(0,101,12);
                         check(((InsanityState)dispatcher.extractEntity(mob,1)).naturality$insanity().hallucination!=null,
                             "Peaceful never rejects a render-only monster disguise");
                     }
-                } finally {client.level.getLevelData().setDifficulty(difficulty);}
-                var dragon=EntityTypes.ENDER_DRAGON.create(client.level,net.minecraft.world.entity.EntitySpawnReason.COMMAND);
+                } finally {TestFixtures.level(client).getLevelData().setDifficulty(difficulty);}
+                var dragon=TestFixtures.require(EntityTypes.ENDER_DRAGON.create(TestFixtures.level(client),net.minecraft.world.entity.EntitySpawnReason.COMMAND), "dragon");
                 dragon.setId(-4_001_000);dragon.setPos(0,110,20);
                 check(((InsanityState)dispatcher.extractEntity(dragon,1)).naturality$insanity().hallucination!=null,
                     "Non-living-render-state boss receives a hallucination");
@@ -124,7 +124,7 @@ public final class InsanityGameTest implements FabricClientGameTest {
             server.runCommand("effect clear @a naturality:insanity");
             context.waitTicks(10);
             context.runOnClient(client -> {
-                check(!client.player.hasEffect(NaturalityEffects.INSANITY), "Effect clears on client");
+                check(!TestFixtures.player(client).hasEffect(NaturalityEffects.INSANITY), "Effect clears on client");
                 var data = ((InsanityState)client.getEntityRenderDispatcher().extractEntity(cow(client), 1)).naturality$insanity();
                 check(data.hallucination == null && data.alpha == 1, "Distant hallucinations clear with effect");
             });

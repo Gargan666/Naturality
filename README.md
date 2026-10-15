@@ -54,7 +54,7 @@ visual features and shader-pack combinations may still need compatibility work.
 
 Put texture PNGs in [`resources/textures`](resources/textures/) and Ogg Vorbis audio clips in [`resources/sounds`](resources/sounds/). Use mono audio for positional sounds. Edit [`resources/sounds.json`](resources/sounds.json) to connect clips to sound events. Gradle packages these resources automatically for builds and development launches. See [`resources/README.txt`](resources/README.txt) for folder locations and a portal sound replacement example.
 
-See [`PROJECT_REFERENCE.txt`](PROJECT_REFERENCE.txt) for the project layout, versions, build commands, Java setup, and resource workflow.
+See [`AGENTS.md`](AGENTS.md) for the current project layout, versions, working rules, feature map, and resource workflow. Read its MUST READ section first, then only the relevant optional sections.
 
 Use **JDK 25** and the included Gradle wrapper to build the mod; no separate Gradle installation is needed.
 
@@ -91,7 +91,15 @@ On macOS or Linux, use `./gradlew build`. The first build downloads dependencies
 .\gradlew.bat runClientGameTest "-PclientTests=fog,lighting"
 ```
 
-Choose suites relevant to your changes; see [`PROJECT_REFERENCE.txt`](PROJECT_REFERENCE.txt) for testing guidance and [`PORTAL_GLOW.txt`](PORTAL_GLOW.txt) for portal details.
+Choose small checks focused on the changed behavior; see [`AGENTS.md`](AGENTS.md) for testing guidance and [`PORTAL_GLOW.txt`](PORTAL_GLOW.txt) for portal details. The current suite selector does not skip normal content loading; a more selective pipeline is planned.
+
+For Java warnings, run **Terminal > Run Task > Fabric: audit Java warnings**, or:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-java-warnings.ps1 -Offline
+```
+
+The audit checks all Gradle Java source sets, including game tests, portal tests and generated models. It saves [`summary.json`](build/java-audit/all/summary.json) and [`problems.json`](build/java-audit/all/problems.json), so agents can read the warning list without a chat paste. Any warning/error makes the audit fail. Omit `-Offline` if dependencies need downloading; `-CompilerJar <path>` selects an Eclipse compiler supporting Java 25 when the VS Code Java extension is unavailable. The narrower `-Scope Production` check is not a workspace-wide pass. This is a saved-source batch audit; unsaved editor buffers, other extensions and editor defaults can produce different Problems-panel counts.
 
 GitHub Actions builds pushes and pull requests with Java 25. You can also start it manually from the **Actions** tab. Successful runs provide the JARs as an **Artifacts** download; these are development builds, not published releases. In-game client suites are run separately.
 

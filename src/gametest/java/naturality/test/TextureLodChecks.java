@@ -50,12 +50,12 @@ final class TextureLodChecks {
         var device=RenderSystem.getDevice();var encoder=device.createCommandEncoder();
         try(var uniform=device.createBuffer(() -> "Texture fade inputs",128,data);
             var readback=device.createBuffer(() -> "Texture fade readback",9,samples*width*height*4L)) {
-            try(var pass=encoder.createRenderPass(() -> "Texture fade test",target.getColorTextureView(),Optional.empty())) {
+            try(var pass=encoder.createRenderPass(() -> "Texture fade test",TestFixtures.require(target.getColorTextureView(), "target.getColorTextureView()"),Optional.empty())) {
                 pass.setPipeline(RenderSystem.getCompiledPipeline(PIPELINE));
                 pass.setUniform("Sampler0",atlas.getTextureView(),RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
                 pass.setUniform("LodTest",uniform);pass.draw(3,1,0,0);
             }
-            encoder.copyTextureToBuffer(target.getColorTexture(),readback,0,() -> {},0);
+            encoder.copyTextureToBuffer(TestFixtures.require(target.getColorTexture(), "target.getColorTexture()"),readback,0,() -> {},0);
             try(var fence=encoder.createFence()){encoder.submit();fence.awaitCompletion(-1);}
             try(var mapped=readback.map(true,false)) {
                 for(int row=0;row<width*height;row++)for(int step=0;step<samples;step++) {
