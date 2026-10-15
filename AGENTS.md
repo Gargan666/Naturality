@@ -30,8 +30,7 @@ All paths below are relative to the repository root. The feature map uses these 
 | `src/main/resources/` | Metadata, data packs and shared assets. Mod data: `data/naturality/`; vanilla overrides use `data/minecraft/` or `assets/minecraft/`. |
 | `src/client/resources/` | Client assets and shader overrides, under `assets/naturality/` and `assets/minecraft/`. |
 | `resources/` | Artist inputs: textures, sounds and model exports. Packaging/generation is defined in `build.gradle`. |
-| `src/gametest/java/naturality/test/` | Fabric client integration tests; selector: `SelectedClientGameTests.java`. |
-| `src/portalGlowTest/java/` | Small executable checks; wired through `checkPortalGlow` in `build.gradle`. |
+| `src/gametest/java/` | All test Java sources. Fabric integration tests live in `naturality/test/`, selected by `SelectedClientGameTests.java`; plain Java checks retain their feature packages and run through `checkPortalGlow`. |
 | `scripts/`, `.vscode/tasks.json` | Maintenance/audit scripts and shared development tasks. |
 
 Place behavior in its owning feature package; use mixins to apply that behavior and initialization for registration/wiring. Follow the file boundaries below. Keep client dependencies out of common code. Match neighboring formatting and descriptive names. Use lowercase resource IDs/filenames with underscores. Edit source inputs, never generated `build/` or IDE `bin/` copies. Keep temporary diagnostics in `build/`, not source folders or this reference.
@@ -60,7 +59,10 @@ Apply these rules to new work and agreed restructuring. The current feature map 
 - Update the affected row in the same change that adds, removes, renames or moves a feature. Search for old paths/names in registrations, mixin lists, resources, tests, build wiring and documentation. Remove stale entries instead of adding a contradictory update.
 - Keep universal rules in MUST READ; put feature details and situational workflows in READ WHEN RELEVANT. Add a warning rule only for a demonstrated recurring issue, with its cause and concrete fix; merge duplicates.
 - For a major rewrite, first document the agreed target and responsibility boundaries using the migration template below. Until migrated, show the current location separately from the proposed destination. Update the current map as each part moves; remove the temporary migration map when complete.
-- No new target directory layout is chosen yet. This reference supports a later redesign; it is not an instruction to reorganize the current code now.
+- The target is a feature-owned layout, scaffolded but not yet migrated; see **Target layout and migration map** below. Keep `M` and `C` separate, with matching relative feature paths where both sides exist. Client-only features need no empty common implementation.
+- Put dedicated feature hooks in `<category>/<feature>/mixins/`. Use `mixins/<category>/` only for small, general vanilla changes without a dedicated feature owner; the behavior still belongs to its feature implementation. A hook's target class does not determine its owner: a sun-beam hook into `SkyRenderer` belongs to `sky/overworld/sunbeams/mixins/`.
+- Use dimensions where they explain ownership (`sky/overworld/`, `sky/end/`, `worldgen/end/`); put truly cross-dimension code under `shared/`, without duplicating it. System frameworks live under `systems/<system>/framework/` when they have separate items. Feature-specific rendering, audio, networking and helpers follow their feature; reusable APIs go under `api/`.
+- Migrate and consolidate one coherent feature at a time into its final folder. Empty destination folders do not mean a feature has moved. Do not bulk-move source files, change resource IDs, or add a new build/source-set layout merely to match the scaffold.
 
 ### Warnings: check the whole workspace and fix the cause
 
@@ -175,7 +177,7 @@ Menu previews use temporary/disposable state. Preserve cancellation, stale-resul
 
 Run `.\gradlew.bat listClientTests` without launching Minecraft, then obtain any missing run authorization under the MUST READ rules before executing exact IDs, e.g. `.\gradlew.bat runClientGameTest "-PclientTests=cloud-geometry,fluid-simulation"`. Command examples are not authorization. `SelectedClientGameTests.java` lazily loads selected check classes, expands groups and deduplicates IDs; `all` is explicit full regression. `assemble` packages; `build` also runs `checkPortalGlow`. No selective content-loading pipeline exists yet: fixture-free checks in this client runner still pay normal game startup; use non-game checks where possible.
 
-The catalog records `id`, implementation `class` (in `naturality.test`) and `fixture` (`none`, `client`, `disposable`, `persistent` or `preview`). Default invocation is a `FabricClientGameTest`; optional `invoke` and `method` select a static no-argument check (`static`), a no-argument check on the client thread (`client`), a method accepting `ClientGameTestContext` (`context`), or a method accepting `Minecraft` on the client thread with a disposable world (`world`). Keep method checks beside their owning test rather than creating tiny files. Fixture metadata describes setup requirements; each test must use the corresponding fixture API. Preserve compatibility group names only as aliases of independently runnable checks.
+The catalog records `id`, implementation `class` (in `naturality.test`) and `fixture` (`none`, `client`, `disposable`, `persistent` or `preview`). Default invocation is a `FabricClientGameTest`; optional `invoke` and `method` select a static no-argument check (`static`), a no-argument check on the client thread (`client`), a method accepting `ClientGameTestContext` (`context`), or a method accepting `Minecraft` on the client thread with a disposable world (`world`). Keep method checks beside their owning test rather than creating tiny files. Fixture metadata describes setup requirements; each test must use the corresponding fixture API. Preserve compatibility group names only as aliases of independently runnable checks. Plain Java checks share the `gametest` source set but remain outside this Minecraft-launching catalog: `checkPortalGlow` runs their existing entrypoint directly. `gametestClasses` compiles both kinds without running either.
 
 `DisposableWorlds.open(root)` must run before opening that world's storage. Hold its scope until the server and storage workers have stopped; only then close it. The API blocks metadata, player, saved-data, chunk/entity/POI and Fabric registry save paths; native directories/session locks can still be created. Menu previews register their temporary copy, never the user's source save. Normal worlds are not registered. Startup failure must retain protection while workers may still exist. Dedicated checks: `disposable-world` verifies absence of saved data through shutdown, `world-persistence` saves/reopens with explicit opt-in, and `menu-no-save` exercises preview integration. Maintain these hooks against matching Minecraft/Fabric sources when upgrading.
 
@@ -191,17 +193,61 @@ This is a reproducible Eclipse batch audit of saved Gradle Java sources, not a l
 
 Sharing a report's path (or attaching its JSON on another machine) replaces pasting hundreds of messages. If an editor-only warning remains unreproduced, request its source/code and one example location before diagnosing it. The policy file `.settings/org.eclipse.jdt.core.prefs` must stay versioned; machine-specific `.vscode/settings.json` should point `java.settings.url` to it.
 
-### Future layout migration template
+### Target layout and migration map
 
-Use only when a restructuring task is agreed. Keep this temporary block short, separate from the current feature map:
+**State: destination folders created; source migration has not started.** The Feature map above still describes the running implementation. Common/server code stays under `M`; client code stays under `C`. Relative ownership paths mirror one another where applicable. Existing entrypoint classes stay at their source root; shared registration wiring is planned for `bootstrap/`, with feature-specific registration delegated to its owner. Configuration data/gates stay in `config/`; configuration screens belong to `ui/settings/`.
 
-```text
-Target layout: <agreed design, or explicitly undecided>
-Responsibility boundaries: <common/server, client, consolidated features, framework/items, category or dedicated hooks, visual-data producers/consumers, tests>
-Feature | Current owner/path | Target owner/path | State (planned/migrating/current)
-Integration updates: <entrypoints, mixin gates/lists, build/source sets, resource IDs>
-Compatibility: <saved data/config/network contracts to preserve or migrate>
-Verification: <narrow behavior checks plus full Java audit>
-```
+`scripts/initialize-feature-layout.ps1` is the authoritative list of scaffold directories. Run it from any working directory to recreate empty destinations after checkout; Git does not retain empty directories. It creates parents and feature folders, adds no placeholder Java/files, and never moves or deletes source. Keep its list synchronized with this map while migration is underway; retire it once real files preserve the layout. Existing folders can contain both unmigrated files and empty new children during the transition.
 
-After migration, replace the current map with verified destinations, remove retired paths and the temporary block, and preserve only continuing behavior/contracts. A rewritten implementation does not need its development history retained here.
+| Parent | Ownership |
+| --- | --- |
+| `sky/` | Sky visuals and their individual event behavior, grouped by dimension or `shared/`. |
+| `systems/` | Weather, sky-event orchestration, gravity, villager work, reputation, sleep and navigation. |
+| `worldgen/` | Dimension-specific terrain, biomes and decoration placement. |
+| `blocks/` | Coherent block features such as chorus, fire and snow. |
+| `entities/` | Mob/projectile features, their behavior and presentation. |
+| `fluids/` | Water/lava features and their shared liquid code. |
+| `particles/` | Independent particle changes; particles belonging to weather, portals or another feature follow that owner. |
+| `portals/` | Nether and End portal features, including their particles/audio. |
+| `effects/` | Status effects and local hallucination/horror features. |
+| `rendering/` | General lighting, shadows, fog, culling, distance detail, glint and breaking visuals. |
+| `ui/` | Menus, preview worlds, settings screens, camera and HUD features. |
+| `audio/` | Standalone ambience/underwater audio; feature-specific sound stays with its feature. |
+| `api/` | Proven cross-feature libraries, including disposable worlds, chunk access, geometry and rendering helpers. |
+| `bootstrap/`, `config/` | Shared mod wiring and configuration infrastructure. |
+| `mixins/` | Small general hooks grouped by `blocks`, `entities`, `items`, `particles`, `world`, and client `menus`/`rendering`. |
+
+Destinations below are relative to the applicable `M`/`C` root. **Every row is planned**, including existing same-named folders whose contents still need ownership review. Dedicated hooks move into the destination's `mixins/` child. Do not create a mixin folder for a feature that has no hooks.
+
+| Current owner/files | Planned destination(s) |
+| --- | --- |
+| `C/sky/SunBeams.java`, `SunLensFlare.java`; `SunBeamsMixin` | `sky/overworld/sunbeams/` (paired beam/flare implementation) |
+| `C/sky/SunsetPalette.java`; `SkyGradientRenderer.java`; `EndSkyRenderer.java` | Respectively `sky/overworld/sunset/`, `sky/shared/atmosphere/`, `sky/end/atmosphere/` |
+| `C/cloud/` | `sky/shared/clouds/`; keep dimension-specific lighting with this cloud feature |
+| `M/sky/Aurora*`, `C/sky/Aurora*` | `sky/shared/aurora/` (both Overworld and End; keep visual-data generation separate from its use) |
+| Individual `M/sky/` cycles/items and `C/sky/` renderers | `sky/overworld/bloodmoon/`, `proximity/`, `rainbow/`, `meteors/`; `sky/end/flashes/` |
+| Shared `M/sky/SkyEvent*`, `C/sky/SkyEventsClient.java` | `systems/skyevents/framework/`; individual events remain owned by their sky feature |
+| Weather orchestration, state, commands, payloads and shared environment data in `M/weather/`, `C/weather/` | `systems/weather/framework/`; End orchestration under `systems/weather/end/framework/` |
+| Rain, accumulation/thaw, lightning and wind in weather/particle packages | `systems/weather/overworld/rain/`, `snow/`, `lightning/`; `systems/weather/wind/` (including their particles, sound and foliage effects) |
+| Rise and `M/starfall/`, related client weather/entity/particle classes | `systems/weather/end/rise/`, `starfall/` |
+| End gravity, ceiling navigation and shared gravity hooks in weather packages | `systems/gravity/`; the Distortion status-effect adapter belongs to `effects/distortion/` |
+| `M/villager/`, `C/villager/` work scheduling and profession implementations | `systems/villagerwork/framework/`, `professions/`, `fishing/`, `bread/`, `gates/`, `shelter/` |
+| Reputation/gossip in villager packages; sleep and navigation packages | `systems/reputation/`, `systems/sleep/`, `systems/navigation/` |
+| `M/worldgen/` clover, moss, mountain waterfalls | `worldgen/overworld/clover/`, `moss/`, `waterfalls/` |
+| `M/worldgen/` End terrain, layers, Crags and Wilds | `worldgen/end/terrain/`, `materials/`, `lirestonecrags/`, `endwilds/` |
+| Chorus/block classes; fire and snow packages | `blocks/chorus/`, `blocks/lyrenheath/`, `blocks/fire/`, `blocks/snow/`; weather-triggered changes stay in weather |
+| Entity, fish and ghast packages and dedicated hooks | `entities/maddened/`, `creepers/`, `ghasts/`, `fish/`, `arrows/`, `fireballs/`, `zombies/`, `floatingmobtilt/`, `endcrystals/`, `crowdpanic/` |
+| `C/fluid/` and liquid-specific particles | `fluids/water/`, `fluids/lava/`, `fluids/shared/`; keep simulation/visual-data production separate from use |
+| Standalone particle implementations and small application hooks | `particles/smoke/`, `flame/`, `leaves/`, `sand/`, `explosions/`, `potionclouds/`, `deathsmoke/`; generic application wiring in `mixins/particles/` |
+| Portal packages, portal particles and `PortalSoundInstance.java` | `portals/nether/`, `portals/end/` |
+| Confusion, insanity and horror packages | `effects/confusion/`, `effects/insanity/`, `effects/ambienthorror/` |
+| Lighting, shadow, fog, render, glint and breaking packages | `rendering/lighting/`, `shadows/`, `fog/`, `culling/`, `distantdetail/`, `glint/`, `breaking/` |
+| Menu/preview packages and menu hooks; camera and client config packages | `ui/menus/previews/`, `ui/menus/title/`, `ui/camera/`, `ui/hud/`, `ui/settings/` |
+| `C/sound/` standalone ambience/underwater classes | `audio/ambience/caves/`, `audio/ambience/end/`, `audio/underwater/`; weather filters remain with weather |
+| `M/util/`, shared `SavedRandom`, `C/AtlasLocations.java` and shared shader setup | `api/worlds/`, `api/geometry/`, `api/random/`, `api/rendering/`; assign by actual callers, not by helper class name |
+
+Before migrating a row, trace its imports/callers to assign shared files once; split mixed ownership deliberately instead of moving an entire old package by prefix. Reassess feature depth during consolidation: add subfeatures only for distinct responsibilities, not one folder per class. Small one-file changes can live directly in their category; no speculative empty dimensions or generic `misc`/`utils` buckets.
+
+**Integration checklist for each migration:** update Java packages/imports, accessors, entrypoints, mixin configuration/metadata and gates, reflection/class-name strings, generators, tests and documentation. Preserve package null contracts in new packages. Mixin configurations must target dedicated `mixins` packages; do not widen their package root over ordinary feature classes. Inspect configuration wiring when the first hooks move. Keep shaders/assets in their required resource source sets and preserve packaged identifiers; physical Java proximity does not justify relocating resources or copying them into Java folders. Keep tests in their existing source sets during this scaffold step.
+
+**Compatibility and validation:** preserve config keys, save formats, network/resource IDs, feature gates and client/server separation. Compile and run the all-source warning audit for code moves; execute game tests only under the MUST READ authorization rules. Mark a row migrating/current only when its real implementation changes, update the current feature map in the same change, and remove completed migration rows rather than retaining a history.

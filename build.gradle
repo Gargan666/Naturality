@@ -276,18 +276,11 @@ tasks.named('vscode') {
 	}
 }
 
-// Small executable geometry checks, using the client's existing dependencies.
-sourceSets {
-	portalGlowTest {
-		compileClasspath += sourceSets.client.output + sourceSets.client.compileClasspath
-		runtimeClasspath += sourceSets.client.output + sourceSets.client.runtimeClasspath
-	}
-}
-
+// Plain Java checks share the gametest source set but still run without launching Minecraft.
 tasks.register('checkPortalGlow', JavaExec) {
 	group = 'verification'
-	description = 'Checks portal glow orientation and one-sided visibility for both portal axes.'
-	classpath = sourceSets.portalGlowTest.runtimeClasspath
+	description = 'Runs the existing portal, water, rope and weather math checks without launching Minecraft.'
+	classpath = sourceSets.gametest.runtimeClasspath
 	mainClass = 'naturality.client.particle.PortalGlowGeometryTest'
 }
 

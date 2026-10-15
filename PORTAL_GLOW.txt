@@ -120,7 +120,7 @@ src/client/resources/assets/naturality/shaders/core/portal_glow.fsh
   Fixed pixel grid, stepped sine animation, eased palette and alpha, fog/OIT.
 src/client/java/naturality/client/mixin/NetherPortalBlockMixin.java
   Client-only observation hook at the end of NetherPortalBlock.animateTick.
-src/portalGlowTest/java/naturality/client/particle/PortalGlowGeometryTest.java
+src/gametest/java/naturality/client/particle/PortalGlowGeometryTest.java
   Geometry checks, run automatically by Gradle check/build.
 
 TEST IN GAME
