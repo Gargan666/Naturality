@@ -438,6 +438,11 @@ public final class PreviewsMixins {
                 pendingConnection = null;
             }
         }
+        @Inject(method = "disconnect(Lnet/minecraft/client/gui/screens/Screen;ZZ)V", at = @At("RETURN"))
+        private void naturality$releasePreview(Screen screen, boolean packs, boolean sound, CallbackInfo ci) {
+            MenuPreview.disconnected();
+            naturality$loadTracker = null;
+        }
         @WrapOperation(method = "disconnect(Lnet/minecraft/client/gui/screens/Screen;ZZ)V", at = @At(value = "INVOKE",
                 target = "Lnet/minecraft/client/server/IntegratedServer;isShutdown()Z"))
         private boolean naturality$doNotWaitForPreview(IntegratedServer server, Operation<Boolean> original) {

@@ -72,9 +72,20 @@ public final class MenuPreview {
     }
     private static void discard(Minecraft client, Screen destination) {
         cancelPreparation();
+        // A stale preview reference must never disconnect a replacement gameplay server.
+        if (server == null || server != client.getSingleplayerServer()) {
+            disconnected();
+            return;
+        }
         switching = true;
         try { client.disconnect(destination, false, false); }
-        finally { server = null; switching = false; connected = false; hiddenLoadingScreen = null; }
+        finally { disconnected(); switching = false; }
+    }
+    /** Release client ownership after native disconnect; retiring servers keep their private save policy. */
+    public static void disconnected() {
+        cancelPreparation();
+        server = null; connected = false; hiddenLoadingScreen = null;
+        MenuWorld.camera().suspend();
     }
     /** Observe real menu navigation, never replace a user's destination with an old screen. */
     public static void navigated(Screen destination) {
@@ -159,7 +170,11 @@ public final class MenuPreview {
                 com.mojang.blaze3d.systems.RenderSystem.getDevice().getDeviceInfo().isZZeroToOne());
     }
     public static Screen loadingScreen(Screen proposed) {
-        if (stopped || backgroundScreen == null) return proposed;
+        if (stopped) return proposed;
+        if (backgroundScreen == null) {
+            navigated(proposed);
+            return proposed;
+        }
         if (proposed == null && (preparingOwnWorld() || active() || switching)) return backgroundScreen;
         if ((preparingOwnWorld() || switching) && proposed != null) {
             String name = proposed.getClass().getSimpleName();
@@ -176,9 +191,16 @@ public final class MenuPreview {
         // Existing non-menu test suites retain their own world ownership.
         String suites = System.getProperty("naturality.test.suites");
         String activeCheck = System.getProperty("naturality.test.activeCheck", "");
-        if (suites != null && !activeCheck.equals("menu-world") && !activeCheck.equals("menu-no-save")) return;
+        if (suites != null && !activeCheck.equals("menu-world") && !activeCheck.equals("menu-no-save")
+                && !activeCheck.equals("menu-world-entry")) return;
         // Fabric's test scheduler must finish its own overlay/thread barrier before a test owns a server.
         if (suites != null && !attempted && client.gui.overlay() != null) return;
+        // Check ownership before any cleanup or connection work can act on Minecraft's current server.
+        if (server != null && server != client.getSingleplayerServer()) {
+            disconnected();
+            attempted = false;
+            return;
+        }
         if (loading != null && client.gui.screen() != loading.screen) {
             if (server != null && client.getSingleplayerServer() == server) discard(client, client.gui.screen());
             else cancelPreparation();
@@ -223,12 +245,6 @@ public final class MenuPreview {
             configureServer(server, loading);
             ((MenuPreviewConnection)client).naturality$connectPreview();
             connected = true;
-        }
-        if (server != null && server != client.getSingleplayerServer()) {
-            server = null; ready = starting = false;
-            attempted = false;
-            MenuWorld.camera().suspend();
-            return;
         }
         var level = client.level;
         var player = client.player;

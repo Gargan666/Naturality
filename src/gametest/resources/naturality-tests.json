@@ -8,6 +8,7 @@
     {"id": "ambient-horror", "class": "AmbientHorrorGameTest", "fixture": "disposable"},
     {"id": "client-startup", "class": "ClientStartupGameTest", "fixture": "client"},
     {"id": "menu-world", "class": "MenuWorldGameTest", "fixture": "preview"},
+    {"id": "menu-world-entry", "class": "MenuWorldEntryGameTest", "fixture": "preview"},
     {"id": "hardcore-lighting", "class": "NativeHardcoreLightingGameTest", "fixture": "disposable"},
     {"id": "shader-stall", "class": "ShaderStallGameTest", "fixture": "disposable"},
     {"id": "sleep", "class": "SleepAccelerationGameTest", "fixture": "disposable"},

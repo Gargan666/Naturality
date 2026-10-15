@@ -231,7 +231,7 @@ Read `resources/README.txt` for packaging/audio (Ogg Vorbis; mono for positional
 
 Use non-loading chunk availability checks. Mesh workers read bounded snapshots, not mutable client-world fallbacks; unknown/out-of-bounds cells need safe results. Keep worldgen within region write/build-height bounds and bounded work budgets. Clear world-specific caches on world changes and resources on reload/shutdown. Do not synchronously wait on a worker pool whose tasks need render-thread uploads; see `C/api/rendering/ShaderPreparation.java`.
 
-Menu previews use temporary/disposable state. Preserve cancellation, stale-result rejection and save-access cleanup even when another close operation fails. Do not test destructive operations against the user's saved worlds. Worldgen changes normally affect newly generated chunks; do not introduce retrofits unless requested.
+Menu previews use temporary/disposable state. Preserve cancellation, stale-result rejection and save-access cleanup even when another close operation fails. Release preview ownership on native disconnect and check server identity before cleanup: a retiring preview must never disconnect a replacement gameplay world. Keep its disposable save policy until its workers finish. The focused `menu-world-entry` check covers native preview detachment followed by a disposable gameplay world. Do not test destructive operations against the user's saved worlds. Worldgen changes normally affect newly generated chunks; do not introduce retrofits unless requested.
 
 ### Selecting and running checks
 
