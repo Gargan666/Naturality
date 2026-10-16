@@ -99,8 +99,8 @@ public final class FractionalLightField {
         var pos = cursor.set(BlockPos.getX(key), BlockPos.getY(key), BlockPos.getZ(key));
         // Build limits constrain terrain, not entity light. Loaded columns have
         // open air above/below their terrain and can still contain flying entities.
-        var result = !naturality.api.worlds.LoadedChunks.has(level, pos)
-            ? Blocks.BEDROCK.defaultBlockState() : level.getBlockState(pos);
+        var chunk = level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
+        var result = chunk == null ? Blocks.BEDROCK.defaultBlockState() : chunk.getBlockState(pos);
         blocks.put(key, result);
         return result;
     }

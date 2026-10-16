@@ -23,6 +23,8 @@ public final class FeatureMixinPlugin implements IMixinConfigPlugin {
         // Optional renderer targets must never be resolved when Sodium is absent.
         if (name.startsWith("Sodium") && !net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("sodium")) return false;
         boolean client = mixin.startsWith("naturality.client.");
+        // Player body geometry and its camera/model must agree even without optional visuals.
+        if (name.startsWith("PlayerRotation") || name.startsWith("PlayerSwimming") || name.startsWith("WaterSurface")) return true;
         if (name.startsWith("MenuPreview")) return true;
         if (Set.of("TitleLogoMixin", "TitleWorldMixin", "MenuPanoramaMixin", "MenuPreviewScreenMixin",
                 "MenuPreviewCameraMixin", "MenuPreviewHudMixin", "MenuPreviewOptionsMixin", "MenuPreviewVisibilityMixin",
@@ -32,8 +34,8 @@ public final class FeatureMixinPlugin implements IMixinConfigPlugin {
                 "MenuPreviewPlayerMixin", "MenuPreviewSoundMixin", "MenuPreviewMobMixin", "MenuPreviewGenerationMobMixin", "MenuPresetSkyMixin").contains(name)) return true;
         if (name.equals("NavigationCompassMixin") || name.equals("NavigationHudMixin")) return NAVIGATION_INSTRUMENTS.enabled();
         if (name.startsWith("Insanity")) return CONTENT.enabled();
-        if (name.equals("MaddenedSpawnMixin")) return CONTENT.enabled() && SKY_EVENT_CYCLES.enabled();
-        if (name.startsWith("BloodMoonSpawn") || name.startsWith("BloodMoonLocal")) return SKY_EVENT_CYCLES.enabled();
+        if (name.equals("MaddenedSpawnMixin")) return CONTENT.enabled() && EVENT_CYCLES.enabled();
+        if (name.startsWith("BloodMoonSpawn") || name.startsWith("BloodMoonLocal")) return EVENT_CYCLES.enabled();
         if (name.equals("MaddenedSoundMixin") || name.equals("MaddenedSoundPitchMixin")) return CONTENT.enabled();
         if (name.startsWith("FloatingMobTilt")) return VISUAL_OVERHAUL.enabled() || GHAST_SQUASH.enabled() || GHAST_PHYSICS.enabled();
         if (name.equals("GhastTentaclePhysicsMixin")) return GHAST_PHYSICS.enabled();

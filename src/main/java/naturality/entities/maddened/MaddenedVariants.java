@@ -3,8 +3,8 @@ package naturality.entities.maddened;
 import java.util.IdentityHashMap;
 import java.util.Map;
 import naturality.config.startup.FeatureConfig.Feature;
-import naturality.systems.skyevents.framework.SkyEvents;
-import naturality.systems.skyevents.framework.SkyEvents.SkyEventType;
+import naturality.systems.event.framework.Events;
+import naturality.systems.event.framework.Events.EventType;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
@@ -20,9 +20,9 @@ public final class MaddenedVariants {
         if (previous != null && previous != variant) throw new IllegalArgumentException("Maddened counterpart already registered");
     }
     public static EntityType<?> forSpawn(ServerLevel level, EntityType<?> original) {
-        if (!Feature.CONTENT.enabled() || !Feature.SKY_EVENT_CYCLES.enabled()
+        if (!Feature.CONTENT.enabled() || !Feature.EVENT_CYCLES.enabled()
                 || original.getCategory() != MobCategory.MONSTER
-                || SkyEvents.strength(level, SkyEventType.BLOOD_MOON) <= 0) return original;
+                || Events.strength(level, EventType.BLOOD_MOON) <= 0) return original;
         return VARIANTS.getOrDefault(original, original);
     }
     private MaddenedVariants() {}

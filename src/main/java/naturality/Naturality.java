@@ -22,6 +22,7 @@ public class Naturality implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
+        naturality.systems.rotation.PlayerRotation.initialize();
         naturality.systems.navigation.NavigationInstruments.NavigationTargetPayload.initialize();
         if (naturality.config.startup.FeatureConfig.Feature.NAVIGATION_INSTRUMENTS.enabled()) naturality.systems.navigation.NavigationInstruments.initialize();
         naturality.entities.arrows.ArrowImpactPayload.initialize();
@@ -46,6 +47,7 @@ public class Naturality implements ModInitializer {
         naturality.entities.fireballs.FireballImpactPayload.initialize();
         naturality.systems.weather.framework.WeatherSystem.initialize();
         naturality.systems.skyevents.framework.SkyEvents.initialize();
+        naturality.systems.event.framework.Events.initialize();
         naturality.blocks.snow.SnowGeometry.SnowCompaction.initialize();
         naturality.blocks.snow.SnowGeometry.SnowLighting.initialize();
 		NaturalitySounds.initialize();

@@ -38,6 +38,12 @@ public final class FeatureConfig {
         if (Files.exists(FILE)) try (var reader = Files.newBufferedReader(FILE)) {
             var config = GSON.fromJson(reader, FeatureConfig.class);
             if (config != null && config.features != null) {
+                // Preserve the old combined scheduler/visual choices when separating gameplay events.
+                if (!config.features.containsKey(Feature.EVENT_CYCLES.key())) {
+                    config.features.put(Feature.EVENT_CYCLES.key(), config.get(Feature.SKY_EVENT_CYCLES));
+                    config.features.put(Feature.BLOOD_MOON.key(),
+                        config.get(Feature.BLOOD_MOON) && config.get(Feature.SKY_EVENTS));
+                }
                 for (var feature : Feature.values()) config.features.putIfAbsent(feature.key(), true);
                 return config;
             }
@@ -101,13 +107,14 @@ public final class FeatureConfig {
         SNOW_WORLDGEN(Group.GAMEPLAY),
         UNDERGROUND_LIGHTNING(Group.GAMEPLAY),
         SKY_EVENT_CYCLES(Group.GAMEPLAY),
+        EVENT_CYCLES(Group.GAMEPLAY),
         VISUAL_OVERHAUL(Group.VISUAL),
         RESOURCE_OVERRIDES(Group.VISUAL, VISUAL_OVERHAUL),
         END_SKY(Group.VISUAL, VISUAL_OVERHAUL),
         SKY_EVENTS(Group.VISUAL, VISUAL_OVERHAUL),
         METEORS(Group.VISUAL, SKY_EVENTS),
         PROXIMITY(Group.VISUAL, SKY_EVENTS),
-        BLOOD_MOON(Group.VISUAL, SKY_EVENTS),
+        BLOOD_MOON(Group.VISUAL),
         RAINBOWS(Group.VISUAL, SKY_EVENTS),
         AURORAS(Group.VISUAL, SKY_EVENTS),
         END_FLASHES(Group.VISUAL, SKY_EVENTS),

@@ -14,6 +14,16 @@ public final class ElasticMotion {
     private final ArrayDeque<Step> steps = new ArrayDeque<>();
     private float[] base, target;
     private double lastTime;
+    private double duration = DURATION;
+    private double strength = 1;
+
+    public void configure(int speedPercent, int strengthPercent) {
+        double nextDuration = DURATION * 100 / Math.clamp(speedPercent, 25, 300);
+        double nextStrength = Math.clamp(strengthPercent, 0, 200) / 100.0;
+        if (duration != nextDuration || strength != nextStrength) reset();
+        duration = nextDuration;
+        strength = nextStrength;
+    }
 
     public static double elasticOut(double t) {
         if (t <= 0) return 0;
@@ -29,7 +39,7 @@ public final class ElasticMotion {
         if (base == null || time < lastTime || time - lastTime > 2) {
             base = next.clone(); target = next.clone(); steps.clear(); lastTime = time;
         }
-        while (!steps.isEmpty() && time - steps.peekFirst().time >= DURATION) {
+        while (!steps.isEmpty() && time - steps.peekFirst().time >= duration) {
             var step = steps.removeFirst();
             for (int i = 0; i < base.length; i++) base[i] += step.delta[i];
         }
@@ -49,7 +59,9 @@ public final class ElasticMotion {
         }
         float[] result = base.clone();
         for (var step : steps) {
-            float weight = (float)elasticOut((time - step.time) / DURATION);
+            double weightValue = elasticOut((time - step.time) / duration);
+            // Scale overshoot without changing the approach or exact endpoints.
+            float weight = (float)(weightValue > 1 ? 1 + (weightValue - 1) * strength : weightValue);
             for (int i = 0; i < result.length; i++) result[i] += step.delta[i] * weight;
         }
         return result;
@@ -77,6 +89,7 @@ public final class ElasticMotion {
             var targetPose = new Matrix4f().translationRotateScale(position, rotation, scale);
             return eased.mul(targetPose.invert().mul(pose));
         }
+        public void configure(int speedPercent, int strengthPercent) { motion.configure(speedPercent, strengthPercent); }
         public void reset() { motion.reset(); lastRotation.identity(); }
     }
 

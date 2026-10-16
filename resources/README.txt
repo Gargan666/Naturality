@@ -50,12 +50,6 @@ it play automatically. Other resource JSON files remain in src/main/resources.
 
 See AGENTS.md in the project root for the current project map and working rules.
 
-WEATHER PARTICLE PLACEHOLDERS
-Replace textures/particle/rain_cluster{,_1,_2}.png and snow_cluster{,_1,_2}.png with transparent
-square cluster artwork. Each image represents many droplets/flakes on one particle.
-See textures/particle/README.txt and the project's PARTICLE_WEATHER.txt for details.
-
-
 CHORUS FLOWER MODEL
 Edit block models/chorus_flower_bloom.json in this folder. Each build and
 Gradle development launch generates assets/naturality/models/block/chorus_flower_bloom.json

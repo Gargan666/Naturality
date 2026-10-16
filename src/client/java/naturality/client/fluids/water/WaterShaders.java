@@ -53,7 +53,7 @@ public final class WaterShaders {
         public static final RenderPipeline PIPELINE = RenderPipelines.register(
             RenderPipeline.builder(RenderPipelines.POST_PROCESSING_SNIPPET)
                 .withLocation(Naturality.id("pipeline/water_optics"))
-                .withVertexShader("core/screenquad")
+                .withVertexShader(Naturality.id("core/water_screen"))
                 .withFragmentShader(Naturality.id("core/water_optics"))
                 .withBindGroupLayout(BindGroupLayouts.PROJECTION)
                 .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
@@ -68,7 +68,7 @@ public final class WaterShaders {
         public static final RenderPipeline FINISH = RenderPipelines.register(
             RenderPipeline.builder(RenderPipelines.POST_PROCESSING_SNIPPET)
                 .withLocation(Naturality.id("pipeline/water_finish"))
-                .withVertexShader("core/screenquad").withFragmentShader(Naturality.id("core/water_finish"))
+                .withVertexShader(Naturality.id("core/water_screen")).withFragmentShader(Naturality.id("core/water_finish"))
                 .withBindGroupLayout(BindGroupLayouts.PROJECTION)
                 .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
                 .withBindGroupLayout(BindGroupLayouts.SAMPLER0_SAMPLER1)

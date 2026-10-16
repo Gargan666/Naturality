@@ -1,5 +1,5 @@
 package naturality.client.sky.shared.atmosphere;
-import naturality.client.sky.overworld.bloodmoon.BloodMoonClient;
+import naturality.client.systems.event.overworld.bloodmoon.BloodMoonClient;
 
 import com.mojang.blaze3d.buffers.Std140Builder;
 import com.mojang.blaze3d.systems.RenderSystem;

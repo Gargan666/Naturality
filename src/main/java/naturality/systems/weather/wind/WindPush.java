@@ -79,17 +79,17 @@ public final class WindPush {
         private static final ThreadLocal<int[]> RAW=ThreadLocal.withInitial(() -> new int[1]);
         private static final java.util.Map<Level,Cache> CACHE=new java.util.WeakHashMap<>();
         private static final class Cache {
-            long tick=Long.MIN_VALUE;
             WeatherState weather=WeatherState.CLEAR;
-            final java.util.Map<BlockPos,Entry> values=new java.util.HashMap<>();
+            final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<Entry> values=new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
         }
         private static final class Entry {
             final BlockState state;
             final Vec3 offset;
+            long tick;
             // A small identity cache retains context-specific collision/outline variants.
-            // Shapes are immutable; entries already expire with the tick, weather or state.
+            // Shapes are immutable; each pose is revalidated against the tick, weather and state.
             java.util.@org.jspecify.annotations.Nullable IdentityHashMap<VoxelShape,VoxelShape> moved;
-            Entry(BlockState state,Vec3 offset) {this.state=state;this.offset=offset;}
+            Entry(BlockState state,Vec3 offset,long tick) {this.state=state;this.offset=offset;this.tick=tick;}
             VoxelShape move(VoxelShape shape) {
                 if(offset.equals(Vec3.ZERO))return shape;
                 var cache = moved;
@@ -133,21 +133,29 @@ public final class WindPush {
         /** Called under CACHE's lock, shared by offsets and translated shape variants. */
         private static Entry entry(Level level,BlockPos pos,BlockState state,WeatherState weather) {
             var cache=CACHE.computeIfAbsent(level,_ -> new Cache());
-            if(cache.tick!=level.getGameTime() || !cache.weather.equals(weather)) {
-                cache.values.clear();cache.tick=level.getGameTime();cache.weather=weather;
+            if(!cache.weather.equals(weather)) {
+                cache.values.clear();cache.weather=weather;
             }
-            var previous=cache.values.get(pos);
-            if(previous!=null && previous.state==state)return previous;
-            var result=new Entry(state,raw(() -> compute(level,pos,state,weather)));
+            long key=pos.asLong(), tick=level.getGameTime();
+            var previous=cache.values.get(key);
+            if(previous!=null && previous.state==state && previous.tick==tick)return previous;
+            Vec3 offset=raw(() -> compute(level,pos,state,weather));
+            // Recheck shelter every tick, but retain translated shapes when the pose is unchanged.
+            // Severe wind deliberately holds a steady pose, so rebuilding those shapes is wasted work.
+            if(previous!=null && previous.state==state && previous.offset.equals(offset)) {
+                previous.tick=tick;
+                return previous;
+            }
+            var result=new Entry(state,offset,tick);
             if(cache.values.size()>=4096)cache.values.clear();
-            cache.values.put(pos.immutable(),result);
+            cache.values.put(key,result);
             return result;
         }
         private static Vec3 compute(Level level,BlockPos pos,BlockState state,WeatherState weather) {
             if(state.is(Blocks.SNOW)) {
                 for(int depth=1;depth<=7;depth++) {
                     var support=pos.below(depth); var below=level.getBlockState(support);
-                    if(below.is(BlockTags.LEAVES))return compute(level,support,below,weather);
+                    if(below.is(BlockTags.LEAVES))return entry(level,support,below,weather).offset;
                     if(!below.is(Blocks.SNOW))break;
                 }
                 return Vec3.ZERO;
@@ -163,7 +171,7 @@ public final class WindPush {
                 for(var direction:Direction.values()) {
                     if(direction==Direction.DOWN || !state.getValue(VineBlock.getPropertyForFace(direction)))continue;
                     var support=pos.relative(direction); var block=level.getBlockState(support);
-                    if(block.is(BlockTags.LEAVES)) { if(anchor==null)anchor=compute(level,support,block,weather); }
+                    if(block.is(BlockTags.LEAVES)) { if(anchor==null)anchor=entry(level,support,block,weather).offset; }
                     else if(block.isFaceSturdy(level,support,direction.getOpposite())) { anchor=Vec3.ZERO; break; }
                 }
                 if(anchor!=null)shift=shift.add(anchor).scale(.5);
@@ -186,6 +194,8 @@ public final class WindPush {
             return new Vec3(x,0,z);
         }
         public static Vec3 broad(WeatherState weather,long tick,BlockPos pos,boolean leaf) {
+            // This branch is exactly the severe=1 result below; skip both spatial sine waves.
+            if(weather.wind()>=100)return new Vec3(weather.windX()*(leaf?.12:.22),0,weather.windZ()*(leaf?.12:.22));
             double x=((pos.getX()>>4)<<4)%4096+(pos.getX()&15)+.5;
             double z=((pos.getZ()>>4)<<4)%4096+(pos.getZ()&15)+.5;
             double phase=(x*111+z*85)*(Math.PI*2/4096)+(leaf?0:(pos.getY()+.5)*.08);
@@ -202,18 +212,39 @@ public final class WindPush {
     public static final class WindShelter {
         private static final int[] EXPOSURE_DISTANCES={4,8};
         private static final int[] EXPOSURE_HEIGHTS={3};
+        private record Probe(int x,int y,int z,int[] cells) {}
+        private static final Probe[] PROBES=probes();
+        private static Probe[] probes() {
+            var result=new java.util.ArrayList<Probe>();
+            for(int distance:EXPOSURE_DISTANCES)for(int dy:EXPOSURE_HEIGHTS)
+                for(int dx=-1;dx<=1;dx++)for(int dz=-1;dz<=1;dz++) {
+                    if(dx==0 && dz==0)continue;
+                    int x=dx*distance,z=dz*distance,steps=distance*4;
+                    var cells=new it.unimi.dsi.fastutil.ints.IntArrayList();
+                    int previousX=Integer.MIN_VALUE,previousY=Integer.MIN_VALUE,previousZ=Integer.MIN_VALUE;
+                    for(int i=1;i<steps;i++) {
+                        double fraction=i/(double)steps;
+                        int cx=net.minecraft.util.Mth.floor(.5+fraction*x);
+                        int cy=net.minecraft.util.Mth.floor(.5+fraction*dy);
+                        int cz=net.minecraft.util.Mth.floor(.5+fraction*z);
+                        if(cx==previousX && cy==previousY && cz==previousZ)continue;
+                        previousX=cx;previousY=cy;previousZ=cz;
+                        cells.add(cx);cells.add(cy);cells.add(cz);
+                    }
+                    result.add(new Probe(x,dy,z,cells.toIntArray()));
+                }
+            return result.toArray(Probe[]::new);
+        }
         public static boolean hasOpenSkyPath(net.minecraft.world.level.BlockGetter level,
                 net.minecraft.core.BlockPos pos, java.util.function.ToIntFunction<net.minecraft.core.BlockPos> sky) {
             if (sky.applyAsInt(pos) <= 0) return false;
             Vec3 origin = new Vec3(pos.getX() + .5, pos.getY() + .5, pos.getZ() + .5);
             if (openSkyColumn(level, origin, sky)) return true;
-            for (int distance : EXPOSURE_DISTANCES) for (int dy : EXPOSURE_HEIGHTS)
-                for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
-                    if ((dx == 0 && dz == 0) || Math.max(Math.abs(dx), Math.abs(dz)) != 1) continue;
-                    Vec3 target = origin.add(dx * distance, dy, dz * distance);
+            for (Probe probe : PROBES) {
+                    Vec3 target = origin.add(probe.x, probe.y, probe.z);
                     var targetPos = net.minecraft.core.BlockPos.containing(target);
                     if (sky.applyAsInt(targetPos.above(5)) <= 0) continue;
-                    if (passable(level, targetPos) && openSkyColumn(level, target, sky) && clearRay(level, origin, target)) return true;
+                    if (passable(level, targetPos) && openSkyColumn(level, target, sky) && clearRay(level, pos, origin, target, probe.cells)) return true;
                 }
             return false;
         }
@@ -243,20 +274,12 @@ public final class WindPush {
             return state.isAir() || state.is(BlockTags.LEAVES) || state.getBlock() instanceof VegetationBlock
                 || state.getCollisionShape(level, pos).isEmpty();
         }
-        private static boolean clearRay(net.minecraft.world.level.BlockGetter level, Vec3 from, Vec3 to) {
-            double span = Math.max(Math.max(Math.abs(to.x - from.x), Math.abs(to.y - from.y)), Math.abs(to.z - from.z));
-            int steps = Math.max(1, (int)Math.ceil(span * 4));
+        private static boolean clearRay(net.minecraft.world.level.BlockGetter level, BlockPos origin, Vec3 from, Vec3 to,int[] cells) {
             var pos = new net.minecraft.core.BlockPos.MutableBlockPos();
-            int previousX = Integer.MIN_VALUE, previousY = Integer.MIN_VALUE, previousZ = Integer.MIN_VALUE;
-            for (int i = 1; i < steps; i++) {
-                double fraction = i / (double)steps;
-                // Match Vec3.lerp's arithmetic and quarter-block samples exactly.
-                int x = net.minecraft.util.Mth.floor(net.minecraft.util.Mth.lerp(fraction, from.x, to.x));
-                int y = net.minecraft.util.Mth.floor(net.minecraft.util.Mth.lerp(fraction, from.y, to.y));
-                int z = net.minecraft.util.Mth.floor(net.minecraft.util.Mth.lerp(fraction, from.z, to.z));
-                if (x == previousX && y == previousY && z == previousZ) continue;
-                previousX = x; previousY = y; previousZ = z;
-                pos.set(x, y, z);
+            // Every probe has block-center endpoints and power-of-two sample spacing.
+            // Translation preserves exactly the original quarter-block cells and their order.
+            for (int i = 0; i < cells.length; i+=3) {
+                pos.set(origin.getX()+cells[i],origin.getY()+cells[i+1],origin.getZ()+cells[i+2]);
                 var state = level.getBlockState(pos);
                 if (state.isAir() || state.is(BlockTags.LEAVES) || state.getBlock() instanceof VegetationBlock) continue;
                 var shape = state.getCollisionShape(level, pos);

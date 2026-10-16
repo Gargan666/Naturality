@@ -40,7 +40,7 @@ public final class HardcoreMixins {
             int red = (int) (((color >>> 16) & 255) * factor);
             int green = (int) (((color >>> 8) & 255) * factor);
             int blue = (int) ((color & 255) * factor);
-            args.set(0, naturality.client.sky.overworld.bloodmoon.BloodMoonClient.tintArgb(
+            args.set(0, naturality.client.systems.event.overworld.bloodmoon.BloodMoonClient.tintArgb(
                 (color & 0xff000000) | (red << 16) | (green << 8) | blue, args.<Float>get(6)));
         }
     }
@@ -56,7 +56,7 @@ public final class HardcoreMixins {
             // Local cave light belongs to world fog only, encoded during upload.
             color.mul(factor, factor, factor, 1.0F);
             if (camera.getFluidInCamera() == FogType.NONE) {
-                var red = naturality.client.sky.overworld.bloodmoon.BloodMoonClient.tint(new org.joml.Vector3f(color.x, color.y, color.z), partial);
+                var red = naturality.client.systems.event.overworld.bloodmoon.BloodMoonClient.tint(new org.joml.Vector3f(color.x, color.y, color.z), partial);
                 color.set(red.x, red.y, red.z, color.w);
             }
         }
@@ -70,7 +70,7 @@ public final class HardcoreMixins {
             var client = Minecraft.getInstance();
             var level = client.level;
             if (!state.needsUpdate || level == null) return;
-            state.skyLightColor = naturality.client.sky.overworld.bloodmoon.BloodMoonClient.lightingTint(state.skyLightColor, partialTicks);
+            state.skyLightColor = naturality.client.systems.event.overworld.bloodmoon.BloodMoonClient.lightingTint(state.skyLightColor, partialTicks);
             state.ambientColor = new Vector3f(state.ambientColor).mul(HardcoreDarkness.ambientMultiplier(level));
             state.skyFactor *= HardcoreDarkness.atmosphere(level, client.gameRenderer.mainCamera(), partialTicks);
         }
@@ -89,7 +89,7 @@ public final class HardcoreMixins {
                 state.endFlashIntensity *= factor;
             }
             if (state.skybox != DimensionType.Skybox.OVERWORLD) return;
-            state.skyColor = naturality.client.sky.overworld.bloodmoon.BloodMoonClient.tint(new Vector3f(state.skyColor).mul(factor), partial);
+            state.skyColor = naturality.client.systems.event.overworld.bloodmoon.BloodMoonClient.tint(new Vector3f(state.skyColor).mul(factor), partial);
             float dry = 1.0F - level.getRainLevel(partial);
             state.sunriseAndSunsetColor = new Vector4f(state.sunriseAndSunsetColor).mul(factor, factor, factor, dry * dry);
             // Preserve celestial brightness: rainBrightness controls the sun and moon,

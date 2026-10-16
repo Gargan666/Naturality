@@ -2,7 +2,6 @@ package naturality.systems.skyevents.framework;
 
 import naturality.sky.overworld.rainbow.RainbowCycle;
 import naturality.sky.overworld.proximity.ProximityCycle;
-import naturality.sky.overworld.bloodmoon.BloodMoonCycle;
 import naturality.sky.shared.aurora.AuroraEvents;
 import java.util.*;
 import naturality.systems.weather.framework.WeatherSystem;
@@ -13,14 +12,12 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.gamerules.GameRules;
 import java.util.List;
 import naturality.api.random.SavedRandom;
-import com.mojang.serialization.Codec;
-import com.mojang.serialization.codecs.RecordCodecBuilder;
-import java.util.HashMap;
 import java.util.Map;
 import naturality.Naturality;
+import naturality.api.worlds.WorldEventOverrides;
+import naturality.api.worlds.WorldEventOverrides.Settings;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.datafix.DataFixTypes;
-import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.saveddata.SavedDataType;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -44,15 +41,14 @@ public final class SkyEvents {
     private static final Map<ServerLevel, Map<SkyEventType, SkyEventCycle>> STATES = new WeakHashMap<>();
     private static final Map<ServerLevel, RainbowCycle> RAINBOWS = new WeakHashMap<>();
     private static final Map<ServerLevel, ProximityCycle> PROXIMITIES = new WeakHashMap<>();
-    private static final Map<ServerLevel, BloodMoonCycle> BLOOD_MOONS = new WeakHashMap<>();
     public static ProximityCycle proximityCycle(ServerLevel level) { return PROXIMITIES.get(level); }
     private SkyEvents() {}
-    public static Map<String, Map<String, SkyEventSettings>> defaults() {
-        var dimensions = new java.util.concurrent.ConcurrentHashMap<String, Map<String, SkyEventSettings>>();
+    public static Map<String, Map<String, Settings>> defaults() {
+        var dimensions = new java.util.concurrent.ConcurrentHashMap<String, Map<String, Settings>>();
         for (String id : List.of("minecraft:overworld", "minecraft:the_end")) {
-            var events = new java.util.concurrent.ConcurrentHashMap<String, SkyEventSettings>();
+            var events = new java.util.concurrent.ConcurrentHashMap<String, Settings>();
             for (var type : SkyEventType.pool(id)) {
-                var settings = new SkyEventSettings(); settings.strength = Math.min(settings.strength, type.maxStrength());
+                var settings = new Settings(false, 10); settings.strength = Math.min(settings.strength, type.maxStrength());
                 events.put(type.id, settings);
             }
             dimensions.put(id, events);
@@ -65,9 +61,6 @@ public final class SkyEvents {
         if (type == SkyEventType.RAINBOW && (isNight(level) || !RainbowCycle.validRain(rainfall(level)))) return 0;
         var settings = SkyEventWorldData.get(java.util.Objects.requireNonNull(level.getServer())).settings(level, type);
         if (settings.override) return Math.clamp(settings.strength, 0, type.maxStrength());
-        if (type == SkyEventType.BLOOD_MOON) {
-            var cycle = BLOOD_MOONS.get(level); return cycle == null ? 0 : cycle.strength();
-        }
         if (type == SkyEventType.PROXIMITY) {
             var cycle = PROXIMITIES.get(level);
             return cycle == null ? 0 : cycle.strength();
@@ -102,9 +95,6 @@ public final class SkyEvents {
                         long seed = level.getSeed() ^ level.getGameTime() ^ type.id.hashCode();
                         var cycle=type==SkyEventType.END_FLASHES ? SkyEventCycle.endFlashes(seed) : new SkyEventCycle(seed);
                         cycle.restore(saved);cycles.put(type,cycle);
-                    } else if(type==SkyEventType.BLOOD_MOON) {
-                        var cycle = new BloodMoonCycle(level.getSeed() ^ type.id.hashCode());
-                        cycle.restore(saved); BLOOD_MOONS.put(level, cycle);
                     } else if(type==SkyEventType.PROXIMITY) {
                         var cycle = new ProximityCycle(level.getSeed() ^ type.id.hashCode());
                         cycle.restore(saved); PROXIMITIES.put(level, cycle);
@@ -116,7 +106,7 @@ public final class SkyEvents {
                 AuroraEvents.restore(level);
             }
         });
-        ServerLifecycleEvents.SERVER_STOPPED.register(_ -> { STATES.clear(); RAINBOWS.clear(); PROXIMITIES.clear(); BLOOD_MOONS.clear(); AuroraEvents.clear(); });
+        ServerLifecycleEvents.SERVER_STOPPED.register(_ -> { STATES.clear(); RAINBOWS.clear(); PROXIMITIES.clear(); AuroraEvents.clear(); });
         ServerPlayConnectionEvents.JOIN.register((handler, _, server) -> {
             for (var level : server.getAllLevels()) send(handler.player, level);
         });
@@ -130,11 +120,6 @@ public final class SkyEvents {
                 int startMultiplier = naturality.api.worlds.PreviewEnvironment.rate(server);
                 var pool = SkyEventType.pool(level.dimension().identifier().toString());
                 if (pool.isEmpty()) continue;
-                if (pool.contains(SkyEventType.BLOOD_MOON)) {
-                    var cycle = BLOOD_MOONS.computeIfAbsent(level, _ -> new BloodMoonCycle(level.getSeed() ^ SkyEventType.BLOOD_MOON.id.hashCode()));
-                    cycle.tick(level.getGameRules().get(GameRules.ADVANCE_WEATHER), isNight(level), startMultiplier);
-                    naturality.api.worlds.EnvironmentWorldData.get(server).write(key(level, SkyEventType.BLOOD_MOON), cycle.snapshot());
-                }
                 if (pool.contains(SkyEventType.PROXIMITY)) {
                     var cycle = PROXIMITIES.computeIfAbsent(level, _ -> new ProximityCycle(level.getSeed()));
                     cycle.tick(level.getGameRules().get(GameRules.ADVANCE_WEATHER), isNight(level), startMultiplier);
@@ -183,17 +168,16 @@ public final class SkyEvents {
     public enum SkyEventType {
         METEOR_SHOWER("meteor_shower", "Meteor Shower"),
         PROXIMITY("proximity", "Proximity"),
-        BLOOD_MOON("blood_moon", "Blood Moon"),
         AURORA_BOREALIS("aurora_borealis", "Aurora Borealis"),
         RAINBOW("rainbow", "Rainbow"),
         END_FLASHES("end_flashes", "End Flashes"),
         END_AURORA("end_aurora", "End Aurora");
         public final String id;
         public final String label;
-        public int maxStrength() { return this == BLOOD_MOON ? 1 : this == PROXIMITY ? 7 : 20; }
+        public int maxStrength() { return this == PROXIMITY ? 7 : 20; }
         SkyEventType(String id, String label) { this.id = id; this.label = label; }
         public static List<SkyEventType> pool(String dimension) {
-            if (dimension.equals("minecraft:overworld")) return List.of(METEOR_SHOWER, AURORA_BOREALIS, RAINBOW, PROXIMITY, BLOOD_MOON);
+            if (dimension.equals("minecraft:overworld")) return List.of(METEOR_SHOWER, AURORA_BOREALIS, RAINBOW, PROXIMITY);
             if (dimension.equals("minecraft:the_end")) return List.of(END_FLASHES, END_AURORA);
             return List.of();
         }
@@ -282,61 +266,21 @@ public final class SkyEvents {
         }
     }
 
-    public static final class SkyEventSettings {
-        public static final Codec<SkyEventSettings> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-            Codec.BOOL.optionalFieldOf("override", false).forGetter(settings -> settings.override),
-            Codec.INT.optionalFieldOf("strength", 10).forGetter(settings -> settings.strength)
-        ).apply(instance, SkyEventSettings::new));
-        public volatile boolean override = false;
-        public volatile int strength = 10;
-        public SkyEventSettings() {}
-        private SkyEventSettings(boolean override, int strength) {
-            this.override = override;
-            this.strength = strength;
-            validate();
-        }
-        public void validate() { strength = Math.clamp(strength, 0, 20); }
-    }
-
-    /** Per-save overrides, with independent event settings for each dimension. */
-    public static final class SkyEventWorldData extends SavedData {
+    /** Independent saved-data owner sharing the event override serialization contract. */
+    public static final class SkyEventWorldData extends WorldEventOverrides {
         public static final SavedDataType<SkyEventWorldData> TYPE = new SavedDataType<>(
             Naturality.id("sky_events"), SkyEventWorldData::new,
-            Codec.unboundedMap(Codec.STRING, Codec.unboundedMap(Codec.STRING, SkyEventSettings.CODEC))
-                .xmap(SkyEventWorldData::new, data -> data.settings),
-            DataFixTypes.LEVEL);
-
-        private final Map<String, Map<String, SkyEventSettings>> settings;
-
-        public SkyEventWorldData() { settings = new HashMap<>(); }
-
-        private SkyEventWorldData(Map<String, Map<String, SkyEventSettings>> saved) {
-            this();
-            saved.forEach((dimension, events) -> settings.put(dimension, new HashMap<>(events)));
-        }
-
+            WorldEventOverrides.codec(10).xmap(SkyEventWorldData::new, data -> data.entries()), DataFixTypes.LEVEL);
+        public SkyEventWorldData() { super(Map.of()); }
+        private SkyEventWorldData(Map<String, Map<String, Settings>> saved) { super(saved); }
         public static SkyEventWorldData get(MinecraftServer server) {
             return server.getDataStorage().computeIfAbsent(TYPE);
         }
-
-        public SkyEventSettings settings(ServerLevel level, SkyEventType type) {
-            String dimension = level.dimension().identifier().toString();
-            var events = settings.computeIfAbsent(dimension, _ -> new HashMap<>());
-            var event = events.computeIfAbsent(type.id, _ -> {
-                var initial = new SkyEventSettings(); initial.strength = Math.min(initial.strength, type.maxStrength()); return initial;
-            });
-            if (type == SkyEventType.BLOOD_MOON && event.strength > 1) {
-                event.strength = 1; setDirty();
-            }
-            return event;
+        public Settings settings(ServerLevel level, SkyEventType type) {
+            return settings(level, type.id, Math.min(10, type.maxStrength()), type.maxStrength());
         }
-
         public void override(ServerLevel level, SkyEventType type, boolean enabled, int strength) {
-            var event = settings(level, type);
-            event.override = enabled;
-            event.strength = Math.clamp(strength, 0, type.maxStrength());
-            setDirty();
-            java.util.Objects.requireNonNull(level.getServer()).getDataStorage().scheduleSave();
+            override(level, type.id, enabled, strength, type.maxStrength());
         }
     }
 
@@ -387,22 +331,10 @@ public final class SkyEvents {
                         if (SkyEvents.isNight(level)) visibility += " Currently hidden at night.";
                     }
                     String reply = "Sky event " + type.label + " in " + id(level)
-                        + (type == SkyEventType.BLOOD_MOON ? " set " + (strength > 0 ? "on" : "off")
-                            : " set to strength " + strength) + " (override)." + visibility;
+                        + " set to strength " + strength + " (override)." + visibility;
                     context.getSource().sendSuccess(() -> Component.literal(reply), true);
                     return Command.SINGLE_SUCCESS;
                 }));
-                for (String toggle : java.util.List.of("on", "off")) {
-                    event.then(Commands.literal(toggle).executes(context -> {
-                        var level = DimensionArgument.getDimension(context, "dimension");
-                        var type = find(level, StringArgumentType.getString(context, "event"));
-                        if (type != SkyEventType.BLOOD_MOON) throw new SimpleCommandExceptionType(
-                            Component.literal("Use a numeric strength for " + type.label + ".")).create();
-                        SkyEventWorldData.get(java.util.Objects.requireNonNull(level.getServer())).override(level, type, true, toggle.equals("on") ? 1 : 0);
-                        context.getSource().sendSuccess(() -> Component.literal("Blood Moon " + toggle + " (override)."), true);
-                        return Command.SINGLE_SUCCESS;
-                    }));
-                }
                 event.then(Commands.literal("auto").executes(context -> {
                     var level = DimensionArgument.getDimension(context, "dimension");
                     var type = find(level, StringArgumentType.getString(context, "event"));
@@ -447,12 +379,6 @@ public final class SkyEvents {
                     if (!settings.override && active && cycle != null) extra += "; " + duration(cycle.remaining()) + " left";
                     if (!night) extra += "; hidden: day";
                     chance = percent(ProximityCycle.START_CHANCE) + "/night";
-                } else if (type == SkyEventType.BLOOD_MOON) {
-                    active = value > 0;
-                    visible = active && night;
-                    if (!night) extra += "; hidden: day";
-                    else if (active && !settings.override) extra += "; until dawn";
-                    chance = percent(BloodMoonCycle.START_CHANCE) + "/night";
                 } else if (type == SkyEventType.METEOR_SHOWER || type == SkyEventType.END_FLASHES) {
                     var cycle = SkyEvents.cycle(level, type);
                     active = settings.override ? settings.strength > 0 : cycle != null && cycle.active();
@@ -483,8 +409,7 @@ public final class SkyEvents {
                 }
                 if (visible) happening.add(type.label);
                 lines.append('\n').append(type.label).append(": ")
-                    .append(type == SkyEventType.BLOOD_MOON ? (active ? "on" : "off")
-                        : (active ? "active" : value > .01F ? "fading" : "quiet")
+                    .append((active ? "active" : value > .01F ? "fading" : "quiet")
                             + " " + number(Math.round(value * 10) / 10.0) + "/" + type.maxStrength())
                     .append(settings.override ? " [override]" : "")
                     .append("; ").append(chance).append(extra);

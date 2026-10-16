@@ -1,6 +1,6 @@
-package naturality.client.sky.overworld.bloodmoon.mixins;
+package naturality.client.systems.event.overworld.bloodmoon.mixins;
 
-import naturality.client.sky.overworld.bloodmoon.BloodMoonClient;
+import naturality.client.systems.event.overworld.bloodmoon.BloodMoonClient;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.SkyRenderer;
 import org.joml.Vector4f;

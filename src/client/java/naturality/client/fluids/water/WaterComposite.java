@@ -61,8 +61,10 @@ public final class WaterComposite {
         mask.copyDepthFrom(target);
         var client = Minecraft.getInstance();
         drawingMask = true;
+        // Alpha marks actual water coverage. JOML's no-argument Vector4f has
+        // w=1, which would mark untouched sky pixels as water as well.
         try (var pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
-                () -> "Naturality water surface depth mask", maskColor, Optional.of(new Vector4f()),
+                () -> "Naturality water surface depth mask", maskColor, Optional.of(new Vector4f(0.0F)),
                 mask.getDepthTextureView(), OptionalDouble.empty())) {
             RenderSystem.bindDefaultUniforms(pass);
             if (sodium) {

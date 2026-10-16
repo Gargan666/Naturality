@@ -32,6 +32,7 @@ public abstract class ElasticHandsMixin implements naturality.client.ui.camera.h
     @Unique private float naturality$lift;
     @Unique private @org.jspecify.annotations.Nullable Object naturality$player, naturality$world;
     @Unique private boolean naturality$gliding;
+    @Unique private boolean naturality$easeReturn;
 
     @WrapMethod(method = "submitHandsWithItems")
     private void naturality$frame(float partial, PoseStack pose, SubmitNodeCollector collector,
@@ -42,6 +43,16 @@ public abstract class ElasticHandsMixin implements naturality.client.ui.camera.h
         if (player != naturality$player || client.level != naturality$world || gliding != naturality$gliding) {
             for (var motion : naturality$motions) motion.reset();
             naturality$player = player; naturality$world = client.level; naturality$gliding = gliding;
+        }
+        var settings = naturality.config.live.NaturalityConfig.get().effects;
+        float attack = player == null ? 0 : player.getSwingAnimation(partial);
+        // Swing preparation and held use poses remain responsive; spring back after release.
+        naturality$easeReturn = settings.elasticHands && player != null
+            && !player.isUsingItem() && (attack == 0 || attack >= .5F)
+            && state.mainHandHeight >= state.oldMainHandHeight
+            && state.offHandHeight >= state.oldOffHandHeight;
+        for (var motion : naturality$motions) {
+            motion.configure(settings.elasticHandsSpeed, settings.elasticHandsStrength);
         }
         naturality$time = player == null ? 0 : player.tickCount + partial;
         naturality$lift = client.gameRenderer.mainCamera() instanceof AirborneCameraState camera
@@ -56,7 +67,13 @@ public abstract class ElasticHandsMixin implements naturality.client.ui.camera.h
         // Work relative to the incoming camera/bob transform: never delay player aiming.
         var relative = new Matrix4f(naturality$inverseRoot).mul(pose.last().pose());
         relative.m31(relative.m31() + naturality$lift);
-        var eased = naturality$motions[channel].sample(relative, naturality$time);
+        var motion = naturality$motions[channel];
+        if (!naturality$easeReturn) {
+            motion.reset();
+            motion.sample(relative, naturality$time);
+            return;
+        }
+        var eased = motion.sample(relative, naturality$time);
         var replacement = new Matrix4f(naturality$root).mul(eased);
         pose.mulPose(new Matrix4f(pose.last().pose()).invert().mul(replacement));
     }

@@ -204,6 +204,29 @@ public final class SnowGeometry {
         }
         return false;
     }
+    /** Footstep material follows the actual body and fitted snow volume, not its saved cell. */
+    public static BlockState walkingParticleState(net.minecraft.world.entity.player.Player player, BlockState original) {
+        var level = player.level();
+        var body = naturality.systems.rotation.PlayerRotation.body(player);
+        var bounds = body.bounds().inflate(1e-6);
+        boolean fitted = GameplaySettings.snowWrapping(level);
+        var from = BlockPos.containing(bounds.minX, bounds.minY - 1, bounds.minZ);
+        var to = BlockPos.containing(bounds.maxX, bounds.maxY + (fitted ? MAX_DEPTH : 0), bounds.maxZ);
+        for (var pos : BlockPos.betweenClosed(from, to)) {
+            if (!naturality.api.worlds.LoadedChunks.has(level, pos)) continue;
+            var state = level.getBlockState(pos);
+            if (!state.is(Blocks.SNOW)) continue;
+            // Use the full layer hitbox: a single layer has no solid collision volume,
+            // but the player's feet still clip into its visible snow.
+            var volume = fitted ? shape(level, pos, state.getValue(SnowLayerBlock.LAYERS))
+                : state.getShape(level, pos);
+            for (var box : volume.toAabbs()) {
+                if (body.separation(box.move(pos)) <= 1e-6) return state;
+            }
+        }
+        return original.is(Blocks.SNOW) ? Blocks.AIR.defaultBlockState() : original;
+    }
+
     private static VoxelShape shape(BlockGetter level, BlockPos pos, int layers, boolean collision) {
         if (layers <= 0 || collision && layers == 1) return Shapes.empty();
         var cache = SnowGeometryCache.entry(level,pos);

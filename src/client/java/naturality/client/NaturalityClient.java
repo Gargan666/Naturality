@@ -62,6 +62,7 @@ public class NaturalityClient implements ClientModInitializer {
         naturality.client.config.gameplay.GameplaySettingsClient.initialize();
         naturality.client.systems.weather.framework.WeatherClient.initialize();
         naturality.client.systems.skyevents.framework.SkyEventsClient.initialize();
+        naturality.client.systems.event.framework.EventsClient.initialize();
         naturality.client.portals.nether.travel.PortalCrossingClient.initialize();
         naturality.client.portals.nether.opening.PortalOpeningClient.initialize();
         // Registered content still has its necessary renderers and effect UI in content-only play.
@@ -77,7 +78,7 @@ public class NaturalityClient implements ClientModInitializer {
         naturality.client.sky.overworld.meteors.MeteorShower.initialize();
         naturality.client.sky.overworld.rainbow.RainbowRenderer.initialize();
         naturality.client.sky.shared.aurora.AuroraRenderer.initialize();
-        naturality.client.sky.overworld.bloodmoon.BloodMoonClient.initialize();
+        naturality.client.systems.event.overworld.bloodmoon.BloodMoonClient.initialize();
         naturality.client.systems.weather.overworld.precipitation.ParticleWeather.initialize();
         if (RISE_PARTICLES.enabled()) naturality.client.systems.weather.end.rise.RiseWeather.initialize();
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents.CLIENT_STOPPING.register(_ -> naturality.client.systems.weather.wind.WindRendering.close());

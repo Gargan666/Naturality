@@ -37,6 +37,9 @@ bin/
 
 run/
 
+# Local-only tests, fixtures, selectors and test assets
+/src/gametest/
+
 # Local logs and credentials
 logs/
 *.log

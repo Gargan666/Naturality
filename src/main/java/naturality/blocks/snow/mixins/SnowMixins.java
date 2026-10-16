@@ -400,6 +400,13 @@ public final class SnowMixins {
     public static abstract class SnowStepSoundMixin {
         @Shadow protected abstract void playStepSound(BlockPos pos, BlockState state);
 
+        @ModifyExpressionValue(method = "spawnSprintParticle", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/world/level/Level;getBlockState(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;"))
+        private BlockState naturality$contactSnowParticles(BlockState state) {
+            return (Object)this instanceof net.minecraft.world.entity.player.Player player
+                ? SnowGeometry.walkingParticleState(player, state) : state;
+        }
+
         @Inject(method = "walkingStepSound", at = @At("HEAD"), cancellable = true)
         private void naturality$displacedSnowStepSound(BlockPos pos, BlockState state, CallbackInfo ci) {
             Entity entity = (Entity)(Object)this;

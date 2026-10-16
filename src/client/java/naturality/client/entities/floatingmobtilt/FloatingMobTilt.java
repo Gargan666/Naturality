@@ -24,6 +24,9 @@ public final class FloatingMobTilt {
     }
     public static Vec2 lean(LivingEntity entity,float yaw,float partial) {
         if(!enabled(entity) || !entity.isAlive()) return Vec2.ZERO;
+        var surface = naturality.systems.swimming.WaterSurface.state(entity);
+        if(naturality.systems.swimming.WaterSurface.active(entity) || surface.lean.lengthSqr() > 1.0e-8
+                || surface.previousLean.lengthSqr() > 1.0e-8) return Vec2.ZERO;
         return GhastMotion.lean(entity,yaw,partial);
     }
 

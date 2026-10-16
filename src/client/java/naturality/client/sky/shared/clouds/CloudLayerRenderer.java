@@ -151,7 +151,7 @@ public final class CloudLayerRenderer implements AutoCloseable {
                         .putVec4(settings.fadingSides && settings.style != 2 ? settings.fadePixels : 0,
                             cameraHeight, cellX, cellZ)
                         .putVec4(CloudMoonLighting.sample(partialTicks))
-                        .putVec4(texture.width, texture.height, settings.fadePixels, naturality.client.sky.overworld.bloodmoon.BloodMoonClient.sample(partialTicks));
+                        .putVec4(texture.width, texture.height, settings.fadePixels, naturality.client.systems.event.overworld.bloodmoon.BloodMoonClient.sample(partialTicks));
                 }
             }
         }

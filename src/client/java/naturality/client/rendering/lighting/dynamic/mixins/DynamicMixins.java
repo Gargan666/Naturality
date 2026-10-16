@@ -65,7 +65,7 @@ public final class DynamicMixins {
         private void naturality$refreshOcclusion(net.minecraft.core.BlockPos pos,
                 net.minecraft.world.level.block.state.BlockState oldState, net.minecraft.world.level.block.state.BlockState newState,
                 CallbackInfo ci) {
-            DynamicLighting.invalidate();
+            DynamicLighting.invalidate(pos);
             naturality.client.rendering.culling.FogCulling.OcclusionCulling.changed(pos);
             WaterVisuals.invalidateChunk((ClientLevel)(Object)this, pos.getX() >> 4, pos.getZ() >> 4);
         }

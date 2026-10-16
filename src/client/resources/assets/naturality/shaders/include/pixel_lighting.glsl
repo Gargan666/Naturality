@@ -4,8 +4,7 @@
 
 // A model's UV texels may be stretched or offset relative to the block grid.
 // The bell's opaque support faces use this path; texture/alpha remain untouched.
-vec3 naturality_texel_lighting_grid(vec2 uv, vec2 atlasSize) {
-    if (!NATURALITY_LIGHTING_ENABLED) return vec3(0.0);
+vec3 naturality_texel_grid(vec2 uv, vec2 atlasSize) {
     vec2 p = uv * atlasSize;
     vec2 px = dFdx(p), py = dFdy(p);
     float determinant = px.x * py.y - px.y * py.x;
@@ -15,11 +14,14 @@ vec3 naturality_texel_lighting_grid(vec2 uv, vec2 atlasSize) {
                     px.x * offset.y - px.y * offset.x) / determinant, 1.0);
 }
 
+vec3 naturality_texel_lighting_grid(vec2 uv, vec2 atlasSize) {
+    return NATURALITY_LIGHTING_ENABLED ? naturality_texel_grid(uv, atlasSize) : vec3(0.0);
+}
+
 // Evaluate an interpolated lighting field at a block-grid cell center.
 // AO and the sky/block lightmap use the same grid, before multiplication.
 // Texture sampling, alpha and atmospheric fog stay outside this calculation.
-vec3 naturality_pixel_grid(vec3 position) {
-    if (!NATURALITY_LIGHTING_ENABLED) return vec3(0.0);
+vec3 naturality_block_grid(vec3 position) {
     vec3 dx = dFdx(position), dy = dFdy(position);
     vec3 normal = abs(cross(dx, dy));
     vec2 p, px, py;
@@ -37,10 +39,17 @@ vec3 naturality_pixel_grid(vec3 position) {
                     px.x * offset.y - px.y * offset.x) / determinant, 1.0);
 }
 
-vec3 naturality_pixel_lighting_grid(vec3 grid, vec3 shade) {
-    if (!NATURALITY_LIGHTING_ENABLED) return shade;
+vec3 naturality_pixel_grid(vec3 position) {
+    return NATURALITY_LIGHTING_ENABLED ? naturality_block_grid(position) : vec3(0.0);
+}
+
+vec3 naturality_field_at_grid(vec3 grid, vec3 shade) {
     vec3 sx = dFdx(shade), sy = dFdy(shade);
     return grid.z == 0.0 ? shade : clamp(shade + sx * grid.x + sy * grid.y, 0.0, 1.0);
+}
+
+vec3 naturality_pixel_lighting_grid(vec3 grid, vec3 shade) {
+    return NATURALITY_LIGHTING_ENABLED ? naturality_field_at_grid(grid, shade) : shade;
 }
 
 vec3 naturality_pixel_lighting(vec3 position, vec3 shade) {

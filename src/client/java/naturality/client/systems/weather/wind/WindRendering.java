@@ -5,7 +5,6 @@ import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
 import naturality.bootstrap.ContentRegistration.NaturalitySounds;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.renderpearl.api.buffers.GpuBuffer;
 import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
@@ -34,6 +33,7 @@ import net.minecraft.client.particle.Particle;
 public final class WindRendering {
     public static final BindGroupLayout LAYOUT = BindGroupLayout.builder().withUniform("NaturalityWind", UniformType.UNIFORM_BUFFER).build();
     private static @org.jspecify.annotations.Nullable GpuBuffer uniform;
+    private static net.minecraft.client.renderer.@org.jspecify.annotations.Nullable MappableRingBuffer uniformRing;
     private static final ThreadLocal<ExposureCache> EXPOSURE_CACHE = ThreadLocal.withInitial(ExposureCache::new);
     private WindRendering() {}
     public static void clearExposureCache() {
@@ -219,8 +219,13 @@ public final class WindRendering {
         return 201 + Math.clamp(Math.round(y * 19), 0, 38);
     }
     private static boolean framePrepared;
-    private static final ByteBuffer frameData = ByteBuffer.allocateDirect(16).order(ByteOrder.nativeOrder());
-    public static void beginFrame() { framePrepared = false; naturality.client.rendering.culling.FogCulling.OcclusionCulling.beginFrame(); }
+    private static final ByteBuffer frameData = ByteBuffer.allocateDirect(32).order(ByteOrder.nativeOrder());
+    public static void beginFrame() {
+        framePrepared = false;
+        // Buffer rotation inserts a GPU fence, which must precede the terrain render pass.
+        prepareFrame();
+        naturality.client.rendering.culling.FogCulling.OcclusionCulling.beginFrame();
+    }
     public static void bind(RenderPass pass) {
         if (!framePrepared || uniform == null) prepareFrame();
         pass.setUniform("NaturalityWind", java.util.Objects.requireNonNull(uniform));
@@ -241,12 +246,24 @@ public final class WindRendering {
             return; // Paused frames can retain the exact same GPU data too.
         }
         var data = frameData.clear();
-        data.putFloat(x).putFloat(z).putFloat(time).putFloat(strength).flip();
-        if (uniform != null) uniform.close();
-        uniform = RenderSystem.getDevice().createBuffer(() -> "Naturality wind", 128, data);
+        data.putFloat(x).putFloat(z).putFloat(time).putFloat(strength);
+        float magnitude=(float)Math.sqrt(x*x+z*z);
+        float severe=Math.clamp((strength-.8F)/(1F-.8F),0F,1F);
+        severe=severe*severe*(3F-2F*severe);
+        data.putFloat(magnitude>.0001F?x/magnitude:0F).putFloat(magnitude>.0001F?z/magnitude:0F)
+            .putFloat(severe).putFloat(magnitude).flip();
+        var ring=uniformRing;
+        if(ring==null) {ring=new net.minecraft.client.renderer.MappableRingBuffer(() -> "Naturality wind",130,32);uniformRing=ring;}
+        else ring.rotate();
+        var buffer=ring.currentBuffer();
+        try(var mapped=buffer.map(false,true)) {mapped.data().put(data);}
+        uniform=buffer;
         framePrepared = true;
     }
-    public static void close() { if (uniform != null) { uniform.close(); uniform = null; } }
+    public static void close() {
+        if(uniformRing!=null) {uniformRing.close();uniformRing=null;}
+        uniform=null;framePrepared=false;
+    }
 
     /** Supply wind tags through FRAPI, including renderers which bypass Indigo. */
     public static final class FoliageWindModel extends WrapperBlockStateModel {
@@ -268,13 +285,15 @@ public final class WindRendering {
             // Cache across vertices of this emission, never across snapshot revisions.
             WindRendering.clearExposureCache();
             if(!state.getFluidState().isEmpty()) { wrapped.emitQuads(emitter,level,pos,state,random,cull); return; }
+            if(!WindRendering.windExposed(level,pos)) {wrapped.emitQuads(emitter,level,pos,state,random,cull);return;}
+            boolean connected=WindRendering.connected(state);
             var offset=state.getOffset(pos);
             emitter.pushTransform(quad -> {
                 for(int i=0;i<4;i++) {
                     int color=quad.color(i);
                     if((color>>>24)!=255) continue; // Preserve fitted snow/plant tags.
-                    int tag=WindRendering.vertexTag(level,pos,state,quad.x(i)+(float)offset.x,
-                        quad.y(i)+(float)offset.y,quad.z(i)+(float)offset.z);
+                    float x=quad.x(i)+(float)offset.x,y=quad.y(i)+(float)offset.y,z=quad.z(i)+(float)offset.z;
+                    int tag=connected?WindRendering.vertexTag(level,pos,state,x,y,z):WindRendering.vertexTag(state,x,y,z);
                     quad.color(i,(color&0xFFFFFF)|(tag<<24));
                 }
                 return true;

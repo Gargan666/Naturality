@@ -64,6 +64,25 @@ import net.minecraft.client.particle.ParticleEngine;
 public final class WaterMixins {
     private WaterMixins() {}
 
+    /** Keep the third-person camera out of dry blocks bordering the water. */
+    @Mixin(Camera.class)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class WaterCameraCollisionMixin {
+        @WrapOperation(method = "getMaxZoom", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/world/phys/Vec3;distanceToSqr(Lnet/minecraft/world/phys/Vec3;)D"))
+        private double naturality$rayTravel(net.minecraft.world.phys.Vec3 hit,
+                net.minecraft.world.phys.Vec3 cameraOrigin, Operation<Double> original,
+                @Local(ordinal = 0) net.minecraft.world.phys.Vec3 rayStart,
+                @Local net.minecraft.world.phys.HitResult result) {
+            // The eight obstruction rays start 0.1 blocks off the eye origin.
+            // Measuring to the eye adds sideways distance and can place the
+            // camera inside a wall, switching every immersion consumer to air.
+            // A ray starting inside the shape has no safe backwards travel.
+            if (result instanceof net.minecraft.world.phys.BlockHitResult block && block.isInside()) return 0.0;
+            return original.call(hit, rayStart);
+        }
+    }
+
     /** Spawn vanilla's animated, water-tinted pop whenever a bubble is removed. */
     @Mixin(Particle.class)
     @org.jspecify.annotations.NullMarked

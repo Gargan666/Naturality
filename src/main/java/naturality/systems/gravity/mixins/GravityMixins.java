@@ -116,7 +116,8 @@ public final class GravityMixins {
         @WrapMethod(method="refreshDimensions")
         private void naturality$keepCeilingFeet(Operation<Void> original) {
             var e=naturality$self();
-            boolean anchor=e instanceof net.minecraft.world.entity.player.Player && EndGravity.inverted(e);
+            boolean anchor=e instanceof net.minecraft.world.entity.player.Player && EndGravity.inverted(e)
+                && !naturality.systems.rotation.PlayerRotation.active(e);
             double top=e.getBoundingBox().maxY;
             original.call();
             if(anchor) {
@@ -197,14 +198,19 @@ public final class GravityMixins {
         }
         @Inject(method="getEyeY",at=@At("RETURN"),cancellable=true)
         private void naturality$eye(CallbackInfoReturnable<Double> cir) {
-            var e=naturality$self(); if(EndGravity.affected(e))cir.setReturnValue(e.getY()+EndGravity.eyeHeight(e,e.getEyeHeight(),false));
+            var e=naturality$self(); if(EndGravity.affected(e) && !naturality.systems.rotation.PlayerRotation.active(e))
+                cir.setReturnValue(e.getY()+EndGravity.eyeHeight(e,e.getEyeHeight(),false));
         }
         @ModifyExpressionValue(method="getEyePosition(F)Lnet/minecraft/world/phys/Vec3;",at=@At(value="INVOKE",target="Lnet/minecraft/world/entity/Entity;getEyeHeight()F"))
         private float naturality$partialEye(float height) { return EndGravity.eyeHeight(naturality$self(),height,true); }
         @ModifyVariable(method="turn",at=@At("HEAD"),argsOnly=true,ordinal=0)
-        private double naturality$mouseYaw(double delta) { return EndGravity.inverted(naturality$self())?-delta:delta; }
+        private double naturality$mouseYaw(double delta) {
+            return EndGravity.inverted(naturality$self()) && !naturality.systems.rotation.PlayerRotation.active(naturality$self())?-delta:delta;
+        }
         @ModifyVariable(method="turn",at=@At("HEAD"),argsOnly=true,ordinal=1)
-        private double naturality$mousePitch(double delta) { return EndGravity.inverted(naturality$self())?-delta:delta; }
+        private double naturality$mousePitch(double delta) {
+            return EndGravity.inverted(naturality$self()) && !naturality.systems.rotation.PlayerRotation.active(naturality$self())?-delta:delta;
+        }
         @ModifyVariable(method="move",at=@At("HEAD"),argsOnly=true)
         private Vec3 naturality$softCeiling(Vec3 movement) {
             var e=naturality$self();
@@ -347,7 +353,7 @@ public final class GravityMixins {
         @Inject(method="canPlayerFitWithinBlocksAndEntitiesWhen",at=@At("HEAD"),cancellable=true)
         private void naturality$ceilingPoseFits(Pose pose, CallbackInfoReturnable<Boolean> cir) {
             var player=(Player)(Object)this;
-            if(!EndGravity.inverted(player))return;
+            if(!EndGravity.inverted(player) || naturality.systems.rotation.PlayerRotation.active(player))return;
             var dimensions=player.getDimensions(pose);
             // The feet are on the upper face of the box. Grow toward the head,
             // below the ceiling, rather than into the supporting block.

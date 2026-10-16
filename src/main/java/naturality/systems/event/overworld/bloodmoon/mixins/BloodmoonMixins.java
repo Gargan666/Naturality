@@ -1,7 +1,7 @@
-package naturality.sky.overworld.bloodmoon.mixins;
+package naturality.systems.event.overworld.bloodmoon.mixins;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
-import naturality.sky.overworld.bloodmoon.BloodMoonCycle.BloodMoonSpawning;
+import naturality.systems.event.overworld.bloodmoon.BloodMoonCycle.BloodMoonSpawning;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;

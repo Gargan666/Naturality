@@ -27,8 +27,13 @@ loom {
 	}
 }
 
+// Tests are kept locally and are absent from a fresh Git checkout.
+// The override also permits validating the public build without moving local files.
+def localTestsEnabled = providers.gradleProperty('localTests').getOrElse('true').toBoolean()
+    && file('src/gametest/resources/naturality-tests.json').isFile()
+
 fabricApi {
-	configureTests {
+	if (localTestsEnabled) configureTests {
 		createSourceSet = true
 		modId = 'naturality-tests'
 		enableGameTests = false
@@ -40,32 +45,40 @@ fabricApi {
 	}
 }
 
-def clientTestCatalog = new groovy.json.JsonSlurper().parseText(providers.fileContents(
-    layout.projectDirectory.file('src/gametest/resources/naturality-tests.json')).asText.get())
-def clientTestNames = clientTestCatalog.checks.collect { it.id } + clientTestCatalog.groups.keySet() + ['all']
-tasks.register('listClientTests') {
-    group = 'verification'
-    description = 'Lists focused client checks, their fixture requirements and compatibility groups without launching Minecraft.'
-    def checks = clientTestCatalog.checks.collect { "${it.id.padRight(28)} ${it.fixture}".toString() }
-    def groups = clientTestCatalog.groups.collect { k, v -> "${k}: ${v.join(', ')}".toString() }
-    doLast { checks.each { println it }; groups.each { println it } }
-}
-
-// Explicit suite selection prevents a small visual change from running every test.
-tasks.named('runClientGameTest') {
-    systemProperty 'naturality.test.suites', providers.gradleProperty('clientTests').getOrElse('')
-    systemProperty 'naturality.test.vanillaSnapshot', layout.buildDirectory.file('vanilla-registry-snapshot.json').get().asFile.absolutePath
-    if (providers.gradleProperty('clientTests').getOrElse('').split(',').any { it.trim() in ['feature-startup', 'all'] }) {
-        dependsOn 'writeVanillaRegistrySnapshot'
+if (localTestsEnabled) {
+    def clientTestCatalog = new groovy.json.JsonSlurper().parseText(providers.fileContents(
+        layout.projectDirectory.file('src/gametest/resources/naturality-tests.json')).asText.get())
+    def clientTestNames = clientTestCatalog.checks.collect { it.id } + clientTestCatalog.groups.keySet() + ['all']
+    tasks.register('listClientTests') {
+        group = 'verification'
+        description = 'Lists focused client checks, their fixture requirements and compatibility groups without launching Minecraft.'
+        def checks = clientTestCatalog.checks.collect { "${it.id.padRight(28)} ${it.fixture}".toString() }
+        def groups = clientTestCatalog.groups.collect { k, v -> "${k}: ${v.join(', ')}".toString() }
+        doLast { checks.each { println it }; groups.each { println it } }
     }
-	systemProperty 'naturality.test.muteAudio', 'true'
-	doFirst {
-		def selection = systemProperties['naturality.test.suites'].toString().split(',', -1).collect { it.trim() }
-		def valid = clientTestNames
-		if (selection.any { !valid.contains(it) }) {
-			throw new GradleException('Choose focused checks with -PclientTests=<id>; run listClientTests for available checks and groups.')
-		}
-	}
+
+    // Explicit suite selection prevents a small visual change from running every test.
+    tasks.named('runClientGameTest') {
+        systemProperty 'naturality.test.suites', providers.gradleProperty('clientTests').getOrElse('')
+        systemProperty 'naturality.test.vanillaSnapshot', layout.buildDirectory.file('vanilla-registry-snapshot.json').get().asFile.absolutePath
+        if (providers.gradleProperty('clientTests').getOrElse('').split(',').any { it.trim() in ['feature-startup', 'all'] }) {
+            dependsOn 'writeVanillaRegistrySnapshot'
+        }
+        systemProperty 'naturality.test.muteAudio', 'true'
+        doFirst {
+            def selection = systemProperties['naturality.test.suites'].toString().split(',', -1).collect { it.trim() }
+            def valid = clientTestNames
+            if (selection.any { !valid.contains(it) }) {
+                throw new GradleException('Choose focused checks with -PclientTests=<id>; run listClientTests for available checks and groups.')
+            }
+        }
+    }
+} else {
+    tasks.register('listClientTests') {
+        group = 'verification'
+        description = 'Reports that local-only tests are unavailable or disabled.'
+        doLast { logger.lifecycle('Local tests are absent or disabled. src/gametest is intentionally not stored in Git.') }
+    }
 }
 
 dependencies {
@@ -86,7 +99,7 @@ dependencies {
 }
 
 // A separate JVM with no Fabric launcher gives the compatibility suite an actual vanilla baseline.
-tasks.register('writeVanillaRegistrySnapshot', JavaExec) {
+if (localTestsEnabled) tasks.register('writeVanillaRegistrySnapshot', JavaExec) {
     group = 'verification'
     dependsOn 'gametestClasses'
     classpath = sourceSets.gametest.output + sourceSets.main.runtimeClasspath
@@ -306,7 +319,8 @@ tasks.named('generateDLIConfig') {
 tasks.register('prepareDebugLaunch') {
 	group = 'fabric'
 	description = 'Builds debug resources and refreshes/verifies Fabric launch metadata.'
-	dependsOn 'classes', 'clientClasses', 'gametestClasses', 'configureClientLaunch'
+	dependsOn 'classes', 'clientClasses', 'configureClientLaunch'
+	if (localTestsEnabled) dependsOn 'gametestClasses'
 	def launchConfig = layout.projectDirectory.file('.gradle/loom-cache/launch.cfg').asFile
 	def modOutputs = (sourceSets.main.output.files + sourceSets.client.output.files).collect { it.absolutePath }
 	doLast {
@@ -338,15 +352,31 @@ tasks.named('vscode') {
 }
 
 // Plain Java checks share the gametest source set but still run without launching Minecraft.
-tasks.register('checkPortalGlow', JavaExec) {
-	group = 'verification'
-	description = 'Runs the existing portal, water, rope and weather math checks without launching Minecraft.'
-	classpath = sourceSets.gametest.runtimeClasspath
-	mainClass = 'naturality.client.particle.PortalGlowGeometryTest'
-}
+if (localTestsEnabled) {
+    tasks.register('checkPlayerSwimming', JavaExec) {
+        group = 'verification'
+        description = 'Checks player swimming directions and tilt policy without launching Minecraft.'
+        classpath = sourceSets.gametest.runtimeClasspath
+        mainClass = 'naturality.systems.swimming.PlayerSwimmingMathTest'
+    }
 
-tasks.named('check') {
-	dependsOn tasks.named('checkPortalGlow')
+    tasks.register('checkPlayerRotation', JavaExec) {
+        group = 'verification'
+        description = 'Checks oriented player geometry and swept collisions without launching Minecraft.'
+        classpath = sourceSets.gametest.runtimeClasspath
+        mainClass = 'naturality.systems.rotation.PlayerRotationGeometryTest'
+    }
+
+    tasks.register('checkPortalGlow', JavaExec) {
+        group = 'verification'
+        description = 'Runs the existing portal, water, rope and weather math checks without launching Minecraft.'
+        classpath = sourceSets.gametest.runtimeClasspath
+        mainClass = 'naturality.client.particle.PortalGlowGeometryTest'
+    }
+
+    tasks.named('check') {
+        dependsOn tasks.named('checkPortalGlow')
+    }
 }
 
 jar {

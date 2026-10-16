@@ -79,7 +79,8 @@ public final class GravityMixins {
         @ModifyArg(method="setRotation",at=@At(value="INVOKE",target="Lorg/joml/Quaternionf;rotationYXZ(FFF)Lorg/joml/Quaternionf;"),index=2)
         private float naturality$roll(float roll) {
             var cameraEntity = entity;
-            return cameraEntity==null?roll:roll+(float)Math.PI*EndGravity.inversion(cameraEntity,true);
+            return cameraEntity==null || naturality.systems.rotation.PlayerRotation.active(cameraEntity)
+                ?roll:roll+(float)Math.PI*EndGravity.inversion(cameraEntity,true);
         }
         @ModifyExpressionValue(method="alignWithEntity",at=@At(value="INVOKE",target="Lnet/minecraft/util/Mth;lerp(FFF)F"))
         private float naturality$eye(float smoothedHeight) {
@@ -103,7 +104,8 @@ public final class GravityMixins {
     public static abstract class EndGravityRendererMixin {
         @Inject(method="extractRenderState(Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/client/renderer/entity/state/LivingEntityRenderState;F)V",at=@At("TAIL"))
         private void naturality$extract(LivingEntity e,LivingEntityRenderState state,float partial,CallbackInfo ci) {
-            float inversion=naturality.client.systems.gravity.GravityPreviewContext.active()?0:EndGravity.inversion(e,true);
+            float inversion=naturality.client.systems.gravity.GravityPreviewContext.active()
+                || naturality.systems.rotation.PlayerRotation.active(e)?0:EndGravity.inversion(e,true);
             ((EndGravityRenderState)state).naturality$inversion(inversion);
             if(inversion==0)return;
             // World look direction expressed in the rolled body's local frame.

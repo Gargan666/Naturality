@@ -6,18 +6,18 @@ float naturality_wind_detail(vec3 cameraRelative) {
     // Identical shared-edge coordinates give matching weights across blocks.
     return 1.0 - smoothstep(64.0 * 64.0, 96.0 * 96.0, dot(cameraRelative.xz, cameraRelative.xz));
 }
-layout(std140) uniform NaturalityWind { vec4 NaturalityWindValue; };
+layout(std140) uniform NaturalityWind { vec4 NaturalityWindValue; vec4 NaturalityWindShape; }; // direction X/Z, severe blend, magnitude
 vec2 naturality_leaf_wind_at(vec2 worldXZ) {
     if (all(equal(NaturalityWindValue.xy, vec2(0.0)))) return vec2(0.0);
     float phase = dot(worldXZ, vec2(111.0, 85.0)) * (6.28318530718 / 4096.0);
     float wave = sin(NaturalityWindValue.z * 1.256637 + phase) * 0.7
         + sin(NaturalityWindValue.z * 3.141593 + phase * 2.0) * 0.3;
-    float shake = smoothstep(0.80, 1.0, NaturalityWindValue.w);
+    float shake = NaturalityWindShape.z;
     wave = mix(wave, 1.0 + wave * 0.12, shake);
     float weight = 0.12;
     vec2 offset = NaturalityWindValue.xy * wave * weight;
-    float windMagnitude = length(NaturalityWindValue.xy);
-    vec2 windDirection = windMagnitude > 0.0001 ? NaturalityWindValue.xy / windMagnitude : vec2(0.0);
+    float windMagnitude = NaturalityWindShape.w;
+    vec2 windDirection = NaturalityWindShape.xy;
     offset = sign(offset) * floor(abs(offset) * 16.0 + 0.5) / 16.0;
     if (shake > 0.0 && windMagnitude > 0.0001) {
         float downwind = dot(offset, windDirection);
@@ -55,12 +55,11 @@ vec2 naturality_wind_offset(vec3 Position, ivec3 ChunkPosition, int foliageTag) 
         float time = NaturalityWindValue.z;
         float wave = sin(time * 1.256637 + worldY * 0.55 + phase) * 0.7
             + sin(time * 2.31 + worldY * 0.91 + phase * 2.0) * 0.3;
-        float severe = smoothstep(0.8,1.0,NaturalityWindValue.w);
+        float severe = NaturalityWindShape.z;
         float bend = mix(wave,1.0 + wave * 0.18,severe);
         float envelope = (1.0 - exp(-depth * 0.45)) * 1.6;
         vec2 flow = NaturalityWindValue.xy * bend * 0.22;
-        float magnitude = length(NaturalityWindValue.xy);
-        vec2 direction = magnitude > 0.0001 ? NaturalityWindValue.xy / magnitude : vec2(0.0);
+        vec2 direction = NaturalityWindShape.xy;
         flow += direction * (sin(time * 9.1 + worldY * 1.4 + phase) * 0.065
             + sin(time * 13.7 + worldY * 0.8 + phase * 2.0) * 0.025) * severe;
         flow = sign(flow) * floor(abs(flow) * 16.0 + 0.5) / 16.0 * envelope;
@@ -143,13 +142,13 @@ vec2 naturality_wind_offset(vec3 Position, ivec3 ChunkPosition, int foliageTag) 
             + sin(NaturalityWindValue.z * 3.141593 + phase * 2.0) * 0.3;
         float weight = foliageTag == 101 ? 0.0 : connectedPlant ? 0.22 : (attachedLeaf || foliageTag == 240) ? 0.12 : anchoredPlant ? 0.22 : 0.22 * float(foliageTag - 201) / 19.0;
         // Faster, stronger gusts layer onto the broad bend once wind becomes severe.
-        float shake = smoothstep(0.80, 1.0, NaturalityWindValue.w);
+        float shake = NaturalityWindShape.z;
         // At severe wind, foliage stays stretched near its full downwind bend;
         // only a narrow oscillation remains around that sustained pose.
         wave = mix(wave, 1.0 + wave * 0.12, shake);
         vec2 offset = NaturalityWindValue.xy * wave * weight;
-        float windMagnitude = length(NaturalityWindValue.xy);
-        vec2 windDirection = windMagnitude > 0.0001 ? NaturalityWindValue.xy / windMagnitude : vec2(0.0);
+        float windMagnitude = NaturalityWindShape.w;
+        vec2 windDirection = NaturalityWindShape.xy;
         // Quantize and constrain the sustained bend before layering the shake.
         // This keeps the main pose pulled downwind while letting the violent
         // overlay swing freely across either side of that direction.

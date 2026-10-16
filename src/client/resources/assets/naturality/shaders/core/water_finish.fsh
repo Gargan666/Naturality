@@ -7,6 +7,7 @@ uniform sampler2D Sampler0;
 uniform sampler2D Sampler1;
 uniform sampler2D NaturalityWaterMask;
 layout(location = 0) in vec2 texCoord;
+layout(location = 1) flat in mat4 waterInverseProjection;
 layout(location = 0) out vec4 fragColor;
 void main() {
     float depth = texture(Sampler1, texCoord).r;
@@ -16,7 +17,7 @@ void main() {
         #ifndef RENDERPEARL_DEPTH_IS_ZERO_TO_ONE
         depth = depth * 2.0 - 1.0;
         #endif
-        vec4 p = inverse(ProjMat) * vec4(texCoord * 2.0 - 1.0, depth, 1.0);
+        vec4 p = waterInverseProjection * vec4(texCoord * 2.0 - 1.0, depth, 1.0);
         distance = length(p.xyz / p.w);
     }
     if (water.a > 0.5) distance = min(distance, water.b);

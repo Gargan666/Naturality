@@ -197,6 +197,9 @@ public class NaturalityCategoryScreen extends OptionsSubScreen {
         addFeatureOptions(category);
         if (category == Category.VISUALS) {
             var c = NaturalityConfig.get().effects;
+            toggle("effects.elasticHands", c.elasticHands, true, v -> c.elasticHands = v);
+            number("effects.elasticHandsSpeed", c.elasticHandsSpeed, 100, 25, 300, v -> c.elasticHandsSpeed = v);
+            number("effects.elasticHandsStrength", c.elasticHandsStrength, 100, 0, 200, v -> c.elasticHandsStrength = v);
             toggle("effects.distantWind", c.distantWind, true, v -> c.distantWind = v);
             toggle("effects.distantLeaves", c.distantLeaves, true, v -> c.distantLeaves = v);
             toggle("effects.distantTextures", c.distantTextures, true, v -> c.distantTextures = v);
@@ -700,7 +703,7 @@ public class NaturalityCategoryScreen extends OptionsSubScreen {
                 case CROWD_PANIC, FISHING_RETURN, FIREBALL_FIRE_SUPPRESSION, GHAST_PHYSICS, FISH_MOVEMENT,
                     ARROW_IMPACT_EVENTS, FIREBALL_IMPACT_EVENTS -> Category.MOB_GAMEPLAY;
                 case SAND_PLACEMENT_EVENTS, SNOW_WORLDGEN -> Category.BLOCK_RULES;
-                case WEATHER_CYCLES, END_WEATHER, UNDERGROUND_LIGHTNING, SKY_EVENT_CYCLES -> Category.WEATHER_RULES;
+                case WEATHER_CYCLES, END_WEATHER, UNDERGROUND_LIGHTNING, SKY_EVENT_CYCLES, EVENT_CYCLES -> Category.WEATHER_RULES;
                 case WIND_PHYSICS, ELYTRA_MOMENTUM, NAVIGATION_INSTRUMENTS -> Category.TRAVEL_RULES;
                 case VISUAL_OVERHAUL, RESOURCE_OVERRIDES -> Category.VISUALS;
                 case END_SKY, SKY_EVENTS, METEORS, PROXIMITY, BLOOD_MOON, RAINBOWS, AURORAS, END_FLASHES -> Category.SKY;

@@ -30,6 +30,7 @@ import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.ModifyArgs;
 import org.spongepowered.asm.mixin.injection.invoke.arg.Args;
+import naturality.client.rendering.biometint.BiomeTint;
 
 /** Feature integration hooks; each nested type retains its independent Mixin target and gate. */
 public final class FluidsSharedMixins {
@@ -85,6 +86,13 @@ public final class FluidsSharedMixins {
         private void naturality$connectExposedFaces(Args args) {
             var corners = naturality$corners.get();
             if (corners == null) return;
+            var tintSource = corners.tintSource;
+            if (tintSource != null) {
+                float x = args.get(0), y = args.get(1), z = args.get(2);
+                int tint = BiomeTint.at(tintSource, corners.level, corners.block, corners.pos,
+                    x - (corners.pos.getX() & 15), y - (corners.pos.getY() & 15), z - (corners.pos.getZ() & 15));
+                args.set(3, BiomeTint.replaceFluidTint(args.get(3), corners.baseTint, tint));
+            }
             // Apply after flow encoding: side vertices must retain their side tag.
             args.set(0, naturality.client.fluids.shared.FluidGeometry.connectedCoordinate(corners.level, corners.pos, args.get(0), true));
             args.set(1, naturality.client.fluids.shared.FluidGeometry.connectedHeight(corners.level, corners.pos, args.get(1)));
@@ -97,7 +105,7 @@ public final class FluidsSharedMixins {
             var previous = naturality$corners.get();
             try {
                 if (state.getType().isSame(Fluids.WATER) || state.getType().isSame(Fluids.LAVA))
-                    naturality$corners.set(new FlowCorners(level, pos, state));
+                    naturality$corners.set(new FlowCorners(level, pos, block, state, fluidModels.get(state).tintSource()));
                 else naturality$corners.remove();
                 original.call(level, pos, output, block, state);
                 // Fabric's fluid handler re-enters this method for the same block.
@@ -146,10 +154,17 @@ public final class FluidsSharedMixins {
             final BlockAndTintGetter level;
             final BlockPos pos;
             final FluidState fluid;
+            final BlockState block;
+            final BiomeTint.@org.jspecify.annotations.Nullable Source tintSource;
+            final int baseTint;
             final int[] angles = {-1, -1, -1, -1};
             final java.util.Map<BlockPos, Integer> lights = new java.util.HashMap<>();
-            FlowCorners(BlockAndTintGetter level, BlockPos pos, FluidState fluid) {
+            FlowCorners(BlockAndTintGetter level, BlockPos pos, BlockState block, FluidState fluid,
+                    net.minecraft.client.color.block.@org.jspecify.annotations.Nullable BlockTintSource source) {
                 this.level = level; this.pos = pos.immutable(); this.fluid = fluid;
+                this.block = block;
+                this.tintSource = source instanceof BiomeTint.Source biome ? biome : null;
+                this.baseTint = source == null ? -1 : source.colorInWorld(block, level, pos);
             }
             int light(float x, float y, float z, int fallback) {
                 // Interpolate a world-anchored, cell-centered field. Inset side faces

@@ -142,7 +142,11 @@ void main() {
     bool texelLighting = int(round(naturalityShade.a * 255.0)) == 242;
     vec3 lightingGrid = texelLighting ? naturality_texel_lighting_grid(texCoord0, TextureSize)
         : naturality_pixel_grid(naturalityBlockPosition);
-    vec4 shade = vec4(naturality_pixel_lighting_grid(lightingGrid, naturalityShade.rgb),
+    // Sprite UVs own the tint grid, including rotated/mirrored foliage and packs
+    // with a different resolution. Procedural fluids already use world texels.
+    vec3 tintGrid = naturalityFluidKind >= 0 ? naturality_block_grid(naturalityBlockPosition)
+        : naturality_texel_grid(texCoord0, TextureSize);
+    vec4 shade = vec4(naturality_field_at_grid(tintGrid, naturalityShade.rgb),
         texelLighting ? 1.0 : naturalityShade.a);
     vec4 light = vec4(naturality_pixel_lighting_grid(lightingGrid, vertexColor.rgb), vertexColor.a);
     vec3 waterPosition = naturalityBlockPosition + vec3(naturalitySectionOrigin - ivec3(WaterMap.x, 0, WaterMap.y));
@@ -227,17 +231,9 @@ void main() {
         // over a substantially longer range than submerged scenery.
         float surfaceFade = naturality_water_distance_fade(sphericalVertexDistance);
         color.a = mix(color.a, 1.0, surfaceFade);
-        if (WaterTime.y < 0.5) {
-            float opaqueDepth = texelFetch(NaturalityWaterOpaqueDepth, ivec2(gl_FragCoord.xy), 0).r;
-            // No opaque bed: the water's lit biome color is the approximation.
-            // This replaces sky/sun transmission rather than tinting those pixels.
-            float coverage = opaqueDepth <= 0.0 ? 1.0 : 0.0;
-            // Missing terrain represents dark deep water, not an extra-bright
-            // opaque copy of the surface. Match 60% water over a dark bed so
-            // loaded-chunk contours do not become bright tinted patches.
-            color.rgb *= mix(1.0, color.a, coverage);
-            color.a = mix(color.a, 1.0, coverage);
-        }
+        // Missing-bed darkness is already behind all translucent draws in the
+        // optics pass. Opaque depth cannot see ice: making this face opaque
+        // here would hide that ice in both sorted and OIT transparency.
     }
     if (naturalityFireKind < 0) color.rgb = naturality_shadow_saturation(color.rgb, lighting.rgb);
     // Keep fog on the depth-tested water geometry rather than over the final

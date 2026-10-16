@@ -33,12 +33,19 @@ float naturality_water_murk(vec2 position) {
 }
 
 // Surface, bottom, turbidity, validity. Integer origin subtraction precedes float conversion.
-vec4 naturality_water_column(vec2 position) {
+vec4 naturality_water_geometry(vec2 position) {
     ivec2 cell = ivec2(floor(position));
     if (WaterMap.w == 0 || any(lessThan(cell, ivec2(0))) || any(greaterThanEqual(cell, ivec2(256)))) return vec4(0);
     ivec4 data = ivec4(round(texelFetch(NaturalityWaterColumns, cell, 0) * 255.0));
     float top = float(WaterMap.z + data.r + data.g * 256) + 0.875;
-    return vec4(top, top - float(data.b) + 0.125, naturality_water_murk(position), data.a > 0 ? 1.0 : 0.0);
+    return vec4(top, top - float(data.b) + 0.125, 0.0, data.a > 0 ? 1.0 : 0.0);
+}
+vec4 naturality_water_column(vec2 position) {
+    ivec2 cell = ivec2(floor(position));
+    if (WaterMap.w == 0 || any(lessThan(cell, ivec2(0))) || any(greaterThanEqual(cell, ivec2(256)))) return vec4(0);
+    vec4 column = naturality_water_geometry(position);
+    column.z = naturality_water_murk(position);
+    return column;
 }
 float naturality_water_depth(vec3 p, vec4 column) {
     return column.w > 0.0 && p.y >= column.y - 0.08 ? max(column.x - p.y, 0.0) : 0.0;

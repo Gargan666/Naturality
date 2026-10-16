@@ -1,7 +1,7 @@
 package naturality.client.sky.shared.aurora;
 import naturality.systems.skyevents.framework.SkyEvents.SkyEventType;
 
-import naturality.client.sky.overworld.bloodmoon.BloodMoonClient;
+import naturality.client.systems.event.overworld.bloodmoon.BloodMoonClient;
 import naturality.client.systems.skyevents.framework.SkyEventsClient;
 
 

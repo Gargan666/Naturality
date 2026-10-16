@@ -31,9 +31,11 @@ import net.minecraft.world.level.block.state.BlockState;
 /** Client-only virtual emitters with an occluded field and a vanilla-light underlay. */
 @org.jspecify.annotations.NullMarked
 public final class DynamicLighting {
-    private record State(@org.jspecify.annotations.Nullable Object engine, Map<Long, Integer> emitters,
+    private record State(@org.jspecify.annotations.Nullable Object engine, it.unimi.dsi.fastutil.longs.Long2IntMap emitters,
             it.unimi.dsi.fastutil.longs.Long2IntMap field, boolean precise, int sourceCount) {}
     private record Source(long id, Vec3 position, int light, double distance) {}
+    private record Placement(Vec3 desired, Vec3 owner, @org.jspecify.annotations.Nullable Vec3 resolved) {}
+    private static final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<Placement> placements = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
     private record Drop(long id, Vec3 position, ItemStack item, Set<Integer> existingItems, int expires) {}
     private static volatile State state = emptyState();
     private static @org.jspecify.annotations.Nullable ClientLevel level;
@@ -44,17 +46,26 @@ public final class DynamicLighting {
     private static final List<Drop> pendingDrops = new ArrayList<>();
     private static long nextDropId = Long.MIN_VALUE;
 
-    private static State emptyState() { return new State(null, Map.of(), it.unimi.dsi.fastutil.longs.Long2IntMaps.EMPTY_MAP, false, 0); }
+    private static State emptyState() { return new State(null, it.unimi.dsi.fastutil.longs.Long2IntMaps.EMPTY_MAP, it.unimi.dsi.fastutil.longs.Long2IntMaps.EMPTY_MAP, false, 0); }
 
     private DynamicLighting() {}
 
     public static int emission(Object engine, long position) {
         State current = state;
-        return current.engine == engine ? current.emitters.getOrDefault(position, 0) : 0;
+        return current.engine == engine ? current.emitters.get(position) : 0;
     }
 
     public static int sourceCount() { return state.sourceCount; }
     public static void invalidate() { dirty = true; }
+    /** Only geometry within a source's maximum propagation radius can alter its field. */
+    public static void invalidate(BlockPos position) {
+        placements.clear();
+        for (Source source : previousSources) {
+            if (Math.abs(source.position.x - position.getX()) <= 17
+                    && Math.abs(source.position.y - position.getY()) <= 17
+                    && Math.abs(source.position.z - position.getZ()) <= 17) { dirty = true; return; }
+        }
+    }
 
     public static int smoothLight(Object engine, long position) {
         State current = state;
@@ -89,19 +100,23 @@ public final class DynamicLighting {
             ticks = 0;
             dirty = true;
             previousSources = List.of();
+            placements.clear();
             pendingDrops.clear();
         }
         var level = DynamicLighting.level;
         if (level == null || client.isPaused()) return;
         var config = NaturalityConfig.get().dynamicLighting;
         if (!config.enabled) {
-            if (!state.emitters.isEmpty() || !state.field.isEmpty()) publish(Map.of(), it.unimi.dsi.fastutil.longs.Long2IntMaps.EMPTY_MAP, false, 0);
+            if (!state.emitters.isEmpty() || !state.field.isEmpty()) publish(it.unimi.dsi.fastutil.longs.Long2IntMaps.EMPTY_MAP, it.unimi.dsi.fastutil.longs.Long2IntMaps.EMPTY_MAP, false, 0);
             previousSources = List.of();
+            placements.clear();
             pendingDrops.clear();
             ticks = 0;
             return;
         }
         boolean scheduled = ticks++ % Math.clamp(config.updateTicks, 1, 20) == 0;
+        // Bound cache lifetime and retain the existing one-second geometry refresh.
+        if (dirty || ticks % 20 == 1 || placements.size() > 1024) placements.clear();
         var camera = client.gameRenderer.mainCamera().position();
         var sources = new ArrayList<Source>();
         double range = Math.clamp(config.sourceRange, 16, 128);
@@ -164,7 +179,7 @@ public final class DynamicLighting {
         previousSources = List.copyOf(sources);
         lastSubBlock = config.subBlockPrecision;
         dirty = false;
-        var next = new HashMap<Long, Integer>();
+        var next = new it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap();
         var field = new FractionalLightField(level);
         for (Source source : sources) {
             if (config.subBlockPrecision) field.add(source.position, source.light);
@@ -181,7 +196,12 @@ public final class DynamicLighting {
         if (level == null) return;
         light = Math.clamp((int)Math.round(light * Math.clamp(config.brightnessPercent, 25, 200) / 100.0), 0, 15);
         if (light == 0) return;
-        Vec3 placed = LightSourcePlacement.resolve(level, position, owner);
+        var cached = placements.get(id);
+        if (cached == null || !cached.desired.equals(position) || !cached.owner.equals(owner)) {
+            cached = new Placement(position, owner, LightSourcePlacement.resolve(level, position, owner));
+            placements.put(id, cached);
+        }
+        Vec3 placed = cached.resolved;
         if (placed != null) sources.add(new Source(id, placed, light, placed.distanceToSqr(camera)));
     }
 
@@ -203,27 +223,20 @@ public final class DynamicLighting {
         return 0;
     }
 
-    private static void publish(Map<Long, Integer> next, it.unimi.dsi.fastutil.longs.Long2IntMap smooth, boolean precise, int count) {
+    private static void publish(it.unimi.dsi.fastutil.longs.Long2IntMap next, it.unimi.dsi.fastutil.longs.Long2IntMap smooth, boolean precise, int count) {
         var level = DynamicLighting.level;
         if (level == null) return;
         var engine = level.getLightEngine();
         var previous = state.emitters;
         var oldSmooth = state.field;
-        state = new State(engine.getLayerListener(LightLayer.BLOCK), Map.copyOf(next), smooth, precise, count);
+        state = new State(engine.getLayerListener(LightLayer.BLOCK), it.unimi.dsi.fastutil.longs.Long2IntMaps.unmodifiable(next), smooth, precise, count);
         // Fractional changes can leave integral light unchanged; explicitly rebuild
         // affected sections, including neighbors whose AO samples cross a border.
         var sections = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
         for (var entry : smooth.long2IntEntrySet()) if (oldSmooth.get(entry.getLongKey()) != entry.getIntValue())
-            sections.add(net.minecraft.core.SectionPos.blockToSection(entry.getLongKey()));
-        for (long key : oldSmooth.keySet()) if (!smooth.containsKey(key)) sections.add(net.minecraft.core.SectionPos.blockToSection(key));
-        // Preserve precisely the same section neighborhood, but notify overlaps once.
-        var affected = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
+            addChangedSections(sections, entry.getLongKey());
+        for (long key : oldSmooth.keySet()) if (!smooth.containsKey(key)) addChangedSections(sections, key);
         for (long section : sections) {
-            int x = net.minecraft.core.SectionPos.x(section), y = net.minecraft.core.SectionPos.y(section), z = net.minecraft.core.SectionPos.z(section);
-            for (int dx = -1; dx <= 1; dx++) for (int dy = -1; dy <= 1; dy++) for (int dz = -1; dz <= 1; dz++)
-                affected.add(net.minecraft.core.SectionPos.asLong(x + dx, y + dy, z + dz));
-        }
-        for (long section : affected) {
             int x = net.minecraft.core.SectionPos.x(section), y = net.minecraft.core.SectionPos.y(section), z = net.minecraft.core.SectionPos.z(section);
             level.setSectionRangeDirty(x, y, z, x, y, z);
         }
@@ -231,6 +244,15 @@ public final class DynamicLighting {
         for (long old : previous.keySet()) if (!next.containsKey(old)) engine.checkBlock(BlockPos.of(old));
         // Recheck current sources too, restoring them after server light packets.
         for (long current : next.keySet()) engine.checkBlock(BlockPos.of(current));
+    }
+
+    private static void addChangedSections(it.unimi.dsi.fastutil.longs.LongSet sections, long block) {
+        int x = BlockPos.getX(block), y = BlockPos.getY(block), z = BlockPos.getZ(block);
+        // AO crosses block boundaries, not an entire 16-block section in every direction.
+        for (int sx = (x - 1) >> 4; sx <= (x + 1) >> 4; sx++)
+            for (int sy = (y - 1) >> 4; sy <= (y + 1) >> 4; sy++)
+                for (int sz = (z - 1) >> 4; sz <= (z + 1) >> 4; sz++)
+                    sections.add(net.minecraft.core.SectionPos.asLong(sx, sy, sz));
     }
 
     /** Bell supports have stretched UVs; their lighting cells follow texture texels. */

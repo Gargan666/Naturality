@@ -1,7 +1,7 @@
-package naturality.client.sky.overworld.bloodmoon;
-import naturality.client.systems.skyevents.framework.SkyEventsClient;
+package naturality.client.systems.event.overworld.bloodmoon;
+import naturality.client.systems.event.framework.EventsClient;
 
-import naturality.systems.skyevents.framework.SkyEvents.SkyEventType;
+import naturality.systems.event.framework.Events.EventType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.attribute.EnvironmentAttributes;
@@ -26,11 +26,11 @@ public final class BloodMoonClient {
         if (level == null || client.isPaused()) return;
         previous = amount;
         float target = 0;
-        if (level.dimension().equals(Level.OVERWORLD)) {
+        if (naturality.config.startup.FeatureConfig.Feature.BLOOD_MOON.enabled() && level.dimension().equals(Level.OVERWORLD)) {
             float sun = client.gameRenderer.mainCamera().attributeProbe().getValue(EnvironmentAttributes.SUN_ANGLE, 1);
             float night = Math.clamp(-(float)Math.cos(Math.toRadians(sun)) * 3, 0, 1);
             night = night * night * (3 - 2 * night);
-            target = SkyEventsClient.strength(level, SkyEventType.BLOOD_MOON) > 0 ? night : 0;
+            target = EventsClient.strength(level, EventType.BLOOD_MOON) > 0 ? night : 0;
         }
         amount += (target - amount) * .05F;
         if (Math.abs(target - amount) < .001F) amount = target;
