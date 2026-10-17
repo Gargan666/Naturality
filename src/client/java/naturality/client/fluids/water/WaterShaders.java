@@ -11,7 +11,6 @@ import java.util.Optional;
 import net.minecraft.client.renderer.BindGroupLayouts;
 import net.minecraft.client.renderer.RenderPipelines;
 import com.mojang.renderpearl.api.pipeline.BlendFunction;
-import com.mojang.renderpearl.api.pipeline.BlendFactor;
 import com.mojang.renderpearl.api.pipeline.ColorTargetState;
 import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import net.minecraft.tags.FluidTags;
@@ -50,9 +49,21 @@ public final class WaterShaders {
         public static final SingleQuadParticle.Layer SPLASH_LAYER=new SingleQuadParticle.Layer(true,naturality.client.api.rendering.AtlasLocations.BLOCKS,SPLASH_PIPELINE,SPLASH_OIT);
     }
     public static final class Composite {
+        public static final RenderPipeline SURFACE = RenderPipelines.register(
+            RenderPipeline.builder(RenderPipelines.POST_PROCESSING_SNIPPET)
+                .withLocation(Naturality.id("pipeline/water_surface"))
+                .withBindGroupLayout(WaterVisuals.SunTransmission.LAYOUT)
+                .withVertexShader(Naturality.id("core/water_screen"))
+                .withFragmentShader(Naturality.id("core/water_surface"))
+                .withBindGroupLayout(BindGroupLayouts.PROJECTION)
+                .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
+                .withBindGroupLayout(BindGroupLayouts.SAMPLER0_SAMPLER1)
+                .withBindGroupLayout(WaterVisuals.LAYOUT).withBindGroupLayout(WaterVisuals.SCENE_LAYOUT)
+                .withDepthStencilState(Optional.empty()).withColorTargetState(ColorTargetState.DEFAULT).build());
         public static final RenderPipeline PIPELINE = RenderPipelines.register(
             RenderPipeline.builder(RenderPipelines.POST_PROCESSING_SNIPPET)
                 .withLocation(Naturality.id("pipeline/water_optics"))
+                .withBindGroupLayout(BindGroupLayouts.FOG)
                 .withVertexShader(Naturality.id("core/water_screen"))
                 .withFragmentShader(Naturality.id("core/water_optics"))
                 .withBindGroupLayout(BindGroupLayouts.PROJECTION)
@@ -65,16 +76,6 @@ public final class WaterShaders {
                 .build());
         public static final RenderPipeline MASK = maskPipeline(false);
         public static final RenderPipeline MASK_MULTIDRAW = maskPipeline(true);
-        public static final RenderPipeline FINISH = RenderPipelines.register(
-            RenderPipeline.builder(RenderPipelines.POST_PROCESSING_SNIPPET)
-                .withLocation(Naturality.id("pipeline/water_finish"))
-                .withVertexShader(Naturality.id("core/water_screen")).withFragmentShader(Naturality.id("core/water_finish"))
-                .withBindGroupLayout(BindGroupLayouts.PROJECTION)
-                .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
-                .withBindGroupLayout(BindGroupLayouts.SAMPLER0_SAMPLER1)
-                .withBindGroupLayout(WaterVisuals.LAYOUT).withBindGroupLayout(WaterVisuals.SCENE_LAYOUT)
-                .withDepthStencilState(Optional.empty()).withColorTargetState(ColorTargetState.DEFAULT).build());
-
         private static RenderPipeline maskPipeline(boolean multidraw) {
             return RenderPipelines.register(RenderPipeline.builder(multidraw ? RenderPipelines.MULTIDRAW_TERRAIN_SNIPPET : RenderPipelines.TERRAIN_SNIPPET)
                 .withLocation(Naturality.id(multidraw ? "pipeline/water_mask_multidraw" : "pipeline/water_mask"))
@@ -84,25 +85,6 @@ public final class WaterShaders {
         }
 
     }
-    public static final class Immersion {
-        public static final RenderPipeline MULTIPLY = pipeline("multiply",
-            new BlendFunction(BlendFactor.DST_COLOR, BlendFactor.ZERO, BlendFactor.ZERO, BlendFactor.ONE));
-        public static final RenderPipeline ADD = pipeline("add",
-            new BlendFunction(BlendFactor.ONE, BlendFactor.ONE, BlendFactor.ZERO, BlendFactor.ONE));
-
-        private static RenderPipeline pipeline(String suffix, BlendFunction blend) {
-            return RenderPipelines.register(
-            RenderPipeline.builder(RenderPipelines.POST_PROCESSING_SNIPPET)
-                .withLocation(Naturality.id("pipeline/water_immersion_overlay_" + suffix))
-                .withVertexShader("core/screenquad")
-                .withFragmentShader(Naturality.id("core/water_immersion_overlay"))
-                .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
-                .withDepthStencilState(Optional.empty())
-                .withColorTargetState(new ColorTargetState(blend)).build());
-        }
-
-    }
-
     /** Shared visible water geometry for model rims and impacts. Coordinates within a tile are in blocks. */
     public record WaterSurface(BlockPos pos,double nw,double sw,double se,double ne,boolean cauldron) {
         public double height(double x,double z) {

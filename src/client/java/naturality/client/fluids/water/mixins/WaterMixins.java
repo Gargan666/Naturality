@@ -45,8 +45,6 @@ import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.renderer.fog.FogData;
 import net.minecraft.client.renderer.fog.environment.WaterFogEnvironment;
-import naturality.client.fluids.water.WaterComposite.WaterImmersionOverlay;
-import net.minecraft.client.renderer.GameRenderer;
 import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import com.mojang.renderpearl.api.textures.GpuSampler;
 import com.mojang.renderpearl.api.textures.GpuTextureView;
@@ -63,6 +61,104 @@ import net.minecraft.client.particle.ParticleEngine;
 /** Feature integration hooks; each nested type retains its independent Mixin target and gate. */
 public final class WaterMixins {
     private WaterMixins() {}
+
+    @Mixin(ClientLevel.class)
+    public static abstract class OceanBubbleSamplingMixin {
+        @Inject(method = "doAnimateTick", at = @At("TAIL"))
+        private void naturality$sampleBubbles(int x, int y, int z, int radius,
+                net.minecraft.util.RandomSource random, net.minecraft.world.level.block.Block marker,
+                BlockPos.MutableBlockPos pos, CallbackInfo ci) {
+            naturality.client.fluids.water.OceanBubbles.sample((ClientLevel) (Object) this, pos);
+        }
+    }
+
+    @Mixin(net.minecraft.world.level.block.entity.ChestBlockEntity.class)
+    public static abstract class OceanChestBubblesMixin {
+        @Inject(method = "lidAnimateTick", at = @At("TAIL"))
+        private static void naturality$chestBubbles(Level level, BlockPos pos,
+                net.minecraft.world.level.block.state.BlockState state,
+                net.minecraft.world.level.block.entity.ChestBlockEntity chest, CallbackInfo ci) {
+            if (level instanceof ClientLevel clientLevel)
+                naturality.client.fluids.water.OceanBubbles.chest(clientLevel, pos, state, chest);
+        }
+    }
+
+    @Mixin(net.minecraft.world.level.lighting.LightEngine.class)
+    public static abstract class WaterSkylightStorageMixin {
+        @Inject(method = "getLightValue", at = @At("RETURN"), cancellable = true)
+        private void naturality$opticalSky(BlockPos pos, CallbackInfoReturnable<Integer> cir) {
+            cir.setReturnValue(WaterVisuals.Skylight.light(this, pos, cir.getReturnValueI()));
+        }
+        @Inject(method = "getDataLayerData", at = @At("RETURN"), cancellable = true)
+        private void naturality$opticalSkyData(net.minecraft.core.SectionPos pos,
+                CallbackInfoReturnable<net.minecraft.world.level.chunk.DataLayer> cir) {
+            cir.setReturnValue(WaterVisuals.Skylight.data(this, pos, cir.getReturnValue()));
+        }
+    }
+
+    @Mixin(ClientLevel.class)
+    public static abstract class WaterSkylightGeometryMixin {
+        @Inject(method = "setBlocksDirty", at = @At("HEAD"))
+        private void naturality$opticalGeometry(BlockPos pos,
+                net.minecraft.world.level.block.state.BlockState oldState,
+                net.minecraft.world.level.block.state.BlockState newState, CallbackInfo ci) {
+            WaterVisuals.Skylight.changed((ClientLevel)(Object)this, pos);
+        }
+    }
+
+    @Mixin(net.minecraft.client.renderer.SkyRenderer.class)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class WaterSunSourceMixin {
+        @SuppressWarnings("null") @Shadow @Final private net.minecraft.client.renderer.texture.TextureAtlas celestialsAtlas;
+        @Inject(method = "renderSun", at = @At("HEAD"))
+        private void naturality$captureSun(RenderPass pass, float rain,
+                com.mojang.blaze3d.vertex.PoseStack pose, CallbackInfo ci) {
+            WaterVisuals.SunTransmission.capture(pose, rain, celestialsAtlas);
+        }
+    }
+
+    @Mixin(net.minecraft.client.renderer.Lightmap.class)
+    public static abstract class WaterLightmapMixin {
+        @Unique private float naturality$underwaterLight;
+        @Unique private float naturality$skyFactor;
+        @Unique private int naturality$waterTint = -1;
+
+        @Inject(method = "render", at = @At("HEAD"))
+        private void naturality$refreshImmersion(net.minecraft.client.renderer.state.LightmapRenderState state, CallbackInfo ci) {
+            float active = WaterVisuals.underwaterLightingBlend();
+            int tint = WaterVisuals.underwaterLightingTint();
+            if (active != naturality$underwaterLight || tint != naturality$waterTint) state.needsUpdate = true;
+            naturality$waterTint = tint;
+            naturality$underwaterLight = active;
+            naturality$skyFactor = Math.max(0.0F, state.skyFactor);
+        }
+
+        @ModifyExpressionValue(method = "render", at = @At(value = "FIELD",
+            target = "Lnet/minecraft/client/renderer/state/LightmapRenderState;skyFactor:F"))
+        private float naturality$uniformSky(float factor) {
+            // Negative encoding is consumed only by our lightmap shader. Encode
+            // at upload, after moon/weather modifiers, without mutating saved state.
+            return naturality$underwaterLight > 0 ? -1.0F - naturality$underwaterLight : factor;
+        }
+
+        @ModifyExpressionValue(method = "render", at = @At(value = "FIELD",
+            target = "Lnet/minecraft/client/renderer/state/LightmapRenderState;skyLightColor:Lorg/joml/Vector3fc;"))
+        private org.joml.Vector3fc naturality$skyColor(org.joml.Vector3fc color) {
+            // Preserve the original daylight/weather factor separately from the
+            // transition encoded in SkyFactor. Never mutate the extracted state.
+            var tinted = WaterVisuals.tintLighting(color, naturality$waterTint);
+            return naturality$underwaterLight > 0
+                ? new org.joml.Vector3f(tinted).mul(naturality$skyFactor) : tinted;
+        }
+
+        @ModifyExpressionValue(method = "render", at = {
+            @At(value = "FIELD", target = "Lnet/minecraft/client/renderer/state/LightmapRenderState;ambientColor:Lorg/joml/Vector3fc;"),
+            @At(value = "FIELD", target = "Lnet/minecraft/client/renderer/state/LightmapRenderState;nightVisionColor:Lorg/joml/Vector3fc;"),
+            @At(value = "FIELD", target = "Lnet/minecraft/client/renderer/state/LightmapRenderState;blockLightTint:Lorg/joml/Vector3fc;")})
+        private org.joml.Vector3fc naturality$tintLight(org.joml.Vector3fc color) {
+            return WaterVisuals.tintLighting(color, naturality$waterTint);
+        }
+    }
 
     /** Keep the third-person camera out of dry blocks bordering the water. */
     @Mixin(Camera.class)
@@ -110,7 +206,37 @@ public final class WaterMixins {
     @Mixin(BubbleParticle.class)
     @org.jspecify.annotations.NullMarked
     public static abstract class BubbleSurfaceHeightMixin extends SingleQuadParticle {
+        @Unique private boolean naturality$longOceanBubble;
+        @Unique private boolean naturality$chestBurstBubble;
+        @Unique private final naturality.client.fluids.water.OceanBubbles.BubbleMotion naturality$motion =
+            new naturality.client.fluids.water.OceanBubbles.BubbleMotion();
         protected BubbleSurfaceHeightMixin(ClientLevel level,double x,double y,double z,TextureAtlasSprite sprite){super(level,x,y,z,sprite);}
+        @Inject(method = "<init>", at = @At("RETURN"))
+        private void naturality$oceanLifetime(CallbackInfo ci) {
+            naturality$longOceanBubble = naturality.client.fluids.water.OceanBubbles.spawningLongBubble();
+            naturality$chestBurstBubble = naturality.client.fluids.water.OceanBubbles.spawningBurstBubble();
+            if (naturality$longOceanBubble) {
+                lifetime = 80 + random.nextInt(41);
+                yd = 0.035;
+            }
+        }
+        @Inject(method = "tick", at = @At("HEAD"))
+        private void naturality$oceanRise(CallbackInfo ci) {
+            naturality$motion.tick();
+            xd += naturality$motion.driftX();
+            zd += naturality$motion.driftZ();
+            // Ease toward a varying rise speed rather than forcing identical straight ascents.
+            if (naturality$longOceanBubble) yd += (naturality$motion.riseSpeed() - yd) * 0.3;
+        }
+        @Inject(method = "tick", at = @At("TAIL"))
+        private void naturality$chestBurstDrag(CallbackInfo ci) {
+            if (naturality$chestBurstBubble) {
+                // Account for vanilla drag, retaining 80% for a much gentler slowdown.
+                xd *= 0.8 / 0.85;
+                yd *= 0.8 / 0.85;
+                zd *= 0.8 / 0.85;
+            }
+        }
         @Inject(method="tick",at=@At("TAIL"))
         private void naturality$leaveSurface(CallbackInfo ci) {
             if(!naturality.config.live.NaturalityConfig.get().liquids.water)return;
@@ -328,15 +454,6 @@ public final class WaterMixins {
         }
     }
 
-    @Mixin(GameRenderer.class)
-    @org.jspecify.annotations.NullMarked
-    public static abstract class WaterImmersionOverlayMixin {
-        @Inject(method = "renderLevel", at = @At("TAIL"))
-        private void naturality$immersionOverlay(CallbackInfo ci) {
-            WaterImmersionOverlay.render();
-        }
-    }
-
     @Mixin(ChunkSectionsToRender.class)
     @org.jspecify.annotations.NullMarked
     public interface WaterLayersAccess {
@@ -348,14 +465,13 @@ public final class WaterMixins {
             GpuTextureView atlas, GpuTextureView lightmap, RenderPipeline pipeline, RenderPipeline multidraw);
     }
 
-    /** The immersion overlay supplies the persistent biome tint, including spectators.
-     * Do not stack vanilla's fixed-blue texture over it in first person. */
+    /** Biome fog supplies underwater color; avoid stacking the fixed-blue overlay. */
     @Mixin(ScreenEffectRenderer.class)
     @org.jspecify.annotations.NullMarked
     public static abstract class WaterOverlayMixin {
         @Inject(method = "submitWater", at = @At("HEAD"), cancellable = true)
         private static void naturality$useBiomeImmersionTint(CallbackInfo ci) {
-            if (WaterImmersionOverlay.active()) ci.cancel();
+            if (WaterVisuals.ready() && NaturalityConfig.get().liquids.waterDepth) ci.cancel();
         }
     }
 

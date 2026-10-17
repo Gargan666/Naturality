@@ -69,6 +69,7 @@ public class NaturalityClient implements ClientModInitializer {
         if (!VISUAL_OVERHAUL.enabled()) return;
         naturality.client.api.rendering.ShaderPreparation.initialize();
         naturality.client.fluids.water.WaterComposite.initialize();
+        ClientTickEvents.END_CLIENT_TICK.register(naturality.client.fluids.water.OceanBubbles::tick);
         naturality.client.rendering.heatwaves.HeatWaves.initialize();
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents.CLIENT_STOPPING.register(_ -> naturality.client.rendering.breaking.BreakingTextures.reset());
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents.CLIENT_STOPPING.register(_ -> naturality.client.rendering.shadows.BlockGridShadow.reset());
@@ -91,7 +92,6 @@ public class NaturalityClient implements ClientModInitializer {
         naturality.client.blocks.fire.ProceduralFire.initialize();
         naturality.client.fluids.shared.ProceduralFluids.initialize();
         naturality.client.fluids.water.WaterVisuals.initialize();
-        naturality.client.fluids.water.WaterComposite.WaterImmersionOverlay.initialize();
         naturality.client.fluids.water.WaterIntersection.initialize();
         naturality.client.fluids.lava.LavaIntersection.initialize();
         naturality.client.systems.sleep.SleepVisuals.register(naturality.client.fluids.lava.LavaIntersection.LavaRipples::tick);

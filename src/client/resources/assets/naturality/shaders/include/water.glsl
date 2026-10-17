@@ -3,7 +3,7 @@
 layout(std140) uniform NaturalityWater {
     ivec4 WaterMap; // origin X/Z, world minimum Y, enabled
     vec4 WaterCamera; // map-relative X/Z, world Y, sunlight
-    vec4 WaterParams; // black depth, clear depth, refraction pixel size, render distance
+    vec4 WaterParams; // reserved, reserved, refraction pixel size, render distance
     ivec4 WaterSwitches; // depth, distortion, shimmer, night vision
     vec4 WaterTime; // seconds, immersed, camera water depth, local illumination
     vec4 WaterTint; // biome-blended current water color, camera turbidity
@@ -11,11 +11,17 @@ layout(std140) uniform NaturalityWater {
 };
 uniform sampler2D NaturalityWaterColumns;
 
-float naturality_water_distance_fade(float distance) {
-    float end = max(14.0, 104.0 / (1.0 + max(WaterTime.z, 0.0) * 0.065));
-    end = min(end, max(12.0, WaterParams.w * 0.65));
+float naturality_water_visibility_range() {
+    // Follow the effective terrain draw distance without a fixed visibility cap.
+    // Both silhouette stages and surface haze use this same range.
+    float end = max(12.0, WaterParams.w * 0.65);
     end *= mix(1.0, 0.45, WaterTint.a);
-    return smoothstep(end * 0.3, end, distance) * WaterTime.y;
+    return end;
+}
+
+float naturality_water_distance_fade(float distance) {
+    float end = naturality_water_visibility_range();
+    return smoothstep(end * 0.18, end, distance) * WaterTime.y;
 }
 
 float naturality_water_murk(vec2 position) {
@@ -50,8 +56,25 @@ vec4 naturality_water_column(vec2 position) {
 float naturality_water_depth(vec3 p, vec4 column) {
     return column.w > 0.0 && p.y >= column.y - 0.08 ? max(column.x - p.y, 0.0) : 0.0;
 }
-float naturality_water_daylight(float depth, float murk) {
-    if (WaterSwitches.x == 0 || WaterSwitches.w != 0) return 1.0;
-    return 1.0 - smoothstep(mix(WaterParams.y, 0.0, murk), mix(WaterParams.x, 8.0, murk), depth);
+vec3 naturality_water_fog_color() {
+    // Only an exposed column containing the camera admits ocean daylight.
+    // Local block lights must not illuminate the entire distant water volume.
+    vec4 column = naturality_water_geometry(WaterCamera.xz);
+    float exposed = column.w * step(column.y, WaterCamera.y) * step(WaterCamera.y, column.x);
+    float daylight = WaterCamera.w * exposed;
+    float ambient = min(WaterTime.w, WaterCamera.w);
+    float light = WaterSwitches.w != 0 ? 1.0 : clamp(max(ambient, daylight), 0.0, 1.0);
+    // No emissive floor: at night, fog extinguishes scenery instead of glowing.
+    return WaterTint.rgb * (0.70 * sqrt(light));
+}
+
+vec3 naturality_water_terrain_fog(vec3 color, float distance) {
+    float range = naturality_water_visibility_range();
+    vec3 fog = naturality_water_fog_color();
+    // Like End fog, remove texture/light variation first, then dissolve the
+    // solid silhouette. Keep the silhouette in the biome's water palette.
+    float silhouette = smoothstep(range * 0.25, range * 0.60, distance) * WaterTime.y;
+    float fade = smoothstep(range * 0.65, range, distance) * WaterTime.y;
+    return mix(mix(color, fog * 0.22, silhouette), fog, fade);
 }
 #endif

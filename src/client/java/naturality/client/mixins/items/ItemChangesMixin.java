@@ -29,6 +29,34 @@ public final class ItemChangesMixin {
     @Mixin(Hud.class)
     @org.jspecify.annotations.NullMarked
     public static abstract class HotbarPickupScaleMixin {
+        @org.spongepowered.asm.mixin.Unique
+        private final naturality.client.ui.items.HotbarPickupScale.Animation naturality$hotbarAnimation =
+            new naturality.client.ui.items.HotbarPickupScale.Animation();
+
+        @com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod(method = "extractItemHotbar")
+        private void naturality$raisedHotbar(GuiGraphicsExtractor graphics, DeltaTracker delta, Operation<Void> original) {
+            var player = net.minecraft.client.Minecraft.getInstance().player;
+            if (player != null) naturality$hotbarAnimation.update(player, delta.getGameTimeDeltaPartialTick(false));
+            graphics.pose().pushMatrix();
+            try {
+                graphics.pose().translate(0, -naturality.config.live.NaturalityConfig.get().effects.hotbarOffset);
+                original.call(graphics, delta);
+            } finally { graphics.pose().popMatrix(); }
+        }
+
+        @WrapOperation(method = "extractSlot", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;item(Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/item/ItemStack;III)V"))
+        private void naturality$selectedSprite(GuiGraphicsExtractor graphics, net.minecraft.world.entity.LivingEntity owner,
+            ItemStack stack, int x, int y, int seed, Operation<Void> original) {
+            float scale = naturality$hotbarAnimation.scale(seed);
+            graphics.pose().pushMatrix();
+            try {
+                graphics.pose().translate(x + 8, y + 8);
+                graphics.pose().scale(scale, scale);
+                graphics.pose().translate(-(x + 8), -(y + 8));
+                original.call(graphics, owner, stack, x, y, seed);
+            } finally { graphics.pose().popMatrix(); }
+        }
         @WrapOperation(method = "extractSlot", at = @At(value = "INVOKE", target = "Lorg/joml/Matrix3x2fStack;scale(FF)Lorg/joml/Matrix3x2f;"))
         private org.joml.Matrix3x2f naturality$uniformPop(Matrix3x2fStack pose, float xScale, float yScale,
                                                         Operation<org.joml.Matrix3x2f> original) {

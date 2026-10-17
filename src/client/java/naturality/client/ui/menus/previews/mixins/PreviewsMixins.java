@@ -370,6 +370,13 @@ public final class PreviewsMixins {
     @org.jspecify.annotations.NullMarked
     public static abstract class MenuSkyProjectionMixin {
         @Unique private @org.jspecify.annotations.Nullable ProjectionMatrixBuffer naturality$skyProjection;
+        @Inject(method = "shouldRenderDarkDisc", at = @At("HEAD"), cancellable = true)
+        private void naturality$previewSky(float partialTicks, ClientLevel level, CallbackInfoReturnable<Boolean> ci) {
+            // Vanilla tests the hidden player's eye against sea level. The menu
+            // instead orbits a surface model, including views from below it;
+            // neither position should replace its surrounding sky with black.
+            if (MenuPreview.active()) ci.setReturnValue(false);
+        }
         @WrapMethod(method = "render")
         private void naturality$sky(GpuBufferSlice fog, SkyRenderState state, Operation<Void> original) {
             if (!MenuPreview.active()) { original.call(fog, state); return; }

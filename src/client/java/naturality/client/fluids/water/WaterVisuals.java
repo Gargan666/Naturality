@@ -4,7 +4,7 @@ import naturality.client.fluids.shared.ProceduralFluids;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.renderpearl.api.GpuFormat;
-import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import net.minecraft.client.renderer.MappableRingBuffer;
 import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
 import com.mojang.renderpearl.api.pipeline.UniformType;
@@ -40,13 +40,273 @@ public final class WaterVisuals {
     private static @org.jspecify.annotations.Nullable NativeImage image;
     private static @org.jspecify.annotations.Nullable GpuTexture texture;
     private static @org.jspecify.annotations.Nullable GpuTextureView view;
-    private static @org.jspecify.annotations.Nullable GpuBuffer uniform;
+    private static @org.jspecify.annotations.Nullable MappableRingBuffer uniform;
     private static int originX, originZ, nextTile;
     private static boolean initialized;
     private static final int[] wetTiles = new int[256];
     private static int wetColumns;
     private static float frameDepth;
+    private static long environmentRevision, depthRevision = -1;
+    private static @org.jspecify.annotations.Nullable ClientLevel depthWorld;
+    private static @org.jspecify.annotations.Nullable BlockPos depthPosition;
+    private static double depthEyeY;
+    private static float cachedDepth;
     public static float cameraDepth() { return frameDepth; }
+
+    /** Captured celestial source, independent of optional sun beams and camera flare. */
+    public static final class SunTransmission {
+        public static final BindGroupLayout LAYOUT = BindGroupLayout.builder()
+            .withUniform("NaturalityWaterSun", UniformType.UNIFORM_BUFFER)
+            .withUniform("NaturalityWaterSunAtlas", UniformType.COMBINED_IMAGE_SAMPLER).build();
+        private static final org.joml.Matrix4f inversePose = new org.joml.Matrix4f();
+        private static final org.joml.Vector3f direction = new org.joml.Vector3f();
+        private static final ByteBuffer data = ByteBuffer.allocateDirect(96).order(ByteOrder.nativeOrder());
+        private static net.minecraft.client.renderer.texture.@org.jspecify.annotations.Nullable TextureAtlas atlas;
+        private static net.minecraft.client.renderer.texture.@org.jspecify.annotations.Nullable TextureAtlasSprite sprite;
+        private static @org.jspecify.annotations.Nullable MappableRingBuffer buffer;
+        private static float brightness;
+        public static void beginFrame() { brightness = 0; }
+        public static void capture(com.mojang.blaze3d.vertex.PoseStack pose, float rain,
+                net.minecraft.client.renderer.texture.TextureAtlas source) {
+            inversePose.set(pose.last().pose()).invert();
+            pose.last().pose().transformDirection(direction.set(0, 1, 0)).normalize();
+            brightness = direction.y > 0 ? rain : 0;
+            atlas = source;
+            sprite = source.getSprite(net.minecraft.resources.Identifier.withDefaultNamespace("sun"));
+        }
+        public static void prepare() {
+            var client = Minecraft.getInstance();
+            var eye = client.gameRenderer.mainCamera().position();
+            float visibility = brightness;
+            if (visibility > 0) {
+                double range = client.options.getEffectiveRenderDistance() * 16.0;
+                var end = eye.add(direction.x * range, direction.y * range, direction.z * range);
+                visibility *= naturality.client.sky.shared.clouds.CloudLayerRenderer.CloudSunOcclusion.transmission(eye, end);
+            }
+            data.clear();
+            inversePose.get(0, data);
+            data.position(64);
+            var source = sprite;
+            if (source == null) data.putFloat(0).putFloat(0).putFloat(0).putFloat(0);
+            else data.putFloat(source.getU0()).putFloat(source.getV0()).putFloat(source.getU1()).putFloat(source.getV1());
+            data.putFloat(source == null ? 0 : visibility).putFloat(0).putFloat(0).putFloat(0);
+            data.flip();
+            var ring = buffer;
+            if (ring == null) { ring = new MappableRingBuffer(() -> "Naturality underwater sun", 130, data.capacity()); buffer = ring; }
+            else ring.rotate();
+            try (var mapped = ring.currentBuffer().map(false, true)) { mapped.data().put(data); }
+        }
+        public static void bind(RenderPass pass) {
+            var uniform = java.util.Objects.requireNonNull(buffer, "Underwater sun prepared");
+            pass.setUniform("NaturalityWaterSun", uniform.currentBuffer());
+            var source = atlas;
+            pass.setUniform("NaturalityWaterSunAtlas", source == null ? view : source.getTextureView(),
+                RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
+        }
+        public static void close() {
+            if (buffer != null) { buffer.close(); buffer = null; }
+            atlas = null;
+            sprite = null;
+            brightness = 0;
+        }
+    }
+    /** Shared lightmap policy covers entities, particles and covered terrain alike. */
+    private static @org.jspecify.annotations.Nullable ClientLevel lightingWorld;
+    private static long lightingTime;
+    private static float lightingBlend;
+
+    public static float underwaterLightingBlend() {
+        var client = Minecraft.getInstance();
+        long now = System.nanoTime();
+        if (lightingWorld != client.level || client.level == null) {
+            lightingWorld = client.level;
+            lightingBlend = 0;
+            lightingTime = now;
+        }
+        float elapsed = lightingTime == 0 ? 0 : Math.min(0.1F, (now - lightingTime) * 1.0e-9F);
+        lightingTime = now;
+        float target = underwaterSkylightActive() ? 1 : 0;
+        if (!client.isPaused()) {
+            lightingBlend += Math.clamp(target - lightingBlend, -elapsed, elapsed);
+        }
+        return lightingBlend * lightingBlend * (3 - 2 * lightingBlend);
+    }
+
+    private static boolean underwaterSkylightActive() {
+        return enabled() && NaturalityConfig.get().liquids.waterDepth
+            && Minecraft.getInstance().gameRenderer.mainCamera().getFluidInCamera() == FogType.WATER;
+    }
+    /** Immediate immersion color, independent of the brightness adaptation timer. */
+    public static int underwaterLightingTint() {
+        var client = Minecraft.getInstance();
+        var level = client.level;
+        if (level == null || !underwaterSkylightActive()) return -1;
+        return net.minecraft.client.renderer.BiomeColors.getAverageWaterColor(level, client.gameRenderer.mainCamera().blockPosition());
+    }
+
+    public static org.joml.Vector3fc tintLighting(org.joml.Vector3fc color, int tint) {
+        if (tint == -1) return color;
+        float red = (tint >> 16 & 255) / 255.0F;
+        float green = (tint >> 8 & 255) / 255.0F;
+        float blue = (tint & 255) / 255.0F;
+        float peak = Math.max(1.0F / 255.0F, Math.max(red, Math.max(green, blue)));
+        // Preserve the brightest channel and retain material/source colors.
+        return new org.joml.Vector3f(color).mul(0.5F + 0.5F * red / peak,
+            0.5F + 0.5F * green / peak, 0.5F + 0.5F * blue / peak);
+    }
+    /** Independent client skylight: water transmits daylight, solid geometry still occludes it. */
+    public static final class Skylight {
+        private static @org.jspecify.annotations.Nullable ClientLevel level;
+        private static volatile net.minecraft.world.level.lighting.@org.jspecify.annotations.Nullable LevelLightEngine engine;
+        private static volatile net.minecraft.world.level.lighting.@org.jspecify.annotations.Nullable LayerLightEventListener original;
+        private static final java.util.Map<Long, OpticalChunk> chunks = new java.util.concurrent.ConcurrentHashMap<>();
+        private static final java.util.Set<BlockPos> changed = new java.util.HashSet<>();
+        private static final it.unimi.dsi.fastutil.longs.LongOpenHashSet dirtySections = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
+
+        private static void dirtyColumn(ClientLevel world, int x, int z) {
+            // Smooth lighting reads across faces, edges and corners. A column
+            // becoming available changes those samples even when its neighbors'
+            // own stored light values did not change.
+            for (int dz = -1; dz <= 1; dz++) for (int dx = -1; dx <= 1; dx++)
+                for (int y = world.getMinSectionY(); y <= world.getMaxSectionY(); y++)
+                    dirtySections.add(net.minecraft.core.SectionPos.asLong(x + dx, y, z + dz));
+        }
+        private static void publishDirtySections(ClientLevel world) {
+            for (long section : dirtySections)
+                world.getChunkSource().onLightUpdate(net.minecraft.world.level.LightLayer.SKY, net.minecraft.core.SectionPos.of(section));
+            dirtySections.clear();
+        }
+
+        private static final class OpticalChunk implements net.minecraft.world.level.chunk.LightChunk {
+            final net.minecraft.world.level.chunk.LevelChunk chunk;
+            final net.minecraft.world.level.lighting.ChunkSkyLightSources sources;
+            OpticalChunk(net.minecraft.world.level.chunk.LevelChunk chunk) {
+                this.chunk = chunk;
+                sources = new net.minecraft.world.level.lighting.ChunkSkyLightSources(chunk);
+                // Seed from the real table, then remove only water's obstruction.
+                sources.fillFrom(chunk);
+                for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
+                    int y = sources.getLowestSourceY(x, z);
+                    if (y > chunk.getMinY()) sources.update(this, x, y - 1, z);
+                }
+            }
+            @Override public net.minecraft.world.level.block.state.BlockState getBlockState(BlockPos pos) {
+                var state = chunk.getBlockState(pos);
+                // Keep waterlogged solid shapes, ice, leaves and roofs intact.
+                if (state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED))
+                    return state.setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED, false);
+                return state.getFluidState().is(FluidTags.WATER) && state.getCollisionShape(chunk, pos).isEmpty()
+                    ? net.minecraft.world.level.block.Blocks.AIR.defaultBlockState() : state;
+            }
+            @Override public FluidState getFluidState(BlockPos pos) { return getBlockState(pos).getFluidState(); }
+            @Override public net.minecraft.world.level.block.entity.@org.jspecify.annotations.Nullable BlockEntity getBlockEntity(BlockPos pos) { return chunk.getBlockEntity(pos); }
+            @Override public int getHeight() { return chunk.getHeight(); }
+            @Override public int getMinY() { return chunk.getMinY(); }
+            @Override public void findBlockLightSources(java.util.function.BiConsumer<BlockPos, net.minecraft.world.level.block.state.BlockState> consumer) {}
+            @Override public net.minecraft.world.level.lighting.ChunkSkyLightSources getSkyLightSources() { return sources; }
+        }
+        public static void changed(ClientLevel source, BlockPos pos) {
+            if (level == source) changed.add(pos.immutable());
+            environmentRevision++;
+        }
+        public static int light(Object source, BlockPos pos, int vanilla) {
+            var current = engine;
+            return source == original && current != null && chunks.containsKey(net.minecraft.world.level.ChunkPos.pack(pos.getX() >> 4, pos.getZ() >> 4))
+                ? Math.max(vanilla, current.getLayerListener(net.minecraft.world.level.LightLayer.SKY).getLightValue(pos)) : vanilla;
+        }
+        public static net.minecraft.world.level.chunk.@org.jspecify.annotations.Nullable DataLayer data(Object source, net.minecraft.core.SectionPos pos,
+                net.minecraft.world.level.chunk.@org.jspecify.annotations.Nullable DataLayer vanilla) {
+            var current = engine;
+            if (source != original || current == null || !chunks.containsKey(net.minecraft.world.level.ChunkPos.pack(pos.x(), pos.z()))) return vanilla;
+            var extra = current.getLayerListener(net.minecraft.world.level.LightLayer.SKY).getDataLayerData(pos);
+            if (extra == null) return vanilla;
+            if (vanilla == null) return extra;
+            var merged = vanilla.copy();
+            for (int y = 0; y < 16; y++) for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++)
+                merged.set(x, y, z, Math.max(vanilla.get(x, y, z), extra.get(x, y, z)));
+            return merged;
+        }
+        private static void tick(Minecraft client) {
+            var next = client.level;
+            if (next != level || !NaturalityConfig.get().liquids.waterDepth) {
+                dirtySections.clear();
+                if (level == next && next != null) for (var chunk : chunks.values())
+                    dirtyColumn(next, chunk.chunk.getPos().x(), chunk.chunk.getPos().z());
+                original = null;
+                engine = null;
+                chunks.clear();
+                changed.clear();
+                level = next;
+                if (next != null) publishDirtySections(next);
+
+            }
+            if (next == null || !next.dimensionType().hasSkyLight() || !NaturalityConfig.get().liquids.waterDepth || client.isPaused()) return;
+            if (engine == null) {
+                original = next.getLightEngine().getLayerListener(net.minecraft.world.level.LightLayer.SKY);
+                engine = new net.minecraft.world.level.lighting.LevelLightEngine(new net.minecraft.world.level.chunk.LightChunkGetter() {
+                    @Override public net.minecraft.world.level.chunk.@org.jspecify.annotations.Nullable LightChunk getChunkForLighting(int x, int z) {
+                        return chunks.get(net.minecraft.world.level.ChunkPos.pack(x, z));
+                    }
+                    @Override public net.minecraft.world.level.BlockGetter getLevel() { return next; }
+                    @Override public void onLightUpdate(net.minecraft.world.level.LightLayer layer, net.minecraft.core.SectionPos pos) {
+                        dirtySections.add(pos.asLong());
+                    }
+                }, false, true);
+            }
+            var current = engine;
+            if (current == null) return;
+            var camera = client.gameRenderer.mainCamera().blockPosition();
+            int cx = camera.getX() >> 4, cz = camera.getZ() >> 4;
+            int range = client.options.getEffectiveRenderDistance() + 1;
+            var removed = new java.util.ArrayList<Long>();
+            for (var entry : chunks.entrySet()) {
+                var pos = entry.getValue().chunk.getPos();
+                var loaded = next.getChunkSource().getChunk(pos.x(), pos.z(), net.minecraft.world.level.chunk.status.ChunkStatus.FULL, false);
+                if (Math.abs(pos.x() - cx) > range || Math.abs(pos.z() - cz) > range || loaded != entry.getValue().chunk) removed.add(entry.getKey());
+            }
+            for (long key : removed) {
+                var chunk = chunks.remove(key).chunk;
+                dirtyColumn(next, chunk.getPos().x(), chunk.getPos().z());
+                current.setLightEnabled(chunk.getPos(), false);
+                for (int y = next.getMinSectionY(); y <= next.getMaxSectionY(); y++)
+                    current.updateSectionStatus(net.minecraft.core.SectionPos.of(chunk.getPos(), y), true);
+            }
+            // Load nearest columns first, with a bounded amount of work each tick.
+            int added = 0;
+            outer: for (int radius = 0; radius <= range; radius++) for (int dz = -radius; dz <= radius; dz++) for (int dx = -radius; dx <= radius; dx++) {
+                if (Math.max(Math.abs(dx), Math.abs(dz)) != radius) continue;
+                long key = net.minecraft.world.level.ChunkPos.pack(cx + dx, cz + dz);
+                if (chunks.containsKey(key)) continue;
+                var chunk = next.getChunkSource().getChunk(cx + dx, cz + dz, net.minecraft.world.level.chunk.status.ChunkStatus.FULL, false);
+                if (chunk == null) continue;
+                chunks.put(key, new OpticalChunk(chunk));
+                dirtyColumn(next, chunk.getPos().x(), chunk.getPos().z());
+                for (int y = next.getMinSectionY(); y <= next.getMaxSectionY(); y++)
+                    current.updateSectionStatus(net.minecraft.core.SectionPos.of(chunk.getPos(), y), chunk.getSection(next.getSectionIndexFromSectionY(y)).hasOnlyAir());
+                current.runLightUpdates();
+                current.propagateLightSources(chunk.getPos());
+                // Sources previously bordering an unavailable column must emit
+                // again now that its light storage exists.
+                for (var direction : net.minecraft.core.Direction.Plane.HORIZONTAL) {
+                    var neighbor = chunks.get(net.minecraft.world.level.ChunkPos.pack(cx + dx + direction.getStepX(), cz + dz + direction.getStepZ()));
+                    if (neighbor != null) current.propagateLightSources(neighbor.chunk.getPos());
+                }
+                if (++added >= 4) break outer;
+            }
+            for (var pos : changed) {
+                var chunk = chunks.get(net.minecraft.world.level.ChunkPos.pack(pos.getX() >> 4, pos.getZ() >> 4));
+                if (chunk == null) continue;
+                chunk.sources.update(chunk, pos.getX() & 15, pos.getY(), pos.getZ() & 15);
+                current.updateSectionStatus(net.minecraft.core.SectionPos.of(pos), chunk.chunk.getSection(next.getSectionIndex(pos.getY())).hasOnlyAir());
+                current.checkBlock(pos);
+            }
+            changed.clear();
+            current.runLightUpdates();
+            // Only schedule meshes after every source and neighboring column in
+            // this batch has published its final light storage.
+            publishDirtySections(next);
+        }
+    }
     private static final int[] rawPixels = new int[SIZE * SIZE];
     private static boolean mapChanged;
     private static final ColumnTile[] mappedTiles = new ColumnTile[256];
@@ -63,6 +323,7 @@ public final class WaterVisuals {
     }
     public static void invalidateChunk(ClientLevel changedWorld, int x, int z) {
         if (world != changedWorld) return;
+        environmentRevision++;
         var cached = columnCache.get(net.minecraft.world.level.ChunkPos.pack(x, z));
         if (cached != null) cached.dirty = true;
     }
@@ -72,6 +333,7 @@ public final class WaterVisuals {
             invalidateChunk(changedWorld, x + dx, z + dz);
     }
     public static void invalidateBiomes() {
+        environmentRevision++;
         for (var tile : columnCache.values()) tile.dirty = true;
     }
     private static final int[] turbidity = new int[SIZE * SIZE];
@@ -112,9 +374,13 @@ public final class WaterVisuals {
     }
 
     private static void tick(Minecraft client) {
+        Skylight.tick(client);
         var level = client.level;
         if (level == null) {
             world = null;
+            depthWorld = null;
+            depthPosition = null;
+            depthRevision = -1;
             initialized = false;
             columnCache.clear();
             java.util.Arrays.fill(mappedTiles, null);
@@ -139,6 +405,7 @@ public final class WaterVisuals {
             updateTile(((p.getZ() - originZ) >> 4) * 16 + ((p.getX() - originX) >> 4));
         }
         if (!mapChanged) return;
+        environmentRevision++;
         smoothTurbidity();
         var texture = WaterVisuals.texture;
         var image = WaterVisuals.image;
@@ -288,32 +555,46 @@ public final class WaterVisuals {
             localLight = Math.max(level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, camera.blockPosition()),
                 level.getBrightness(net.minecraft.world.level.LightLayer.SKY, camera.blockPosition()) * sun) / 15.0F;
             if (immersed && !inWaterfall) {
-                var scan = camera.blockPosition().mutable();
-                int n = 0;
-                while (n++ < 255 && scan.getY() < level.getMaxY()
-                        && level.getFluidState(scan).is(FluidTags.WATER)
-                        && !fallingWater(level.getFluidState(scan))) scan.move(0, 1, 0);
-                cameraDepth = Math.max(0, (float) (scan.getY() - 0.125 - p.y));
-                // A solid overhang is not the water surface. Recover the local
-                // exposed water level instead of treating its underside as air.
-                if (!level.getBlockState(scan).isAir() && !fallingWater(level.getFluidState(scan))) {
-                    float sum = 0, weight = 0;
-                    for (int dz = -16; dz <= 16; dz += 2) for (int dx = -16; dx <= 16; dx += 2) {
-                        float top = surface(camera.blockPosition().getX() + dx, camera.blockPosition().getZ() + dz);
-                        if (!Float.isFinite(top) || top < p.y) continue;
-                        float w = 1.0F / (1 + dx * dx + dz * dz);
-                        sum += top * w;
-                        weight += w;
+                // Reuse identical camera-column queries between frames. Vertical
+                // motion also invalidates roof recovery and preserves the exact
+                // depth arithmetic, including near-surface clamping.
+                var cachedPosition = depthPosition;
+                if (depthWorld != level || depthRevision != environmentRevision || cachedPosition == null
+                        || !camera.blockPosition().equals(cachedPosition) || depthEyeY != p.y) {
+                    var scan = camera.blockPosition().mutable();
+                    int n = 0;
+                    while (n++ < 255 && scan.getY() < level.getMaxY()
+                            && level.getFluidState(scan).is(FluidTags.WATER)
+                            && !fallingWater(level.getFluidState(scan))) scan.move(0, 1, 0);
+                    cameraDepth = Math.max(0, (float) (scan.getY() - 0.125 - p.y));
+                    boolean cachedRoof = !level.getBlockState(scan).isAir() && !fallingWater(level.getFluidState(scan));
+                    // A solid overhang is not the water surface. Recover the local
+                    // exposed water level instead of treating its underside as air.
+                    if (cachedRoof) {
+                        float sum = 0, weight = 0;
+                        for (int dz = -16; dz <= 16; dz += 2) for (int dx = -16; dx <= 16; dx += 2) {
+                            float top = surface(camera.blockPosition().getX() + dx, camera.blockPosition().getZ() + dz);
+                            if (!Float.isFinite(top) || top < p.y) continue;
+                            float w = 1.0F / (1 + dx * dx + dz * dz);
+                            sum += top * w;
+                            weight += w;
+                        }
+                        if (weight > 0) cameraDepth = Math.max(cameraDepth, sum / weight - (float) p.y);
                     }
-                    if (weight > 0) cameraDepth = Math.max(cameraDepth, sum / weight - (float) p.y);
+                    cachedDepth = cameraDepth;
+                    depthWorld = level;
+                    depthPosition = camera.blockPosition().immutable();
+                    depthRevision = environmentRevision;
+                    depthEyeY = p.y;
                 }
+                cameraDepth = cachedDepth;
             }
         }
         frameDepth = cameraDepth;
         ByteBuffer data = frameData.clear();
         data.putInt(originX).putInt(originZ).putInt(world == null ? 0 : world.getMinY()).putInt(active ? 1 : 0);
         data.putFloat((float) (p.x - originX)).putFloat((float) p.y).putFloat((float) (p.z - originZ)).putFloat(sun);
-        data.putFloat(c.waterDarkDepth).putFloat(8).putFloat(c.waterPixelSize).putFloat(client.options.getEffectiveRenderDistance() * 16.0F);
+        data.putFloat(0).putFloat(0).putFloat(c.waterPixelSize).putFloat(client.options.getEffectiveRenderDistance() * 16.0F);
         data.putInt(c.waterDepth ? 1 : 0).putInt(c.waterDistortion ? 1 : 0).putInt(c.waterShimmer ? 1 : 0).putInt(nightVision ? 1 : 0);
         data.putFloat(ProceduralFluids.ticks() / 20.0F).putFloat(immersed ? 1 : 0).putFloat(cameraDepth).putFloat(localLight);
         data.putFloat(((tint >> 16) & 255) / 255.0F).putFloat(((tint >> 8) & 255) / 255.0F)
@@ -327,14 +608,16 @@ public final class WaterVisuals {
         data.putInt(atmosphere ? 1 : 0).putInt(inWaterfall ? 1 : 0)
             .putInt(Float.floatToRawIntBits(rainFog)).putInt(0);
         data.flip();
-        if (uniform != null) uniform.close();
-        uniform = RenderSystem.getDevice().createBuffer(() -> "Naturality water frame", 128, data);
+        var ring = uniform;
+        if (ring == null) { ring = new MappableRingBuffer(() -> "Naturality water frame", 130, data.capacity()); uniform = ring; }
+        else ring.rotate();
+        try (var mapped = ring.currentBuffer().map(false, true)) { mapped.data().put(data); }
     }
 
     public static void bind(RenderPass pass) {
         if (uniform == null) prepareFrame();
         var uniform = java.util.Objects.requireNonNull(WaterVisuals.uniform, "Water frame was prepared");
-        pass.setUniform("NaturalityWater", uniform);
+        pass.setUniform("NaturalityWater", uniform.currentBuffer());
         pass.setUniform("NaturalityWaterColumns", view, RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
     }
 
@@ -357,6 +640,7 @@ public final class WaterVisuals {
     }
 
     public static void close() {
+        SunTransmission.close();
         if (uniform != null) { uniform.close(); uniform = null; }
         if (view != null) { view.close(); view = null; }
         if (texture != null) { texture.close(); texture = null; }

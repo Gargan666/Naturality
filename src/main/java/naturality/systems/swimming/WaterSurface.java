@@ -1,6 +1,7 @@
 package naturality.systems.swimming;
 
 import naturality.api.worlds.LoadedChunks;
+import naturality.systems.rotation.PlayerRotation;
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.EntityTypeTags;
 import net.minecraft.tags.FluidTags;
@@ -23,31 +24,59 @@ public final class WaterSurface {
         private double bank = Double.NaN;
         private Vec3 previousPosition = Vec3.ZERO;
         private boolean initialized;
+        private int riptideUntil;
+        private int bubbleUntil;
         public Vec3 previousLean = Vec3.ZERO;
         public Vec3 lean = Vec3.ZERO;
         public float previousStroke;
         public float stroke;
     }
     public static State state(LivingEntity entity) { return ((Access)entity).naturality$waterSurface(); }
+    public static boolean riptiding(LivingEntity entity) {
+        return entity.isAutoSpinAttack() || entity.tickCount < state(entity).riptideUntil;
+    }
 
     private static boolean eligible(LivingEntity entity) {
+        if (entity.tickCount < state(entity).bubbleUntil) return false;
+        if (entity.tickCount < state(entity).riptideUntil) return false;
         // Preserve sinking for the zombie family; drowned retain their swimming behavior.
         if (entity instanceof Zombie && !(entity instanceof Drowned)) return false;
-        if (!entity.isAlive() || !entity.isInWater() || entity.isPassenger() || entity.isSleeping()
+        if (entity.isAutoSpinAttack() || !entity.isAlive() || !entity.isInWater() || entity.isPassenger() || entity.isSleeping()
                 || entity.isFallFlying() || !entity.isAffectedByFluids() || entity.is(EntityTypeTags.AQUATIC)) return false;
         return !(entity instanceof Player player) || !player.isSpectator() && !player.getAbilities().flying;
     }
 
-    /** Fluid at the upper face must cover the entire physical box, not merely the eyes. */
+    /** Air above the terrain collider ends swimming; solid wall/ceiling contacts do not. */
     public static boolean fullySubmerged(Player player) {
-        var box = player.getBoundingBox().deflate(1.0e-4);
+        var body = PlayerRotation.body(player);
+        var envelope = PlayerRotation.envelope(body).bounds();
+        var box = body.compactTerrain ? PlayerRotation.terrain(body).bounds() : envelope;
+        // Keep the surface threshold at the body's top, but sample above the occupied
+        // torso footprint rather than the empty corners of a rotating enclosing box.
+        box = new net.minecraft.world.phys.AABB(box.minX, box.minY, box.minZ, box.maxX, envelope.maxY, box.maxZ).deflate(1.0e-4);
         for (double x : new double[]{box.minX, box.maxX}) for (double z : new double[]{box.minZ, box.maxZ}) {
-            var pos = BlockPos.containing(x, box.maxY + 0.02, z);
+            var point = new Vec3(x, box.maxY + 0.02, z);
+            var pos = BlockPos.containing(point);
             if (!LoadedChunks.has(player.level(), pos)) return false;
             var fluid = player.level().getFluidState(pos);
-            if (!fluid.is(FluidTags.WATER) || pos.getY() + fluid.getHeight(player.level(), pos) < box.maxY + 0.02) return false;
+            if (fluid.is(FluidTags.WATER)) {
+                if (pos.getY() + fluid.getHeight(player.level(), pos) >= point.y) continue;
+                // Source water's fractional top under ice is not an exposed surface to climb out of.
+                if (fluid.isSource() && LoadedChunks.has(player.level(), pos.above())
+                        && solidAt(player, pos.above(), new Vec3(x, pos.getY() + 1.001, z))) continue;
+            }
+            // The sampling margin can reach into a ceiling. That is obstruction, not an exit.
+            if (!solidAt(player, pos, point)) return false;
         }
         return player.isInWater();
+    }
+
+    public static boolean solidAt(LivingEntity entity, BlockPos pos, Vec3 point) {
+        var shape = entity.level().getBlockState(pos).getCollisionShape(entity.level(), pos,
+            net.minecraft.world.phys.shapes.CollisionContext.of(entity));
+        var local = point.subtract(pos.getX(), pos.getY(), pos.getZ());
+        for (var box : shape.toAabbs()) if (box.contains(local)) return true;
+        return false;
     }
 
     /** Bounded, loaded-only search near the head; deep swimmers are never hauled to the surface. */
@@ -61,6 +90,7 @@ public final class WaterSurface {
             if (!LoadedChunks.has(entity.level(), pos) || !LoadedChunks.has(entity.level(), pos.above())) return Double.NaN;
             var fluid = entity.level().getFluidState(pos);
             if (!fluid.is(FluidTags.WATER) || entity.level().getFluidState(pos.above()).is(FluidTags.WATER)) continue;
+            if (solidAt(entity, pos.above(), new Vec3(entity.getX(), y + 1.001, entity.getZ()))) continue;
             double height = y + fluid.getHeight(entity.level(), pos);
             if (height - eye < -0.6 || height - eye > 0.65) continue;
             return height;
@@ -70,6 +100,24 @@ public final class WaterSurface {
 
     public static void update(LivingEntity entity) {
         var state = state(entity);
+        // Detect contact before travel as well as in vanilla's later inside-block callbacks.
+        var area = entity instanceof Player player && PlayerSwimming.compactTerrain(player)
+            ? PlayerRotation.terrain(PlayerRotation.body(player)).bounds() : entity.getBoundingBox();
+        for (var pos : BlockPos.betweenClosed(BlockPos.containing(area.minX, area.minY, area.minZ),
+                BlockPos.containing(area.maxX, area.maxY, area.maxZ))) {
+            if (LoadedChunks.has(entity.level(), pos)
+                    && entity.level().getBlockState(pos).is(net.minecraft.world.level.block.Blocks.BUBBLE_COLUMN)) {
+                bubbleContact(entity);
+                break;
+            }
+        }
+        if (entity.isAutoSpinAttack()) {
+            state.surface = state.bank = Double.NaN;
+            state.previousLean = state.lean = Vec3.ZERO;
+            state.previousStroke = state.stroke = 0;
+            state.initialized = false;
+            return;
+        }
         if (entity instanceof Player player && fullySubmerged(player)) {
             state.surface = state.bank = Double.NaN;
             return;
@@ -89,8 +137,16 @@ public final class WaterSurface {
     }
     public static boolean active(LivingEntity entity) { return eligible(entity) && Double.isFinite(state(entity).surface); }
 
+    /** Keep the surface controller released through the launch, including the first ticks above water. */
+    public static void bubbleContact(LivingEntity entity) {
+        var state = state(entity);
+        state.bubbleUntil = entity.tickCount + 20;
+        state.surface = state.bank = Double.NaN;
+    }
+
     public static boolean diving(Player player) {
         var input = PlayerSwimming.state(player).input;
+        if (input.shift()) return true;
         double forward = (input.forward() ? 1 : 0) - (input.backward() ? 1 : 0);
         return forward * player.getLookAngle().y < -0.25;
     }
@@ -127,7 +183,19 @@ public final class WaterSurface {
         }
         return Double.NaN;
     }
-    public static boolean climbingOut(LivingEntity entity) { return Double.isFinite(state(entity).bank); }
+    public static boolean climbingOut(LivingEntity entity) {
+        return eligible(entity) && Double.isFinite(state(entity).bank) && !(entity instanceof Player player && diving(player));
+    }
+
+    /** Local launch precedes the synchronized spin flag; release the surface on that same frame. */
+    public static void releaseForRiptide(LivingEntity entity, int duration) {
+        var state = state(entity);
+        state.riptideUntil = entity.tickCount + Math.max(0, duration);
+        state.surface = state.bank = Double.NaN;
+        state.previousLean = state.lean = Vec3.ZERO;
+        state.previousStroke = state.stroke = 0;
+        state.initialized = false;
+    }
     public static boolean controlsHeight(LivingEntity entity) {
         return active(entity) && !climbingOut(entity) && !(entity instanceof Player player && diving(player));
     }

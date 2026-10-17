@@ -4,6 +4,9 @@ import naturality.api.worlds.LoadedChunks;
 import naturality.systems.rotation.PlayerRotation;
 import naturality.systems.rotation.PlayerRotation.Angles;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.phys.AABB;
+import org.jspecify.annotations.Nullable;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.effect.MobEffects;
@@ -28,6 +31,10 @@ public final class PlayerSwimming {
 
     public interface Access {
         State naturality$swimming();
+        boolean naturality$compactTerrain();
+        void naturality$compactTerrain(boolean value);
+        boolean naturality$braced();
+        void naturality$braced(boolean value);
         float naturality$swimMeter();
         void naturality$swimMeter(float value);
     }
@@ -36,6 +43,10 @@ public final class PlayerSwimming {
         public boolean ownsRotation;
         private boolean inWater;
         private boolean moved;
+        private boolean resumeFromSpin;
+        private @Nullable Anchor anchor;
+        private boolean chargeHeld;
+        private final Transition brace = new Transition();
         private float gentleStroke;
         private float previousGentleStroke;
         private final StrokeClock strokes = new StrokeClock();
@@ -111,34 +122,91 @@ public final class PlayerSwimming {
         return state(player).inWater && eligible(player);
     }
     private static boolean eligible(Player player) {
-        return player.isAlive() && player.isInWater() && !player.isPassenger() && !player.isSleeping()
+        return !naturality.systems.swimming.WaterSurface.riptiding(player) && player.isAlive() && player.isInWater() && !player.isPassenger() && !player.isSleeping()
             && !player.isSpectator() && !player.getAbilities().flying && !player.isFallFlying();
     }
     public static boolean fullSize(Player player) {
+        if (naturality.systems.swimming.WaterSurface.riptiding(player)) return false;
+        if (player.level().isClientSide() && player.getPose() == Pose.SWIMMING
+                && !((Access)player).naturality$compactTerrain()) return false;
         return (state(player).ownsRotation || WaterSurface.standing(player)) && player.isAlive() && !player.isPassenger() && !player.isSleeping();
     }
+    public static boolean compactTerrain(Player player) {
+        return !naturality.systems.swimming.WaterSurface.riptiding(player) && (player.isSwimming() || state(player).ownsRotation);
+    }
     public static boolean waterMovement(Player player) { return active(player) || WaterSurface.active(player); }
-    public static float meter(Player player) { return ((Access)player).naturality$swimMeter(); }
+    public static float meter(Player player) { return naturality.systems.swimming.WaterSurface.riptiding(player) ? -1 : ((Access)player).naturality$swimMeter(); }
+    public static boolean braced(Player player) { return !naturality.systems.swimming.WaterSurface.riptiding(player) && ((Access)player).naturality$braced(); }
+    public static float braceBlend(Player player, float partial) { return naturality.systems.swimming.WaterSurface.riptiding(player) ? 0 : state(player).brace.sample(partial); }
     public static float gentleStroke(Player player, float partial) {
+        if (naturality.systems.swimming.WaterSurface.riptiding(player)) return 0;
         var state = state(player);
         return state.previousGentleStroke + (state.gentleStroke - state.previousGentleStroke) * partial;
     }
     public static float strokePhase(Player player, float partial) { return state(player).strokes.phase(partial); }
-    public static float surfaceBlend(Player player, float partial) { return state(player).surface.sample(partial); }
+    public static float surfaceBlend(Player player, float partial) { return naturality.systems.swimming.WaterSurface.riptiding(player) ? 0 : state(player).surface.sample(partial); }
+
+    /** Riptide owns movement and pose immediately; no queued dash or exit recovery may survive it. */
+    public static void startRiptide(Player player, int ticks) {
+        boolean customBox = state(player).ownsRotation;
+        double oldHeight = player.getBbHeight();
+        WaterSurface.releaseForRiptide(player, ticks);
+        releaseForRiptide(player);
+        player.setPose(Pose.SPIN_ATTACK);
+        if (customBox) {
+            // Vanilla's short spin pose must occupy the existing swimming cube rather
+            // than dropping its centre into the seabed when the full hurtbox disappears.
+            Vec3 shift = new Vec3(0, (oldHeight - player.getBbHeight()) / 2, 0);
+            player.setPos(player.position().add(shift));
+            syncDisplacement(player, shift);
+        }
+    }
+
+    public static void releaseForRiptide(Player player) {
+        var state = state(player);
+        state.resumeFromSpin = true;
+        boolean wasSwimming = state.inWater || state.ownsRotation;
+        state.inWater = state.ownsRotation = state.moved = state.chargeHeld = false;
+        state.anchor = null;
+        state.dash.charge = state.dash.cooldown = 0;
+        state.dash.jumpWasDown = false;
+        state.gentleStroke = state.previousGentleStroke = 0;
+        for (var blend : new Transition[]{state.brace, state.sprint, state.surface}) {
+            blend.previous = blend.value = blend.velocity = 0;
+        }
+        ((Access)player).naturality$compactTerrain(false);
+        ((Access)player).naturality$braced(false);
+        ((Access)player).naturality$swimMeter(-1);
+        ((PlayerRotation.Access)player).naturality$rotation(Angles.ZERO);
+        if (wasSwimming) player.setSwimming(false);
+    }
 
     /** Runs after vanilla has refreshed fluid contact, on both sides. No custom input packet is needed. */
     public static void updateMode(Player player) {
         var state = state(player);
         boolean swimming = eligible(player) && WaterSurface.fullySubmerged(player);
-        if (swimming && !state.ownsRotation && player.getPose() != Pose.STANDING) {
+        if (swimming && !state.resumeFromSpin && !state.ownsRotation && player.getPose() != Pose.STANDING) {
             // Never expand a crawling player into a tunnel ceiling when water first touches them.
             var standing = PlayerRotation.body(player, player.position(), player.getDimensions(Pose.STANDING), PlayerRotation.angles(player));
             swimming = PlayerRotation.fits(player, standing);
         }
         if (swimming && !state.inWater) {
-            state.moved = false;
+            state.moved = state.resumeFromSpin;
+            double oldHeight = player.getBbHeight();
             state.ownsRotation = true;
+            if (!player.level().isClientSide()) ((Access)player).naturality$compactTerrain(true);
+            if (state.resumeFromSpin) {
+                // Resume from the head-first spin, never from an intermediate upright body.
+                ((PlayerRotation.Access)player).naturality$rotation(targetAngles(player.getLookAngle(), player.getYRot(), true, false, true, true));
+                player.setPose(Pose.STANDING);
+                player.refreshDimensions();
+                Vec3 shift = new Vec3(0, (oldHeight - player.getBbHeight()) / 2, 0);
+                player.setPos(player.position().add(shift));
+                player.xo = player.getX(); player.yo = player.getY(); player.zo = player.getZ();
+                syncDisplacement(player, shift);
+            }
         }
+        if (!WaterSurface.riptiding(player)) state.resumeFromSpin = false;
         state.inWater = swimming;
         player.setSwimming(swimming);
         if (swimming) player.setShiftKeyDown(false);
@@ -147,19 +215,25 @@ public final class PlayerSwimming {
 
     /** Only the server changes orientation and releases dashes; entity data supplies the client's HUD. */
     public static void tick(Player player) {
+        if (naturality.systems.swimming.WaterSurface.riptiding(player)) { releaseForRiptide(player); return; }
         var state = state(player);
         state.previousGentleStroke = state.gentleStroke;
-        boolean moving = moving(state.input) || player.getKnownMovement().lengthSqr() > 0.0025;
+        state.brace.tick(braced(player));
+        boolean moving = !braced(player) && (moving(state.input) || player.getKnownMovement().lengthSqr() > 0.0025);
         state.sprint.tick(waterMovement(player) && player.isSprinting() && moving);
         state.surface.tick(WaterSurface.active(player));
         boolean reverse = state.input.backward() && !state.input.forward();
         if (!state.input.forward() && !state.input.backward())
             reverse = player.getKnownMovement().dot(player.getLookAngle()) < -0.001;
         if (waterMovement(player)) state.strokes.tick(moving, reverse);
-        float strokeTarget = waterMovement(player) ? 1 - (active(player) ? state.sprint.sample(1) : 0) : 0;
+        float strokeTarget = waterMovement(player) ? 1 - (active(player) && !braced(player) ? state.sprint.sample(1) : 0) : 0;
         state.gentleStroke += (strokeTarget - state.gentleStroke) * 0.18F;
         if (player.level().isClientSide()) {
-            if (!active(player) && !PlayerRotation.active(player)) state.ownsRotation = false;
+            state.ownsRotation = active(player) || ((Access)player).naturality$compactTerrain();
+            // Pose and compact-terrain metadata can arrive in either order. The pose
+            // callback may have cached standing dimensions while ownership was still set.
+            if (player.getPose() == Pose.SWIMMING && !((Access)player).naturality$compactTerrain()
+                    && player.getBbHeight() != player.getDimensions(Pose.SWIMMING).height()) player.refreshDimensions();
             return;
         }
         if (player instanceof ServerPlayer && state.ownsRotation && !player.isPassenger() && !player.isSleeping()) {
@@ -168,6 +242,9 @@ public final class PlayerSwimming {
             player.setPos(player.xo, player.yo, player.zo);
         }
         if (!active(player)) {
+            state.anchor = null;
+            state.chargeHeld = false;
+            ((Access)player).naturality$braced(false);
             state.dash.tick(false, false);
             ((Access)player).naturality$swimMeter(-1);
             if (state.ownsRotation && (player.isPassenger() || player.isSleeping() || !player.isAlive())) {
@@ -176,36 +253,116 @@ public final class PlayerSwimming {
                 state.ownsRotation = false;
             }
             if (state.ownsRotation && !player.isPassenger() && !player.isSleeping()) {
+                if (!player.isInWater() && enterTunnelCrawl(player)) return;
                 resetUpright(player);
-                if (!PlayerRotation.active(player)) state.ownsRotation = false;
+                if (!PlayerRotation.active(player)) {
+                    var body = PlayerRotation.body(player);
+                    // Do not expand into a bank/ceiling when the torso finishes righting itself.
+                    var normal = new PlayerRotation.Box(body.center, body.half, Angles.ZERO);
+                    if (PlayerRotation.fits(player, normal)) state.ownsRotation = false;
+                }
             }
+            ((Access)player).naturality$compactTerrain(state.ownsRotation);
             return;
         }
+        if (chargeAtSurface(player)) return;
         moving = moving(state.input);
         state.moved |= moving;
         boolean surface = atSurface(player);
-        // Approaching a bank restores the upright shape while vanilla's fluid step assist lifts it.
-        boolean climbingOut = surface && player.horizontalCollision && moving;
+        // A tall wall is not a bank, even when close to the water surface.
+        boolean climbingOut = WaterSurface.climbingOut(player) && moving;
         Vec3 input = new Vec3((state.input.left() ? 1 : 0) - (state.input.right() ? 1 : 0), 0,
             (state.input.forward() ? 1 : 0) - (state.input.backward() ? 1 : 0));
         Angles walk = walkAngles(swimInput(input, player.getLookAngle(), player.getYRot()), player.getYRot(), state.moved);
         Angles sprint = targetAngles(player.getLookAngle(), player.getYRot(), true, surface, moving, state.moved);
         Angles target = climbingOut ? Angles.ZERO : walk.towards(sprint, state.sprint.sample(1));
-        var pressure = moving ? swimInput(input, player.getLookAngle(), player.getYRot()).scale(0.2) : player.getKnownMovement();
-        var contact = PlayerRotation.deflect(player, pressure, Math.toRadians(6));
-        syncDisplacement(player, contact.displacement());
-        // Holding against terrain must not fight the contact response with the view-driven pose.
-        if (!contact.blocked()) turn(player, target);
+        // Keep the requested tunnel idle posture without constraining active steering.
+        if (!moving && lowCeiling(player, PlayerRotation.body(player))) target = PlayerRotation.angles(player);
+        turn(player, target);
 
         boolean ready = player.isEyeInFluid(FluidTags.WATER) && nearTerrain(player);
-        double released = state.dash.tick(ready, state.input.jump());
+        ((Access)player).naturality$swimMeter(state.dash.meter(ready));
+    }
+
+    /** A transient fixed face; holding the key never selects another supporting block. */
+    private record Anchor(BlockPos block, AABB shape, Vec3 feet, Vec3 normal, Angles rotation) { }
+
+    private static boolean chargeAtSurface(Player player) {
+        var state = state(player);
+        boolean held = state.input.jump();
+        if (held && !state.chargeHeld && state.dash.cooldown == 0 && player.isEyeInFluid(FluidTags.WATER))
+            state.anchor = nearestAnchor(player);
+        state.chargeHeld = held;
+        var anchor = state.anchor;
+        boolean valid = anchor != null && LoadedChunks.has(player.level(), anchor.block)
+            && player.level().getBlockState(anchor.block).getCollisionShape(player.level(), anchor.block, CollisionContext.of(player))
+                .toAabbs().stream().anyMatch(box -> box.move(anchor.block).equals(anchor.shape));
+        if (!valid) state.anchor = null;
+        ((Access)player).naturality$braced(valid && held);
+        if (valid && held && anchor != null) {
+            var body = PlayerRotation.body(player);
+            double angle = PlayerRotation.angles(player).radiansTo(anchor.rotation);
+            // Approach feet-first; translation uses the separate terrain cube.
+            double clearance = body.half.y + 0.002;
+            Vec3 goal = anchor.feet.add(anchor.normal.scale(clearance));
+            Vec3 offset = goal.subtract(body.center);
+            Vec3 movement = PlayerRotation.collide(player, offset.scale(Math.min(0.3, 0.1 / Math.max(0.1, offset.length()))));
+            player.setPos(player.position().add(movement));
+            syncDisplacement(player, movement);
+            var current = PlayerRotation.angles(player);
+            PlayerRotation.rotate(player, current.towards(anchor.rotation,
+                angle < Math.toRadians(0.1) ? 1 : Math.min(0.25, Math.toRadians(8) / angle)));
+            player.setDeltaMovement(Vec3.ZERO);
+            player.syncVelocity = true;
+        }
+        double released = state.dash.tick(valid, held);
+        if (!held) state.anchor = null;
         if (released > 0) {
             player.setDeltaMovement(player.getLookAngle().scale(0.4 + 0.8 * released));
-            // Ordinary tracker movement excludes the controlling player; this flag also sends to self.
             player.syncVelocity = true;
             player.causeFoodExhaustion(0.2F);
         }
-        ((Access)player).naturality$swimMeter(state.dash.meter(ready));
+        ((Access)player).naturality$swimMeter(state.dash.meter(valid || nearTerrain(player)));
+        return valid && held;
+    }
+
+    private static @Nullable Anchor nearestAnchor(Player player) {
+        var body = PlayerRotation.body(player);
+        var search = body.bounds().inflate(TERRAIN_REACH);
+        Anchor best = null;
+        double bestDistance = Double.POSITIVE_INFINITY;
+        for (var pos : BlockPos.betweenClosed(BlockPos.containing(search.minX, search.minY, search.minZ),
+                BlockPos.containing(search.maxX, search.maxY, search.maxZ))) {
+            if (!LoadedChunks.has(player.level(), pos)) continue;
+            for (var local : player.level().getBlockState(pos).getCollisionShape(player.level(), pos, CollisionContext.of(player)).toAabbs()) {
+                var box = local.move(pos);
+                if (body.separation(box) > TERRAIN_REACH) continue;
+                for (var direction : Direction.values()) {
+                    Vec3 normal = new Vec3(direction.getStepX(), direction.getStepY(), direction.getStepZ());
+                    Vec3 point = new Vec3(Math.clamp(body.center.x, box.minX, box.maxX),
+                        Math.clamp(body.center.y, box.minY, box.maxY), Math.clamp(body.center.z, box.minZ, box.maxZ));
+                    point = switch (direction) {
+                        case DOWN -> new Vec3(point.x, box.minY, point.z);
+                        case UP -> new Vec3(point.x, box.maxY, point.z);
+                        case NORTH -> new Vec3(point.x, point.y, box.minZ);
+                        case SOUTH -> new Vec3(point.x, point.y, box.maxZ);
+                        case WEST -> new Vec3(box.minX, point.y, point.z);
+                        case EAST -> new Vec3(box.maxX, point.y, point.z);
+                    };
+                    if (body.center.subtract(point).dot(normal) < 0) continue;
+                    double distance = body.center.distanceToSqr(point);
+                    if (distance >= bestDistance) continue;
+                    Vec3 up = PlayerRotation.angles(player).transform(new Vec3(0, 1, 0));
+                    Angles rotation = Angles.fromQuaternion(new Quaterniond().rotationTo(up.x, up.y, up.z,
+                        normal.x, normal.y, normal.z).mul(PlayerRotation.angles(player).quaternion()));
+                    var target = new PlayerRotation.Box(point.add(normal.scale(body.half.y + 0.002)), body.half, rotation, body.compactTerrain);
+                    if (!PlayerRotation.fits(player, target)) continue;
+                    best = new Anchor(pos.immutable(), box, point, normal, rotation);
+                    bestDistance = distance;
+                }
+            }
+        }
+        return best;
     }
 
     private static void turn(Player player, Angles target) {
@@ -213,9 +370,34 @@ public final class PlayerSwimming {
         if (previous.equals(target)) return;
         double distance = previous.radiansTo(target);
         double fraction = distance < Math.toRadians(0.05) ? 1 : Math.min(0.18, Math.toRadians(6) / distance);
-        // Free a corner resting on the bottom, but never climb a wall just to chase a blocked turn.
-        double lift = PlayerRotation.rotateWithLift(player, previous.towards(target, fraction), 0.12, false);
-        syncLift(player, lift);
+        Angles next = previous.towards(target, fraction);
+        PlayerRotation.rotate(player, next);
+    }
+
+    private static boolean lowCeiling(Player player, PlayerRotation.Box body) {
+        double radius = body.half.x;
+        var above = new AABB(body.center.x - radius, body.center.y + radius + PlayerRotation.EPSILON,
+            body.center.z - radius, body.center.x + radius,
+            body.center.y - radius + player.getDimensions(Pose.STANDING).height(), body.center.z + radius);
+        return player.level().getBlockCollisions(player, above.deflate(PlayerRotation.EPSILON)).iterator().hasNext();
+    }
+
+    /** Release the custom standing-sized body without moving its compact terrain footprint. */
+    private static boolean enterTunnelCrawl(Player player) {
+        var body = PlayerRotation.body(player);
+        if (!lowCeiling(player, body)) return false;
+        var cube = PlayerRotation.terrain(body);
+        if (!PlayerRotation.fits(player, cube)) return false;
+        Vec3 oldPosition = player.position();
+        Vec3 crawlPosition = cube.center.subtract(0, cube.half.y, 0);
+        state(player).ownsRotation = false;
+        ((Access)player).naturality$compactTerrain(false);
+        player.setSwimming(false);
+        ((PlayerRotation.Access)player).naturality$rotation(Angles.ZERO);
+        player.setPose(Pose.SWIMMING);
+        player.setPos(crawlPosition);
+        syncDisplacement(player, crawlPosition.subtract(oldPosition));
+        return true;
     }
 
     private static void resetUpright(Player player) {
@@ -223,12 +405,7 @@ public final class PlayerSwimming {
         if (!previous.active()) return;
         double distance = previous.radiansTo(Angles.ZERO);
         double fraction = distance < Math.toRadians(0.25) ? 1 : Math.min(0.4, Math.toRadians(12) / distance);
-        double lift = PlayerRotation.rotateWithLift(player, previous.towards(Angles.ZERO, fraction), 0.25);
-        syncLift(player, lift);
-    }
-
-    private static void syncLift(Player player, double lift) {
-        syncDisplacement(player, new Vec3(0, lift, 0));
+        PlayerRotation.rotate(player, previous.towards(Angles.ZERO, fraction));
     }
 
     private static void syncDisplacement(Player player, Vec3 displacement) {
@@ -285,12 +462,17 @@ public final class PlayerSwimming {
     /** Called in place of Player.travel only while in water. Vanilla collision and block effects still run. */
     public static void travel(Player player, Vec3 input) {
         if (!player.isEffectiveAi()) return;
+        if (braced(player) && state(player).input.jump()) {
+            player.setDeltaMovement(Vec3.ZERO);
+            return;
+        }
         double oldY = player.getY();
         Vec3 intent = swimInput(input, player.getLookAngle(), player.getYRot());
         double efficiency = Math.clamp(player.getAttributeValue(Attributes.WATER_MOVEMENT_EFFICIENCY), 0, 1);
         double acceleration = (0.025 + 0.02 * state(player).sprint.sample(1)) * (1 + efficiency);
         double drag = player.hasEffect(MobEffects.DOLPHINS_GRACE) ? 0.96 : 0.85;
         Vec3 velocity = player.getDeltaMovement().add(intent.scale(acceleration));
+        if (state(player).input.shift()) velocity = velocity.add(0, -0.03, 0);
         // Jump still allows ordinary ascent away from terrain; near terrain it exclusively charges a dash.
         if (active(player) && state(player).input.jump() && !(player.isEyeInFluid(FluidTags.WATER) && nearTerrain(player))) {
             velocity = velocity.add(0, 0.03, 0);
@@ -299,21 +481,17 @@ public final class PlayerSwimming {
         WaterSurface.buoyancy(player);
         player.move(MoverType.SELF, player.getDeltaMovement());
         player.setDeltaMovement(player.getDeltaMovement().scale(drag));
-        // Same clearance test and impulse as LivingEntity.jumpOutOfFluid, only near the water surface.
+        // Only a verified walkable bank may receive the vanilla fluid-exit impulse.
         Vec3 remaining = player.getDeltaMovement();
-        if (atSurface(player) && player.horizontalCollision
+        if (WaterSurface.climbingOut(player) && player.horizontalCollision
                 && player.isFree(remaining.x, remaining.y + 0.6 - player.getY() + oldY, remaining.z)) {
             player.setDeltaMovement(remaining.x, 0.3, remaining.z);
         }
     }
 
-    /** Surface policy only; general entity flotation is deliberately owned by the later water feature. */
+    /** A nearby exposed water surface, not simply any non-water block above the eyes. */
     public static boolean atSurface(Player player) {
-        if (!player.isEyeInFluid(FluidTags.WATER)) return true;
-        Vec3 eye = player.getEyePosition();
-        var above = BlockPos.containing(eye.add(0, 0.3, 0));
-        return LoadedChunks.has(player.level(), above) && !player.level().getFluidState(above).is(FluidTags.WATER)
-            && !(moving(state(player).input) && player.getLookAngle().y < -0.25);
+        return Double.isFinite(WaterSurface.surface(player)) && !WaterSurface.diving(player);
     }
 
     /** Search actual block shapes around the oriented body, excluding entities and fluids. */

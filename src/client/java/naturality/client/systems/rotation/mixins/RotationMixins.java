@@ -64,12 +64,41 @@ public final class RotationMixins {
     public static abstract class PlayerRotationCameraMixin {
         @Shadow private @Nullable Entity entity;
         @Shadow protected abstract void setPosition(Vec3 position);
+        @Shadow public abstract Vec3 position();
+        @Unique private PlayerRotationRendering.CameraHandoff naturality$cameraHandoff = new PlayerRotationRendering.CameraHandoff();
+        @Unique private @Nullable Entity naturality$previousCameraEntity;
         // Set the eye origin before vanilla's third-person obstruction sweep, not after that sweep.
         @Inject(method = "alignWithEntity", at = @At(value = "FIELD", target = "Lnet/minecraft/client/Camera;detached:Z", opcode = Opcodes.PUTFIELD))
         private void naturality$eyePosition(float partial, CallbackInfo ci) {
             var cameraEntity = entity;
-            if (cameraEntity != null && (PlayerRotation.active(cameraEntity) || PlayerRotation.interpolatedAngles(cameraEntity, partial).active()))
-                setPosition(cameraEntity.getEyePosition(partial));
+            if (cameraEntity != naturality$previousCameraEntity) {
+                naturality$cameraHandoff = new PlayerRotationRendering.CameraHandoff();
+                naturality$previousCameraEntity = cameraEntity;
+            }
+            if (cameraEntity instanceof Player player)
+                setPosition(PlayerRotationRendering.cameraHandoff(player, partial, position(), naturality$cameraHandoff));
+        }
+    }
+
+    @Mixin(Entity.class)
+    public static abstract class PlayerRotationLightingMixin {
+        @Inject(method = "getLightProbePosition", at = @At("HEAD"), cancellable = true)
+        private void naturality$lightProbe(float partial, CallbackInfoReturnable<Vec3> cir) {
+            if ((Object)this instanceof Player player && (PlayerRotation.terrainActive(player)
+                    || PlayerRotation.interpolatedAngles(player, partial).active()))
+                cir.setReturnValue(PlayerRotationRendering.cameraPosition(player, partial));
+        }
+    }
+
+    @Mixin(net.minecraft.client.renderer.extract.LevelExtractor.class)
+    public static abstract class PlayerRotationOverlayMixin {
+        @Inject(method = "getViewBlockingState", at = @At("HEAD"), cancellable = true)
+        private static void naturality$cameraObstruction(LocalPlayer player,
+                net.minecraft.client.renderer.culling.Frustum frustum,
+                CallbackInfoReturnable<net.minecraft.world.level.block.state.BlockState> cir) {
+            if (!PlayerRotation.terrainActive(player) && !PlayerRotation.interpolatedAngles(player, 1).active()) return;
+            var camera = net.minecraft.client.Minecraft.getInstance().gameRenderer.mainCamera();
+            cir.setReturnValue(PlayerRotationRendering.viewBlockingState(player, frustum.getNearPlaneBounds().move(camera.position())));
         }
     }
 
@@ -81,7 +110,20 @@ public final class RotationMixins {
             var player = (LocalPlayer)(Object)this;
             // Envelope corners are not body contacts, even during a transient real overlap.
             // The oriented collision solver already permits movement out of penetration.
-            if (PlayerRotation.active(player)) ci.cancel();
+            if (PlayerRotation.terrainActive(player)) ci.cancel();
+        }
+    }
+
+    /** Update vanilla's local ambience flag before LocalPlayer chooses entry/exit sounds. */
+    @Mixin(Player.class)
+    public static abstract class PlayerRotationListenerMixin {
+        @Shadow protected boolean wasUnderwater;
+        @Inject(method = "updateIsUnderwater", at = @At("RETURN"), cancellable = true)
+        private void naturality$listenerWater(CallbackInfoReturnable<Boolean> cir) {
+            if ((Object)this instanceof LocalPlayer player && PlayerRotation.terrainActive(player)) {
+                wasUnderwater = PlayerRotationRendering.underwaterListener(player);
+                cir.setReturnValue(wasUnderwater);
+            }
         }
     }
 
@@ -90,7 +132,7 @@ public final class RotationMixins {
     public static abstract class PlayerRotationDebugMixin {
         @Inject(method = "showHitboxes", at = @At("HEAD"), cancellable = true)
         private void naturality$realHitbox(Entity entity, float partial, boolean server, CallbackInfo ci) {
-            if (entity instanceof Player player && PlayerRotation.active(player)) {
+            if (entity instanceof Player player && PlayerRotation.terrainActive(player)) {
                 PlayerRotationRendering.debug(player, partial, server);
                 ci.cancel();
             }

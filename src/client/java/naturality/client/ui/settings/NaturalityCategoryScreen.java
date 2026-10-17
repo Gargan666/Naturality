@@ -197,6 +197,7 @@ public class NaturalityCategoryScreen extends OptionsSubScreen {
         addFeatureOptions(category);
         if (category == Category.VISUALS) {
             var c = NaturalityConfig.get().effects;
+            number("effects.hotbarOffset", c.hotbarOffset, 3, 0, 10, v -> c.hotbarOffset = v);
             toggle("effects.elasticHands", c.elasticHands, true, v -> c.elasticHands = v);
             number("effects.elasticHandsSpeed", c.elasticHandsSpeed, 100, 25, 300, v -> c.elasticHandsSpeed = v);
             number("effects.elasticHandsStrength", c.elasticHandsStrength, 100, 0, 200, v -> c.elasticHandsStrength = v);
@@ -327,9 +328,6 @@ public class NaturalityCategoryScreen extends OptionsSubScreen {
             liquidToggle("waterFallDroplets", config.waterFallDroplets, defaults.waterFallDroplets, value -> config.waterFallDroplets = value);
             liquidToggle("waterImpactColumns", config.waterImpactColumns, defaults.waterImpactColumns, value -> config.waterImpactColumns = value);
             section("detail");
-            addReset(new OptionInstance<>("naturality.config.liquids.waterDarkDepth", OptionInstance.noTooltip(),
-                (caption, value) -> Component.literal(caption.getString() + ": " + value + " blocks"),
-                new OptionInstance.IntRange(12, 96), config.waterDarkDepth, value -> config.waterDarkDepth = value), defaults.waterDarkDepth);
             addReset(new OptionInstance<>("naturality.config.liquids.waterPixelSize", OptionInstance.noTooltip(),
                 (caption, value) -> Component.literal(caption.getString() + ": " + value),
                 new OptionInstance.IntRange(1, 16), config.waterPixelSize, value -> config.waterPixelSize = value), defaults.waterPixelSize);
@@ -693,7 +691,7 @@ public class NaturalityCategoryScreen extends OptionsSubScreen {
 
         public static Category category(Feature feature) {
             return switch (feature) {
-                case CONTENT, MOUNTAIN_WATERFALLS -> Category.CONTENT;
+                case CONTENT, MOUNTAIN_WATERFALLS, OCEAN_TERRAIN -> Category.CONTENT;
                 case END_TERRAIN, END_MATERIALS, LIRESTONE_CRAGS, END_WILDS, LIRESTONE_BOULDERS,
                     WILDS_BOULDERS, LYREN_PLANTS -> Category.END_WORLDGEN;
                 case CHORUS_FLOWERS, CHORUS_CROWNS, CHORUS_SPROUTS -> Category.CHORUS;

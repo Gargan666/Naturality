@@ -159,6 +159,7 @@ public final class FogMixins {
             var clouds = naturality$clouds;
             var cloudStatus = naturality$cloudStatus;
             if (clouds == null || cloudStatus == null) {
+                naturality.client.fluids.water.WaterComposite.renderSurface(target);
                 return;
             }
             // Clouds are a separate sorted overlay in either scene-transparency mode.
@@ -171,6 +172,7 @@ public final class FogMixins {
                 clouds.render(cloudStatus, pass);
             }
             naturality$clouds = null;
+            naturality.client.fluids.water.WaterComposite.renderSurface(target);
         }
 
         @Inject(method = "close", at = @At("TAIL"))

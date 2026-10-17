@@ -6,7 +6,6 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.resources.Identifier;
-import net.minecraft.world.entity.player.Input;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.renderer.entity.state.HumanoidRenderState;
 import net.minecraft.client.model.geom.ModelPart;
@@ -14,7 +13,7 @@ import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 
-/** Client input filtering and the vanilla-style contextual charge bar. */
+/** Client swimming input, animations and the vanilla-style contextual charge bar. */
 @org.jspecify.annotations.NullMarked
 public final class PlayerSwimmingClient {
     private PlayerSwimmingClient() { }
@@ -23,6 +22,8 @@ public final class PlayerSwimmingClient {
     private static final Identifier COOLDOWN = Identifier.withDefaultNamespace("hud/jump_bar_cooldown");
 
     public interface RenderState {
+        float naturality$brace();
+        void naturality$brace(float value);
         boolean naturality$physicalSwimming();
         void naturality$physicalSwimming(boolean value);
         float naturality$gentleStroke();
@@ -46,6 +47,17 @@ public final class PlayerSwimmingClient {
                 && (state.rightArmPose == HumanoidModel.ArmPose.EMPTY || state.rightArmPose == HumanoidModel.ArmPose.ITEM))
             gentleArm(model.rightArm, blend, strokeAngles(phase, 1));
     }
+    public static void brace(HumanoidModel<?> model, float blend) {
+        model.body.xRot = Mth.rotLerpRad(blend, model.body.xRot, 0.5F);
+        model.leftLeg.xRot *= 1 - blend;
+        model.rightLeg.xRot *= 1 - blend;
+        model.leftLeg.z += 4 * blend;
+        model.rightLeg.z += 4 * blend;
+        model.head.y += 4.2F * blend;
+        model.body.y += 3.2F * blend;
+        model.leftArm.y += 3.2F * blend;
+        model.rightArm.y += 3.2F * blend;
+    }
     public static void strokeLegs(HumanoidModel<?> model, float phase, float blend, float left, float right) {
         // Vanilla's crawl arms and kicks have different periods. Use one closed cycle so
         // wrapping the reversible arm clock never introduces a discontinuity in the legs.
@@ -66,12 +78,8 @@ public final class PlayerSwimmingClient {
     }
 
     public static void input(LocalPlayer player) {
-        var input = player.input.keyPresses;
-        if (PlayerSwimming.waterMovement(player)) {
-            input = new Input(input.forward(), input.backward(), input.left(), input.right(), input.jump(), false, input.sprint());
-            player.input.keyPresses = input;
-        }
-        PlayerSwimming.state(player).input = input;
+        // Preserve Shift in the normal input packet; water travel uses it as descent, not crouching.
+        PlayerSwimming.state(player).input = player.input.keyPresses;
     }
 
     public static boolean showBar() {

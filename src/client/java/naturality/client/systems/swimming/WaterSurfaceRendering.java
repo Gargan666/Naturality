@@ -40,6 +40,13 @@ public final class WaterSurfaceRendering {
     }
     public static void extract(LivingEntity entity, LivingEntityRenderState render, float partial, @Nullable EntityModel<?> model) {
         var target = (State)render;
+        if (WaterSurface.riptiding(entity)) {
+            target.naturality$surfaceLean(Vec3.ZERO);
+            target.naturality$surfaceStroke(0);
+            target.naturality$surfaceFloating(false);
+            target.naturality$surfaceEyes(entity.getEyeHeight());
+            return;
+        }
         var source = WaterSurface.state(entity);
         var lean = source.previousLean.lerp(source.lean, partial);
         target.naturality$surfaceLean(fourLegged(model) ? lean.scale(-1) : lean);

@@ -1,6 +1,7 @@
 param(
     [string]$CompilerJar,
     [switch]$Offline,
+    [switch]$SkipResourceProcessing,
     [ValidateSet('All', 'Production')]
     [string]$Scope = 'All'
 )
@@ -27,6 +28,9 @@ try {
     $java = Join-Path $env:JAVA_HOME 'bin/java.exe'
     $gradleArgs = @('writeJavaAuditClasspath', '--console=plain')
     if ($Offline) { $gradleArgs += '--offline' }
+    # Static Java analysis does not need to rewrite assets used by a live client.
+    # Source generators and Java compilation still run for every source set.
+    if ($SkipResourceProcessing) { $gradleArgs += @('-x', 'processResources', '-x', 'processClientResources') }
     & ./gradlew.bat @gradleArgs
     if ($LASTEXITCODE -ne 0) { throw 'Could not prepare the Java audit classpath.' }
     $sourceSets = Get-Content -Raw 'build/java-audit/source-sets.json' | ConvertFrom-Json

@@ -55,11 +55,21 @@ public final class RotationMixins {
         private void naturality$rotationFrame(CallbackInfo ci) {
             var player = (Player)(Object)this;
             if (!player.level().isClientSide()) return;
+            if (naturality.systems.swimming.WaterSurface.riptiding(player)) {
+                naturality$previousFrameRotation = naturality$frameRotation = Angles.ZERO;
+                return;
+            }
             var next = PlayerRotation.angles(player);
-            naturality$previousFrameRotation = naturality$frameRotation == null ? next : naturality$frameRotation;
-            naturality$frameRotation = next;
+            var current = naturality$frameRotation;
+            naturality$previousFrameRotation = current == null ? next : current;
+            naturality$frameRotation = current == null || current.radiansTo(next) < Math.toRadians(0.05)
+                ? next : current.towards(next, 0.5);
         }
         public Angles naturality$renderRotation(float partial) {
+            var player = (Player)(Object)this;
+            // Vanilla crawling already rotates the model; do not blend the old swim
+            // transform on top of it after the server hands the pose back to vanilla.
+            if (player.getPose() == Pose.SWIMMING && !PlayerRotation.active(player)) return Angles.ZERO;
             var previous = naturality$previousFrameRotation;
             var current = naturality$frameRotation;
             return previous == null || current == null ? PlayerRotation.angles((Player)(Object)this) : previous.towards(current, partial);
@@ -98,13 +108,13 @@ public final class RotationMixins {
         @Inject(method = "canPlayerFitWithinBlocksAndEntitiesWhen", at = @At("HEAD"), cancellable = true)
         private void naturality$poseFits(Pose pose, CallbackInfoReturnable<Boolean> cir) {
             var player = (Player)(Object)this;
-            if (PlayerRotation.active(player)) cir.setReturnValue(PlayerRotation.fits(player,
+            if (PlayerRotation.terrainActive(player)) cir.setReturnValue(PlayerRotation.fits(player,
                 PlayerRotation.body(player, player.position(), player.getDimensions(pose), PlayerRotation.angles(player))));
         }
         @Inject(method = "canFallAtLeast", at = @At("HEAD"), cancellable = true)
         private void naturality$edgeSupport(double x, double z, double height, CallbackInfoReturnable<Boolean> cir) {
             var player = (Player)(Object)this;
-            if (!PlayerRotation.active(player)) return;
+            if (!PlayerRotation.terrainActive(player)) return;
             var displacement = new Vec3(x, 0, z);
             // Only probe translated clearance here; actual motion is resolved by the swept body solver.
             var body = PlayerRotation.body(player).move(displacement);
@@ -118,7 +128,7 @@ public final class RotationMixins {
     public interface PlayerRotationClearanceMixin {
         @Inject(method = "noCollision(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/phys/AABB;Z)Z", at = @At("HEAD"), cancellable = true)
         default void naturality$clearance(@Nullable Entity entity, AABB area, boolean fluids, CallbackInfoReturnable<Boolean> cir) {
-            if (fluids || !(entity instanceof Player player) || !PlayerRotation.active(player)) return;
+            if (fluids || !(entity instanceof Player player) || !PlayerRotation.terrainActive(player)) return;
             var envelope = player.getBoundingBox();
             if (Math.abs(area.getXsize() - envelope.getXsize()) > 1.0e-6
                     || Math.abs(area.getYsize() - envelope.getYsize()) > 1.0e-6
@@ -130,6 +140,34 @@ public final class RotationMixins {
     @Mixin(Entity.class)
     @org.jspecify.annotations.NullMarked
     public static abstract class PlayerRotationEntityMixin {
+        @Inject(method = "isInWall", at = @At("HEAD"), cancellable = true)
+        private void naturality$wholeBodySuffocation(CallbackInfoReturnable<Boolean> cir) {
+            if ((Object)this instanceof Player player && PlayerRotation.terrainActive(player))
+                cir.setReturnValue(PlayerRotation.fullyInsideSolids(player));
+        }
+        @Inject(method = "getFluidInteractionBox", at = @At("HEAD"), cancellable = true)
+        private void naturality$swimmingFluidBox(CallbackInfoReturnable<AABB> cir) {
+            if ((Object)this instanceof Player player && naturality.systems.swimming.PlayerSwimming.compactTerrain(player))
+                cir.setReturnValue(PlayerRotation.terrain(PlayerRotation.body(player)).bounds().deflate(0.001));
+        }
+        @Inject(method = "isEyeInFluid", at = @At("HEAD"), cancellable = true)
+        private void naturality$swimmingEyes(net.minecraft.tags.TagKey<net.minecraft.world.level.material.Fluid> type,
+                CallbackInfoReturnable<Boolean> cir) {
+            if (!((Object)this instanceof Player player) || !naturality.systems.swimming.PlayerSwimming.compactTerrain(player)) return;
+            // The body scan now covers the movement cube. Breathing still samples the actual eye,
+            // which may lie outside that cube or inside a block while the torso remains submerged.
+            var eye = player.getEyePosition();
+            var pos = BlockPos.containing(eye);
+            if (!naturality.api.worlds.LoadedChunks.has(player.level(), pos)) { cir.setReturnValue(false); return; }
+            var fluid = player.level().getFluidState(pos);
+            boolean submerged = fluid.is(type) && eye.y <= pos.getY() + fluid.getHeightForCamera(player.level(), pos);
+            if (!submerged && type.equals(net.minecraft.tags.FluidTags.WATER)
+                    && player.isInWater() && naturality.systems.swimming.WaterSurface.solidAt(player, pos, eye)) {
+                // Solid material is not breathable air. The collider's water contact remains authoritative here.
+                submerged = true;
+            }
+            cir.setReturnValue(submerged);
+        }
         @Inject(method = "collidedWithShapeMovingFrom", at = @At("HEAD"), cancellable = true)
         private void naturality$shapeContact(Vec3 from, Vec3 to, List<AABB> obstacles, CallbackInfoReturnable<Boolean> cir) {
             if (!((Object)this instanceof Player player) || !PlayerRotation.active(player)) return;
@@ -164,7 +202,7 @@ public final class RotationMixins {
         }
         @Inject(method = "collide", at = @At("HEAD"), cancellable = true)
         private void naturality$collide(Vec3 movement, CallbackInfoReturnable<Vec3> cir) {
-            if ((Object)this instanceof Player player && PlayerRotation.active(player)) cir.setReturnValue(PlayerRotation.collide(player, movement));
+            if ((Object)this instanceof Player player && PlayerRotation.terrainActive(player)) cir.setReturnValue(PlayerRotation.collide(player, movement));
         }
         @Inject(method = "getEyeY", at = @At("RETURN"), cancellable = true)
         private void naturality$eyeY(CallbackInfoReturnable<Double> cir) {
@@ -185,13 +223,13 @@ public final class RotationMixins {
         }
         @Inject(method = "checkSupportingBlock", at = @At("HEAD"), cancellable = true)
         private void naturality$support(boolean onGround, @Nullable Vec3 movement, CallbackInfo ci) {
-            if (!((Object)this instanceof Player player) || !PlayerRotation.active(player)) return;
+            if (!((Object)this instanceof Player player) || !PlayerRotation.terrainActive(player)) return;
             player.mainSupportingBlockPos = onGround ? PlayerRotation.support(player, 1.0e-4).map(PlayerRotation.Contact::block) : Optional.empty();
             ci.cancel();
         }
         @Inject(method = "getOnPos(F)Lnet/minecraft/core/BlockPos;", at = @At("HEAD"), cancellable = true)
         private void naturality$surface(float offset, CallbackInfoReturnable<BlockPos> cir) {
-            if (!((Object)this instanceof Player player) || !PlayerRotation.active(player)) return;
+            if (!((Object)this instanceof Player player) || !PlayerRotation.terrainActive(player)) return;
             var contact = PlayerRotation.support(player, Math.max(1.0e-4, offset));
             cir.setReturnValue(contact.map(PlayerRotation.Contact::block).orElseGet(() -> {
                 var bounds = player.getBoundingBox();
@@ -207,7 +245,7 @@ public final class RotationMixins {
         @Inject(method = "isEntityCollidingWithAnythingNew", at = @At("HEAD"), cancellable = true)
         private void naturality$validate(LevelReader level, Entity entity, AABB oldBounds, double x, double y, double z,
                 CallbackInfoReturnable<Boolean> cir) {
-            if (entity instanceof Player player && PlayerRotation.active(player)) cir.setReturnValue(
+            if (entity instanceof Player player && PlayerRotation.terrainActive(player)) cir.setReturnValue(
                 PlayerRotation.introducesCollision(player, oldBounds, new Vec3(x, y, z)));
         }
     }
@@ -228,6 +266,7 @@ public final class RotationMixins {
                 @Local(argsOnly = true) Entity entity, @Local BlockPos.MutableBlockPos pos) {
             if (original.call(fluid)) return true;
             if (!(entity instanceof Player player) || !PlayerRotation.active(player)) return false;
+            if (naturality.systems.swimming.PlayerSwimming.compactTerrain(player)) return false;
             var bounds = new AABB(pos.getX(), pos.getY(), pos.getZ(), pos.getX() + 1,
                 pos.getY() + fluid.getHeight(player.level(), pos), pos.getZ() + 1);
             return PlayerRotation.body(player).separation(bounds) >= -PlayerRotation.EPSILON;
@@ -237,7 +276,10 @@ public final class RotationMixins {
     @Mixin(ProjectileUtil.class)
     @org.jspecify.annotations.NullMarked
     public static abstract class PlayerRotationTargetingMixin {
-        @WrapOperation(method = {"getEntityHitResult", "getManyEntityHitResult"},
+        @WrapOperation(method = {
+            "getEntityHitResult(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/AABB;Ljava/util/function/Predicate;D)Lnet/minecraft/world/phys/EntityHitResult;",
+            "getEntityHitResult(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/AABB;Ljava/util/function/Predicate;F)Lnet/minecraft/world/phys/EntityHitResult;",
+            "getManyEntityHitResult(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/AABB;Ljava/util/function/Predicate;FLnet/minecraft/world/level/ClipContext$Block;ZZ)Ljava/util/Collection;"},
             at = @At(value = "INVOKE", target = "Lnet/minecraft/world/phys/AABB;clip(Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/Vec3;)Ljava/util/Optional;"))
         private static Optional<Vec3> naturality$exactHit(AABB bounds, Vec3 from, Vec3 to, Operation<Optional<Vec3>> original,
                 @Local(name = "entity") Entity entity) {
@@ -247,7 +289,10 @@ public final class RotationMixins {
             }
             return original.call(bounds, from, to);
         }
-        @WrapOperation(method = {"getEntityHitResult", "getManyEntityHitResult"},
+        @WrapOperation(method = {
+            "getEntityHitResult(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/AABB;Ljava/util/function/Predicate;D)Lnet/minecraft/world/phys/EntityHitResult;",
+            "getEntityHitResult(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/AABB;Ljava/util/function/Predicate;F)Lnet/minecraft/world/phys/EntityHitResult;",
+            "getManyEntityHitResult(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/AABB;Ljava/util/function/Predicate;FLnet/minecraft/world/level/ClipContext$Block;ZZ)Ljava/util/Collection;"},
             at = @At(value = "INVOKE", target = "Lnet/minecraft/world/phys/AABB;contains(Lnet/minecraft/world/phys/Vec3;)Z"))
         private static boolean naturality$inside(AABB bounds, Vec3 point, Operation<Boolean> original,
                 @Local(name = "entity") Entity entity) {

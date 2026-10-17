@@ -38,9 +38,20 @@ void main() {
     // Calculate block and sky brightness levels based on texture coordinates
     float block_level = floor(texCoord.x * 16) / 15;
     float sky_level = floor(texCoord.y * 16) / 15;
+    // Negative SkyFactor carries immersion blend; the original daylight factor
+    // is folded into SkyLightColor at upload without changing extracted state.
+    float skyFactor = lightmapInfo.SkyFactor;
+    float immersion = 0.0;
+    if (skyFactor < 0.0) {
+        immersion = clamp(-skyFactor - 1.0, 0.0, 1.0);
+        skyFactor = 1.0;
+    }
 
     float block_brightness = get_brightness(block_level) * lightmapInfo.BlockFactor;
-    float sky_brightness = get_brightness(sky_level) * lightmapInfo.SkyFactor;
+    float sky_brightness = get_brightness(sky_level) * skyFactor;
+    // Retain the propagated skylight gradient through cave entrances. Zero sky
+    // remains zero; block lights and night vision retain their normal behavior.
+    sky_brightness = mix(sky_brightness, sqrt(get_brightness(sky_level)), immersion);
 
     // Calculate ambient color with or without night vision
     vec3 nightVisionColor = lightmapInfo.NightVisionColor * lightmapInfo.NightVisionFactor;
@@ -63,6 +74,10 @@ void main() {
     color = clamp(color, 0.0, 1.0);
     vec3 notGamma = notGamma(color);
     color = mix(color, notGamma, lightmapInfo.BrightnessFactor);
+
+    // A small, uniform underwater reduction after gamma: retain normal light
+    // colors and time-of-day response without reintroducing depth attenuation.
+    color *= mix(1.0, 0.85, immersion);
 
     fragColor = vec4(color, 1.0);
 }

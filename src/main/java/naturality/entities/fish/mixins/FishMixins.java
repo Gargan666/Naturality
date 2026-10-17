@@ -6,6 +6,8 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 import naturality.entities.fish.FishMoveControl;
 import net.minecraft.world.entity.animal.fish.AbstractFish;
+import net.minecraft.world.entity.animal.fish.AbstractSchoolingFish;
+import net.minecraft.world.entity.ai.goal.GoalSelector;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.level.Level;
@@ -21,11 +23,29 @@ public final class FishMixins {
     @org.jspecify.annotations.NullMarked
     public interface FishMoveControlAccess {
         @Accessor("moveControl") void naturality$control(MoveControl<?> control);
+        @Accessor("goalSelector") GoalSelector naturality$goals();
+    }
+
+    @Mixin(AbstractSchoolingFish.class)
+    @org.jspecify.annotations.NullMarked
+    public interface SchoolLeaderAccess {
+        @Accessor("leader") @org.jspecify.annotations.Nullable AbstractSchoolingFish naturality$leader();
+    }
+
+    @Mixin(AbstractSchoolingFish.class)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class SchoolFollowingMixin {
+        @Inject(method="pathToLeader",at=@At("HEAD"),cancellable=true)
+        private void naturality$sharedSteering(CallbackInfo ci) { ci.cancel(); }
     }
 
     @Mixin(AbstractFish.class)
     @org.jspecify.annotations.NullMarked
     public static abstract class FishMovementMixin {
+        @Inject(method="registerGoals",at=@At("TAIL"))
+        private void naturality$swimmingGoals(CallbackInfo ci) {
+            FishMoveControl.registerGoals((AbstractFish)(Object)this,((FishMoveControlAccess)this).naturality$goals());
+        }
         @Inject(method="<init>",at=@At("TAIL"))
         private void naturality$control(EntityType<?> type,Level level,CallbackInfo ci) {
             ((FishMoveControlAccess)this).naturality$control(new FishMoveControl((AbstractFish)(Object)this));

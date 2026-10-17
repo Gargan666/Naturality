@@ -33,6 +33,14 @@ public final class SwimmingMixins {
         @Unique private static final EntityDataAccessor<Float> naturality$SWIM_METER =
             SynchedEntityData.defineId(Player.class, EntityDataSerializers.FLOAT);
         @Unique private PlayerSwimming.@Nullable State naturality$swimState;
+        @Unique private static final EntityDataAccessor<Boolean> naturality$COMPACT_TERRAIN =
+            SynchedEntityData.defineId(Player.class, EntityDataSerializers.BOOLEAN);
+        public boolean naturality$compactTerrain() { return ((Player)(Object)this).getEntityData().get(naturality$COMPACT_TERRAIN); }
+        public void naturality$compactTerrain(boolean value) { ((Player)(Object)this).getEntityData().set(naturality$COMPACT_TERRAIN, value); }
+        @Unique private static final EntityDataAccessor<Boolean> naturality$BRACED =
+            SynchedEntityData.defineId(Player.class, EntityDataSerializers.BOOLEAN);
+        public boolean naturality$braced() { return ((Player)(Object)this).getEntityData().get(naturality$BRACED); }
+        public void naturality$braced(boolean value) { ((Player)(Object)this).getEntityData().set(naturality$BRACED, value); }
         public PlayerSwimming.State naturality$swimming() {
             var state = naturality$swimState;
             if (state == null) naturality$swimState = state = new PlayerSwimming.State();
@@ -41,11 +49,22 @@ public final class SwimmingMixins {
         public float naturality$swimMeter() { return ((Player)(Object)this).getEntityData().get(naturality$SWIM_METER); }
         public void naturality$swimMeter(float value) { ((Player)(Object)this).getEntityData().set(naturality$SWIM_METER, value); }
         @Inject(method = "defineSynchedData", at = @At("TAIL"))
-        private void naturality$define(SynchedEntityData.Builder builder, CallbackInfo ci) { builder.define(naturality$SWIM_METER, -1F); }
+        private void naturality$define(SynchedEntityData.Builder builder, CallbackInfo ci) {
+            builder.define(naturality$SWIM_METER, -1F);
+            builder.define(naturality$BRACED, false);
+            builder.define(naturality$COMPACT_TERRAIN, false);
+        }
         @Inject(method = "updateSwimming", at = @At("HEAD"), cancellable = true)
         private void naturality$mode(CallbackInfo ci) {
+            var player = (Player)(Object)this;
+            if (naturality.systems.swimming.WaterSurface.riptiding(player)) { PlayerSwimming.releaseForRiptide(player); return; }
             PlayerSwimming.updateMode((Player)(Object)this);
             ci.cancel();
+        }
+        @Inject(method = "startAutoSpinAttack", at = @At("TAIL"))
+        private void naturality$riptide(int ticks, float damage, net.minecraft.world.item.ItemStack item, CallbackInfo ci) {
+            var player = (Player)(Object)this;
+            PlayerSwimming.startRiptide(player, ticks);
         }
         @Inject(method = "tick", at = @At("TAIL"))
         private void naturality$tick(CallbackInfo ci) { PlayerSwimming.tick((Player)(Object)this); }
@@ -92,8 +111,13 @@ public final class SwimmingMixins {
     @Mixin(LivingEntity.class)
     @org.jspecify.annotations.NullMarked
     public static abstract class WaterSurfaceLivingMixin implements WaterSurface.Access {
-        @Unique private final WaterSurface.State naturality$surface = new WaterSurface.State();
-        public WaterSurface.State naturality$waterSurface() { return naturality$surface; }
+        @Unique private WaterSurface.@Nullable State naturality$surface;
+        public WaterSurface.State naturality$waterSurface() {
+            // Rotation/shape queries can run from the Entity constructor before field initializers.
+            var state = naturality$surface;
+            if (state == null) naturality$surface = state = new WaterSurface.State();
+            return state;
+        }
         @Inject(method = "aiStep", at = @At("HEAD"))
         private void naturality$surfaceUpdate(CallbackInfo ci) { WaterSurface.update((LivingEntity)(Object)this); }
         @Inject(method = "travel", at = @At("HEAD"))
@@ -108,6 +132,14 @@ public final class SwimmingMixins {
 
     @Mixin(Entity.class)
     public static abstract class PlayerSwimmingSneakMixin {
+        @Inject(method = "onInsideBubbleColumn", at = @At("HEAD"))
+        private void naturality$bubbleContact(boolean down, CallbackInfo ci) {
+            if ((Object)this instanceof LivingEntity entity) WaterSurface.bubbleContact(entity);
+        }
+        @Inject(method = "onAboveBubbleColumn", at = @At("HEAD"))
+        private void naturality$bubbleLaunch(boolean down, net.minecraft.core.BlockPos pos, CallbackInfo ci) {
+            if ((Object)this instanceof LivingEntity entity) WaterSurface.bubbleContact(entity);
+        }
         @Inject(method = "restituteMovementAfterCollisions", at = @At("HEAD"), cancellable = true)
         private void naturality$slideVelocity(BlockState state, boolean xCollision, boolean zCollision,
                                              Vec3 movement, CallbackInfo ci) {

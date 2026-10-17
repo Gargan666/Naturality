@@ -7,6 +7,7 @@ import java.util.Locale;
 import java.util.Optional;
 import naturality.api.worlds.LoadedChunks;
 import naturality.systems.gravity.EndGravity;
+import naturality.systems.swimming.PlayerSwimming;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
@@ -95,6 +96,7 @@ public final class PlayerRotation {
     }
 
     public static Angles angles(Entity entity) {
+        if (entity instanceof Player player && naturality.systems.swimming.WaterSurface.riptiding(player)) return Angles.ZERO;
         if (entity instanceof Player && entity instanceof Access access) {
             var value = access.naturality$rotation();
             if (value != null) return value;
@@ -102,13 +104,34 @@ public final class PlayerRotation {
         return Angles.ZERO;
     }
     public static boolean active(Entity entity) { return angles(entity).active(); }
+    public static boolean terrainActive(Entity entity) {
+        return active(entity) || entity instanceof Player player && PlayerSwimming.compactTerrain(player);
+    }
     public static Angles interpolatedAngles(Entity entity, float partial) {
+        if (entity instanceof Player player && naturality.systems.swimming.WaterSurface.riptiding(player)) return Angles.ZERO;
         return entity instanceof Access access ? access.naturality$renderRotation(Math.clamp(partial, 0, 1)) : Angles.ZERO;
     }
     public static Box body(Player player) { return body(player, player.position(), player.getDimensions(player.getPose()), angles(player)); }
+    /** Subtract the union of suffocating solids, then test the remaining space against the actual OBB. */
+    public static boolean fullyInsideSolids(Player player) {
+        if (player.noPhysics) return false;
+        var body = body(player);
+        var bounds = body.bounds();
+        var uncovered = net.minecraft.world.phys.shapes.Shapes.create(bounds);
+        for (var pos : BlockPos.betweenClosed(BlockPos.containing(bounds.minX, bounds.minY, bounds.minZ),
+                BlockPos.containing(bounds.maxX, bounds.maxY, bounds.maxZ))) {
+            if (!LoadedChunks.has(player.level(), pos)) return false;
+            var block = player.level().getBlockState(pos);
+            if (!block.isSuffocating(player.level(), pos)) continue;
+            uncovered = net.minecraft.world.phys.shapes.Shapes.join(uncovered,
+                block.getCollisionShape(player.level(), pos).move(pos), net.minecraft.world.phys.shapes.BooleanOp.ONLY_FIRST);
+        }
+        for (var gap : uncovered.toAabbs()) if (body.separation(gap) < -EPSILON) return false;
+        return true;
+    }
     public static Box body(Player player, Vec3 position, EntityDimensions dimensions, Angles orientation) {
         return new Box(position.add(0, dimensions.height() / 2.0, 0),
-            new Vec3(dimensions.width() / 2.0, dimensions.height() / 2.0, dimensions.width() / 2.0), orientation);
+            new Vec3(dimensions.width() / 2.0, dimensions.height() / 2.0, dimensions.width() / 2.0), orientation, PlayerSwimming.compactTerrain(player));
     }
     public static Vec3 eyeOffset(Player player, float eyeHeight) {
         return eyeOffset(player, eyeHeight, angles(player));
@@ -122,18 +145,56 @@ public final class PlayerRotation {
         return body.center.add(body.orientation.transform(new Vec3(0, -body.half.y, 0)));
     }
 
-    /** Sets an absolute orientation along the shortest angular path, stopping before terrain.
+    /** Terrain-only envelope. Targeting, fluids, damage contacts and feet retain the oriented body. */
+    public static Box terrain(Box body) {
+        // One vanilla-sized swimming cube at the body centre, independent of body rotation.
+        if (body.compactTerrain) {
+            return new Box(body.center, new Vec3(body.half.x, body.half.x, body.half.x), Angles.ZERO);
+        }
+        return envelope(body);
+    }
+
+    /** Full body envelope for water-mode sampling and non-swimming rotation. */
+    public static Box envelope(Box body) {
+        var bounds = body.bounds();
+        var up = body.orientation.transform(WORLD_AXES[1]);
+        double x = terrainRadius(body, WORLD_AXES[0], bounds.getXsize() / 2);
+        double z = terrainRadius(body, WORLD_AXES[2], bounds.getZsize() / 2);
+        // Preserve the entire head/feet centreline, including eye positions, with a small margin.
+        double margin = Math.min(0.04, Math.min(body.half.x, body.half.z) * 0.1);
+        x = Math.max(x, Math.min(bounds.getXsize() / 2, Math.abs(up.x) * body.half.y + margin));
+        z = Math.max(z, Math.min(bounds.getZsize() / 2, Math.abs(up.z) * body.half.y + margin));
+        return new Box(body.center, new Vec3(x, bounds.getYsize() / 2, z), Angles.ZERO);
+    }
+
+    private static double terrainRadius(Box body, Vec3 axis, double enclosingRadius) {
+        double a = body.half.x * body.axes[0].dot(axis);
+        double b = body.half.y * body.axes[1].dot(axis);
+        double c = body.half.z * body.axes[2].dot(axis);
+        double excess = Math.max(0, enclosingRadius - Math.sqrt(a * a + b * b + c * c));
+        // Zero for axis-aligned faces; smoothly approaches an eight-centimetre maximum inset.
+        return enclosingRadius - 0.08 * excess / (0.08 + excess);
+    }
+
+    /** Sets an absolute orientation; swimming rotates freely, manual poses stop before obstacles.
      * Call on the logical server. The accepted orientation is synchronized to the player and observers.
      * Passenger/sleeping poses are deliberately excluded until their attachment rules are implemented.
      */
     public static RotationResult rotate(Player player, Angles target) {
         var previous = angles(player);
         if (player.level().isClientSide() || player.isPassenger() || player.isSleeping()) return new RotationResult(previous, false);
+        if (previous.equals(target)) return new RotationResult(previous, true);
         var start = body(player);
-        double radius = start.half.length();
-        var colliders = colliders(player, AABB.ofSize(start.center, radius * 2, radius * 2, radius * 2));
+        if (start.compactTerrain) {
+            ((Access)player).naturality$rotation(target);
+            return new RotationResult(target, true);
+        }
+        double radius = rotationRadius(start);
+        var area = AABB.ofSize(start.center, radius * 2, radius * 2, radius * 2);
+        var colliders = colliders(player, area);
         if (colliders == null) return new RotationResult(previous, false);
-        double fraction = safeRotationFraction(start, target, colliders);
+        double terrainFraction = safeTerrainRotationFraction(start, target, colliders);
+        double fraction = Math.min(terrainFraction, safeRotationFraction(start, target, entityColliders(player, area)));
         if (fraction < 1 && previous.radiansTo(target) * fraction < 1.0e-5) fraction = 0;
         var accepted = fraction == 1 ? target : previous.towards(target, fraction);
         ((Access)player).naturality$rotation(accepted);
@@ -141,129 +202,20 @@ public final class PlayerRotation {
         return new RotationResult(accepted, fraction == 1);
     }
     public record RotationResult(Angles accepted, boolean complete) { }
-
-    /** Contact response for movement controllers. The caller synchronizes any returned displacement. */
-    public static Deflection deflect(Player player, Vec3 requested, double maximumRadians) {
-        var body = body(player);
-        var unchanged = new Deflection(body.orientation, Vec3.ZERO, false);
-        if (player.level().isClientSide() || player.isPassenger() || player.isSleeping() || requested.lengthSqr() < 1.0e-10) return unchanged;
-        double radius = body.half.length() + requested.length() + 0.12;
-        var obstacles = colliders(player, AABB.ofSize(body.center, radius * 2, radius * 2, radius * 2));
-        if (obstacles == null) return new Deflection(body.orientation, Vec3.ZERO, true);
-        var response = deflect(body, requested, obstacles, maximumRadians);
-        if (response.displacement.lengthSqr() > 0) player.setPos(player.position().add(response.displacement));
-        if (!response.rotation.equals(body.orientation)) {
-            ((Access)player).naturality$rotation(response.rotation);
-            player.setOnGround(false);
-        }
-        return response;
-    }
-
-    public record Deflection(Angles rotation, Vec3 displacement, boolean blocked) { }
-
-    /** Turn the long body axis along a blocking surface, with a bounded outward clearance shift.
-     * Both the translation and the entire angular sweep must be clear of every obstacle. */
-    public static Deflection deflect(Box body, Vec3 requested, List<AABB> obstacles, double maximumRadians) {
-        double fraction = 1;
-        Vec3 normal = Vec3.ZERO;
-        for (var obstacle : obstacles) {
-            var hit = body.sweep(obstacle, requested);
-            if (hit.fraction < fraction) { fraction = hit.fraction; normal = hit.normal; }
-        }
-        var unchanged = new Deflection(body.orientation, Vec3.ZERO, fraction < 1);
-        if (fraction == 1 || normal.lengthSqr() < 1.0e-12) return unchanged;
-        var up = body.orientation.transform(new Vec3(0, 1, 0));
-        var tangent = up.subtract(normal.scale(up.dot(normal)));
-        if (tangent.lengthSqr() < 1.0e-8) {
-            // A head-on impact has no preferred torque. Prefer the slide direction, then
-            // upright along a wall, or the body's forward direction along a floor/ceiling.
-            tangent = requested.subtract(normal.scale(requested.dot(normal)));
-            if (tangent.lengthSqr() < 1.0e-8) tangent = new Vec3(0, 1, 0).subtract(normal.scale(normal.y));
-            if (tangent.lengthSqr() < 1.0e-8) {
-                var forward = body.orientation.transform(new Vec3(0, 0, 1));
-                tangent = forward.subtract(normal.scale(forward.dot(normal)));
-            }
-        }
-        tangent = tangent.normalize();
-        var axis = up.cross(tangent);
-        if (axis.lengthSqr() < 1.0e-10) return unchanged;
-        axis = axis.normalize();
-        double angle = Math.min(Math.clamp(maximumRadians, 0, Math.toRadians(8)), Math.acos(Math.clamp(up.dot(tangent), -1, 1)));
-        var target = Angles.fromQuaternion(new Quaterniond().rotationAxis(angle, axis.x, axis.y, axis.z).mul(body.orientation.quaternion()));
-        if (safeRotationFraction(body, target, obstacles) == 1) return new Deflection(target, Vec3.ZERO, true);
-        var outward = sweepStraight(body, normal.scale(0.12), obstacles);
-        if (outward.lengthSqr() < EPSILON * EPSILON) return unchanged;
-        double lower = 0;
-        for (int step = 1; step <= 8; step++) {
-            double upper = step / 8.0;
-            if (safeRotationFraction(body.move(outward.scale(upper)), target, obstacles) == 1) {
-                for (int iteration = 0; iteration < 8; iteration++) {
-                    double middle = (lower + upper) / 2;
-                    if (safeRotationFraction(body.move(outward.scale(middle)), target, obstacles) == 1) upper = middle;
-                    else lower = middle;
-                }
-                return new Deflection(target, outward.scale(upper), true);
-            }
-            lower = upper;
-        }
-        return unchanged;
-    }
-
-    /** Rotate toward a recovery pose, lifting only along a clear upward path when rotation is blocked.
-     * Returns the lift for the caller to synchronize to the controlling player. */
-    public static double rotateWithLift(Player player, Angles target, double maximumLift) {
-        return rotateWithLift(player, target, maximumLift, true);
-    }
-
-    /** With partial lifts disabled, ascent must make the requested angular step completely clear. */
-    public static double rotateWithLift(Player player, Angles target, double maximumLift, boolean allowPartialLift) {
-        if (rotate(player, target).complete() || player.level().isClientSide() || player.isPassenger() || player.isSleeping()) return 0;
-        var start = body(player);
-        double limit = Math.clamp(maximumLift, 0, 0.25);
-        double radius = start.half.length();
-        var obstacles = colliders(player, AABB.ofSize(start.center, radius * 2, radius * 2, radius * 2).expandTowards(0, limit, 0));
-        if (obstacles == null) return 0;
-        double lift = liftForRotation(start, target, obstacles, limit, allowPartialLift);
-        if (lift <= EPSILON) return 0;
-        player.setPos(player.position().add(0, lift, 0));
-        rotate(player, target);
-        player.resetFallDistance();
-        return lift;
-    }
-
-    public static double liftForRotation(Box start, Angles target, List<AABB> obstacles, double maximumLift) {
-        return liftForRotation(start, target, obstacles, maximumLift, true);
-    }
-
-    public static double liftForRotation(Box start, Angles target, List<AABB> obstacles, double maximumLift, boolean allowPartialLift) {
-        if (safeRotationFraction(start, target, obstacles) == 1) return 0;
-        double allowed = sweepStraight(start, new Vec3(0, maximumLift, 0), obstacles).y;
-        if (allowed <= EPSILON) return 0;
-        double lower = 0;
-        for (int step = 1; step <= 8; step++) {
-            double upper = allowed * step / 8;
-            if (safeRotationFraction(start.move(new Vec3(0, upper, 0)), target, obstacles) == 1) {
-                for (int iteration = 0; iteration < 8; iteration++) {
-                    double middle = (lower + upper) / 2;
-                    if (safeRotationFraction(start.move(new Vec3(0, middle, 0)), target, obstacles) == 1) upper = middle;
-                    else lower = middle;
-                }
-                return upper;
-            }
-            lower = upper;
-        }
-        // A tall obstruction can need several small lifts. An overhead obstruction still stops ascent.
-        return allowPartialLift ? allowed : 0;
+    private static double rotationRadius(Box body) {
+        return body.half.length();
     }
 
     /** Preserve vanilla's distinction between an existing overlap and a newly introduced collision. */
     public static boolean introducesCollision(Player player, AABB oldBounds, Vec3 targetPosition) {
         var current = body(player);
+        if (current.compactTerrain) current = terrain(current);
         var before = current.move(oldBounds.getCenter().subtract(current.center));
         var after = current.move(targetPosition.subtract(player.position()));
         if (before.center.distanceToSqr(after.center) < 1.0e-20) return false;
         var obstacles = colliders(player, before.bounds().minmax(after.bounds()));
-        return obstacles == null || introducesCollision(before, after, obstacles);
+        return obstacles == null || introducesCollision(terrain(before), terrain(after), obstacles)
+            || introducesCollision(before, after, entityColliders(player, before.bounds().minmax(after.bounds())));
     }
     public static boolean introducesCollision(Box before, Box after, List<AABB> obstacles) {
         for (var obstacle : obstacles) {
@@ -296,11 +248,14 @@ public final class PlayerRotation {
         });
     }
 
-    /** Broad bounds are search envelopes only. Exact OBB checks decide clearance. */
+    /** Swimming uses its separate cube for all physical contacts; manual rotation uses the body. */
     public static boolean fits(Player player, Box box) {
         var colliders = colliders(player, box.bounds());
         if (colliders == null) return false;
-        for (var collider : colliders) if (box.separation(collider) < -CONTACT_TOLERANCE) return false;
+        var terrain = terrain(box);
+        for (var collider : colliders) if (terrain.separation(collider) < -CONTACT_TOLERANCE) return false;
+        var physical = box.compactTerrain ? terrain : box;
+        for (var collider : entityColliders(player, physical.bounds())) if (physical.separation(collider) < -CONTACT_TOLERANCE) return false;
         return true;
     }
 
@@ -317,13 +272,22 @@ public final class PlayerRotation {
     private static @Nullable List<AABB> colliders(Player player, AABB area) {
         if (!available(player, area.inflate(1))) return null;
         var result = new ArrayList<AABB>();
-        for (var shape : Entity.collectAllColliders(player, player.level(), area.inflate(EPSILON))) result.addAll(shape.toAabbs());
+        for (var shape : player.level().getBlockCollisions(player, area.inflate(EPSILON))) result.addAll(shape.toAabbs());
+        var border = player.level().getWorldBorder();
+        if (border.isInsideCloseToBorder(player, area)) result.addAll(border.getCollisionShape().toAabbs());
+        return result;
+    }
+
+    private static List<AABB> entityColliders(Player player, AABB area) {
+        var result = new ArrayList<AABB>();
+        for (var shape : player.level().getEntityCollisions(player, area)) result.addAll(shape.toAabbs());
         return result;
     }
 
     /** Continuous translation with one-way contact planes and bounded stepping. */
     public static Vec3 collide(Player player, Vec3 requested) {
         var body = body(player);
+        if (body.compactTerrain) body = terrain(body);
         double up = EndGravity.inverted(player) ? -1 : 1;
         // Underwater contact should slide/turn, not perform a full walking step.
         double step = player.isSwimming() ? 0.0 : player.maxUpStep();
@@ -332,12 +296,14 @@ public final class PlayerRotation {
         double pathBound = Math.abs(requested.x) + Math.abs(requested.y) + Math.abs(requested.z) + step * 2;
         var obstacles = colliders(player, body.bounds().inflate(pathBound + EPSILON));
         if (obstacles == null) return Vec3.ZERO;
-        var resolved = slide(body, requested, obstacles);
+        var entities = entityColliders(player, body.bounds().inflate(pathBound + EPSILON));
+        var resolved = slide(terrain(body), requested, obstacles, body, entities);
         boolean grounded = player.onGround() || requested.y * up < 0 && requested.y != resolved.y;
         if (step > 0 && grounded && resolved.horizontalDistanceSqr() + EPSILON < requested.horizontalDistanceSqr()) {
-            var raised = sweepStraight(body, new Vec3(0, up * step, 0), obstacles);
-            var across = slide(body.move(raised), new Vec3(requested.x, 0, requested.z), obstacles);
-            var lowered = sweepStraight(body.move(raised.add(across)), new Vec3(0, requested.y - raised.y - across.y, 0), obstacles);
+            var raised = sweepStraight(terrain(body), new Vec3(0, up * step, 0), obstacles, body, entities);
+            var across = slide(terrain(body).move(raised), new Vec3(requested.x, 0, requested.z), obstacles, body.move(raised), entities);
+            var offset = raised.add(across);
+            var lowered = sweepStraight(terrain(body).move(offset), new Vec3(0, requested.y - offset.y, 0), obstacles, body.move(offset), entities);
             var stepped = raised.add(across).add(lowered);
             if (stepped.horizontalDistanceSqr() > resolved.horizontalDistanceSqr() + EPSILON) resolved = stepped;
         }
@@ -345,15 +311,19 @@ public final class PlayerRotation {
     }
 
     /** A step's vertical lift/settle must not manufacture lateral movement on an oblique contact. */
-    private static Vec3 sweepStraight(Box body, Vec3 requested, List<AABB> obstacles) {
+    private static Vec3 sweepStraight(Box body, Vec3 requested, List<AABB> obstacles, Box physical, List<AABB> entities) {
         double length = requested.length();
         if (length == 0) return requested;
         double fraction = 1;
         for (var obstacle : obstacles) fraction = Math.min(fraction, body.sweep(obstacle, requested).fraction);
+        for (var obstacle : entities) fraction = Math.min(fraction, physical.sweep(obstacle, requested).fraction);
         return fraction == 1 ? requested : requested.scale(Math.max(0, fraction - EPSILON / length));
     }
 
     public static Vec3 slide(Box body, Vec3 requested, List<AABB> obstacles) {
+        return slide(body, requested, obstacles, body, List.of());
+    }
+    private static Vec3 slide(Box body, Vec3 requested, List<AABB> obstacles, Box physical, List<AABB> entities) {
         Vec3 resolved = Vec3.ZERO;
         Vec3 remaining = requested;
         var contacts = new ArrayList<Vec3>();
@@ -363,6 +333,10 @@ public final class PlayerRotation {
             Vec3 normal = Vec3.ZERO;
             for (var obstacle : obstacles) {
                 var hit = current.sweep(obstacle, remaining);
+                if (hit.fraction < fraction) { fraction = hit.fraction; normal = hit.normal; }
+            }
+            for (var obstacle : entities) {
+                var hit = physical.move(resolved).sweep(obstacle, remaining);
                 if (hit.fraction < fraction) { fraction = hit.fraction; normal = hit.normal; }
             }
             if (fraction == 1) return resolved.add(remaining);
@@ -421,7 +395,7 @@ public final class PlayerRotation {
     }
 
     public static Optional<Contact> support(Player player, double distance) {
-        return blockContact(player, body(player), new Vec3(0, EndGravity.inverted(player) ? distance : -distance, 0));
+        return blockContact(player, terrain(body(player)), new Vec3(0, EndGravity.inverted(player) ? distance : -distance, 0));
     }
 
     /** The normal points out of the obstacle; touching is distinct from a nearby positive-distance hit. */
@@ -450,39 +424,58 @@ public final class PlayerRotation {
 
     /** Certifies the entire angular path, not just endpoints. Subdivision stops conservatively on exhaustion. */
     public static double safeRotationFraction(Box start, Angles target, List<AABB> obstacles) {
+        return safeRotationFraction(start, target, obstacles, false);
+    }
+    public static double safeTerrainRotationFraction(Box start, Angles target, List<AABB> obstacles) {
+        if (start.compactTerrain) return 1;
+        return safeRotationFraction(start, target, obstacles, true);
+    }
+    private static double safeRotationFraction(Box start, Angles target, List<AABB> obstacles, boolean terrain) {
         if (start.orientation.equals(target)) return 1;
-        for (var obstacle : obstacles) if (start.separation(obstacle) < -EPSILON) return 0;
-        return rotationInterval(start, target, obstacles, 0, 1, 0, new int[]{8192});
+        var shape = terrain ? terrain(start) : start;
+        for (var obstacle : obstacles) if (shape.separation(obstacle) < -EPSILON) return 0;
+        return rotationInterval(start, target, obstacles, 0, 1, 0, new int[]{8192}, terrain);
     }
     private static double rotationInterval(Box start, Angles target, List<AABB> obstacles,
-            double from, double to, int depth, int[] budget) {
+            double from, double to, int depth, int[] budget, boolean terrain) {
         if (--budget[0] < 0) return from;
         double middle = (from + to) / 2;
-        var sample = new Box(start.center, start.half, start.orientation.towards(target, middle));
-        double travelBound = start.half.length() * start.orientation.radiansTo(target) * (to - from) / 2;
+        var sample = new Box(start.center, start.half, start.orientation.towards(target, middle), start.compactTerrain);
+        if (terrain) sample = terrain(sample);
+        // Enclosing support and the inset's excess projection both vary with orientation.
+        // Four circumradii bound their combined rate, including centreline protection.
+        double radius = terrain && start.compactTerrain ? Math.max(0, start.half.y - start.half.x)
+            : (terrain ? 4 : 1) * start.half.length();
+        double travelBound = radius * start.orientation.radiansTo(target) * (to - from) / 2;
         boolean clear = true;
         for (var obstacle : obstacles) if (sample.separation(obstacle) < travelBound - EPSILON) { clear = false; break; }
         if (clear) return to;
         if (depth == 24) return from;
-        double first = rotationInterval(start, target, obstacles, from, middle, depth + 1, budget);
+        double first = rotationInterval(start, target, obstacles, from, middle, depth + 1, budget, terrain);
         if (first < middle) return first;
-        return rotationInterval(start, target, obstacles, middle, to, depth + 1, budget);
+        return rotationInterval(start, target, obstacles, middle, to, depth + 1, budget, terrain);
     }
 
-    /** Exact convex box geometry. Kept here with the API so every consumer uses identical transforms. */
+    /** Exact convex box geometry shared by body, terrain and camera clearance. */
     public static final class Box {
         public final Vec3 center;
         public final Vec3 half;
         public final Angles orientation;
+        public final boolean compactTerrain;
         private final Vec3[] axes;
         public Box(Vec3 center, Vec3 half, Angles orientation) {
+            this(center, half, orientation, false);
+        }
+        public Box(Vec3 center, Vec3 half, Angles orientation, boolean compactTerrain) {
             this.center = center;
             this.half = half;
             this.orientation = orientation;
+            this.compactTerrain = compactTerrain;
             axes = new Vec3[]{orientation.transform(WORLD_AXES[0]), orientation.transform(WORLD_AXES[1]), orientation.transform(WORLD_AXES[2])};
         }
-        public Box move(Vec3 delta) { return new Box(center.add(delta), half, orientation); }
+        public Box move(Vec3 delta) { return new Box(center.add(delta), half, orientation, compactTerrain); }
         public AABB bounds() {
+
             double x = radius(WORLD_AXES[0]), y = radius(WORLD_AXES[1]), z = radius(WORLD_AXES[2]);
             return new AABB(center.x - x, center.y - y, center.z - z, center.x + x, center.y + y, center.z + z);
         }
@@ -504,12 +497,14 @@ public final class PlayerRotation {
         }
         /** Positive means separated, negative means overlap. A conservative lower bound on clearance. */
         public double separation(AABB other) {
+
             Vec3 delta = center.subtract(other.getCenter());
             double result = -Double.MAX_VALUE;
             for (var axis : separatingAxes()) result = Math.max(result, Math.abs(delta.dot(axis)) - radius(axis) - radius(other, axis));
             return result;
         }
         public Sweep sweep(AABB other, Vec3 movement) {
+
             Vec3 offset = center.subtract(other.getCenter());
             double enter = 0, exit = 1;
             Vec3 normal = Vec3.ZERO;
@@ -553,6 +548,7 @@ public final class PlayerRotation {
             return new Sweep(Math.clamp(enter, 0, 1), normal);
         }
         public Optional<Vec3> clip(Vec3 from, Vec3 to, double margin) {
+
             Vec3 a = from.subtract(center), b = to.subtract(center);
             Vec3 localFrom = new Vec3(a.dot(axes[0]), a.dot(axes[1]), a.dot(axes[2]));
             Vec3 localTo = new Vec3(b.dot(axes[0]), b.dot(axes[1]), b.dot(axes[2]));

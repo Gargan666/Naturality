@@ -54,6 +54,9 @@ public final class SwimmingMixins {
 
     @Mixin(AvatarRenderState.class)
     public static abstract class PlayerSwimmingRenderStateMixin implements PlayerSwimmingClient.RenderState {
+        @Unique private float naturality$brace;
+        public float naturality$brace() { return naturality$brace; }
+        public void naturality$brace(float value) { naturality$brace = value; }
         @Unique private boolean naturality$swimming;
         @Unique private float naturality$gentleStroke;
         @Unique private float naturality$strokePhase;
@@ -71,6 +74,7 @@ public final class SwimmingMixins {
         private void naturality$extract(Avatar entity, AvatarRenderState state, float partial, CallbackInfo ci) {
             boolean swimming = entity instanceof Player player && PlayerSwimming.active(player);
             ((PlayerSwimmingClient.RenderState)state).naturality$physicalSwimming(swimming);
+            ((PlayerSwimmingClient.RenderState)state).naturality$brace(entity instanceof Player player ? PlayerSwimming.braceBlend(player, partial) : 0);
             ((PlayerSwimmingClient.RenderState)state).naturality$gentleStroke(entity instanceof Player player ? PlayerSwimming.gentleStroke(player, partial) : 0);
             ((PlayerSwimmingClient.RenderState)state).naturality$strokePhase(entity instanceof Player player ? PlayerSwimming.strokePhase(player, partial) : 0);
             if (swimming) state.isVisuallySwimming = true;
@@ -104,6 +108,7 @@ public final class SwimmingMixins {
         @WrapOperation(method = "setupAnim(Lnet/minecraft/client/renderer/entity/state/HumanoidRenderState;)V", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/model/HumanoidModel;setupSwimAnimation(Lnet/minecraft/client/renderer/entity/state/HumanoidRenderState;FF)V"))
         private void naturality$strokeClock(HumanoidModel<?> model, HumanoidRenderState state, float animation, float amount, Operation<Void> original) {
+            if (state.isAutoSpinAttack) { original.call(model, state, animation, amount); return; }
             float leftLeg = model.leftLeg.xRot, rightLeg = model.rightLeg.xRot;
             if (state instanceof PlayerSwimmingClient.RenderState swimming)
                 animation = swimming.naturality$strokePhase() * (26F / (2F * (float)Math.PI));
@@ -113,6 +118,7 @@ public final class SwimmingMixins {
         }
         @Inject(method = "setupSwimAnimation", at = @At("RETURN"))
         private void naturality$physicalHead(HumanoidRenderState state, float animation, float amount, CallbackInfo ci) {
+            if (state.isAutoSpinAttack) return;
             PlayerSwimmingClient.animate((HumanoidModel<?>)(Object)this, state);
         }
     }
@@ -153,10 +159,12 @@ public final class SwimmingMixins {
         @Shadow protected abstract void setupSwimAnimation(HumanoidRenderState state, float animation, float amount);
         @Inject(method = "setupAnim(Lnet/minecraft/client/renderer/entity/state/HumanoidRenderState;)V", at = @At("TAIL"))
         private void naturality$surfaceStrokes(HumanoidRenderState state, CallbackInfo ci) {
+            if (state.isAutoSpinAttack) return;
             if (state instanceof AvatarRenderState) {
                 var player = (PlayerSwimmingClient.RenderState)state;
                 if (player.naturality$gentleStroke() > 0.001)
                     PlayerSwimmingClient.gentleSwim((HumanoidModel<?>)(Object)this, state, player.naturality$strokePhase(), player.naturality$gentleStroke());
+                PlayerSwimmingClient.brace((HumanoidModel<?>)(Object)this, player.naturality$brace());
                 return;
             }
             float stroke = ((WaterSurfaceRendering.State)state).naturality$surfaceStroke();

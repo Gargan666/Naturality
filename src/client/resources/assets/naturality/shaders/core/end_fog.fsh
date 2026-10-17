@@ -23,7 +23,7 @@ vec3 world_offset(vec2 uv, float depth) {
 void main() {
     float depth = texture(Sampler1, texCoord).r;
     vec4 water = texture(NaturalityWaterMask, texCoord);
-    bool waterSurface = WaterMap.w != 0 && WaterSwitches.x != 0 && water.a > 0.5;
+    bool waterSurface = WaterMap.w != 0 && WaterSwitches.x != 0 && water.r > 0.0 && water.a > 0.0;
     // Overworld terrain once again receives distance fog in its material
     // shader. Only water needs a separate surface-distance atmosphere blend.
     if (FogColor.a >= 0.0 && !waterSurface) { fragColor = vec4(0); return; }
@@ -42,7 +42,7 @@ void main() {
     float pixelDistance = clamp(cellDistance, distance - edgeTolerance, distance + edgeTolerance);
     if ((!waterSurface && depth <= 0.0) || !NATURALITY_FOG_ENABLED) { fragColor = vec4(0); return; }
     vec4 centerWater = texelFetch(NaturalityWaterMask, center, 0);
-    if (waterSurface && centerWater.a > 0.5) {
+    if (waterSurface && centerWater.r > 0.0 && centerWater.a > 0.0) {
         if (abs(centerWater.g - distance) <= max(2.0, distance * 0.05)) pixelDistance = centerWater.g;
     } else if (centerDepth > 0.0 && !waterSurface) {
         float centerDistance = fog_cylindrical_distance(world_offset((vec2(center) + 0.5) / vec2(size), centerDepth));
@@ -62,5 +62,5 @@ void main() {
     // Render-distance fading must meet the actual atmosphere, even when the
     // camera is in local shade. Cave darkening belongs to environmental fog.
     vec3 worldFog = texture(Sampler0, texCoord).rgb;
-    fragColor = vec4(worldFog, clamp(amount, 0.0, 1.0));
+    fragColor = vec4(worldFog, clamp(amount, 0.0, 1.0) * (waterSurface ? clamp(water.a, 0.0, 1.0) : 1.0));
 }

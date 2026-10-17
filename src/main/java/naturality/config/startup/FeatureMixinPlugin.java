@@ -39,7 +39,7 @@ public final class FeatureMixinPlugin implements IMixinConfigPlugin {
         if (name.equals("MaddenedSoundMixin") || name.equals("MaddenedSoundPitchMixin")) return CONTENT.enabled();
         if (name.startsWith("FloatingMobTilt")) return VISUAL_OVERHAUL.enabled() || GHAST_SQUASH.enabled() || GHAST_PHYSICS.enabled();
         if (name.equals("GhastTentaclePhysicsMixin")) return GHAST_PHYSICS.enabled();
-        if (name.equals("FishMovementMixin") || name.equals("FishMoveControlAccess")) return FISH_MOVEMENT.enabled();
+        if (name.equals("FishMovementMixin") || name.equals("FishMoveControlAccess") || name.equals("SchoolLeaderAccess") || name.equals("SchoolFollowingMixin")) return FISH_MOVEMENT.enabled();
         if (name.startsWith("GhastCrash")) return GHAST_PHYSICS.enabled();
         if (name.equals("ArrowImpactMixin")) return ARROW_IMPACT_EVENTS.enabled();
         if (name.equals("FireballImpactMixin")) return FIREBALL_IMPACT_EVENTS.enabled();
@@ -62,6 +62,8 @@ public final class FeatureMixinPlugin implements IMixinConfigPlugin {
         if (name.equals("ChorusPlantFeatureMixin") || name.equals("EndBiomeRegionsMixin"))
             return LIRESTONE_CRAGS.enabled() || END_WILDS.enabled();
         if (name.equals("EndTerrainDensityMixin")) return END_TERRAIN.enabled();
+        if (name.equals("OceanTerrainMixin")) return OCEAN_TERRAIN.enabled();
+        if (name.startsWith("OceanMonument")) return OCEAN_TERRAIN.enabled();
         if (name.equals("EndStoneTerrainMixin") || name.equals("SmallEndIslandLayersMixin")) return END_MATERIALS.enabled();
         if (name.equals("ElytraMomentumMixin")) return ELYTRA_MOMENTUM.enabled();
         if (name.equals("FireballBurnMixin")) return FIREBALL_MODELS.enabled() || FIREBALL_FIRE_SUPPRESSION.enabled();
