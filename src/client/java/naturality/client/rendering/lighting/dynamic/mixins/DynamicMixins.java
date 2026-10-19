@@ -17,6 +17,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import naturality.client.fluids.water.WaterVisuals;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.level.lighting.LightEngine;
+import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 
 /** Feature integration hooks; each nested type retains its independent Mixin target and gate. */
 public final class DynamicMixins {
@@ -84,11 +85,38 @@ public final class DynamicMixins {
     @Mixin(LightEngine.class)
     @org.jspecify.annotations.NullMarked
     public static abstract class DynamicLightStorageMixin {
-        @Inject(method = "getLightValue", at = @At("RETURN"), cancellable = true)
-        private void naturality$virtualField(BlockPos position, CallbackInfoReturnable<Integer> cir) {
+        @ModifyReturnValue(method = "getLightValue", at = @At("RETURN"))
+        private int naturality$virtualField(int light, BlockPos position) {
             // Empty high sections have no vanilla storage. The identity check also
             // excludes skylight and every server/world engine from this overlay.
-            cir.setReturnValue(Math.max(cir.getReturnValueI(), DynamicLighting.blockLight(this, position.asLong())));
+            // Compose with optical skylight instead of cancelling other overlays.
+            return Math.max(light, DynamicLighting.blockLight(this, position.asLong()));
+        }
+    }
+
+    @org.spongepowered.asm.mixin.Pseudo
+    @Mixin(targets = "ca.spottedleaf.starlight.common.light.StarLightInterface", remap = false)
+    public static abstract class ScalableLuxDynamicLightMixin {
+        @SuppressWarnings("null") // Initialized by ScalableLux's constructor.
+        @org.spongepowered.asm.mixin.Shadow @org.spongepowered.asm.mixin.Final
+        protected net.minecraft.world.level.lighting.LayerLightEventListener blockReader;
+
+        @ModifyReturnValue(method = "getBlockLightValue", at = @At("RETURN"))
+        private int naturality$virtualField(int light, BlockPos pos,
+                net.minecraft.world.level.chunk.@org.jspecify.annotations.Nullable ChunkAccess chunk) {
+            // Includes direct raw-brightness queries, not just LayerLightEventListener.
+            // Reader identity confines the overlay to the active client block layer.
+            return Math.max(light, DynamicLighting.blockLight(blockReader, pos.asLong()));
+        }
+    }
+
+    @org.spongepowered.asm.mixin.Pseudo
+    @Mixin(targets = "ca.spottedleaf.starlight.common.light.StarLightInterface$2", remap = false)
+    public static abstract class ScalableLuxDynamicLightDataMixin {
+        @Inject(method = "getDataLayerData", at = @At("RETURN"), cancellable = true)
+        private void naturality$virtualSnapshot(net.minecraft.core.SectionPos pos,
+                CallbackInfoReturnable<net.minecraft.world.level.chunk.DataLayer> cir) {
+            cir.setReturnValue(DynamicLighting.data(this, pos, cir.getReturnValue()));
         }
     }
 }

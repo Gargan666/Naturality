@@ -32,6 +32,9 @@ public final class RotationMixins {
     public static abstract class PlayerRotationRenderStateMixin implements PlayerRotationRendering.State {
         @Unique private Angles naturality$bodyRotation = Angles.ZERO;
         @Unique private float naturality$rotationPivot;
+        @Unique private float naturality$rotationYaw;
+        public float naturality$rotationYaw() { return naturality$rotationYaw; }
+        public void naturality$rotationYaw(float yaw) { naturality$rotationYaw = yaw; }
         public Angles naturality$bodyRotation() { return naturality$bodyRotation; }
         public void naturality$bodyRotation(Angles angles) { naturality$bodyRotation = angles; }
         public float naturality$rotationPivot() { return naturality$rotationPivot; }
@@ -54,7 +57,8 @@ public final class RotationMixins {
         }
         @Inject(method = "getRenderOffset", at = @At("RETURN"), cancellable = true)
         private void naturality$offset(AvatarRenderState state, CallbackInfoReturnable<Vec3> cir) {
-            var angles = ((PlayerRotationRendering.State)state).naturality$bodyRotation();
+            var angles = PlayerRotationRendering.relativeRotation(((PlayerRotationRendering.State)state).naturality$bodyRotation(),
+                ((PlayerRotationRendering.State)state).naturality$rotationYaw(), state.bodyRot);
             if (angles.active()) cir.setReturnValue(angles.transform(cir.getReturnValue()));
         }
     }

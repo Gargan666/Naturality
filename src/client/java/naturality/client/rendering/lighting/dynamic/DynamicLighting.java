@@ -32,9 +32,22 @@ import net.minecraft.world.level.block.state.BlockState;
 @org.jspecify.annotations.NullMarked
 public final class DynamicLighting {
     private record State(@org.jspecify.annotations.Nullable Object engine, it.unimi.dsi.fastutil.longs.Long2IntMap emitters,
-            it.unimi.dsi.fastutil.longs.Long2IntMap field, boolean precise, int sourceCount) {}
+            it.unimi.dsi.fastutil.longs.Long2IntMap field, boolean precise, int sourceCount,
+            it.unimi.dsi.fastutil.longs.Long2ObjectMap<net.minecraft.world.level.chunk.DataLayer> sections) {}
     private record Source(long id, Vec3 position, int light, double distance) {}
-    private record Placement(Vec3 desired, Vec3 owner, @org.jspecify.annotations.Nullable Vec3 resolved) {}
+    private record Placement(Vec3 desired, Vec3 owner, @org.jspecify.annotations.Nullable Vec3 resolved) {
+        boolean affected(BlockPos pos) {
+            // Keep the full vertical columns: sky-dependent foliage shapes can
+            // change when a distant roof is edited. The horizontal margin covers
+            // endpoint escape, eight-block shelter probes and lateral skylight.
+            // Include the whole owner-to-emitter ray, including failed placements.
+            int margin = 40;
+            return pos.getX() >= Math.min(desired.x, owner.x) - margin
+                && pos.getX() <= Math.max(desired.x, owner.x) + margin
+                && pos.getZ() >= Math.min(desired.z, owner.z) - margin
+                && pos.getZ() <= Math.max(desired.z, owner.z) + margin;
+        }
+    }
     private static final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<Placement> placements = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
     private record Drop(long id, Vec3 position, ItemStack item, Set<Integer> existingItems, int expires) {}
     private static volatile State state = emptyState();
@@ -46,7 +59,7 @@ public final class DynamicLighting {
     private static final List<Drop> pendingDrops = new ArrayList<>();
     private static long nextDropId = Long.MIN_VALUE;
 
-    private static State emptyState() { return new State(null, it.unimi.dsi.fastutil.longs.Long2IntMaps.EMPTY_MAP, it.unimi.dsi.fastutil.longs.Long2IntMaps.EMPTY_MAP, false, 0); }
+    private static State emptyState() { return new State(null, it.unimi.dsi.fastutil.longs.Long2IntMaps.EMPTY_MAP, it.unimi.dsi.fastutil.longs.Long2IntMaps.EMPTY_MAP, false, 0, it.unimi.dsi.fastutil.longs.Long2ObjectMaps.emptyMap()); }
 
     private DynamicLighting() {}
 
@@ -59,7 +72,7 @@ public final class DynamicLighting {
     public static void invalidate() { dirty = true; }
     /** Only geometry within a source's maximum propagation radius can alter its field. */
     public static void invalidate(BlockPos position) {
-        placements.clear();
+        placements.values().removeIf(placement -> placement.affected(position));
         for (Source source : previousSources) {
             if (Math.abs(source.position.x - position.getX()) <= 17
                     && Math.abs(source.position.y - position.getY()) <= 17
@@ -75,6 +88,16 @@ public final class DynamicLighting {
     public static int blockLight(Object engine, long position) {
         State current = state;
         return current.engine == engine ? current.field.get(position) / 16 : 0;
+    }
+
+    /** Replacement engines expose section arrays directly to mesh builders. Never edit their storage. */
+    public static net.minecraft.world.level.chunk.@org.jspecify.annotations.Nullable DataLayer data(Object engine,
+            net.minecraft.core.SectionPos position, net.minecraft.world.level.chunk.@org.jspecify.annotations.Nullable DataLayer vanilla) {
+        State current = state;
+        if (engine != current.engine) return vanilla;
+        var extra = current.sections.get(position.asLong());
+        if (extra == null) return vanilla;
+        return vanilla == null ? extra.copy() : naturality.client.api.rendering.LightLayers.mergeLightData(vanilla, extra);
     }
 
     /** Called before the local inventory prediction removes a thrown item. */
@@ -229,13 +252,27 @@ public final class DynamicLighting {
         var engine = level.getLightEngine();
         var previous = state.emitters;
         var oldSmooth = state.field;
-        state = new State(engine.getLayerListener(LightLayer.BLOCK), it.unimi.dsi.fastutil.longs.Long2IntMaps.unmodifiable(next), smooth, precise, count);
+        var reader = engine.getLayerListener(LightLayer.BLOCK);
+        // Native block light already propagates our emitters into its storage.
+        // Replacement engines need snapshots of the very same occluded field.
+        boolean replacement = !(reader instanceof net.minecraft.world.level.lighting.BlockLightEngine);
+        var layers = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<net.minecraft.world.level.chunk.DataLayer>();
         // Fractional changes can leave integral light unchanged; explicitly rebuild
         // affected sections, including neighbors whose AO samples cross a border.
         var sections = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
-        for (var entry : smooth.long2IntEntrySet()) if (oldSmooth.get(entry.getLongKey()) != entry.getIntValue())
-            addChangedSections(sections, entry.getLongKey());
+        for (var entry : smooth.long2IntEntrySet()) {
+            long position = entry.getLongKey();
+            if (oldSmooth.get(position) != entry.getIntValue()) addChangedSections(sections, position);
+            int light = entry.getIntValue() / 16;
+            if (replacement && light > 0) {
+                int x = BlockPos.getX(position), y = BlockPos.getY(position), z = BlockPos.getZ(position);
+                layers.computeIfAbsent(net.minecraft.core.SectionPos.asLong(x >> 4, y >> 4, z >> 4),
+                    _ -> new net.minecraft.world.level.chunk.DataLayer()).set(x & 15, y & 15, z & 15, light);
+            }
+        }
         for (long key : oldSmooth.keySet()) if (!smooth.containsKey(key)) addChangedSections(sections, key);
+        state = new State(reader, it.unimi.dsi.fastutil.longs.Long2IntMaps.unmodifiable(next), smooth, precise, count,
+            it.unimi.dsi.fastutil.longs.Long2ObjectMaps.unmodifiable(layers));
         for (long section : sections) {
             int x = net.minecraft.core.SectionPos.x(section), y = net.minecraft.core.SectionPos.y(section), z = net.minecraft.core.SectionPos.z(section);
             level.setSectionRangeDirty(x, y, z, x, y, z);

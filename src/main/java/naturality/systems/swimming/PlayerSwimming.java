@@ -78,10 +78,26 @@ public final class PlayerSwimming {
     public static final class StrokeClock {
         private double previous;
         private double ticks;
+        private double rate = 0.5;
+        private float amplitude = 0.7F;
+        private float previousAmplitude = 0.7F;
         public void tick(boolean moving) { tick(moving, false); }
         public void tick(boolean moving, boolean reverse) {
+            advance(moving ? reverse ? -1 : 1 : 0.5);
+        }
+        public void tick(double speed, boolean reverse) {
+            double target = Math.clamp(Math.sqrt(Math.max(0, speed) / 0.1), 0.5, 2);
+            if (reverse && speed > 0.001) target = -target;
+            double oldRate = rate;
+            rate += (target - rate) * 0.2;
+            previousAmplitude = amplitude;
+            amplitude += ((float)Math.clamp(0.7 + speed * 3, 0.7, 1.5) - amplitude) * 0.2F;
+            advance((oldRate + rate) * 0.5);
+        }
+        public float amplitude(float partial) { return previousAmplitude + (amplitude - previousAmplitude) * Math.clamp(partial, 0, 1); }
+        private void advance(double rate) {
             previous = ticks;
-            ticks += moving ? reverse ? -1 : 1 : 0.5;
+            ticks += rate;
         }
         public float phase(float partial) {
             double cycle = (previous + (ticks - previous) * partial) % 32;
@@ -122,7 +138,7 @@ public final class PlayerSwimming {
         return state(player).inWater && eligible(player);
     }
     private static boolean eligible(Player player) {
-        return !naturality.systems.swimming.WaterSurface.riptiding(player) && player.isAlive() && player.isInWater() && !player.isPassenger() && !player.isSleeping()
+        return !naturality.items.heavyboots.HeavyBoots.worn(player) && !naturality.systems.swimming.WaterSurface.riptiding(player) && player.isAlive() && player.isInWater() && !player.isPassenger() && !player.isSleeping()
             && !player.isSpectator() && !player.getAbilities().flying && !player.isFallFlying();
     }
     public static boolean fullSize(Player player) {
@@ -144,6 +160,7 @@ public final class PlayerSwimming {
         return state.previousGentleStroke + (state.gentleStroke - state.previousGentleStroke) * partial;
     }
     public static float strokePhase(Player player, float partial) { return state(player).strokes.phase(partial); }
+    public static float strokeAmplitude(Player player, float partial) { return state(player).strokes.amplitude(partial); }
     public static float surfaceBlend(Player player, float partial) { return naturality.systems.swimming.WaterSurface.riptiding(player) ? 0 : state(player).surface.sample(partial); }
 
     /** Riptide owns movement and pose immediately; no queued dash or exit recovery may survive it. */
@@ -225,7 +242,7 @@ public final class PlayerSwimming {
         boolean reverse = state.input.backward() && !state.input.forward();
         if (!state.input.forward() && !state.input.backward())
             reverse = player.getKnownMovement().dot(player.getLookAngle()) < -0.001;
-        if (waterMovement(player)) state.strokes.tick(moving, reverse);
+        if (waterMovement(player)) state.strokes.tick(braced(player) ? 0 : player.getKnownMovement().length(), reverse);
         float strokeTarget = waterMovement(player) ? 1 - (active(player) && !braced(player) ? state.sprint.sample(1) : 0) : 0;
         state.gentleStroke += (strokeTarget - state.gentleStroke) * 0.18F;
         if (player.level().isClientSide()) {

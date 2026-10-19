@@ -56,8 +56,19 @@ public final class WindRendering {
     /** Connected segments sample one continuous world-space field at their shared edges. */
     public static int vertexTag(net.minecraft.client.renderer.block.BlockAndTintGetter level, net.minecraft.core.BlockPos pos,
             BlockState state, float x, float y, float z) {
-        if (tag(state) != 255 && !windExposed(level, pos)) return 255;
+        if (tag(state) != 255 && (!state.getFluidState().isEmpty() || !windExposed(level, pos)))
+            return brushable(state) ? state.getFluidState().isEmpty() ? 243 : 244 : 255;
         if (connected(state)) {
+            if (state.is(Blocks.TWISTING_VINES) || state.is(Blocks.TWISTING_VINES_PLANT)) {
+                int height = 0;
+                while (height < 7) {
+                    var below = level.getBlockState(pos.below(height + 1));
+                    if (!below.is(Blocks.TWISTING_VINES) && !below.is(Blocks.TWISTING_VINES_PLANT)) break;
+                    height++;
+                }
+                // The lower edge is pinned; both sides of each join encode the same height.
+                return 201 + Math.clamp(height + Math.round(y), 0, 7);
+            }
             if (hangingFamily(state)!=0) {
                 int depth=0;
                 int family=hangingFamily(state);
@@ -146,9 +157,19 @@ public final class WindRendering {
         // Chunk render views may expose only their thread-safe lighting snapshot.
         return level.getBrightness(LightLayer.SKY, pos) > 0;
     }
-    /** Test exposure at the foliage itself; player location must not control plants indoors. */
+    /** The light engine retains immutable dimension identity even in worker-owned render snapshots. */
+    public interface WindWorldAccess {
+        net.minecraft.world.level.LevelHeightAccessor naturality$windLevel();
+    }
+    private static boolean windEverywhere(BlockAndTintGetter view) {
+        return view.getLightEngine() instanceof WindWorldAccess access
+            && access.naturality$windLevel() instanceof net.minecraft.world.level.Level world
+            && world.dimension().equals(net.minecraft.world.level.Level.NETHER);
+    }
+    /** Test exposure at the foliage itself; Nether foliage bypasses all shelter rays. */
     public static boolean windExposed(net.minecraft.client.renderer.block.BlockAndTintGetter level,
             net.minecraft.core.BlockPos pos) {
+        if (windEverywhere(level)) return true;
         var cache = EXPOSURE_CACHE.get();
         if (cache.view != level) {
             cache.view = level;
@@ -211,15 +232,224 @@ public final class WindRendering {
         return vertexTag(state,y);
     }
     public static int vertexTag(BlockState state, float y) {
-        if (tag(state) != 241) return tag(state);
-        if (state.getBlock() instanceof CropBlock) return vertexTag(state,.5F,y,.5F);
-        if (state.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.DOUBLE_BLOCK_HALF)
-            && state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.DOUBLE_BLOCK_HALF)
-                == net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER) y += 1;
-        return 201 + Math.clamp(Math.round(y * 19), 0, 38);
+        // Use the same anchored encoding as model vertices; 201..208 belong to rising vines.
+        return tag(state) == 241 ? vertexTag(state, .5F, y, .5F) : tag(state);
     }
     private static boolean framePrepared;
-    private static final ByteBuffer frameData = ByteBuffer.allocateDirect(32).order(ByteOrder.nativeOrder());
+    private static final int MAX_BRUSHES = 32;
+    private static final int MAX_CONTACT_ENTITIES = 64;
+    private static final int MAX_CONTACT_BLOCK_QUERIES = 4096;
+    private static final double ENTITY_CONTACT_RANGE = 48;
+    private static final int MAX_BRUSH_NODES = 512;
+    private static final int BRUSH_NODES_OFFSET = 48 + MAX_BRUSHES * 48;
+    private static final int UNIFORM_BYTES = BRUSH_NODES_OFFSET + MAX_BRUSH_NODES * 16;
+    private static final ByteBuffer frameData = ByteBuffer.allocateDirect(UNIFORM_BYTES).order(ByteOrder.nativeOrder());
+    private static final java.util.Map<BlockPos, BrushPose> brushPoses = new java.util.HashMap<>();
+    private static net.minecraft.client.multiplayer.@org.jspecify.annotations.Nullable ClientLevel brushLevel;
+    private static long brushFrameTime;
+
+    /** A vertically connected strand with shared spring nodes at every block join. */
+    private static final class BrushPose {
+        private static final float STEP = 1F / 120;
+        private static final float CONTACT_FORCE = .35F;
+        private static final float MAX_BEND = .55F;
+        private final BlockPos bottom;
+        private final boolean hanging, underwater, pinBottom, pinTop;
+        private final float[] x, y, z, velocityX, velocityZ;
+        private float targetX, targetZ, contactHeight, remainder;
+        private double contactDistance = Double.POSITIVE_INFINITY;
+
+        private BrushPose(BlockPos bottom, int blocks, boolean hanging, boolean underwater, boolean cutBottom, boolean cutTop) {
+            this.bottom = bottom;
+            this.hanging = hanging;
+            this.underwater = underwater;
+            pinBottom = !hanging || cutBottom;
+            pinTop = hanging || cutTop;
+            x = new float[blocks + 1]; y = new float[blocks + 1]; z = new float[blocks + 1];
+            velocityX = new float[blocks + 1]; velocityZ = new float[blocks + 1];
+        }
+
+        private boolean pinned(int node) { return node == 0 && pinBottom || node == x.length - 1 && pinTop; }
+
+        private void advance(float seconds) {
+            remainder += seconds;
+            // Fixed simulation steps make damping and propagation independent of render rate.
+            while (remainder + 1E-7F >= STEP) {
+                remainder = Math.max(0, remainder - STEP);
+                float tension = underwater ? 32 : 70;
+                float restoring = underwater ? 7 : 20;
+                float drag = underwater ? 5.5F : 3.5F;
+                float force = underwater ? 48 : 100;
+                for (int i = 0; i < x.length; i++) {
+                    if (pinned(i)) continue;
+                    int before = Math.max(0, i - 1), after = Math.min(x.length - 1, i + 1);
+                    float contact = (float)Math.exp(-Math.abs(i - contactHeight) * (underwater ? .8F : 1.2F));
+                    float accelerationX = tension * (x[before] + x[after] - 2 * x[i]) - restoring * x[i] + targetX * force * contact;
+                    float accelerationZ = tension * (z[before] + z[after] - 2 * z[i]) - restoring * z[i] + targetZ * force * contact;
+                    float damping = (float)Math.exp(-drag * STEP);
+                    velocityX[i] = (velocityX[i] + accelerationX * STEP) * damping;
+                    velocityZ[i] = (velocityZ[i] + accelerationZ * STEP) * damping;
+                }
+                for (int i = 0; i < x.length; i++) {
+                    x[i] += velocityX[i] * STEP;
+                    z[i] += velocityZ[i] * STEP;
+                    float length = (float)Math.sqrt(x[i] * x[i] + z[i] * z[i]);
+                    if (length > MAX_BEND) { x[i] *= MAX_BEND / length; z[i] *= MAX_BEND / length; }
+                }
+                // Each segment keeps its rest length; hanging strands lift and
+                // buoyant upright strands dip as they bend instead of stretching.
+                int root = hanging ? x.length - 1 : 0;
+                int direction = hanging ? -1 : 1;
+                y[root] = 0;
+                for (int i = root + direction; i >= 0 && i < x.length; i += direction) {
+                    int previous = i - direction;
+                    float dx = x[i] - x[previous], dz = z[i] - z[previous];
+                    float distance = (float)Math.sqrt(dx * dx + dz * dz);
+                    if (distance > .55F && !pinned(i)) {
+                        x[i] = x[previous] + dx * .55F / distance;
+                        z[i] = z[previous] + dz * .55F / distance;
+                        dx = x[i] - x[previous]; dz = z[i] - z[previous];
+                    }
+                    y[i] = y[previous] + direction * ((float)Math.sqrt(Math.max(0, 1 - dx * dx - dz * dz)) - 1);
+                }
+                // At a bounded continuation, end at the untouched join without
+                // creating a vertical discontinuity in an exceptionally long strand.
+                if (pinBottom && pinTop) {
+                    float first = y[0], last = y[x.length - 1];
+                    for (int i = 0; i < x.length; i++) {
+                        float fraction = (float)i / (x.length - 1);
+                        y[i] -= first * (1 - fraction) + last * fraction;
+                    }
+                }
+            }
+        }
+
+        private boolean resting() {
+            if (targetX != 0 || targetZ != 0) return false;
+            for (int i = 0; i < x.length; i++)
+                if (Math.abs(x[i]) + Math.abs(z[i]) + Math.abs(velocityX[i]) + Math.abs(velocityZ[i]) > .002F) return false;
+            return true;
+        }
+    }
+
+    private static boolean brushable(BlockState state) {
+        return !state.is(BlockTags.LEAVES) && tag(state) != 255;
+    }
+
+    /** Head/body variants are one plant; neighboring columns are always independent. */
+    private static boolean samePlant(BlockState first, BlockState second) {
+        if (first.is(second.getBlock())) return true;
+        if (hangingFamily(first) != 0) return hangingFamily(first) == hangingFamily(second);
+        return first.is(Blocks.KELP) && second.is(Blocks.KELP_PLANT)
+            || first.is(Blocks.KELP_PLANT) && second.is(Blocks.KELP)
+            || first.is(Blocks.TWISTING_VINES) && second.is(Blocks.TWISTING_VINES_PLANT)
+            || first.is(Blocks.TWISTING_VINES_PLANT) && second.is(Blocks.TWISTING_VINES);
+    }
+
+    private static boolean continues(net.minecraft.client.multiplayer.ClientLevel level, BlockPos pos, BlockState state) {
+        if (!naturality.api.worlds.LoadedChunks.has(level, pos)) return false;
+        var neighbor = level.getBlockState(pos);
+        return samePlant(state, neighbor) && neighbor.getCollisionShape(level, pos).isEmpty();
+    }
+
+    /** Every entity uses the same hitbox contact and nearest-contact force limit. */
+    private static int applyBrushContacts(net.minecraft.client.multiplayer.ClientLevel level,
+            net.minecraft.world.entity.Entity entity, int budget) {
+        int queries = 0;
+        var box = entity.getBoundingBox();
+        var visited = new java.util.HashSet<BlockPos>();
+        for (var cursor : BlockPos.betweenClosed(net.minecraft.util.Mth.floor(box.minX), net.minecraft.util.Mth.floor(box.minY),
+                net.minecraft.util.Mth.floor(box.minZ), net.minecraft.util.Mth.floor(box.maxX),
+                net.minecraft.util.Mth.floor(box.maxY), net.minecraft.util.Mth.floor(box.maxZ))) {
+            if (queries++ >= budget) break;
+            var pos = cursor.immutable();
+            if (visited.contains(pos) || !naturality.api.worlds.LoadedChunks.has(level, pos)) continue;
+            var state = level.getBlockState(pos);
+            if (!brushable(state) || !state.getCollisionShape(level, pos).isEmpty()) continue;
+            var shape = naturality.systems.weather.wind.WindPush.WindShapes.raw(() -> state.getShape(level, pos));
+            if (shape.isEmpty() || !shape.bounds().move(pos).intersects(box)) continue;
+            var bottom = pos;
+            var top = pos;
+            while (pos.getY() - bottom.getY() < 64 && continues(level, bottom.below(), state)) bottom = bottom.below();
+            while (top.getY() - bottom.getY() < 127 && continues(level, top.above(), state)) top = top.above();
+            for (int y = bottom.getY(); y <= top.getY(); y++) visited.add(new BlockPos(pos.getX(), y, pos.getZ()));
+            boolean hanging = hangingFamily(state) != 0 || state.getBlock() instanceof VineBlock;
+            boolean underwater = !state.getFluidState().isEmpty();
+            boolean cutBottom = continues(level, bottom.below(), state);
+            boolean cutTop = continues(level, top.above(), state);
+            int blocks = top.getY() - bottom.getY() + 1;
+            var pose = brushPoses.get(bottom);
+            if (pose == null && brushPoses.size() >= MAX_BRUSHES) continue;
+            if (pose == null || pose.x.length != blocks + 1 || pose.hanging != hanging || pose.underwater != underwater
+                    || pose.pinBottom != (!hanging || cutBottom) || pose.pinTop != (hanging || cutTop)) {
+                pose = new BrushPose(bottom, blocks, hanging, underwater, cutBottom, cutTop);
+                brushPoses.put(bottom, pose);
+            }
+            double dx = pos.getX() + .5 - box.getCenter().x;
+            double dz = pos.getZ() + .5 - box.getCenter().z;
+            double length = Math.sqrt(dx * dx + dz * dz);
+            if (length > pose.contactDistance) continue;
+            pose.contactDistance = length;
+            if (length < .001) {
+                var forward = entity.getLookAngle();
+                dx = forward.x; dz = forward.z; length = Math.sqrt(dx * dx + dz * dz);
+                if (length < .001) { dx = 1; dz = 0; length = 1; }
+            }
+            pose.targetX = (float)(dx / length) * BrushPose.CONTACT_FORCE;
+            pose.targetZ = (float)(dz / length) * BrushPose.CONTACT_FORCE;
+            pose.contactHeight = (float)Math.clamp(box.getCenter().y - bottom.getY(), .1, blocks - .1);
+        }
+        return Math.min(queries, budget);
+    }
+
+    /** Render-thread contact queries follow only the touched plant's vertical column. */
+    private static int writeBrushes(ByteBuffer data, Minecraft client) {
+        var level = client.level;
+        var player = client.player;
+        if (brushLevel != level) { brushPoses.clear(); brushLevel = level; brushFrameTime = 0; }
+        if (level == null || player == null || !naturality.config.live.NaturalityConfig.get().effects.foliageWind) {
+            brushPoses.clear(); return 0;
+        }
+        long now = System.nanoTime();
+        float seconds = brushFrameTime == 0 ? 0 : Math.clamp((now - brushFrameTime) / 1_000_000_000F, 0F, .1F);
+        brushFrameTime = now;
+        for (var pose : brushPoses.values()) {
+            pose.targetX = 0; pose.targetZ = 0; pose.contactDistance = Double.POSITIVE_INFINITY;
+        }
+        int budget = MAX_CONTACT_BLOCK_QUERIES;
+        if (!player.isSpectator() && !player.isRemoved())
+            budget -= applyBrushContacts(level, player, Math.min(512, budget));
+        var entities = level.getEntities(player, player.getBoundingBox().inflate(ENTITY_CONTACT_RANGE),
+            entity -> !entity.isRemoved() && !entity.isSpectator() && entity.getBbWidth() > 0 && entity.getBbHeight() > 0);
+        entities.sort(java.util.Comparator.comparingDouble(entity -> entity.distanceToSqr(player)));
+        int considered = 0;
+        for (var entity : entities) {
+            if (budget <= 0 || considered++ >= MAX_CONTACT_ENTITIES) break;
+            budget -= applyBrushContacts(level, entity, Math.min(512, budget));
+        }
+        var anchor = player.blockPosition();
+        data.putInt(36, anchor.getX()).putInt(40, anchor.getY()).putInt(44, anchor.getZ());
+        int count = 0, nodeCount = 0;
+        var iterator = brushPoses.values().iterator();
+        while (iterator.hasNext()) {
+            var pose = iterator.next();
+            pose.advance(client.isPaused() ? 0 : seconds);
+            if (pose.resting()) { iterator.remove(); continue; }
+            if (nodeCount + pose.x.length > MAX_BRUSH_NODES) continue;
+            int firstNode = nodeCount;
+            for (int i = 0; i < pose.x.length; i++) {
+                int offset = BRUSH_NODES_OFFSET + nodeCount++ * 16;
+                data.putFloat(offset, pose.x[i]).putFloat(offset + 4, pose.y[i]).putFloat(offset + 8, pose.z[i]);
+            }
+            data.putFloat(pose.bottom.getX() - anchor.getX()).putFloat(pose.bottom.getY() - anchor.getY())
+                .putFloat(pose.bottom.getZ() - anchor.getZ()).putFloat(firstNode);
+            data.putFloat(pose.bottom.getX() - anchor.getX() + 1).putFloat(pose.bottom.getY() - anchor.getY() + pose.x.length - 1)
+                .putFloat(pose.bottom.getZ() - anchor.getZ() + 1).putFloat(pose.x.length);
+            data.putFloat(pose.hanging ? 1 : 0).putFloat(0).putFloat(0).putFloat(0);
+            count++;
+        }
+        return count;
+    }
     public static void beginFrame() {
         framePrepared = false;
         // Buffer rotation inserts a GPU fence, which must precede the terrain render pass.
@@ -240,20 +470,21 @@ public final class WindRendering {
         float x = s == null ? 0 : s.windX() * windScale;
         float z = s == null ? 0 : s.windZ() * windScale;
         float strength = s == null ? 0 : s.wind() / 100 * windScale;
-        if (uniform != null && frameData.getFloat(0) == x && frameData.getFloat(4) == z
-                && frameData.getFloat(8) == time && frameData.getFloat(12) == strength) {
-            framePrepared = true;
-            return; // Paused frames can retain the exact same GPU data too.
-        }
         var data = frameData.clear();
+        while (data.hasRemaining()) data.putInt(0);
+        data.clear();
         data.putFloat(x).putFloat(z).putFloat(time).putFloat(strength);
         float magnitude=(float)Math.sqrt(x*x+z*z);
-        float severe=Math.clamp((strength-.8F)/(1F-.8F),0F,1F);
-        severe=severe*severe*(3F-2F*severe);
+        float severe=s == null ? 0 : s.severeWindBlend();
         data.putFloat(magnitude>.0001F?x/magnitude:0F).putFloat(magnitude>.0001F?z/magnitude:0F)
-            .putFloat(severe).putFloat(magnitude).flip();
+            .putFloat(severe).putFloat(magnitude);
+        data.position(48);
+        int brushes = writeBrushes(data, client);
+        data.position(UNIFORM_BYTES);
+        data.putInt(32, brushes);
+        data.flip();
         var ring=uniformRing;
-        if(ring==null) {ring=new net.minecraft.client.renderer.MappableRingBuffer(() -> "Naturality wind",130,32);uniformRing=ring;}
+        if(ring==null) {ring=new net.minecraft.client.renderer.MappableRingBuffer(() -> "Naturality wind",130,UNIFORM_BYTES);uniformRing=ring;}
         else ring.rotate();
         var buffer=ring.currentBuffer();
         try(var mapped=buffer.map(false,true)) {mapped.data().put(data);}
@@ -263,6 +494,7 @@ public final class WindRendering {
     public static void close() {
         if(uniformRing!=null) {uniformRing.close();uniformRing=null;}
         uniform=null;framePrepared=false;
+        brushPoses.clear();brushLevel=null;brushFrameTime=0;
     }
 
     /** Supply wind tags through FRAPI, including renderers which bypass Indigo. */
@@ -284,16 +516,13 @@ public final class WindRendering {
             // Render views (including Sodium's LevelSlice) can be reused after edits.
             // Cache across vertices of this emission, never across snapshot revisions.
             WindRendering.clearExposureCache();
-            if(!state.getFluidState().isEmpty()) { wrapped.emitQuads(emitter,level,pos,state,random,cull); return; }
-            if(!WindRendering.windExposed(level,pos)) {wrapped.emitQuads(emitter,level,pos,state,random,cull);return;}
-            boolean connected=WindRendering.connected(state);
             var offset=state.getOffset(pos);
             emitter.pushTransform(quad -> {
                 for(int i=0;i<4;i++) {
                     int color=quad.color(i);
                     if((color>>>24)!=255) continue; // Preserve fitted snow/plant tags.
                     float x=quad.x(i)+(float)offset.x,y=quad.y(i)+(float)offset.y,z=quad.z(i)+(float)offset.z;
-                    int tag=connected?WindRendering.vertexTag(level,pos,state,x,y,z):WindRendering.vertexTag(state,x,y,z);
+                    int tag=WindRendering.vertexTag(level,pos,state,x,y,z);
                     quad.color(i,(color&0xFFFFFF)|(tag<<24));
                 }
                 return true;
@@ -322,6 +551,10 @@ public final class WindRendering {
 
     public static final class WindAudio {
         private static @org.jspecify.annotations.Nullable WindLoop weak, strong;
+        private static boolean underwater(Minecraft client) {
+            return client.gameRenderer.mainCamera().getFluidInCamera()
+                == net.minecraft.world.level.material.FogType.WATER;
+        }
         public static void stop(Minecraft client) {
             var weak = WindAudio.weak;
             var strong = WindAudio.strong;
@@ -331,21 +564,23 @@ public final class WindRendering {
         }
         public static void update(net.minecraft.client.Minecraft client, naturality.systems.weather.framework.WeatherSystem.@org.jspecify.annotations.Nullable WeatherState state) {
             if (!naturality.config.startup.FeatureConfig.Feature.VISUAL_OVERHAUL.enabled()
-                    || !naturality.config.live.NaturalityConfig.get().effects.windSounds || state == null) { stop(client); return; }
+                    || !naturality.config.live.NaturalityConfig.get().effects.windSounds || state == null
+                    || underwater(client)) { stop(client); return; }
             var weak = WindAudio.weak;
             var strong = WindAudio.strong;
             // Keep silent loops alive so gradual crossfades do not repeatedly restart their clips.
             if (weak == null || !client.getSoundManager().isActive(weak)) {
-                weak = new WindLoop(false); WindAudio.weak = weak; client.getSoundManager().play(weak);
+                weak = new WindLoop(false, client.level != null && client.level.dimension().equals(net.minecraft.world.level.Level.NETHER)); WindAudio.weak = weak; client.getSoundManager().play(weak);
             }
-            if (strong == null || !client.getSoundManager().isActive(strong)) {
-                strong = new WindLoop(true); WindAudio.strong = strong; client.getSoundManager().play(strong);
+            if (client.level != null && !client.level.dimension().equals(net.minecraft.world.level.Level.NETHER)
+                    && (strong == null || !client.getSoundManager().isActive(strong))) {
+                strong = new WindLoop(true, false); WindAudio.strong = strong; client.getSoundManager().play(strong);
             }
         }
         private static final class WindLoop extends AbstractTickableSoundInstance {
             private final boolean strong;
-            WindLoop(boolean strong) {
-                super(strong ? NaturalitySounds.WIND_STRONG : NaturalitySounds.WIND_WEAK, SoundSource.WEATHER, RandomSource.create());
+            WindLoop(boolean strong, boolean nether) {
+                super(nether ? NaturalitySounds.WIND_NETHER : strong ? NaturalitySounds.WIND_STRONG : NaturalitySounds.WIND_WEAK, SoundSource.WEATHER, RandomSource.create());
                 this.strong = strong; looping = true; delay = 0; relative = true;
                 attenuation = SoundInstance.Attenuation.NONE; volume = 0;
             }
@@ -354,7 +589,8 @@ public final class WindRendering {
                 var client = Minecraft.getInstance();
                 var s = client.level == null ? null : WeatherSystem.state(client.level);
                 if (!naturality.config.startup.FeatureConfig.Feature.VISUAL_OVERHAUL.enabled()
-                        || !naturality.config.live.NaturalityConfig.get().effects.windSounds || s == null) { stop(); return; }
+                        || !naturality.config.live.NaturalityConfig.get().effects.windSounds || s == null
+                        || underwater(client)) { volume = 0; stop(); return; }
                 float exposure = WeatherSoundEnvironment.windExposure();
                 if (!client.gameRenderer.mainCamera().getFluidInCamera().equals(net.minecraft.world.level.material.FogType.NONE)) exposure *= .15F;
                 float target = (strong ? s.strongWindGain() : s.weakWindGain()) * exposure;

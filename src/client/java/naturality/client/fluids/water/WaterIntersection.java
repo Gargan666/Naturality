@@ -59,6 +59,30 @@ public final class WaterIntersection extends QuadParticleRenderState {
     private static final Map<String,Wake> WAKES=new HashMap<>();
     private static @org.jspecify.annotations.Nullable ClientLevel wakeWorld;
     private record Pixel(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int color,int light) {}
+    private record Appearance(int tint,int light,int aboveLight) {}
+    /** Render-thread lookups live for one extraction only, including cached absence. */
+    private static final class SurfaceQueries {
+        private static final int LIMIT=4096;
+        private final ClientLevel level;
+        private final Map<BlockPos,@org.jspecify.annotations.Nullable WaterSurface> surfaces=new HashMap<>();
+        private final Map<BlockPos,Appearance> appearances=new HashMap<>();
+        SurfaceQueries(ClientLevel level) {this.level=level;}
+        @org.jspecify.annotations.Nullable WaterSurface surface(BlockPos pos) {
+            if(surfaces.containsKey(pos)) return surfaces.get(pos);
+            var surface=WaterSurface.at(level,pos);
+            if(surfaces.size()<LIMIT) surfaces.put(pos.immutable(),surface);
+            return surface;
+        }
+        Appearance appearance(BlockPos pos) {
+            var cached=appearances.get(pos);
+            if(cached!=null) return cached;
+            int above=LightCoordsUtil.getLightCoords(level,pos.above());
+            var result=new Appearance(BiomeColors.getAverageWaterColor(level,pos),
+                LightCoordsUtil.max(LightCoordsUtil.getLightCoords(level,pos),above),above);
+            if(appearances.size()<LIMIT) appearances.put(pos.immutable(),result);
+            return result;
+        }
+    }
     private static final class Tile {
         final WaterSurface surface;
         final List<PlanarGeometry.Rect> first=new ArrayList<>(),second=new ArrayList<>();
@@ -77,6 +101,7 @@ public final class WaterIntersection extends QuadParticleRenderState {
         if(level!=wakeWorld){WAKES.clear();wakeWorld=level;}
         if(level==null || !NaturalityConfig.get().liquids.water){WAKES.clear();return;}
         var eye=camera.position();
+        var queries=new SurfaceQueries(level);
         var tiles=new HashMap<BlockPos,Tile>();
         int captured=0;
         var entities=new ArrayList<net.minecraft.world.entity.Entity>();
@@ -90,7 +115,7 @@ public final class WaterIntersection extends QuadParticleRenderState {
             var candidates=new ArrayList<BlockPos>();
             for(var p:BlockPos.betweenClosed((int)Math.floor(box.minX),(int)Math.floor(box.minY),(int)Math.floor(box.minZ),
                     (int)Math.floor(box.maxX),(int)Math.floor(box.maxY),(int)Math.floor(box.maxZ))) {
-                if(WaterSurface.at(level,p)==null) continue;
+                if(queries.surface(p)==null) continue;
                 candidates.add(p.immutable());
             }
             if(candidates.isEmpty()) continue;
@@ -99,26 +124,35 @@ public final class WaterIntersection extends QuadParticleRenderState {
             var mesh=ModelCapture.mesh(entity,origin,camera,partial);
             if(mesh.isEmpty()) continue; // Never invent a hitbox outline for a non-model renderer.
             for(var pos:candidates) {
-                var surface = WaterSurface.at(level,pos);
+                var surface = queries.surface(pos);
                 if (surface == null) continue;
                 var tile=tiles.computeIfAbsent(pos,_->new Tile(surface));
-                var s=tile.surface;
-                double left=pos.getX()-origin.x, bottom=pos.getZ()-origin.z;
-                double dx=s.se()-s.sw(),dz=s.sw()-s.nw();
-                double height=s.height(0,0)-origin.y-dx*left-dz*bottom;
-                tile.first.addAll(worldSections(mesh,height,dx,dz,left,bottom,origin));
-                dx=s.ne()-s.nw(); dz=s.se()-s.ne();
-                height=s.height(0,0)-origin.y-dx*left-dz*bottom;
-                tile.second.addAll(worldSections(mesh,height,dx,dz,left,bottom,origin));
+                intersect(tile,mesh,origin);
             }
         }
         var state=new WaterIntersection();
-        for(var tile:tiles.values()) state.add(level,tile,eye);
-        state.addWake(level,eye);
+        for(var tile:tiles.values()) state.add(level,tile,eye,queries);
+        state.addWake(level,eye,queries);
         WaterImpactColumn.render(state,level,eye,partial);
         lastPixelCount=state.pixels.size();
-        WaterRipples.addTo(state,level,eye,frustum,partial);
+        WaterRipples.addTo(state,level,eye,frustum,partial,queries);
         if(!state.isEmpty()) output.add(state);
+    }
+    private static void intersect(Tile tile,List<Vec3[]> mesh,Vec3 origin) {
+        var s=tile.surface; var pos=s.pos();
+        double left=pos.getX()-origin.x, bottom=pos.getZ()-origin.z;
+        double dx=s.se()-s.sw(),dz=s.sw()-s.nw();
+        double height=s.height(0,0)-origin.y-dx*left-dz*bottom;
+        var first=worldSections(mesh,height,dx,dz,left,bottom,origin);
+        tile.first.addAll(first);
+        double secondDx=s.ne()-s.nw(),secondDz=s.se()-s.ne();
+        double secondHeight=s.height(0,0)-origin.y-secondDx*left-secondDz*bottom;
+        // Flat/coplanar triangles intersect the identical pose at the identical plane.
+        // Keep separate ordered lists; non-coplanar flowing surfaces still clip twice.
+        if(Double.doubleToLongBits(dx)==Double.doubleToLongBits(secondDx)
+                && Double.doubleToLongBits(dz)==Double.doubleToLongBits(secondDz)
+                && Double.doubleToLongBits(height)==Double.doubleToLongBits(secondHeight)) tile.second.addAll(first);
+        else tile.second.addAll(worldSections(mesh,secondHeight,secondDx,secondDz,left,bottom,origin));
     }
     private static List<PlanarGeometry.Rect> worldSections(List<Vec3[]> mesh,double h,double dx,double dz,
                                                                double x,double z,Vec3 origin) {
@@ -127,20 +161,21 @@ public final class WaterIntersection extends QuadParticleRenderState {
         for(var r:local) result.add(new PlanarGeometry.Rect(r.left()+origin.x,r.bottom()+origin.z,r.right()+origin.x,r.top()+origin.z));
         return result;
     }
-    private void add(ClientLevel level,Tile tile,Vec3 eye) {
+    private void add(ClientLevel level,Tile tile,Vec3 eye,SurfaceQueries queries) {
         var s=tile.surface; var p=s.pos();
-        int tint=BiomeColors.getAverageWaterColor(level,p);
+        var appearance=queries.appearance(p);
+        int tint=appearance.tint;
         float r=ARGB.red(tint)/255F,g=ARGB.green(tint)/255F,b=ARGB.blue(tint)/255F;
         // procedural_fluids.glsl peaks at (50 + 64) / 114 = 1 before biome tint.
         // Match that brightest water color, without extra brightness or added white.
-        int light=LightCoordsUtil.max(LightCoordsUtil.getLightCoords(level,p),LightCoordsUtil.getLightCoords(level,p.above()));
+        int light=appearance.light;
+        long tick=level.getGameTime();
         for(int x=0;x<16;x++) for(int z=0;z<16;z++) {
             double u=(x+0.5)/16,v=(z+0.5)/16;
             if(!s.contains(u,v)) continue;
             float alpha=WaterIntersectionGeometry.alpha(z>=x?tile.first:tile.second,p.getX()+u,p.getZ()+v);
             if(alpha==0) continue;
-            long tick=level.getGameTime();
-            int hash=Objects.hash(p.getX()*16+x,p.getZ()*16+z,tick/4);
+            int hash=31*(31*(31+p.getX()*16+x)+p.getZ()*16+z)+Long.hashCode(tick/4);
             alpha*=0.86F+Math.floorMod(hash,15)/100F;
             if(WAKES.size()<12000)WAKES.put(p+"/"+x+"/"+z,new Wake(p,x,z,alpha,tick));
             int color=ARGB.colorFromFloat(alpha,r,g,b);
@@ -169,19 +204,20 @@ public final class WaterIntersection extends QuadParticleRenderState {
     private static void vertex(VertexConsumer buffer,Vec3 p,int color,int light) {
         buffer.addVertex((float)p.x,(float)p.y,(float)p.z).setUv(0,0).setColor(color).setLight(light);
     }
-    private void addWake(ClientLevel level,Vec3 eye) {
+    private void addWake(ClientLevel level,Vec3 eye,SurfaceQueries queries) {
         long tick=level.getGameTime();
         if(!NaturalityConfig.get().liquids.waterRim || !NaturalityConfig.get().liquids.waterWake){WAKES.clear();return;}
         WAKES.values().removeIf(w->tick-w.tick>6);
         for(var w:WAKES.values()) {
             long age=tick-w.tick;
             if(age<=0 || w.pos.distToCenterSqr(eye)>32*32)continue;
-            var surface=WaterSurface.at(level,w.pos);
+            var surface=queries.surface(w.pos);
             if(surface==null)continue;
             float alpha=w.alpha*.22F*(1-age/7F);
-            int tint=BiomeColors.getAverageWaterColor(level,w.pos);
+            var appearance=queries.appearance(w.pos);
+            int tint=appearance.tint;
             int color=ARGB.colorFromFloat(alpha,ARGB.red(tint)/255F,ARGB.green(tint)/255F,ARGB.blue(tint)/255F);
-            int light=LightCoordsUtil.getLightCoords(level,w.pos.above());
+            int light=appearance.aboveLight;
             pixels.add(new Pixel(vertex(surface,w.x/16.0,w.z/16.0,eye),vertex(surface,w.x/16.0,(w.z+1)/16.0,eye),
                 vertex(surface,(w.x+1)/16.0,(w.z+1)/16.0,eye),vertex(surface,(w.x+1)/16.0,w.z/16.0,eye),color,light));
         }
@@ -203,27 +239,32 @@ public final class WaterIntersection extends QuadParticleRenderState {
     public static final class WaterRipples {
         private static final int LIFETIME=8, LIMIT=512, RANGE=24;
         private record Ripple(double x,double z,double y,BlockPos origin,boolean cauldron,boolean rain,int born) {}
-        private record Appearance(int tint,int light) {}
+        // Particle mods can publish impacts on worker threads. Protect the small
+        // state update only; world queries and pixel extraction never hold this lock.
+        private static final Object STATE_LOCK=new Object();
         private static final List<Ripple> RIPPLES=new ArrayList<>();
         private static @org.jspecify.annotations.Nullable ClientLevel world;
         private static int tick;
         private static final Random RANDOM=new Random();
         public static int lastPixelCount;
         private WaterRipples() {}
-        public static int activeCount(){return RIPPLES.size();}
-        public static long activeRainCount(){return RIPPLES.stream().filter(Ripple::rain).count();}
-        public static long activeRainAt(BlockPos pos){return RIPPLES.stream().filter(r->r.rain && r.origin.equals(pos)).count();}
+        public static int activeCount(){synchronized(STATE_LOCK){return RIPPLES.size();}}
+        public static long activeRainCount(){synchronized(STATE_LOCK){return RIPPLES.stream().filter(Ripple::rain).count();}}
+        public static long activeRainAt(BlockPos pos){synchronized(STATE_LOCK){return RIPPLES.stream().filter(r->r.rain && r.origin.equals(pos)).count();}}
+        // Only the client thread may switch ownership, with STATE_LOCK held.
         private static void sync(@org.jspecify.annotations.Nullable ClientLevel level) {
             if(world!=level) {RIPPLES.clear();world=level;tick=0;lastPixelCount=0;}
         }
         public static void tick(Minecraft client) {
-            sync(client.level);
-            var world = WaterRipples.world;
-            if(client.isPaused()) return;
-            if(world==null || !NaturalityConfig.get().liquids.water) {RIPPLES.clear();return;}
-            tick++;
+            var world = client.level;
             var eye=client.gameRenderer.mainCamera().position();
-            RIPPLES.removeIf(r->(r.rain ? !NaturalityConfig.get().liquids.rainRipples : !NaturalityConfig.get().liquids.dripRipples) || tick-r.born>=LIFETIME || eye.distanceToSqr(new Vec3(r.x,r.y,r.z))>32*32);
+            synchronized(STATE_LOCK) {
+                sync(world);
+                if(client.isPaused()) return;
+                if(world==null || !NaturalityConfig.get().liquids.water) {RIPPLES.clear();return;}
+                tick++;
+                RIPPLES.removeIf(r->(r.rain ? !NaturalityConfig.get().liquids.rainRipples : !NaturalityConfig.get().liquids.dripRipples) || tick-r.born>=LIFETIME || eye.distanceToSqr(new Vec3(r.x,r.y,r.z))>32*32);
+            }
             float rain=world.getRainLevel(1);
             if(!NaturalityConfig.get().liquids.rainRipples || rain<=0) return;
             var random=RANDOM;
@@ -242,12 +283,20 @@ public final class WaterIntersection extends QuadParticleRenderState {
             }
         }
         private static void spawn(ClientLevel level,WaterSurface surface,double x,double z,boolean rain) {
-            sync(level);
-            if(RIPPLES.size()>=LIMIT) return;
             // Centers and output cells share the water's world-space grid, including negative coordinates.
             x=(Math.floor(x*16)+0.5)/16;z=(Math.floor(z*16)+0.5)/16;
-            RIPPLES.add(new Ripple(x,z,surface.height(x-surface.pos().getX(),z-surface.pos().getZ()),
-                surface.pos(),surface.cauldron(),rain,tick));
+            double y=surface.height(x-surface.pos().getX(),z-surface.pos().getZ());
+            synchronized(STATE_LOCK) {
+                if(world!=level) {
+                    var client=Minecraft.getInstance();
+                    // A late worker from a retired world must not clear or replace
+                    // the current world's rings. Native first impacts can initialize.
+                    if(!client.isSameThread() || client.level!=level) return;
+                    sync(level);
+                }
+                if(RIPPLES.size()>=LIMIT) return;
+                RIPPLES.add(new Ripple(x,z,y,surface.pos().immutable(),surface.cauldron(),rain,tick));
+            }
         }
         /** Add a ring when a falling leaf settles onto a water surface. */
         public static boolean leafImpact(@org.jspecify.annotations.Nullable ClientLevel level,double x,double y,double z) {
@@ -300,15 +349,19 @@ public final class WaterIntersection extends QuadParticleRenderState {
             }
             return false;
         }
-        static void addTo(WaterIntersection output,ClientLevel level,Vec3 eye,Frustum frustum,float partial) {
-            sync(level);
+        private static void addTo(WaterIntersection output,ClientLevel level,Vec3 eye,Frustum frustum,float partial,SurfaceQueries queries) {
+            final Ripple[] frame;
+            final int frameTick;
+            synchronized(STATE_LOCK) {
+                sync(level);
+                frame=RIPPLES.toArray(Ripple[]::new);
+                frameTick=tick;
+            }
             lastPixelCount=0;
-            var surfaces=new HashMap<BlockPos,WaterSurface>();
-            var appearances=new HashMap<BlockPos,Appearance>();
-            for(var r:RIPPLES) {
-                float age=tick-r.born+partial;
+            for(var r:frame) {
+                float age=frameTick-r.born+partial;
                 if(age>=LIFETIME || !frustum.isVisible(new AABB(r.x-0.5,r.y-0.1,r.z-0.5,r.x+0.5,r.y+0.1,r.z+0.5))) continue;
-                var origin=WaterSurface.at(level,r.origin);
+                var origin=queries.surface(r.origin);
                 if(origin==null || origin.cauldron()!=r.cauldron
                     || Math.abs(origin.height(r.x-r.origin.getX(),r.z-r.origin.getZ())-r.y)>0.02) continue;
                 double radius=1+3*Math.min(1,age/6);
@@ -320,13 +373,12 @@ public final class WaterIntersection extends QuadParticleRenderState {
                     int px=cx+dx,pz=cz+dz;
                     var pos=new BlockPos(Math.floorDiv(px,16),r.origin.getY(),Math.floorDiv(pz,16));
                     if(r.cauldron && !pos.equals(r.origin)) continue;
-                    var s=surfaces.computeIfAbsent(pos,p->WaterSurface.at(level,p));
+                    var s=queries.surface(pos);
                     if(s==null || s.cauldron()!=r.cauldron) continue;
                     int u=Math.floorMod(px,16),v=Math.floorMod(pz,16);
                     double localX=(u+0.5)/16,localZ=(v+0.5)/16;
                     if(!s.contains(localX,localZ) || Math.abs(s.height(localX,localZ)-r.y)>0.5) continue;
-                    var appearance=appearances.computeIfAbsent(pos,p->new Appearance(BiomeColors.getAverageWaterColor(level,p),
-                        LightCoordsUtil.max(LightCoordsUtil.getLightCoords(level,p),LightCoordsUtil.getLightCoords(level,p.above()))));
+                    var appearance=queries.appearance(pos);
                     output.ripplePixel(s,u,v,eye,alpha,appearance.tint,appearance.light);
                     lastPixelCount++;
                 }

@@ -9,6 +9,7 @@
 #include <naturality:menu_geometry.glsl>
 #include <naturality:fluid_uniforms.glsl>
 #include <naturality:fire_uniforms.glsl>
+#include <naturality:glass_uniforms.glsl>
 #include <naturality:water.glsl>
 #ifndef MULTIDRAW_TERRAIN
     #include <minecraft:chunksection.glsl>
@@ -23,9 +24,7 @@ layout(location = 4) in ivec3 ChunkPosition;
 layout(location = 5) in float ChunkVisibility;
 #endif
 
-#ifndef OIT_ALPHA_ONLY
 uniform sampler2D Sampler2;
-#endif
 
 layout(location = 0) out float sphericalVertexDistance;
 layout(location = 1) out float cylindricalVertexDistance;
@@ -45,10 +44,24 @@ layout(location = 14) flat out vec3 naturalityFireSeed;
 layout(location = 15) flat out int naturalitySubmerged;
 #include <naturality:foliage_wind.glsl>
 
+layout(location = 16) flat out int naturalityGlassKind;
+layout(location = 17) out vec3 naturalityGlassRelative;
+layout(location = 18) flat out vec3 naturalityGlassForward;
+
 void main() {
     bool fallingFluidTail = (UV2.x & 4096) != 0;
     ivec2 lightCoords = UV2 & ivec2(4095);
     vec3 pos = Position + (ChunkPosition - CameraBlockPos) + CameraOffset;
+    naturalityGlassRelative = pos;
+    naturalityGlassForward = transpose(mat3(ModelViewMat)) * vec3(0.0, 0.0, -1.0);
+    naturalityGlassKind = -1;
+    for (int i = 0; i < 34; i++) {
+        vec4 b = GlassBounds[i];
+        if (b.x >= 0.0 && all(greaterThanEqual(UV0, b.xy)) && all(lessThanEqual(UV0, b.zw))) {
+            naturalityGlassKind = i;
+            break;
+        }
+    }
     int foliageTag = int(round(Color.a * 255.0));
     int windTag = foliageTag;
     bool snowLeafOverlay = foliageTag >= 224 && foliageTag <= 231;
@@ -66,22 +79,21 @@ void main() {
 
     sphericalVertexDistance = fog_spherical_distance(pos);
     cylindricalVertexDistance = fog_cylindrical_distance(pos);
-    #ifndef OIT_ALPHA_ONLY
+    // Keep glass light gating identical in color and alpha-only OIT stages.
     vertexColor = sample_lightmap(Sampler2, lightCoords);
-    #else
-    vertexColor = vec4(1.0);
-    #endif
     texCoord0 = UV0;
     // Section-local positions retain precision; section origins are multiples of 16 blocks.
     naturalityBlockPosition = Position;
     naturalityLightLevels = (vec2(lightCoords) + 8.0) / 256.0;
     naturalityShade = Color;
-    if (windFoliage || snowSurface) naturalityShade.a = 1.0;
+    if (windFoliage || snowSurface || windTag == 243 || windTag == 244) naturalityShade.a = 1.0;
     int waterTag = int(round(Color.a * 255.0));
     naturalitySubmerged = waterTag >= 246 && waterTag <= 254 ? waterTag - 245 : 0;
+    if (waterTag == 244) naturalitySubmerged = 9;
     if (naturalitySubmerged != 0) naturalityShade.a = 1.0;
     naturalitySectionOrigin = ChunkPosition;
     naturalityFluidKind = -1;
+    bool terrainFluidSprite = false;
     naturalityFluidUV = vec2(0.0);
     naturalityFlow = vec3(0.0);
     naturalityFireKind = -1;
@@ -102,9 +114,13 @@ void main() {
         vec4 b = NaturalityFluidBounds[i];
         if (b.x >= 0.0 && all(greaterThanEqual(UV0, b.xy)) && all(lessThanEqual(UV0, b.zw))) {
             naturalityFluidKind = (NaturalityFluidInfo.w & (1 << i)) != 0 ? i : -1;
+            terrainFluidSprite = true;
             windFoliage = false;
             snowSurface = false;
-            naturalitySubmerged = 0; // Fluid alpha carries flow, not the terrain tag.
+            // Negative means water material; positive values remain submerged
+            // terrain heights. Classify once per primitive, not from interpolated
+            // fragment UVs, which can round just outside an atlas edge.
+            naturalitySubmerged = i < 2 ? -1 : 0;
             int flowCode = int(round(Color.a * 255.0));
             if (flowCode < 255) {
                 float angle = (float(flowCode) + 0.5) * (6.28318530718 / 254.0) - 3.14159265359;
@@ -123,6 +139,8 @@ void main() {
         pos.xz += offset;
         gl_Position = ProjMat * ModelViewMat * vec4(pos, 1.0);
     }
+    if (!terrainFluidSprite && naturalityFireKind < 0)
+        pos += naturality_brush_offset(Position, ChunkPosition, windTag);
     pos.xz += naturality_menu_extension(Position + ChunkPosition);
     pos.y -= naturality_menu_wall_drop(Position + ChunkPosition);
     gl_Position = ProjMat * ModelViewMat * vec4(pos, 1.0);

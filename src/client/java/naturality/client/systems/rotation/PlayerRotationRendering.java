@@ -121,12 +121,15 @@ public final class PlayerRotationRendering {
         return center.add(direction.scale(Math.max(0, fraction - 1e-5 / Math.max(1e-5, direction.length()))));
     }
     public interface State {
+        float naturality$rotationYaw();
+        void naturality$rotationYaw(float yaw);
         Angles naturality$bodyRotation();
         void naturality$bodyRotation(Angles angles);
         float naturality$rotationPivot();
         void naturality$rotationPivot(float height);
     }
     public static void extract(Player player, AvatarRenderState state, float partial) {
+        ((State)state).naturality$rotationYaw(state.bodyRot);
         float time = player.tickCount + partial;
         if (naturality.systems.swimming.WaterSurface.riptiding(player)) {
             state.isAutoSpinAttack = true;
@@ -184,7 +187,7 @@ public final class PlayerRotationRendering {
         return new Vec2((float)(55 * Math.tanh(pitch / 55)), (float)(60 * Math.tanh(headYaw / 60)));
     }
     public static void rotate(AvatarRenderState state, PoseStack pose, float bodyYaw, float scale) {
-        var angles = ((State)state).naturality$bodyRotation();
+        var angles = relativeRotation(((State)state).naturality$bodyRotation(), ((State)state).naturality$rotationYaw(), bodyYaw);
         double half = ((State)state).naturality$rotationPivot() / scale;
         pose.translate(0, half, 0);
         pose.rotateDegrees(Axis.ZP, angles.z());
@@ -192,6 +195,13 @@ public final class PlayerRotationRendering {
         pose.rotateDegrees(Axis.YP, angles.yawCompensation());
         pose.translate(0, -half, 0);
         pose.rotateDegrees(Axis.YP, 180 - bodyYaw);
+    }
+    /** GUI previews replace body yaw after extraction; carry the world tilt into that new facing frame. */
+    public static Angles relativeRotation(Angles angles, float sourceYaw, float displayedYaw) {
+        double difference = Math.toRadians(sourceYaw - displayedYaw);
+        if (Math.abs(difference) < 1.0e-7) return angles;
+        return Angles.fromQuaternion(new org.joml.Quaterniond().rotationY(difference)
+            .mul(angles.quaternion()).rotateY(-difference));
     }
     /** F3+B distinguishes the oriented target (white/green) from terrain collision (cyan). */
     public static void debug(Player player, float partial, boolean server) {

@@ -73,6 +73,10 @@ public final class FogMixins {
         @Unique private @org.jspecify.annotations.Nullable CloudStatus naturality$cloudStatus;
         @Unique private @org.jspecify.annotations.Nullable ChunkSectionsToRender naturality$waterChunks;
         @Unique private boolean naturality$replayTransparency;
+        @Unique private boolean naturality$backgroundClouds;
+        @SuppressWarnings("null") @Shadow @Final private CloudRenderer cloudRenderer;
+        @SuppressWarnings("null") @Shadow @Final private net.minecraft.client.renderer.state.OptionsRenderState optionsRenderState;
+        @SuppressWarnings("null") @Shadow @Final private net.minecraft.client.renderer.state.level.LevelRenderState levelRenderState;
         @Shadow protected abstract void executeClassicTransparency(ChunkSectionsToRender chunks,
             FeatureRenderDispatcher.PreparedFrame features, RenderPass pass);
 
@@ -87,24 +91,50 @@ public final class FogMixins {
             naturality.client.fluids.water.WaterVisuals.prepareFrame();
             naturality$fog = fog;
             naturality$clouds = null;
+            naturality$backgroundClouds = false;
             naturality$waterChunks = null;
         }
 
         @Inject(method = "executeClassicTransparency", at = @At("HEAD"), cancellable = true)
         private void naturality$holdWaterTransparency(ChunkSectionsToRender chunks,
                 FeatureRenderDispatcher.PreparedFrame features, RenderPass pass, CallbackInfo ci) {
-            if (naturality$replayTransparency || !naturality.client.fluids.water.WaterVisuals.ready()) return;
-            // Vanilla shares its opaque pass with classic transparency. Let it close
-            // before sampling opaque depth and color; replay transparency afterward.
-            naturality$waterChunks = chunks;
-            ci.cancel();
+            if (!naturality$replayTransparency && naturality.client.fluids.water.WaterVisuals.ready()) {
+                // Close the opaque pass before sampling its color/depth for optics.
+                naturality$waterChunks = chunks;
+                ci.cancel();
+                return;
+            }
+            naturality$renderBackgroundClouds(pass);
         }
 
         @Inject(method = "executeOit", at = @At("HEAD"))
         private void naturality$waterBeforeOit(ChunkSectionsToRender chunks, FeatureRenderDispatcher.PreparedFrame features, CallbackInfo ci) {
-            naturality.client.fluids.water.WaterComposite.render(targets.main.get(), chunks);
+            naturality.client.fluids.water.WaterComposite.render(targets.main.get(), chunks, features, true);
+            var target = targets.main.get();
+            var color = target.getColorTextureView();
+            if (color == null || !naturality$needsBackgroundClouds()) return;
+            try (var pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
+                    () -> "Naturality clouds before scene transparency", color, Optional.empty(),
+                    target.getDepthTextureView(), OptionalDouble.empty())) {
+                naturality$renderBackgroundClouds(pass);
+            }
         }
 
+        @Unique private boolean naturality$needsBackgroundClouds() {
+            var level = net.minecraft.client.Minecraft.getInstance().level;
+            return !naturality$backgroundClouds && level != null
+                && level.dimension().equals(Level.OVERWORLD) && optionsRenderState.cloudStatus != CloudStatus.OFF
+                && net.minecraft.util.ARGB.alpha(levelRenderState.cloudColor) > 0;
+        }
+
+        @Unique private void naturality$renderBackgroundClouds(RenderPass pass) {
+            if (!naturality$needsBackgroundClouds()) return;
+            RenderSystem.bindDefaultUniforms(pass);
+            // Test against opaque scene depth before partially transparent glass,
+            // water and particles write depth. Their later colors blend over clouds.
+            cloudRenderer.render(optionsRenderState.cloudStatus, pass);
+            naturality$backgroundClouds = true;
+        }
         @Inject(method = "addMainPass", at = @At("HEAD"))
         private void naturality$captureBackground(CallbackInfo ci, @Local(argsOnly = true) FrameGraphBuilder frame) {
             // Also runs when boss fog suppresses the sky pass: the cleared background
@@ -118,6 +148,7 @@ public final class FogMixins {
         @WrapOperation(method = "executeClassicTransparency", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/renderer/CloudRenderer;render(Lnet/minecraft/client/CloudStatus;Lcom/mojang/renderpearl/api/commands/RenderPass;)V"))
         private void naturality$deferClouds(CloudRenderer clouds, CloudStatus status, RenderPass pass, Operation<Void> original) {
+            if (naturality$backgroundClouds) return;
             if (!EndFogComposite.ready()) { original.call(clouds, status, pass); return; }
             naturality$clouds = clouds;
             naturality$cloudStatus = status;
@@ -127,6 +158,7 @@ public final class FogMixins {
             target = "Lnet/minecraft/client/renderer/CloudRenderer;renderOit(Lnet/minecraft/client/CloudStatus;Lnet/minecraft/client/renderer/oit/OitStage;Lcom/mojang/renderpearl/api/textures/GpuTextureView;Lnet/minecraft/client/renderer/oit/OitRenderPassProvider$Parameters;)V"))
         private void naturality$deferOitClouds(CloudRenderer clouds, CloudStatus status, OitStage stage,
                 GpuTextureView depth, OitRenderPassProvider.Parameters params, Operation<Void> original) {
+            if (naturality$backgroundClouds) return;
             if (!EndFogComposite.ready()) { original.call(clouds, status, stage, depth, params); return; }
             naturality$clouds = clouds;
             naturality$cloudStatus = status;
@@ -141,7 +173,7 @@ public final class FogMixins {
             if (colorView == null) return;
             var waterChunks = naturality$waterChunks;
             if (waterChunks != null) {
-                naturality.client.fluids.water.WaterComposite.render(target, waterChunks);
+                naturality.client.fluids.water.WaterComposite.render(target, waterChunks, features, false);
                 naturality$replayTransparency = true;
                 try (var pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
                         () -> "Naturality transparency after underwater optics", colorView, Optional.empty(),

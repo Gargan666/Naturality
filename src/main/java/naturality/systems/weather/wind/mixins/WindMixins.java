@@ -57,10 +57,17 @@ public final class WindMixins {
     @org.jspecify.annotations.NullMarked
     public static abstract class WindCollisionScanMixin {
         @SuppressWarnings("null") @Shadow @Final private CollisionGetter collisionGetter;
+        @Unique private boolean naturality$windActive;
+        @Inject(method="computeNext", at=@At("HEAD"))
+        private void naturality$sampleWind(CallbackInfoReturnable<Object> cir) {
+            // One synchronous iterator step cannot advance weather. Resample on
+            // each step so iterators retained across ticks still see live state.
+            naturality$windActive = WindShapes.active(collisionGetter);
+        }
         // Wind offsets remain under one block. Visit the iterator's existing outer
         // ring, including diagonal cells, rather than relying on static shape flags.
         @ModifyExpressionValue(method="computeNext",at=@At(value="INVOKE",target="Lnet/minecraft/core/Cursor3D;getNextType()I"))
-        private int naturality$includeWindNeighbors(int type) { return WindShapes.active(collisionGetter)?0:type; }
+        private int naturality$includeWindNeighbors(int type) { return naturality$windActive?0:type; }
     }
 
     @Mixin(BlockGetter.class)

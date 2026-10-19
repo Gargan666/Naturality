@@ -20,9 +20,16 @@ public final class FeatureMixinPlugin implements IMixinConfigPlugin {
 
     @Override public boolean shouldApplyMixin(String target, String mixin) {
         String name = mixin.substring(Math.max(mixin.lastIndexOf('.'), mixin.lastIndexOf('$')) + 1);
-        // Optional renderer targets must never be resolved when Sodium is absent.
+        // Optional renderer and lighting targets must not resolve without their mod.
         if (name.startsWith("Sodium") && !net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("sodium")) return false;
+        if (name.startsWith("ScalableLux") && !net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("scalablelux")) return false;
+        if (name.startsWith("Iris") && !net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("iris")) return false;
         boolean client = mixin.startsWith("naturality.client.");
+        if (mixin.contains(".items.durability.mixins.")) return true;
+        if (client && name.equals("LayerOverlayUpdatesMixin")) return CONTENT.enabled() || VISUAL_OVERHAUL.enabled();
+        if (client && name.equals("AshAtlasLifecycleMixin")) return CONTENT.enabled() && !VISUAL_OVERHAUL.enabled();
+        // Ash needs the shared coating snapshots, atlas and lighting even in content-only play.
+        if (client && mixin.startsWith("naturality.client.blocks.snow.mixins.") && CONTENT.enabled()) return true;
         // Player body geometry and its camera/model must agree even without optional visuals.
         if (name.startsWith("PlayerRotation") || name.startsWith("PlayerSwimming") || name.startsWith("WaterSurface")) return true;
         if (name.startsWith("MenuPreview")) return true;
@@ -33,6 +40,7 @@ public final class FeatureMixinPlugin implements IMixinConfigPlugin {
                 "MenuPreviewEntityMixin", "MenuWorldSelectionMixin", "MenuCreateWorldMixin", "MenuCreateWorldAccess",
                 "MenuPreviewPlayerMixin", "MenuPreviewSoundMixin", "MenuPreviewMobMixin", "MenuPreviewGenerationMobMixin", "MenuPresetSkyMixin").contains(name)) return true;
         if (name.equals("NavigationCompassMixin") || name.equals("NavigationHudMixin")) return NAVIGATION_INSTRUMENTS.enabled();
+        if (name.startsWith("HeavyBoots")) return CONTENT.enabled();
         if (name.startsWith("Insanity")) return CONTENT.enabled();
         if (name.equals("MaddenedSpawnMixin")) return CONTENT.enabled() && EVENT_CYCLES.enabled();
         if (name.startsWith("BloodMoonSpawn") || name.startsWith("BloodMoonLocal")) return EVENT_CYCLES.enabled();
@@ -63,6 +71,7 @@ public final class FeatureMixinPlugin implements IMixinConfigPlugin {
             return LIRESTONE_CRAGS.enabled() || END_WILDS.enabled();
         if (name.equals("EndTerrainDensityMixin")) return END_TERRAIN.enabled();
         if (name.equals("OceanTerrainMixin")) return OCEAN_TERRAIN.enabled();
+        if (name.equals("NetherTerrainMixin")) return NETHER_TERRAIN.enabled();
         if (name.startsWith("OceanMonument")) return OCEAN_TERRAIN.enabled();
         if (name.equals("EndStoneTerrainMixin") || name.equals("SmallEndIslandLayersMixin")) return END_MATERIALS.enabled();
         if (name.equals("ElytraMomentumMixin")) return ELYTRA_MOMENTUM.enabled();

@@ -1,4 +1,4 @@
-package naturality.blocks.snow;
+package naturality.api.geometry;
 
 import com.google.gson.*;
 import java.io.InputStreamReader;
@@ -16,15 +16,15 @@ import net.minecraft.world.level.block.*;
 
 /** Model-derived upper surfaces shared by clients and dedicated servers. */
 @org.jspecify.annotations.NullMarked
-public final class SnowBlockModels {
+public final class SurfaceSupportModels {
     private static final JsonObject DATA=read("data/naturality/snow_models.json");
     private static final Map<String,JsonObject> RESOURCES=new ConcurrentHashMap<>();
     private static final Map<BlockState,List<AABB>> GEOMETRY=new ConcurrentHashMap<>();
     private static final Map<BlockState,Boolean> FULL_TOP=new ConcurrentHashMap<>(),EXPOSED_GROUND=new ConcurrentHashMap<>();
-    private SnowBlockModels() { }
+    private SurfaceSupportModels() { }
 
     public static List<AABB> boxes(BlockState state) {
-        return GEOMETRY.computeIfAbsent(state,SnowBlockModels::bake);
+        return GEOMETRY.computeIfAbsent(state,SurfaceSupportModels::bake);
     }
     public static boolean fullTop(BlockState state) {
         return FULL_TOP.computeIfAbsent(state,key -> {
@@ -135,7 +135,7 @@ public final class SnowBlockModels {
         return RESOURCES.computeIfAbsent(kind+":"+id,_->read("assets/"+parts[0]+"/"+kind+"/"+parts[1]+".json"));
     }
     private static JsonObject read(String path) {
-        try(var stream=SnowBlockModels.class.getClassLoader().getResourceAsStream(path)) {
+        try(var stream=SurfaceSupportModels.class.getClassLoader().getResourceAsStream(path)) {
             if(stream==null)return new JsonObject();
             try(var reader=new InputStreamReader(stream,StandardCharsets.UTF_8)) { return JsonParser.parseReader(reader).getAsJsonObject(); }
         } catch(java.io.IOException | JsonParseException e) { throw new IllegalStateException("Cannot read snow model "+path,e); }
@@ -177,7 +177,7 @@ public final class SnowBlockModels {
         private SnowSupportModels() { }
 
         public static List<AABB> boxes(BlockGetter level, BlockPos pos) {
-            return SnowBlockModels.boxes(level.getBlockState(pos));
+            return SurfaceSupportModels.boxes(level.getBlockState(pos));
         }
     }
 

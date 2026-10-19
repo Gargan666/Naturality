@@ -27,6 +27,7 @@ import naturality.Naturality;
 import org.spongepowered.asm.mixin.*;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import org.spongepowered.asm.mixin.Pseudo;
 import com.mojang.renderpearl.api.commands.RenderPass;
 import com.llamalad7.mixinextras.sugar.Local;
@@ -85,13 +86,40 @@ public final class WaterMixins {
 
     @Mixin(net.minecraft.world.level.lighting.LightEngine.class)
     public static abstract class WaterSkylightStorageMixin {
-        @Inject(method = "getLightValue", at = @At("RETURN"), cancellable = true)
-        private void naturality$opticalSky(BlockPos pos, CallbackInfoReturnable<Integer> cir) {
-            cir.setReturnValue(WaterVisuals.Skylight.light(this, pos, cir.getReturnValueI()));
+        @ModifyReturnValue(method = "getLightValue", at = @At("RETURN"))
+        private int naturality$opticalSky(int light, BlockPos pos) {
+            // Returning unchanged block light must still allow the dynamic overlay.
+            return WaterVisuals.Skylight.light(this, pos, light);
         }
         @Inject(method = "getDataLayerData", at = @At("RETURN"), cancellable = true)
         private void naturality$opticalSkyData(net.minecraft.core.SectionPos pos,
                 CallbackInfoReturnable<net.minecraft.world.level.chunk.DataLayer> cir) {
+            cir.setReturnValue(WaterVisuals.Skylight.data(this, pos, cir.getReturnValue()));
+        }
+    }
+
+    @Pseudo
+    @Mixin(targets = "ca.spottedleaf.starlight.common.light.StarLightInterface", remap = false)
+    public static abstract class ScalableLuxWaterSkylightMixin {
+        @SuppressWarnings("null") // Initialized by ScalableLux's constructor.
+        @Shadow @Final protected net.minecraft.world.level.lighting.LayerLightEventListener skyReader;
+
+        @ModifyReturnValue(method = "getSkyLightValue", at = @At("RETURN"))
+        private int naturality$opticalSky(int light, BlockPos pos,
+                net.minecraft.world.level.chunk.@org.jspecify.annotations.Nullable ChunkAccess chunk) {
+            // Covers both the layer reader and ScalableLux's direct raw-brightness
+            // path. The shared identity guard excludes every server light engine.
+            return WaterVisuals.Skylight.light(skyReader, pos, light);
+        }
+    }
+
+    @Pseudo
+    @Mixin(targets = "ca.spottedleaf.starlight.common.light.StarLightInterface$1", remap = false)
+    public static abstract class ScalableLuxWaterSkyDataMixin {
+        @Inject(method = "getDataLayerData", at = @At("RETURN"), cancellable = true)
+        private void naturality$opticalSkyData(net.minecraft.core.SectionPos pos,
+                CallbackInfoReturnable<net.minecraft.world.level.chunk.DataLayer> cir) {
+            // Terrain snapshots must see the same optical overlay as entity queries.
             cir.setReturnValue(WaterVisuals.Skylight.data(this, pos, cir.getReturnValue()));
         }
     }
@@ -114,6 +142,37 @@ public final class WaterMixins {
         private void naturality$captureSun(RenderPass pass, float rain,
                 com.mojang.blaze3d.vertex.PoseStack pose, CallbackInfo ci) {
             WaterVisuals.SunTransmission.capture(pose, rain, celestialsAtlas);
+        }
+    }
+
+    @Mixin(Camera.class)
+    public static abstract class SodiumWaterSkyMixin {
+        @Inject(method = "extractRenderState", at = @At("RETURN"))
+        private void naturality$transmittedSky(net.minecraft.client.renderer.state.level.CameraRenderState state,
+                DeltaTracker delta, CallbackInfo ci) {
+            var camera = (Camera)(Object)this;
+            if (!NaturalityConfig.get().liquids.waterDepth
+                    || camera.getFluidInCamera() != net.minecraft.world.level.material.FogType.WATER) return;
+            // Sodium folds fluid occlusion into this mob-effect flag. Water is not
+            // opaque with our surface transmission: retain the native effect test
+            // so the real sky/sun pass runs, without unmasking blindness or darkness.
+            if (camera.entity() instanceof net.minecraft.world.entity.LivingEntity body)
+                state.entityRenderState.doesMobEffectBlockSky = body.hasEffect(net.minecraft.world.effect.MobEffects.BLINDNESS)
+                    || body.hasEffect(net.minecraft.world.effect.MobEffects.DARKNESS);
+        }
+    }
+
+    // Iris replaces Sodium's sky optimization with its own pass cancellation even
+    // without a shader pack. Target only that fluid query, not Camera globally.
+    @Mixin(value = net.minecraft.client.renderer.LevelRenderer.class, priority = 1100)
+    public static abstract class IrisWaterSkyMixin {
+        @com.bawnorton.mixinsquared.TargetHandler(mixin = "net.irisshaders.iris.mixin.MixinLevelRenderer_Sky", name = "preRenderSky")
+        @ModifyExpressionValue(method = "@MixinSquared:Handler", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/Camera;getFluidInCamera()Lnet/minecraft/world/level/material/FogType;"))
+        private static net.minecraft.world.level.material.FogType naturality$transmittedSky(
+                net.minecraft.world.level.material.FogType fluid) {
+            return fluid == net.minecraft.world.level.material.FogType.WATER && NaturalityConfig.get().liquids.waterDepth
+                ? net.minecraft.world.level.material.FogType.NONE : fluid;
         }
     }
 
@@ -164,6 +223,11 @@ public final class WaterMixins {
     @Mixin(Camera.class)
     @org.jspecify.annotations.NullMarked
     public static abstract class WaterCameraCollisionMixin {
+        @Inject(method = "update", at = @At("TAIL"))
+        private void naturality$waterline(DeltaTracker delta, CallbackInfo ci) {
+            WaterVisuals.Waterline.update((Camera) (Object) this);
+        }
+
         @WrapOperation(method = "getMaxZoom", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/world/phys/Vec3;distanceToSqr(Lnet/minecraft/world/phys/Vec3;)D"))
         private double naturality$rayTravel(net.minecraft.world.phys.Vec3 hit,
@@ -176,6 +240,18 @@ public final class WaterMixins {
             // A ray starting inside the shape has no safe backwards travel.
             if (result instanceof net.minecraft.world.phys.BlockHitResult block && block.isInside()) return 0.0;
             return original.call(hit, rayStart);
+        }
+    }
+
+    /** Keep the air half's atmosphere; water fog is applied per pixel at the lens. */
+    @Mixin(net.minecraft.client.renderer.fog.FogRenderer.class)
+    public static abstract class WaterlineFogMixin {
+        @ModifyExpressionValue(method = "getFogType", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/Camera;getFluidInCamera()Lnet/minecraft/world/level/material/FogType;"))
+        private net.minecraft.world.level.material.FogType naturality$lensAtmosphere(
+                net.minecraft.world.level.material.FogType original) {
+            return original == net.minecraft.world.level.material.FogType.WATER && WaterVisuals.Waterline.active()
+                ? net.minecraft.world.level.material.FogType.NONE : original;
         }
     }
 
@@ -332,6 +408,15 @@ public final class WaterMixins {
             naturality.client.ui.menus.previews.MenuSurface.MenuFog.bind(pass);
             naturality.client.fluids.water.WaterVisuals.bind(pass);
             naturality.client.fluids.water.WaterVisuals.bindScene(pass);
+        }
+    }
+
+    @Mixin(net.minecraft.client.renderer.feature.QuadParticleFeatureRenderer.class)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class WaterIntersectionMaskMixin {
+        @Inject(method = "executeGroup", at = @At("HEAD"))
+        private void naturality$bindSurfaceMask(CallbackInfo ci, @Local(argsOnly = true) RenderPass pass) {
+            WaterVisuals.bindSurfaceMask(pass);
         }
     }
 

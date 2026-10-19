@@ -24,15 +24,21 @@ import net.minecraft.core.particles.ParticleTypes;
 public final class WaterShaders {
     private WaterShaders() { }
     public static final class Intersection {
+        public static final com.mojang.renderpearl.api.pipeline.BindGroupLayout BOAT_MASK = com.mojang.renderpearl.api.pipeline.BindGroupLayout.builder()
+            .withUniform("NaturalityWaterMask", UniformType.COMBINED_IMAGE_SAMPLER)
+            .withUniform("NaturalityWaterMaskDepth", UniformType.COMBINED_IMAGE_SAMPLER)
+            .withUniform("NaturalityWaterOpaqueDepth", UniformType.COMBINED_IMAGE_SAMPLER).build();
         public static final RenderPipeline.Snippet EFFECT=RenderPipeline.builder()
             .withVertexShader(Naturality.id("core/water_intersection"))
             .withFragmentShader(Naturality.id("core/water_intersection")).withCull(false).buildSnippet();
+        private static final RenderPipeline.Snippet SURFACE_EFFECT = RenderPipeline.builder(EFFECT)
+            .withShaderDefine("NATURALITY_WATER_SURFACE_EFFECT").withBindGroupLayout(BOAT_MASK).buildSnippet();
         public static final DepthStencilState DEPTH=new DepthStencilState(CompareOp.GREATER_THAN_OR_EQUAL,false);
-        public static final RenderPipeline PIPELINE=RenderPipelines.register(RenderPipeline.builder(RenderPipelines.PARTICLE_SNIPPET,EFFECT)
+        public static final RenderPipeline PIPELINE=RenderPipelines.register(RenderPipeline.builder(RenderPipelines.PARTICLE_SNIPPET,SURFACE_EFFECT)
             .withLocation(Naturality.id("pipeline/water_intersection")).withDepthStencilState(DEPTH)
             .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT)).build());
         public static final OitPipelineSet OIT=RenderPipelines.register(OitPipelineSet.builder("naturality_water_intersection",
-            RenderPipeline.builder(RenderPipelines.OIT_PARTICLE_SNIPPET,EFFECT))
+            RenderPipeline.builder(RenderPipelines.OIT_PARTICLE_SNIPPET,SURFACE_EFFECT))
             .withDepthBoundsModifier(b->b.withDepthStencilState(DEPTH))
             .withTransmittanceModifier(b->b.withDepthStencilState(DEPTH))
             .withAccumulateModifier(b->b.withDepthStencilState(DEPTH)).build());
@@ -49,6 +55,18 @@ public final class WaterShaders {
         public static final SingleQuadParticle.Layer SPLASH_LAYER=new SingleQuadParticle.Layer(true,naturality.client.api.rendering.AtlasLocations.BLOCKS,SPLASH_PIPELINE,SPLASH_OIT);
     }
     public static final class Composite {
+        public static final RenderPipeline SHAFTS = RenderPipelines.register(
+            RenderPipeline.builder(RenderPipelines.POST_PROCESSING_SNIPPET)
+                .withLocation(Naturality.id("pipeline/water_shafts"))
+                .withBindGroupLayout(WaterVisuals.SunTransmission.LAYOUT)
+                .withVertexShader(Naturality.id("core/water_shafts"))
+                .withFragmentShader(Naturality.id("core/water_shafts"))
+                .withBindGroupLayout(BindGroupLayouts.PROJECTION)
+                .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
+                .withBindGroupLayout(WaterVisuals.LAYOUT)
+                .withCull(false)
+                .withDepthStencilState(new DepthStencilState(CompareOp.GREATER_THAN_OR_EQUAL, false))
+                .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT)).build());
         public static final RenderPipeline SURFACE = RenderPipelines.register(
             RenderPipeline.builder(RenderPipelines.POST_PROCESSING_SNIPPET)
                 .withLocation(Naturality.id("pipeline/water_surface"))
@@ -63,6 +81,8 @@ public final class WaterShaders {
         public static final RenderPipeline PIPELINE = RenderPipelines.register(
             RenderPipeline.builder(RenderPipelines.POST_PROCESSING_SNIPPET)
                 .withLocation(Naturality.id("pipeline/water_optics"))
+                .withBindGroupLayout(BindGroupLayout.builder()
+                    .withUniform("NaturalityWaterMaskDepth", UniformType.COMBINED_IMAGE_SAMPLER).build())
                 .withBindGroupLayout(BindGroupLayouts.FOG)
                 .withVertexShader(Naturality.id("core/water_screen"))
                 .withFragmentShader(Naturality.id("core/water_optics"))

@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import naturality.client.blocks.snow.SurfaceSnowModel.SnowSectionVisibility;
+import naturality.client.api.rendering.layers.SurfaceLayerModel.SnowSectionVisibility;
 import net.minecraft.client.renderer.LevelRenderer;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
@@ -30,8 +30,8 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
 import net.minecraft.world.phys.AABB;
 import java.util.HashMap;
-import naturality.client.blocks.snow.SurfaceSnowModel.SnowRenderRegion;
-import naturality.config.gameplay.GameplaySettings;
+import naturality.client.api.rendering.layers.SurfaceLayerModel.SnowRenderRegion;
+
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.chunk.RenderRegionCache;
 import net.minecraft.client.renderer.chunk.RenderSectionRegion;
@@ -56,7 +56,7 @@ import net.minecraft.client.resources.metadata.animation.AnimationMetadataSectio
 import net.minecraft.client.resources.metadata.animation.FrameSize;
 import net.minecraft.client.resources.metadata.texture.TextureMetadataSection;
 import net.minecraft.server.packs.metadata.MetadataSectionType.WithValue;
-import naturality.blocks.snow.SnowGeometry;
+
 import net.minecraft.core.Direction;
 import org.spongepowered.asm.mixin.Pseudo;
 import naturality.blocks.snow.SnowGeometry.SnowGeometryCache;
@@ -65,6 +65,27 @@ import org.spongepowered.asm.mixin.injection.Coerce;
 /** Feature integration hooks; each nested type retains its independent Mixin target and gate. */
 public final class SnowMixins {
     private SnowMixins() {}
+
+    /** Content-only mode needs coating sprites without enabling the procedural-fluid atlas hook. */
+    @Mixin(TextureAtlas.class)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class AshAtlasLifecycleMixin {
+        // TextureAtlas initializes this injected field before upload is called.
+        @SuppressWarnings("null") @Shadow private Map<Identifier,net.minecraft.client.renderer.texture.TextureAtlasSprite> texturesByName;
+
+        @Inject(method = "upload", at = @At("HEAD"))
+        private void naturality$retireAshAtlas(SpriteLoader.Preparations preparations, CallbackInfo ci) {
+            SnowTextureAtlas.retire((TextureAtlas)(Object)this);
+        }
+
+        @Inject(method = "upload", at = @At("TAIL"))
+        private void naturality$loadAshAtlas(SpriteLoader.Preparations preparations, CallbackInfo ci) {
+            TextureAtlas atlas = (TextureAtlas)(Object)this;
+            if (!atlas.location().equals(naturality.client.api.rendering.AtlasLocations.BLOCKS)) return;
+            naturality.client.api.rendering.layers.SurfaceLayerModel.SnowOverlayModel.atlasLoaded(texturesByName);
+            SnowTextureAtlas.loaded(atlas,texturesByName);
+        }
+    }
 
     @Mixin(TextureAtlas.class)
     @org.jspecify.annotations.NullMarked
@@ -139,7 +160,7 @@ public final class SnowMixins {
             target="Lnet/minecraft/client/renderer/culling/Frustum;cubeInFrustum(Lnet/minecraft/world/level/levelgen/structure/BoundingBox;)I"))
         private int naturality$includeLowerSnow(Frustum frustum, BoundingBox bounds, Operation<Integer> original) {
             int visible=original.call(frustum,bounds);
-            if (!naturality.config.gameplay.GameplaySettings.clientSnowWrapping() || visible==-2 || visible==-1) return visible;
+            if (visible==-2 || visible==-1) return visible;
             return original.call(frustum,new BoundingBox(bounds.minX(),bounds.minY()-SnowSectionVisibility.MAX_DROP,
                 bounds.minZ(),bounds.maxX(),bounds.maxY(),bounds.maxZ()));
         }
@@ -154,7 +175,7 @@ public final class SnowMixins {
             target="Lnet/minecraft/client/renderer/culling/Frustum;isVisible(Lnet/minecraft/world/phys/AABB;)Z"))
         private boolean naturality$includeLowerSnow(Frustum frustum, AABB bounds, Operation<Boolean> original) {
             if (original.call(frustum,bounds)) return true;
-            if (!naturality.config.gameplay.GameplaySettings.clientSnowWrapping()) return false;
+
             int drop=SnowSectionVisibility.below(section.getSectionNode());
             return drop>0 && original.call(frustum,new AABB(bounds.minX,bounds.minY-drop,bounds.minZ,
                 bounds.maxX,bounds.maxY,bounds.maxZ));
@@ -169,16 +190,16 @@ public final class SnowMixins {
 
         @Inject(method = "createRegion", at = @At("RETURN"))
         private void naturality$captureSnow(ClientLevel level, long node, CallbackInfoReturnable<RenderSectionRegion> cir) {
-            if (!GameplaySettings.clientSnowWrapping()) return;
+
             int x = SectionPos.x(node), y = SectionPos.y(node), z = SectionPos.z(node);
             // Probe palettes on the client thread before copying. Conservatively
             // include the complete old snapshot volume, including neighboring owners.
-            boolean snow = naturality.client.blocks.snow.SurfaceSnowModel.SnowRegionPresence.mayHaveSnow(level, node);
+            boolean snow = naturality.client.api.rendering.layers.SurfaceLayerModel.SnowRegionPresence.mayHaveSnow(level, node);
             if (!snow) {
                 ((SnowRenderRegion) cir.getReturnValue()).naturality$markSnowFree();
                 // Tall sugar cane also uses this existing vertical snapshot to find
                 // its wind anchor. Keep the lower margin for sections with stalks.
-                if (!naturality.client.blocks.snow.SurfaceSnowModel.SnowRegionPresence.hasRootedStalk(level, node)) return;
+                if (!naturality.client.api.rendering.layers.SurfaceLayerModel.SnowRegionPresence.hasRootedStalk(level, node)) return;
             }
             var copies = new HashMap<Long, SectionCopy>();
             // A 32-block owner/support search plus one AO neighbor needs a three-section
@@ -283,9 +304,9 @@ public final class SnowMixins {
 
         @Inject(method="shouldDrawSide",at=@At("HEAD"),cancellable=true)
         private void naturality$displacedSnowFace(Direction facing,CallbackInfoReturnable<Boolean> cir) {
-            if(!naturality.config.gameplay.GameplaySettings.clientSnowWrapping())return;
+
             var neighbor=pos.relative(facing);
-            if(level.getBlockState(neighbor).is(Blocks.SNOW) && !SnowGeometry.usesVanillaGeometry(level,neighbor))
+            if(naturality.client.api.rendering.layers.SurfaceLayerModel.isLayer(level.getBlockState(neighbor)) && !naturality.api.geometry.SurfaceLayers.usesVanillaGeometry(level,neighbor,level.getBlockState(neighbor).getBlock()))
                 cir.setReturnValue(true);
         }
     }

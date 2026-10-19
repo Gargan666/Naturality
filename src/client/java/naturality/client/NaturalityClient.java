@@ -66,6 +66,7 @@ public class NaturalityClient implements ClientModInitializer {
         naturality.client.portals.nether.travel.PortalCrossingClient.initialize();
         naturality.client.portals.nether.opening.PortalOpeningClient.initialize();
         // Registered content still has its necessary renderers and effect UI in content-only play.
+        if (CONTENT.enabled() || VISUAL_OVERHAUL.enabled()) naturality.client.api.rendering.layers.SurfaceLayerModel.initialize();
         if (!VISUAL_OVERHAUL.enabled()) return;
         naturality.client.api.rendering.ShaderPreparation.initialize();
         naturality.client.fluids.water.WaterComposite.initialize();
@@ -84,12 +85,12 @@ public class NaturalityClient implements ClientModInitializer {
         if (RISE_PARTICLES.enabled()) naturality.client.systems.weather.end.rise.RiseWeather.initialize();
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents.CLIENT_STOPPING.register(_ -> naturality.client.systems.weather.wind.WindRendering.close());
         naturality.client.blocks.fire.SurfaceFireModel.initialize();
-        naturality.client.blocks.snow.SurfaceSnowModel.initialize();
         naturality.client.systems.weather.wind.WindRendering.FoliageWindModel.initialize();
         naturality.client.rendering.distantdetail.RenderDetail.initialize();
         naturality.client.rendering.lighting.dynamic.DynamicLighting.BellLightingModel.initialize();
         naturality.client.rendering.distantdetail.RenderDetail.DistanceModel.initialize();
         naturality.client.blocks.fire.ProceduralFire.initialize();
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents.CLIENT_STOPPING.register(_ -> naturality.client.blocks.glass.GlassShine.close());
         naturality.client.fluids.shared.ProceduralFluids.initialize();
         naturality.client.fluids.water.WaterVisuals.initialize();
         naturality.client.fluids.water.WaterIntersection.initialize();

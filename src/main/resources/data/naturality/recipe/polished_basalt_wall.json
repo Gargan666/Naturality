@@ -1,0 +1,14 @@
+{
+  "pattern": [
+    "###",
+    "###"
+  ],
+  "type": "minecraft:crafting_shaped",
+  "key": {
+    "#": "minecraft:polished_basalt"
+  },
+  "result": {
+    "id": "naturality:polished_basalt_wall",
+    "count": 6
+  }
+}

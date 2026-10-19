@@ -93,12 +93,20 @@ public final class WeatherClient {
         }
 
         private static float openSkyExposure(Level level, Vec3 origin, Entity context) {
-            if (canSeeSky(level,BlockPos.containing(origin))) return 1;
+            if (level.dimension().equals(Level.NETHER)) {
+                return 1; // Nether wind has no indoor or cave shelter checks.
+            }
+            var probe = new BlockPos.MutableBlockPos().set(origin.x, origin.y, origin.z);
+            if (canSeeSky(level,probe)) return 1;
             for (double distance : DISTANCES) {
                 float reach = distance <= 2 ? 1 : distance <= 4 ? .85F : .65F;
                 for (double[] direction : DIRECTIONS) {
-                    Vec3 sample = origin.add(direction[0] * distance, 0, direction[1] * distance);
-                    if (!canSeeSky(level,BlockPos.containing(sample))) continue;
+                    double x = origin.x + direction[0] * distance, z = origin.z + direction[1] * distance;
+                    probe.set(x, origin.y, z);
+                    if (!canSeeSky(level,probe)) continue;
+                    // Sheltered samples only need their block coordinates. Build
+                    // an exact-position ray endpoint only when the sky is open.
+                    Vec3 sample = new Vec3(x, origin.y, z);
                     if (level.clip(new ClipContext(origin, sample, ClipContext.Block.COLLIDER,
                             ClipContext.Fluid.NONE, context)).getType() == HitResult.Type.MISS)
                         return reach;
@@ -115,6 +123,10 @@ public final class WeatherClient {
             var level = client.level;
             var cameraEntity = client.getCameraEntity();
             if (level == null || cameraEntity == null) { reset(); return; }
+            if (level.dimension().equals(Level.NETHER)) {
+                indoor = 0; initialized = true; underground = false;
+                return;
+            }
             Vec3 eye = client.gameRenderer.mainCamera().position();
             underground = naturality.systems.weather.framework.WeatherSystem.WeatherShelter.underground(level, eye, cameraEntity);
             float open = openSkyExposure(level, eye, cameraEntity);

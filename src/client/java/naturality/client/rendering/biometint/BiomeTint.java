@@ -32,9 +32,53 @@ public final class BiomeTint {
         return index >= 0 && index < sources.size() && sources.get(index) instanceof Source source ? source : null;
     }
 
+    /** Exact neighbor samples for one block tessellation; never retain across builds. */
+    public static final class Samples {
+        private final Source source;
+        private final BlockAndTintGetter level;
+        private final BlockState state;
+        private final BlockPos pos;
+        private final int[] colors = new int[27];
+        private int valid;
+
+        public Samples(Source source, BlockAndTintGetter level, BlockState state, BlockPos pos) {
+            this.source = source;
+            this.level = level;
+            this.state = state;
+            this.pos = pos.immutable();
+        }
+
+        public boolean matches(Source source, BlockAndTintGetter level, BlockState state, BlockPos pos) {
+            return this.source == source && this.level == level && this.state == state && this.pos.equals(pos);
+        }
+
+        private int color(int x, int y, int z) {
+            // Offset/oversized models may extend outside the ordinary neighborhood.
+            // Query those positions directly instead of clamping or growing a world cache.
+            if (x < -1 || x > 1 || y < -1 || y > 1 || z < -1 || z > 1)
+                return source.colorInWorld(state, level, pos.offset(x, y, z));
+            int index = x + 1 + 3 * (y + 1) + 9 * (z + 1);
+            int bit = 1 << index;
+            if ((valid & bit) == 0) {
+                colors[index] = source.colorInWorld(state, level, pos.offset(x, y, z));
+                valid |= bit;
+            }
+            return colors[index];
+        }
+
+        public int at(double x, double y, double z) {
+            return BiomeTint.at(source, level, state, pos, x, y, z, this);
+        }
+    }
+
     /** Coordinates are relative to pos, before section translation or animated wind. */
     public static int at(Source source, BlockAndTintGetter level, BlockState state, BlockPos pos,
             double x, double y, double z) {
+        return at(source, level, state, pos, x, y, z, null);
+    }
+
+    private static int at(Source source, BlockAndTintGetter level, BlockState state, BlockPos pos,
+            double x, double y, double z, @Nullable Samples samples) {
         x -= 0.5; y -= 0.5; z -= 0.5;
         int bx = (int) Math.floor(x), by = (int) Math.floor(y), bz = (int) Math.floor(z);
         double fx = x - bx, fy = y - by, fz = z - bz;
@@ -42,7 +86,9 @@ public final class BiomeTint {
         for (int dz = 0; dz < 2; dz++) for (int dy = 0; dy < 2; dy++) for (int dx = 0; dx < 2; dx++) {
             double weight = (dx == 0 ? 1 - fx : fx) * (dy == 0 ? 1 - fy : fy) * (dz == 0 ? 1 - fz : fz);
             if (weight == 0) continue;
-            int color = source.colorInWorld(state, level, pos.offset(bx + dx, by + dy, bz + dz));
+            int color = samples == null
+                ? source.colorInWorld(state, level, pos.offset(bx + dx, by + dy, bz + dz))
+                : samples.color(bx + dx, by + dy, bz + dz);
             red += ARGB.red(color) * weight;
             green += ARGB.green(color) * weight;
             blue += ARGB.blue(color) * weight;

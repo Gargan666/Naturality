@@ -455,7 +455,7 @@ public class NaturalityCategoryScreen extends OptionsSubScreen {
                 FeatureConfig.get().get(feature), value -> FeatureConfig.get().set(feature, value));
             var reset = addReset(option, true, VisualPerformance.estimate("feature." + feature.key()));
             var button = optionsList().findOption(option);
-            boolean editable = feature.group == Feature.Group.VISUAL || minecraft.level == null;
+            boolean editable = feature.available() && (feature.group == Feature.Group.VISUAL || minecraft.level == null);
             if (button != null) button.active = editable;
             if (reset != null) reset.active = editable;
         }
@@ -691,7 +691,7 @@ public class NaturalityCategoryScreen extends OptionsSubScreen {
 
         public static Category category(Feature feature) {
             return switch (feature) {
-                case CONTENT, MOUNTAIN_WATERFALLS, OCEAN_TERRAIN -> Category.CONTENT;
+                case CONTENT, MOUNTAIN_WATERFALLS, OCEAN_TERRAIN, NETHER_TERRAIN -> Category.CONTENT;
                 case END_TERRAIN, END_MATERIALS, LIRESTONE_CRAGS, END_WILDS, LIRESTONE_BOULDERS,
                     WILDS_BOULDERS, LYREN_PLANTS -> Category.END_WORLDGEN;
                 case CHORUS_FLOWERS, CHORUS_CROWNS, CHORUS_SPROUTS -> Category.CHORUS;

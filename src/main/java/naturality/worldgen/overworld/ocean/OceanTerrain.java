@@ -3,7 +3,9 @@ package naturality.worldgen.overworld.ocean;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import it.unimi.dsi.fastutil.longs.Long2DoubleLinkedOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
 import naturality.Naturality;
+import naturality.bootstrap.ContentRegistration.NaturalityBlocks;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructurePiece;
 import net.minecraft.core.BlockPos;
@@ -80,8 +82,6 @@ public record OceanTerrain(DensityFunction input, DensityFunction continents) im
             boolean sand = biome.is(Biomes.WARM_OCEAN)
                 || biome.is(Biomes.LUKEWARM_OCEAN)
                 || biome.is(Biomes.DEEP_LUKEWARM_OCEAN);
-            var sediment = (sand ? Blocks.SAND
-                : Blocks.GRAVEL).defaultBlockState();
             // Descend through the actual open water, including frozen-ocean ice above it.
             boolean water = false;
             for (int y = seaLevel - 1; y >= -24; y--) {
@@ -94,7 +94,9 @@ public record OceanTerrain(DensityFunction input, DensityFunction continents) im
                     var below = chunk.getBlockState(pos);
                     if (below.isAir() || !below.getFluidState().isEmpty()
                             || below.is(Blocks.BEDROCK)) break;
-                    chunk.setBlockState(pos, sediment);
+                    var material = sand && depth == 0 ? Blocks.SAND
+                        : sand && depth == 1 ? NaturalityBlocks.SEDIMENT : Blocks.GRAVEL;
+                    chunk.setBlockState(pos, material.defaultBlockState());
                 }
                 break;
             }
@@ -128,6 +130,7 @@ public record OceanTerrain(DensityFunction input, DensityFunction continents) im
     }
 
     private static final class Sampler implements DensitySampler {
+        private static final double[] COAST_DISTANCES = coastDistances();
         private final DensitySampler vanilla, continents;
         private final SimplexNoise warp, paths, cracks, relief;
         private final SimplexNoise[] regions = new SimplexNoise[5];
@@ -135,6 +138,18 @@ public record OceanTerrain(DensityFunction input, DensityFunction continents) im
         // Only seed-dependent climate values are cached, never chunk/blending contexts.
         private final ThreadLocal<Long2DoubleLinkedOpenHashMap> distances =
             ThreadLocal.withInitial(Long2DoubleLinkedOpenHashMap::new);
+        // Geometry depends only on this sampler's seed and the 96-block cell.
+        // Keep it worker-local and bounded; never cache the context-dependent base height.
+        private final ThreadLocal<Long2ObjectLinkedOpenHashMap<Spire>> spires =
+            ThreadLocal.withInitial(Long2ObjectLinkedOpenHashMap::new);
+
+        private static double[] coastDistances() {
+            double[] values = new double[25 * 25];
+            int index = 0;
+            for (int dz = -12; dz <= 12; dz++) for (int dx = -12; dx <= 12; dx++)
+                values[index++] = Math.hypot(dx, dz) * 64;
+            return values;
+        }
 
         Sampler(DensitySampler vanilla, DensitySampler continents, RandomSource random) {
             this.vanilla = vanilla;
@@ -154,8 +169,9 @@ public record OceanTerrain(DensityFunction input, DensityFunction continents) im
             double nearest = 768;
             // Bounded geometric distance to land in the vanilla continental field, in blocks.
             // The 64-block lattice is interpolated below; it never loads or generates a chunk.
+            int index = 0;
             for (int dz = -12; dz <= 12; dz++) for (int dx = -12; dx <= 12; dx++) {
-                double distance = Math.hypot(dx, dz) * 64;
+                double distance = COAST_DISTANCES[index++];
                 if (distance >= nearest) continue;
                 if (!ocean(continents.sampleValue(context, (gx + dx) * 64, 0, (gz + dz) * 64))) {
                     nearest = distance;
@@ -184,14 +200,15 @@ public record OceanTerrain(DensityFunction input, DensityFunction continents) im
         }
 
         private record Column(double height, double blend) {}
+        private static final Column UNCHANGED_COLUMN = new Column(0, 0);
 
         private Column column(SamplerContext context, int x, int z, java.util.function.DoubleSupplier surface) {
             float continentalness = continents.sampleValue(context, x, 0, z);
-            if (!ocean(continentalness)) return new Column(0, 0);
+            if (!ocean(continentalness)) return UNCHANGED_COLUMN;
             double original = surface.getAsDouble();
             double blend = ease((-.19 - continentalness) / .09) * ease((continentalness + 1.05) / .12)
                 * ease((62 - original) / 12);
-            if (blend == 0) return new Column(0, 0);
+            if (blend == 0) return UNCHANGED_COLUMN;
             double distance = coastDistance(context, x, z);
             double offshore = ease(distance / 640);
             // Leave relief above the depth limit so deep paths/ravines remain visible.
@@ -225,11 +242,31 @@ public record OceanTerrain(DensityFunction input, DensityFunction continents) im
         private double spires(double x, double z, double base) {
             int gx = (int)Math.floor(x / 96), gz = (int)Math.floor(z / 96);
             double height = base;
+            var cache = spires.get();
             for (int dz = -1; dz <= 1; dz++) for (int dx = -1; dx <= 1; dx++) {
-                RandomSource random = RandomSource.create(seed ^ ((long)(gx + dx) * 341873128712L)
-                    ^ ((long)(gz + dz) * 132897987541L));
-                double cx = (gx + dx + .15 + .7 * random.nextDouble()) * 96;
-                double cz = (gz + dz + .15 + .7 * random.nextDouble()) * 96;
+                int cellX = gx + dx, cellZ = gz + dz;
+                long key = ((long)cellX << 32) ^ (cellZ & 0xffffffffL);
+                var spire = cache.get(key);
+                if (spire == null) {
+                    spire = Spire.create(seed, cellX, cellZ);
+                    if (cache.size() >= 256) cache.removeFirst();
+                    cache.put(key, spire);
+                }
+                height = spire.height(x, z, base, height);
+            }
+            return height;
+        }
+
+        private record Tier(double width, double depth, double offsetU, double offsetV, double fraction) {}
+
+        private record Spire(double cx, double cz, double radius, double summit, double pedestal,
+                double cos, double sin, double aspect, Tier[] tiers) {
+            private static Spire create(long seed, int gx, int gz) {
+                // Preserve the original random draw order, including the rare-summit branch.
+                RandomSource random = RandomSource.create(seed ^ ((long)gx * 341873128712L)
+                    ^ ((long)gz * 132897987541L));
+                double cx = (gx + .15 + .7 * random.nextDouble()) * 96;
+                double cz = (gz + .15 + .7 * random.nextDouble()) * 96;
                 double radius = 8 + 31 * Math.pow(random.nextDouble(), 2);
                 // Preserve the narrow stacks; compress only the broad tail into a 16-block
                 // half-width limit so its upper tiers cannot become large mesas.
@@ -241,24 +278,48 @@ public record OceanTerrain(DensityFunction input, DensityFunction continents) im
                 double pedestal = random.nextDouble();
                 double angle = random.nextDouble() * Math.PI;
                 double cos = Math.cos(angle), sin = Math.sin(angle);
-                double u = Math.abs((x - cx) * cos + (z - cz) * sin);
-                double v = Math.abs((z - cz) * cos - (x - cx) * sin);
                 double aspect = .65 + .55 * random.nextDouble();
-                double rise = Math.max(0, summit - base);
-                // Unwarped rectangular tiers give straight faces and broad, level tops.
-                // A one-block bevel softens voxel edges without rounding the stack into a cone.
-                if (pedestal > .35) {
-                    double edge = Math.min(radius + 6 * pedestal - u, radius * aspect + 5 * pedestal - v);
-                    height = Math.max(height, base + rise * .18 * Math.clamp(edge, 0, 1));
-                }
+                double middleLength = 1.5 + .5 * random.nextDouble();
+                double upperLength = middleLength + .6 + .6 * random.nextDouble();
+                double totalLength = 1 + middleLength + upperLength;
+                double footFraction = pedestal > .35 ? .18 : 0;
+                double elevation = footFraction;
+                double offsetU = 0, offsetV = 0;
+                double previousWidth = radius + (pedestal > .35 ? 6 * pedestal : 0);
+                double previousDepth = radius * aspect + (pedestal > .35 ? 5 * pedestal : 0);
+                Tier[] tiers = new Tier[3];
                 for (int tier = 0; tier < 3; tier++) {
                     double width = radius * (1 - tier * .25);
-                    double edge = Math.min(width - u, width * aspect - v);
-                    double landing = base + rise * (.4 + tier * .3);
+                    double depth = width * aspect;
+                    // Sample the whole containment range in the parent's local axes. Accumulated
+                    // offsets keep every upper footprint supported without forcing concentric tiers.
+                    offsetU += (2 * random.nextDouble() - 1) * (previousWidth - width);
+                    offsetV += (2 * random.nextDouble() - 1) * (previousDepth - depth);
+                    previousWidth = width;
+                    previousDepth = depth;
+                    double length = tier == 0 ? 1 : tier == 1 ? middleLength : upperLength;
+                    elevation += (1 - footFraction) * length / totalLength;
+                    tiers[tier] = new Tier(width, depth, offsetU, offsetV, tier == 2 ? 1 : elevation);
+                }
+                return new Spire(cx, cz, radius, summit, pedestal, cos, sin, aspect, tiers);
+            }
+
+            private double height(double x, double z, double base, double height) {
+                double u = (x - cx) * cos + (z - cz) * sin;
+                double v = (z - cz) * cos - (x - cx) * sin;
+                double rise = Math.max(0, summit - base);
+                // Unwarped rectangular tiers and the original one-block bevel.
+                if (pedestal > .35) {
+                    double edge = Math.min(radius + 6 * pedestal - Math.abs(u), radius * aspect + 5 * pedestal - Math.abs(v));
+                    height = Math.max(height, base + rise * .18 * Math.clamp(edge, 0, 1));
+                }
+                for (var tier : tiers) {
+                    double edge = Math.min(tier.width - Math.abs(u - tier.offsetU), tier.depth - Math.abs(v - tier.offsetV));
+                    double landing = base + rise * tier.fraction;
                     height = Math.max(height, base + (landing - base) * Math.clamp(edge, 0, 1));
                 }
+                return height;
             }
-            return height;
         }
 
         private static float shape(Column column, int y, float original) {
@@ -291,6 +352,12 @@ public record OceanTerrain(DensityFunction input, DensityFunction continents) im
                     }
                     return surface(context, blockX, blockZ);
                 });
+                // Vanilla already filled this column. Rewriting it through shape's
+                // identity branch needlessly touches every density in inland chunks.
+                if (column.blend == 0) {
+                    index += volume.sizeY();
+                    continue;
+                }
                 for (int y = 0; y < volume.sizeY(); y++) {
                     output.set(index, shape(column, volume.blockY(y), output.get(index)));
                     index++;

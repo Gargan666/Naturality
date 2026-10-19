@@ -7,6 +7,8 @@
 uniform sampler2D Sampler0;
 uniform sampler2D Sampler1;
 uniform sampler2D NaturalityWaterMask;
+uniform sampler2D NaturalityWaterMaskDepth;
+uniform sampler2D NaturalityWaterAtmosphere;
 
 layout(location = 0) in vec2 texCoord;
 layout(location = 1) flat in mat4 waterInverseProjection;
@@ -32,13 +34,22 @@ vec2 water_project(vec3 offset) {
 // This is the pre-transparency backdrop, not the final visible water color.
 // The same water surface supplies biome color, lighting and atmospheric fog
 // over both missing terrain and fully faded terrain.
-vec3 water_missing_bed_fill() { return vec3(0.0); }
+vec3 water_missing_bed_fill(vec3 offset) {
+    // A roofed pocket still looks into the underwater lower hemisphere, even
+    // where terrain is absent or reaches the render-distance boundary.
+    return WaterEnvironment.w != 0 ? naturality_water_directional_fog_color(normalize(offset).y)
+        : naturality_water_fog_color();
+}
 
 vec3 above_water_terrain_fade(vec3 color, vec3 offset) {
     float end = min(FogRenderDistanceEnd, max(12.0, WaterParams.w * 0.80));
     float start = min(FogRenderDistanceStart, end * 0.65);
-    float fade = smoothstep(start, end, length(offset.xz));
-    return mix(color, water_missing_bed_fill(), fade);
+    float distance = max(length(offset.xz), abs(offset.y));
+    float fade = smoothstep(start, end, distance);
+    vec3 water = mix(color, water_missing_bed_fill(offset), fade);
+    float atmosphereFade = naturality_water_fog_coverage(smoothstep(
+        FogRenderDistanceEnd * 0.80, FogRenderDistanceEnd, distance));
+    return mix(water, texture(NaturalityWaterAtmosphere, texCoord).rgb, atmosphereFade);
 }
 vec2 water_cell_wave(ivec2 cell) {
     uvec2 h = uvec2(cell) * uvec2(1597334677u, 3812015801u);
@@ -58,19 +69,19 @@ vec2 water_continuous_wave(vec2 localGrid, ivec2 origin) {
 
 // Integrate only wet intervals. Each interval is clipped analytically in Y so
 // even a one-block pond is retained when viewed from high above it.
-vec3 water_path(vec3 ray, float distance) {
-    float wet = 0.0, optical = 0.0, scatter = 0.0;
-    float stepLength = min(distance, 192.0) / 24.0;
+float water_path(vec3 ray, float distance, float entry) {
+    float wet = 0.0;
+    float stepLength = min(max(distance - entry, 0.0), 192.0) / 24.0;
     for (int i = 0; i < 24; i++) {
-        float a = float(i) * stepLength, b = a + stepLength;
+        float a = entry + float(i) * stepLength, b = a + stepLength;
         vec3 mid = WaterCamera.xyz + ray * ((a + b) * 0.5);
         vec4 column = naturality_water_geometry(mid.xz);
-        // Covered/stacked columns are absent from the exposed-surface map.
-        // Keep immersion fog continuous using the actual camera water column.
-        bool fallback = WaterTime.y > 0.5 && WaterEnvironment.y == 0 && (column.w == 0.0
-                || (WaterCamera.y < column.y - 0.1 && mid.y < column.y));
-        if (fallback)
-            column = vec4(WaterCamera.y + WaterTime.z, WaterCamera.y - 255.0, 0.0, 1.0);
+        // The visible entry face proves water after the dry pocket. Roofs and
+        // stacked pools can be absent/below the exposed-column map; do not
+        // interpret that missing data as air. Ordinary air views and falling
+        // sheets keep their mapped intervals. Never count the dry approach.
+        bool covered = WaterEnvironment.w != 0 && (column.w == 0.0 || mid.y < column.y);
+        if (covered) { wet += b - a; continue; }
         if (column.w == 0.0) continue;
         if (abs(ray.y) > 0.0001) {
             float t0 = (column.y - WaterCamera.y) / ray.y;
@@ -80,20 +91,28 @@ vec3 water_path(vec3 ray, float distance) {
         } else if (mid.y < column.y || mid.y > column.x) continue;
         float segment = max(b - a, 0.0);
         if (segment <= 0.0) continue;
-        // Four biome taps are useful only after this interval actually intersects water.
-        if (!fallback) column.z = naturality_water_murk(mid.xz);
-        float density = mix(0.008, 0.16, column.z);
         wet += segment;
-        optical += density * segment;
-        scatter += segment;
     }
-    return vec3(wet, optical, scatter / max(wet, 0.001));
+    return wet;
 }
 
 void main() {
     vec4 original = texture(Sampler0, texCoord);
     if (WaterMap.w == 0) { fragColor = original; return; }
     float depth = texture(Sampler1, texCoord).r;
+    bool splitView = WaterLens.z > 0.5;
+    // Reversed-Z depth 1 is the actual near plane, including pitch and roll.
+    // Water faces clipped before this plane cannot supply a surface-mask pixel.
+    bool immersed = splitView ? naturality_water_lens_depth(water_world_offset(texCoord, 1.0)) >= 0.0
+        : WaterTime.y > 0.5;
+    vec4 surface = texture(NaturalityWaterMask, texCoord);
+    if (splitView && immersed) {
+        // The private depth mask also contains vanilla's posed dry boat hull.
+        // Do not confuse that invisible patch with water clipped by the lens.
+        float maskDepth = texture(NaturalityWaterMaskDepth, texCoord).r;
+        if (maskDepth > depth + 0.000001 && (surface.r <= 0.0 || maskDepth > surface.r + 0.000001))
+            immersed = false;
+    }
     // The column map contains loaded water well beyond the terrain draw range.
     // It is an optical-property lookup, not proof that this pixel sees water.
     // From air, only shade opaque scenery behind an actually visible water face.
@@ -101,13 +120,12 @@ void main() {
     // translucent draws. Water keeps its normal alpha so ice/entities between
     // the surface and the missing bed remain visible in classic and OIT modes.
     float surfaceCoverage = 1.0;
-    if (WaterTime.y < 0.5) {
-        vec4 surface = texture(NaturalityWaterMask, texCoord);
+    if (!immersed) {
         surfaceCoverage = clamp(surface.a, 0.0, 1.0);
         if (surface.r <= 0.0 || surfaceCoverage <= 0.0) { fragColor = original; return; }
         if (depth <= 0.0) {
             vec3 surfaceOffset = water_world_offset(texCoord, surface.r);
-            vec3 backdrop = above_water_terrain_fade(vec3(0.0), surfaceOffset);
+            vec3 backdrop = above_water_terrain_fade(water_missing_bed_fill(surfaceOffset), surfaceOffset);
             fragColor = WaterSwitches.x != 0
                 ? vec4(mix(original.rgb, backdrop, surfaceCoverage), original.a) : original;
             return;
@@ -118,9 +136,9 @@ void main() {
     float distance = depth > 0.0 ? length(offset) : 192.0;
     vec3 ray = normalize(offset);
     // Only above-water absorption consumes the wet-path integral.
-    vec3 path = vec3(0.0);
-    if (WaterTime.y < 0.5) path = water_path(ray, distance);
-    if (path.x <= 0.001 && WaterTime.y < 0.5) {
+    float path = 0.0;
+    if (!immersed) path = water_path(ray, distance, length(water_world_offset(texCoord, surface.r)));
+    if (path <= 0.001 && !immersed) {
         // Distant water can lie beyond the bounded optical map/integration.
         // Its visible mask still requires terrain to join the horizon fade.
         vec3 distant = WaterSwitches.x != 0 ? above_water_terrain_fade(original.rgb, offset) : original.rgb;
@@ -138,7 +156,7 @@ void main() {
     if (WaterSwitches.y != 0 && submergedEndpoint) {
         vec2 size = vec2(textureSize(Sampler0, 0));
         vec2 delta;
-        if (WaterTime.y < 0.5) {
+        if (!immersed) {
             float cellSize = exp2(floor(log2(max(WaterParams.z, 1.0)))) / 8.0;
             float t = clamp((endpointColumn.x - WaterCamera.y) / min(ray.y, -0.0001), 0.0, distance);
             vec2 surface = WaterCamera.xz + ray.xz * t;
@@ -163,36 +181,39 @@ void main() {
         float tolerance = max(0.75, distance * 0.03);
         refractionWeight = (1.0 - smoothstep(tolerance, tolerance * 3.0, separation))
             * smoothstep(0.0, 0.4, otherWet) * step(0.000001, otherDepth);
+        if (splitView && (naturality_water_lens_depth(water_world_offset(candidate, 1.0)) >= 0.0) != immersed)
+            refractionWeight = 0.0;
         uv = candidate;
     }
     vec3 color = mix(original.rgb, texture(Sampler0, uv).rgb, refractionWeight);
     // Immersed scenery receives shared biome haze below, before translucency.
     // Keep wet-path absorption for views through water from above.
-    if (WaterSwitches.x != 0 && WaterTime.y < 0.5) {
+    if (WaterSwitches.x != 0 && (!immersed || splitView)) {
         // Apply the submerged palette through the water mask, rather than
         // tinting the dry camera's shared lightmap (which would color land).
         vec3 tint = mix(vec3(1.0), WaterTint.rgb / max(max(WaterTint.r, WaterTint.g), max(WaterTint.b, 0.00392)), 0.5);
         color *= tint * 0.85;
-        float transmission = exp(-path.y);
-        // Above water the ray can cross a different biome than the camera.
-        // Preserve the submerged scene's local color instead of painting it
-        // with the camera biome's tint (which creates moving colored patches).
-        vec3 scatter = original.rgb * 0.18 * path.z * WaterCamera.w;
-        if (WaterSwitches.w != 0) scatter = WaterTint.rgb * 0.22 * max(path.z, 0.2);
-        color = mix(scatter, color, transmission);
+    }
+    if (WaterSwitches.x != 0 && !immersed) {
+        // Crossing into air must not remove the underwater silhouette/haze.
+        // Count only the wet part of the sightline, excluding camera altitude.
+        color = naturality_water_path_fog(color, path, 1.0, ray.y);
         // Submerged terrain bypasses terrain atmosphere. Restore its distance
         // fade after water optics, into the exact same fill as absent seabed.
         color = above_water_terrain_fade(color, offset);
     }
-    if (WaterSwitches.x != 0 && WaterTime.y > 0.5) {
+    if (WaterSwitches.x != 0 && immersed) {
         // Preserve the old RGBA8 intermediate's rounding before applying fog.
         color = round(clamp(color, 0.0, 1.0) * 255.0) / 255.0;
         vec4 water = texture(NaturalityWaterMask, texCoord);
         float skyOpening = depth <= 0.0 && water.r > 0.0 && water.a > 0.0
-            ? smoothstep(0.05, 0.35, ray.y) : 0.0;
+            ? smoothstep(0.05, 0.35, ray.y) * naturality_water_sun_transmission() : 0.0;
         float fogDistance = depth > 0.0 ? length(water_view_offset(texCoord, depth)) : 10000.0;
-        if (water.r > 0.0 && water.a > 0.0) fogDistance = min(fogDistance, water.b);
-        color = mix(naturality_water_terrain_fog(color, fogDistance), color, skyOpening);
+        // A nearby water face at entry is not the distance to the seabed.
+        // Only bound sky haze by the overhead exit; keep actual terrain depth.
+        if (depth <= 0.0 && ray.y > 0.0 && water.r > 0.0 && water.a > 0.0)
+            fogDistance = min(fogDistance, water.b);
+        color = mix(naturality_water_path_fog(color, fogDistance, 1.0, ray.y), color, skyOpening);
     }
     fragColor = vec4(mix(original.rgb, color, surfaceCoverage), original.a);
 }

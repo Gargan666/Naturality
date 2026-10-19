@@ -1,0 +1,13 @@
+{
+  "variants": {
+    "waterlogged=false": {
+      "model": "minecraft:block/cauldron"
+    },
+    "waterlogged=true,water_surface=false": {
+      "model": "minecraft:block/cauldron"
+    },
+    "waterlogged=true,water_surface=true": {
+      "model": "minecraft:block/water_cauldron_full"
+    }
+  }
+}

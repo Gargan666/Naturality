@@ -68,10 +68,12 @@ void main() {
     naturalityFluidUV=vec2(0.0);
     naturalityFlow=vec3(0.0); // Shared shader reconstructs flow from UV derivatives.
     bool fluidSprite=false;
+    naturalitySubmerged=0;
     for(int i=0;i<4;i++) {
         vec4 b=NaturalityFluidBounds[i];
         if(b.x>=0.0 && all(greaterThanEqual(texCoord0,b.xy)) && all(lessThanEqual(texCoord0,b.zw))) {
             fluidSprite=true;
+            naturalitySubmerged=i<2?-1:0;
             naturalityFluidKind=(NaturalityFluidInfo.w & (1<<i))!=0?i:-1;
             naturalityFluidUV=(texCoord0-b.xy)/(b.zw-b.xy);
         }
@@ -87,13 +89,14 @@ void main() {
             naturalityShade=vec4(1.0);
         }
     }
-    naturalitySubmerged=0;
     int windTag=(fluidSprite || naturalityFireKind>=0)?255:int(round(_vert_color.a*255.0));
+    if (windTag == 244) naturalitySubmerged = 9;
     // Preserve the bell's lighting-coordinate marker for the shared fragment shader.
     if (windTag == 242) naturalityShade.a = 242.0 / 255.0;
     float windDetail = naturality_wind_detail(position);
     if (windDetail > 0.0)
         position.xz+=naturality_wind_offset(_vert_position,naturalitySectionOrigin,windTag) * windDetail;
+    position += naturality_brush_offset(_vert_position,naturalitySectionOrigin,windTag);
     position.xz += naturality_menu_extension(_vert_position + naturalitySectionOrigin);
     position.y -= naturality_menu_wall_drop(_vert_position + naturalitySectionOrigin);
     gl_Position=u_ProjectionMatrix*u_ModelViewMatrix*vec4(position,1.0);

@@ -5,6 +5,11 @@ plugins {
 
 repositories {
 	maven {
+		name = 'MixinSquared'
+		url = 'https://maven.bawnorton.com/releases'
+		content { includeGroup 'com.github.bawnorton.mixinsquared' }
+	}
+	maven {
 		name = 'Terraformers'
 		url = 'https://maven.terraformersmc.com/'
 		content { includeGroup 'com.terraformersmc' }
@@ -85,6 +90,8 @@ dependencies {
 	// To change the versions see the gradle.properties file
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
 	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	// Select Iris's injected sky guard by owner/name, without generated handler hashes.
+	include(implementation(annotationProcessor('com.github.bawnorton.mixinsquared:mixinsquared-fabric:0.3.7')))
 
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"

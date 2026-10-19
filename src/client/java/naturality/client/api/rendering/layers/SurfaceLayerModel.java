@@ -1,4 +1,5 @@
-package naturality.client.blocks.snow;
+package naturality.client.api.rendering.layers;
+import naturality.client.blocks.snow.SnowTextureAtlas;
 
 import java.util.function.Predicate;
 import naturality.blocks.snow.SnowGeometry;
@@ -36,22 +37,94 @@ import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 @org.jspecify.annotations.NullMarked
-public final class SurfaceSnowModel extends WrapperBlockStateModel {
-    private SurfaceSnowModel(BlockStateModel wrapped) { super(wrapped); }
+public final class SurfaceLayerModel extends WrapperBlockStateModel {
+    public static boolean isLayer(BlockState state) {
+        return state.is(Blocks.SNOW) || naturality.blocks.ash.Ash.isLayer(state);
+    }
+    private static boolean wrapping(BlockState state) {
+        return naturality.blocks.ash.Ash.isLayer(state)
+            || naturality.config.startup.FeatureConfig.Feature.VISUAL_OVERHAUL.enabled()
+                && naturality.config.gameplay.GameplaySettings.clientSnowWrapping();
+    }
+    private static boolean plainGeometry(BlockAndTintGetter level, BlockPos pos) {
+        var material = level.getBlockState(pos).getBlock();
+        return naturality.api.geometry.SurfaceLayers.usesVanillaGeometry(level,pos,material)
+            || naturality.blocks.ash.Ash.isLayer(level.getBlockState(pos))
+                && naturality.api.geometry.SurfaceLayers.surfaces(level,pos,material).isEmpty();
+    }
+    private static VoxelShape layerShape(BlockAndTintGetter level, BlockPos pos, int layers) {
+        return naturality.api.geometry.SurfaceLayers.shape(level,pos,layers,level.getBlockState(pos).getBlock());
+    }
+    private static List<naturality.blocks.fire.FireGeometry.FireSurface.Patch> layerSurfaces(BlockAndTintGetter level, BlockPos pos) {
+        return naturality.api.geometry.SurfaceLayers.surfaces(level,pos,level.getBlockState(pos).getBlock());
+    }
+    private SurfaceLayerModel(BlockStateModel wrapped) { super(wrapped); }
     public static void initialize() {
         ModelLoadingPlugin.register(context -> context.modifyBlockModelAfterBake().register(
-            ModelModifier.WRAP_LAST_PHASE, (model, bake) -> bake.state().is(Blocks.SNOW) ? new SurfaceSnowModel(model)
-                : bake.state().isAir() || bake.state().getBlock() instanceof net.minecraft.world.level.block.BaseFireBlock
-                    || bake.state().getBlock() instanceof net.minecraft.world.level.block.GrassBlock
-                    ? model : new SnowOverlayModel(model)));
+            ModelModifier.WRAP_LAST_PHASE, (model, bake) -> {
+                BlockState state = bake.state();
+                BlockStateModel coated = isLayer(state) ? new SurfaceLayerModel(model)
+                    : state.isAir() || state.getBlock() instanceof net.minecraft.world.level.block.BaseFireBlock
+                        ? model : new SnowOverlayModel(model);
+                return naturality.blocks.ash.Ash.isLayer(state)
+                    || net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(state.getBlock()).equals(AshTopRotationModel.ASH_BLOCK)
+                    ? new AshTopRotationModel(coated) : coated;
+            }));
+    }
+
+    /** Rotate only the ash sprite's upward faces, including the patches emitted by fitted layers. */
+    private static final class AshTopRotationModel extends WrapperBlockStateModel {
+        private static final Identifier ASH_BLOCK = Identifier.fromNamespaceAndPath("naturality","ash_block");
+        private static final Identifier ASH_SPRITE = Identifier.fromNamespaceAndPath("naturality","block/ash");
+        private record Key(Object geometry, int turns) {}
+
+        private AshTopRotationModel(BlockStateModel wrapped) { super(wrapped); }
+
+        private static int turns(BlockState state, BlockPos pos) {
+            return (int)(state.getSeed(pos) >>> 16) & 3;
+        }
+
+        @Override
+        public @org.jspecify.annotations.Nullable Object createGeometryKey(BlockAndTintGetter level, BlockPos pos,
+                BlockState state, RandomSource random) {
+            Object geometry = wrapped.createGeometryKey(level,pos,state,random);
+            return geometry == null ? null : new Key(geometry,turns(state,pos));
+        }
+
+        @Override
+        public void emitQuads(QuadEmitter emitter, BlockAndTintGetter level, BlockPos pos, BlockState state,
+                RandomSource random, Predicate<@org.jspecify.annotations.Nullable Direction> cull) {
+            int turns = turns(state,pos);
+            if (turns == 0) { wrapped.emitQuads(emitter,level,pos,state,random,cull); return; }
+            emitter.pushTransform(quad -> {
+                if (quad.lightFace() != Direction.UP) return true;
+                TextureAtlasSprite sprite = SnowOverlayModel.spriteLookup.find(
+                    (quad.u(0)+quad.u(2))*.5F,(quad.v(0)+quad.v(2))*.5F);
+                if (sprite == null || !sprite.contents().name().equals(ASH_SPRITE)) return true;
+                float width = sprite.getU1()-sprite.getU0(), height = sprite.getV1()-sprite.getV0();
+                for (int vertex = 0; vertex < 4; vertex++) {
+                    float u = (quad.u(vertex)-sprite.getU0())/width;
+                    float v = (quad.v(vertex)-sprite.getV0())/height;
+                    for (int turn = 0; turn < turns; turn++) {
+                        float previousU = u;
+                        u = 1-v;
+                        v = previousU;
+                    }
+                    quad.uv(vertex,sprite.getU0()+u*width,sprite.getV0()+v*height);
+                }
+                return true;
+            });
+            try { wrapped.emitQuads(emitter,level,pos,state,random,cull); }
+            finally { emitter.popTransform(); }
+        }
     }
     @Override public @org.jspecify.annotations.Nullable Object createGeometryKey(BlockAndTintGetter level, BlockPos pos, BlockState state, RandomSource random) {
-        return !naturality.config.gameplay.GameplaySettings.clientSnowWrapping() || SnowGeometry.usesVanillaGeometry(level,pos)
+        return !wrapping(state) || !level.getBlockState(pos).is(state.getBlock()) || plainGeometry(level,pos)
             ? wrapped.createGeometryKey(level,pos,state,random) : null;
     }
     @Override public void emitQuads(QuadEmitter e, BlockAndTintGetter level, BlockPos pos, BlockState state,
             RandomSource random, Predicate<@org.jspecify.annotations.Nullable Direction> cull) {
-        if (!naturality.config.gameplay.GameplaySettings.clientSnowWrapping() || SnowGeometry.usesVanillaGeometry(level,pos)) {
+        if (!wrapping(state) || !level.getBlockState(pos).is(state.getBlock()) || plainGeometry(level,pos)) {
             wrapped.emitQuads(e,level,pos,state,random,cull); return;
         }
         naturality.blocks.snow.SnowGeometry.SnowGeometryCache.begin();
@@ -65,14 +138,14 @@ public final class SurfaceSnowModel extends WrapperBlockStateModel {
         for(int d=1;d<=7;d++) {
             var below=level.getBlockState(pos.below(d));
             if(below.is(net.minecraft.tags.BlockTags.LEAVES)){leafDepth=d;break;}
-            if(!below.is(Blocks.SNOW))break;
+            if(!below.is(state.getBlock()))break;
         }
         // Use the supporting leaf's wind shelter result, not skylight at the
         // snow block. Those can differ under a canopy and make the cap drift
         // away from leaves which are correctly sheltered from wind.
         boolean exposedLeaves=leafDepth>0
             && naturality.client.systems.weather.wind.WindRendering.windExposed(level,pos.below(leafDepth));
-        var shape = SnowGeometry.shape(level,pos,state.getValue(SnowLayerBlock.LAYERS));
+        var shape = layerShape(level,pos,state.getValue(SnowLayerBlock.LAYERS));
         var visibility = new SnowFaceVisibility(level,pos,shape);
         for (var p : shape.toAabbs()) {
             SnowSectionVisibility.record(pos,p.minY);
@@ -117,6 +190,7 @@ public final class SurfaceSnowModel extends WrapperBlockStateModel {
     /** Snow painted into cached sprite variants on the original model faces. */
     public static final class SnowOverlayModel extends WrapperBlockStateModel {
         private static final Identifier OVERLAY = Identifier.fromNamespaceAndPath("naturality","block/snow_overlay");
+        private static final Identifier ASH_OVERLAY = Identifier.fromNamespaceAndPath("naturality","block/ash_overlay");
         private static volatile Map<Identifier,TextureAtlasSprite> sprites=Map.of();
         private static volatile SnowSpriteLookup spriteLookup=new SnowSpriteLookup(Map.of());
         public static void atlasLoaded(Map<Identifier,TextureAtlasSprite> atlas) {
@@ -126,15 +200,22 @@ public final class SurfaceSnowModel extends WrapperBlockStateModel {
         @Override public @org.jspecify.annotations.Nullable Object createGeometryKey(BlockAndTintGetter l,BlockPos p,BlockState s,RandomSource r) {
             return naturality.client.rendering.distantdetail.RenderDetail.reducedDetails(p)
                 || l instanceof SnowRenderRegion region && !region.naturality$mayHaveSnow()
-                || !naturality.config.gameplay.GameplaySettings.clientSnowWrapping()
-                || !naturality.config.live.NaturalityConfig.get().effects.snowOverlays
-                || naturality.blocks.snow.SnowGeometry.NoSnowSideOverlay.contains(s) || naturality.blocks.snow.SnowGeometry.SnowSupportOnly.contains(s) || snowOwner(l,p)==null
+                || !overlayAllowed(l,p,s)
                 ? wrapped.createGeometryKey(l,p,s,r) : null;
+        }
+        private static boolean overlayAllowed(BlockAndTintGetter level, BlockPos pos, BlockState state) {
+            var owner = snowOwner(level,pos);
+            if (owner == null) return false;
+            if (naturality.blocks.ash.Ash.isLayer(level.getBlockState(owner))) return !state.is(naturality.blocks.ash.Ash.NO_OVERLAYS);
+            return naturality.config.gameplay.GameplaySettings.clientSnowWrapping()
+                && naturality.config.startup.FeatureConfig.Feature.VISUAL_OVERHAUL.enabled()
+                && naturality.config.live.NaturalityConfig.get().effects.snowOverlays
+                && !SnowGeometry.NoSnowSideOverlay.contains(state) && !SnowGeometry.SnowSupportOnly.contains(state);
         }
         private static @org.jspecify.annotations.Nullable BlockPos snowOwner(BlockAndTintGetter level,BlockPos pos) {
             for(int offset=1;offset<=SnowGeometry.MAX_DEPTH;offset++) {
                 var candidate=pos.above(offset);
-                if(level.getBlockState(candidate).is(Blocks.SNOW))return candidate;
+                if(isLayer(level.getBlockState(candidate)) && wrapping(level.getBlockState(candidate)))return candidate;
                 if(!SnowGeometry.exposesGround(level,candidate))break;
             }
             return null;
@@ -158,25 +239,24 @@ public final class SurfaceSnowModel extends WrapperBlockStateModel {
         }
         private void emitCached(QuadEmitter e,BlockAndTintGetter level,BlockPos pos,BlockState state,
                 RandomSource random,Predicate<@org.jspecify.annotations.Nullable Direction> cull) {
-            if (!naturality.config.gameplay.GameplaySettings.clientSnowWrapping() || !naturality.config.live.NaturalityConfig.get().effects.snowOverlays) { wrapped.emitQuads(e,level,pos,state,random,cull); return; }
-            var overlay=sprites.get(OVERLAY);
-            if (overlay == null || naturality.blocks.snow.SnowGeometry.NoSnowSideOverlay.contains(state)
-                    || naturality.blocks.snow.SnowGeometry.SnowSupportOnly.contains(state)) { wrapped.emitQuads(e,level,pos,state,random,cull); return; }
+            var owner=snowOwner(level,pos);
+            if(owner==null || !overlayAllowed(level,pos,state)) { wrapped.emitQuads(e,level,pos,state,random,cull);return; }
+            boolean ash=naturality.blocks.ash.Ash.isLayer(level.getBlockState(owner));
+            var overlay=sprites.get(ash ? ASH_OVERLAY : OVERLAY);
+            if (overlay == null) { wrapped.emitQuads(e,level,pos,state,random,cull); return; }
             boolean lowerDoublePlant=state.getBlock() instanceof DoublePlantBlock
                 && state.getValue(DoublePlantBlock.HALF)==net.minecraft.world.level.block.state.properties.DoubleBlockHalf.LOWER;
-            if(state.getBlock() instanceof GrassBlock || SnowGeometry.coveredByContinuation(level,pos) || lowerDoublePlant) {
+            if(!ash && state.getBlock() instanceof GrassBlock || SnowGeometry.coveredByContinuation(level,pos) || lowerDoublePlant) {
                 wrapped.emitQuads(e,level,pos,state,random,cull); return;
             }
-            var owner=snowOwner(level,pos);
-            if(owner==null) { wrapped.emitQuads(e,level,pos,state,random,cull); return; }
             boolean foliage=SnowGeometry.isFoliage(state);
             var tops=new ArrayList<naturality.blocks.fire.FireGeometry.FireSurface.Patch>();
             var snowBoxes=new ArrayList<net.minecraft.world.phys.AABB>();
             int offset=owner.getY()-pos.getY();
             var snowState=level.getBlockState(owner);
-            for(var box:SnowGeometry.shape(level,owner,snowState.getValue(SnowLayerBlock.LAYERS)).toAabbs())
+            for(var box:layerShape(level,owner,snowState.getValue(SnowLayerBlock.LAYERS)).toAabbs())
                 snowBoxes.add(box.move(0,offset,0));
-            for(var p:SnowGeometry.surfaces(level,owner))tops.add(new naturality.blocks.fire.FireGeometry.FireSurface.Patch(
+            for(var p:layerSurfaces(level,owner))tops.add(new naturality.blocks.fire.FireGeometry.FireSurface.Patch(
                 p.x(),p.y()+offset,p.z(),p.ux(),p.uz(),p.vx(),p.vz()));
             if(tops.isEmpty()) { wrapped.emitQuads(e,level,pos,state,random,cull);return; }
             boolean leaves=state.getBlock() instanceof LeavesBlock || foliage;
@@ -247,7 +327,7 @@ public final class SurfaceSnowModel extends WrapperBlockStateModel {
                     if(source!=null && !sides.isEmpty()) {
                         var tintSource=q.tintIndex()<0?null:net.minecraft.client.Minecraft.getInstance().getBlockColors().getTintSource(state,q.tintIndex());
                         int tint=tintSource==null?0xFFFFFF:tintSource.colorInWorld(state,level,pos)&0xFFFFFF;
-                        var key=compositeKey(source,sides,tint,leaves);
+                        var key=compositeKey(source,overlay,sides,tint,leaves);
                         var composite=SnowTextureAtlas.sprite(key,source,overlay,()->raster(source,overlay,sides,tint,leaves));
                         if(composite!=source) {
                             for(int vertex=0;vertex<4;vertex++)q.uv(vertex,
@@ -285,7 +365,7 @@ public final class SurfaceSnowModel extends WrapperBlockStateModel {
                     var cell=pos.offset(column.x,y,column.z);
                     var shape=cells.computeIfAbsent(cell,p -> {
                         var state=level.getBlockState(p);
-                        var local=state.is(Blocks.SNOW)?SnowGeometry.shape(level,p,state.getValue(SnowLayerBlock.LAYERS))
+                        var local=isLayer(state)?layerShape(level,p,state.getValue(SnowLayerBlock.LAYERS))
                             :state.getOcclusionShape();
                         return local.move(p.getX()-pos.getX(),p.getY()-pos.getY(),p.getZ()-pos.getZ());
                     });
@@ -305,8 +385,8 @@ public final class SurfaceSnowModel extends WrapperBlockStateModel {
                     net.minecraft.world.phys.shapes.BooleanOp.ONLY_FIRST);
             }
         }
-        private record CompositeKey(Identifier source,List<Integer> mask,int tint,boolean foliage) { }
-        private static CompositeKey compositeKey(TextureAtlasSprite source,List<Side> sides,int tint,boolean foliage) {
+        private record CompositeKey(Identifier source,Identifier overlay,List<Integer> mask,int tint,boolean foliage) { }
+        private static CompositeKey compositeKey(TextureAtlasSprite source,TextureAtlasSprite overlay,List<Side> sides,int tint,boolean foliage) {
             var mask=new ArrayList<Integer>();
             for(var side:sides) {
                 for(var uv:side.uv) {
@@ -317,7 +397,7 @@ public final class SurfaceSnowModel extends WrapperBlockStateModel {
                 mask.add(Math.round((float)Math.hypot(side.p[3][0]-side.p[0][0],side.p[3][2]-side.p[0][2])*65536));
                 mask.add(Math.round((side.p[0][1]-side.p[1][1])*65536));
             }
-            return new CompositeKey(source.contents().name(),List.copyOf(mask),tint,foliage);
+            return new CompositeKey(source.contents().name(),overlay.contents().name(),List.copyOf(mask),tint,foliage);
         }
         private static NativeImage raster(TextureAtlasSprite source,TextureAtlasSprite overlay,List<Side> sides,int tint,boolean foliage) {
             var original=((SnowSpritePixels)source.contents()).naturality$image();
@@ -436,7 +516,7 @@ public final class SurfaceSnowModel extends WrapperBlockStateModel {
                 if (chunk == null) continue;
                 for (int sy = Math.max(y - 3, level.getMinSectionY()); sy <= Math.min(y + 3, level.getMaxSectionY() - 1); sy++) {
                     var data = chunk.getSection(chunk.getSectionIndexFromSectionY(sy));
-                    if (!data.hasOnlyAir() && data.maybeHas(state -> state.is(Blocks.SNOW))) return true;
+                    if (!data.hasOnlyAir() && data.maybeHas(SurfaceLayerModel::isLayer)) return true;
                 }
             }
             return false;
@@ -447,6 +527,64 @@ public final class SurfaceSnowModel extends WrapperBlockStateModel {
             int y = SectionPos.y(section);
             return chunk != null && y >= level.getMinSectionY() && y < level.getMaxSectionY()
                 && chunk.getSection(chunk.getSectionIndexFromSectionY(y)).maybeHas(state -> state.is(Blocks.SUGAR_CANE));
+        }
+    }
+
+    /** Coating meshes depend on owners/supports outside vanilla's one-block rebuild neighborhood. */
+    public static final class Updates {
+        private Updates() {}
+
+        @FunctionalInterface
+        public interface DirtySection {
+            void mark(int x, int y, int z);
+        }
+
+        public static void changed(ClientLevel level, BlockPos pos, BlockState before, BlockState after, DirtySection dirty) {
+            if (before == after) return;
+            int lowest = Integer.MAX_VALUE;
+            int highest = Integer.MIN_VALUE;
+            int depth = naturality.api.geometry.SurfaceLayers.MAX_DEPTH;
+            boolean ownerChanged = isLayer(before) || isLayer(after);
+            if (ownerChanged) {
+                // Consult the old state too: after removal no palette/owner lookup can find its old overlays.
+                lowest = pos.getY() - depth - 1;
+                highest = pos.getY() + 1;
+            } else {
+                // A support or side occluder can change fitted layers above it. Probe section palettes first;
+                // ordinary edits in coating-free terrain must not scan 32 blocks in each neighboring column.
+                int minSectionY = Math.max(level.getMinSectionY(),SectionPos.blockToSectionCoord(pos.getY()-1));
+                int maxSectionY = Math.min(level.getMaxSectionY()-1,SectionPos.blockToSectionCoord(pos.getY()+depth+1));
+                for (int z = (pos.getZ()-1)>>4; z <= (pos.getZ()+1)>>4; z++) {
+                    for (int x = (pos.getX()-1)>>4; x <= (pos.getX()+1)>>4; x++) {
+                        var chunk = level.getChunkSource().getChunkNow(x,z);
+                        if (chunk == null) continue;
+                        for (int sy = minSectionY; sy <= maxSectionY; sy++) {
+                            var section = chunk.getSection(chunk.getSectionIndexFromSectionY(sy));
+                            if (!section.maybeHas(SurfaceLayerModel::isLayer)) continue;
+                            int minY = Math.max(pos.getY()-1,sy*16);
+                            int maxY = Math.min(pos.getY()+depth+1,sy*16+15);
+                            for (int cz = Math.max(pos.getZ()-1,z*16); cz <= Math.min(pos.getZ()+1,z*16+15); cz++) {
+                                for (int cx = Math.max(pos.getX()-1,x*16); cx <= Math.min(pos.getX()+1,x*16+15); cx++) {
+                                    for (int y = minY; y <= maxY; y++) {
+                                        if (!isLayer(section.getBlockState(cx&15,y&15,cz&15))) continue;
+                                        lowest = Math.min(lowest,y-depth-1);
+                                        highest = Math.max(highest,y+1);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if (lowest == Integer.MAX_VALUE) return;
+            int minY = Math.max(level.getMinSectionY(),lowest>>4);
+            int maxY = Math.min(level.getMaxSectionY()-1,highest>>4);
+            int margin = ownerChanged ? 1 : 2;
+            for (int z = (pos.getZ()-margin)>>4; z <= (pos.getZ()+margin)>>4; z++) {
+                for (int x = (pos.getX()-margin)>>4; x <= (pos.getX()+margin)>>4; x++) {
+                    for (int y = minY; y <= maxY; y++) dirty.mark(x,y,z);
+                }
+            }
         }
     }
 
@@ -510,14 +648,14 @@ public final class SurfaceSnowModel extends WrapperBlockStateModel {
         private VoxelShape occluder(BlockPos cell) {
             var state = level.getBlockState(cell);
             VoxelShape shape;
-            if (state.is(Blocks.SNOW)) {
+            if (isLayer(state)) {
                 // Neighboring leaf snow can move away from an otherwise shared edge.
                 for (int depth=1;depth<=7;depth++) {
                     var support = level.getBlockState(cell.below(depth));
                     if (support.is(BlockTags.LEAVES)) return Shapes.empty();
-                    if (!support.is(Blocks.SNOW)) break;
+                    if (!support.is(state.getBlock())) break;
                 }
-                shape = SnowGeometry.shape(level,cell,state.getValue(SnowLayerBlock.LAYERS));
+                shape = layerShape(level,cell,state.getValue(SnowLayerBlock.LAYERS));
             } else {
                 // Cutout/translucent blocks must never act as solid face occluders.
                 if (!state.canOcclude()) return Shapes.empty();

@@ -18,18 +18,28 @@ public final class FluidGeometry {
     private FluidGeometry() {}
 
     public static float connectedHeight(BlockAndTintGetter level, BlockPos pos, float height) {
+        return connectedHeight(level, pos, height, null);
+    }
+
+    private static float connectedHeight(BlockAndTintGetter level, BlockPos pos, float height,
+            @org.jspecify.annotations.Nullable BoundaryCache cache) {
         int local = pos.getY() & 15;
         float relative = height - local;
-        if (Math.abs(relative - 0.001F) < 0.0001F && level.getBlockState(pos.below()).isAir())
+        if (Math.abs(relative - 0.001F) < 0.0001F && boundaryOpen(level, pos, Direction.DOWN, cache))
             return local;
         // A full-height corner can be lowered by vanilla's top-face epsilon,
         // leaving a crack against a neighboring column at the integer boundary.
-        if (Math.abs(relative - 0.999F) < 0.0001F && level.getBlockState(pos.above()).isAir())
+        if (Math.abs(relative - 0.999F) < 0.0001F && boundaryOpen(level, pos, Direction.UP, cache))
             return local + 1;
         return height;
     }
 
     public static float connectedCoordinate(BlockAndTintGetter level, BlockPos pos, float coordinate, boolean xAxis) {
+        return connectedCoordinate(level, pos, coordinate, xAxis, null);
+    }
+
+    private static float connectedCoordinate(BlockAndTintGetter level, BlockPos pos, float coordinate, boolean xAxis,
+            @org.jspecify.annotations.Nullable BoundaryCache cache) {
         int local = (xAxis ? pos.getX() : pos.getZ()) & 15;
         float relative = coordinate - local;
         Direction side;
@@ -41,7 +51,50 @@ public final class FluidGeometry {
             side = xAxis ? Direction.EAST : Direction.SOUTH;
             boundary = local + 1;
         } else return coordinate;
-        return level.getBlockState(pos.relative(side)).isAir() ? boundary : coordinate;
+        return boundaryOpen(level, pos, side, cache) ? boundary : coordinate;
+    }
+
+    private static boolean boundaryOpen(BlockAndTintGetter level, BlockPos pos, Direction side,
+            @org.jspecify.annotations.Nullable BoundaryCache cache) {
+        return cache == null ? openBoundary(level, pos, side) : cache.open(side);
+    }
+
+    /** One tessellation's lazy six-face cache; never retained across blocks or mesh rebuilds. */
+    public static final class BoundaryCache {
+        private final BlockAndTintGetter level;
+        private final BlockPos pos;
+        private int checked, open;
+
+        public BoundaryCache(BlockAndTintGetter level, BlockPos pos) {
+            this.level = level;
+            this.pos = pos.immutable();
+        }
+
+        private boolean open(Direction side) {
+            int bit = 1 << side.ordinal();
+            if ((checked & bit) == 0) {
+                if (openBoundary(level, pos, side)) open |= bit;
+                checked |= bit;
+            }
+            return (open & bit) != 0;
+        }
+
+        public float height(float height) { return connectedHeight(level, pos, height, this); }
+        public float coordinate(float coordinate, boolean xAxis) {
+            return connectedCoordinate(level, pos, coordinate, xAxis, this);
+        }
+    }
+
+    private static boolean openBoundary(BlockAndTintGetter level, BlockPos pos, Direction side) {
+        var neighborPos = pos.relative(side);
+        var neighbor = level.getBlockState(neighborPos);
+        // Air is not the only empty visual boundary: barriers are invisible,
+        // while plants have no solid contact face. Selection/outline shapes
+        // include plant bounding boxes and would falsely leave these cracks.
+        // Keep the anti-z-fighting inset when visible block geometry does meet
+        // that plane (including transparent glass and partial block supports).
+        return neighbor.getRenderShape() == net.minecraft.world.level.block.RenderShape.INVISIBLE
+            || neighbor.getCollisionShape(level, neighborPos).getFaceShape(side.getOpposite()).isEmpty();
     }
 
     /** Rendered fluid heights shared by moving spray and the pixel columns of impact splashes. */

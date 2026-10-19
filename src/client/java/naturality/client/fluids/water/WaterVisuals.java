@@ -45,6 +45,7 @@ public final class WaterVisuals {
     private static boolean initialized;
     private static final int[] wetTiles = new int[256];
     private static int wetColumns;
+    private static boolean besideSubmergedWater;
     private static float frameDepth;
     private static long environmentRevision, depthRevision = -1;
     private static @org.jspecify.annotations.Nullable ClientLevel depthWorld;
@@ -52,6 +53,82 @@ public final class WaterVisuals {
     private static double depthEyeY;
     private static float cachedDepth;
     public static float cameraDepth() { return frameDepth; }
+
+    /** Authoritative fully opaque distance, shared with GLSL through WaterParams.x.
+     * This is a color limit, not permission to discard terrain depth. */
+    public static float visibilityRange(float renderDistanceBlocks, float murk) {
+        float clear = Math.max(12.0F, renderDistanceBlocks * 0.20F);
+        float blend = Math.clamp(murk, 0.0F, 1.0F);
+        return clear * (1.0F - blend) + 5.0F * blend;
+    }
+    private static volatile float frameVisibilityRange = Float.POSITIVE_INFINITY;
+    public static float visibilityRange() { return frameVisibilityRange; }
+
+    /** Local lens geometry, independent of the entity's breathing/immersion state. */
+    public static final class Waterline {
+        private static final WaterShaders.@org.jspecify.annotations.Nullable WaterSurface[] surfaces =
+            new WaterShaders.WaterSurface[9];
+        private static @org.jspecify.annotations.Nullable ClientLevel level;
+        private static boolean active;
+        private static int x, z;
+
+        public static boolean active() {
+            return active && level == Minecraft.getInstance().level && enabled()
+                && NaturalityConfig.get().liquids.waterDepth;
+        }
+
+        /** Called after the camera position, rotation and projection have all settled. */
+        public static void update(net.minecraft.client.Camera camera) {
+            active = false;
+            java.util.Arrays.fill(surfaces, null);
+            level = Minecraft.getInstance().level;
+            var current = level;
+            if (current == null || !camera.isInitialized() || !ready()
+                    || !NaturalityConfig.get().liquids.waterDepth) return;
+            var eye = camera.position();
+            var plane = camera.getNearPlane(camera.getFov());
+            // Include the whole near rectangle, even when looking straight down
+            // or rolling the camera. The small margin avoids an eye/mesh-height seam.
+            double radius = Math.max(plane.getTopLeft().length(), plane.getBottomRight().length()) + 0.02;
+            x = net.minecraft.util.Mth.floor(eye.x) - 1;
+            z = net.minecraft.util.Mth.floor(eye.z) - 1;
+            int y = net.minecraft.util.Mth.floor(eye.y);
+            for (int dz = 0; dz < 3; dz++) for (int dx = 0; dx < 3; dx++) {
+                // Only tiles reached by this lens: never scan the world or load chunks.
+                if (eye.x + radius < x + dx || eye.x - radius > x + dx + 1
+                        || eye.z + radius < z + dz || eye.z - radius > z + dz + 1) continue;
+                for (int dy = -1; dy <= 0; dy++) {
+                    var surface = WaterShaders.WaterSurface.at(current, new BlockPos(x + dx, y + dy, z + dz));
+                    if (surface == null) continue;
+                    double low = surface.pos().getY() + Math.min(Math.min(surface.nw(), surface.sw()), Math.min(surface.se(), surface.ne()));
+                    double high = surface.pos().getY() + Math.max(Math.max(surface.nw(), surface.sw()), Math.max(surface.se(), surface.ne()));
+                    if (eye.y + radius < low || eye.y - radius > high) continue;
+                    surfaces[dz * 3 + dx] = surface;
+                    active = true;
+                    break;
+                }
+            }
+        }
+
+        private static void write(ByteBuffer data, net.minecraft.client.Camera camera) {
+            data.putFloat(x - originX).putFloat(z - originZ).putFloat(active() ? 1 : 0).putFloat(0);
+            var forward = camera.forwardVector();
+            data.putFloat(forward.x()).putFloat(forward.y()).putFloat(forward.z())
+                .putFloat(net.minecraft.client.Camera.PROJECTION_Z_NEAR);
+            for (var surface : surfaces) {
+                if (surface == null) { data.putFloat(0).putFloat(0).putFloat(0).putFloat(0); continue; }
+                float base = surface.pos().getY() - (surface.cauldron() ? 0 : 0.001F);
+                data.putFloat(base + (float) surface.nw()).putFloat(base + (float) surface.sw())
+                    .putFloat(base + (float) surface.se()).putFloat(base + (float) surface.ne());
+            }
+            for (var surface : surfaces) {
+                data.putFloat(surface == null ? 0 : surface.pos().getY())
+                    .putFloat(surface != null && surface.cauldron() ? 0.125F : 0)
+                    .putFloat(surface == null ? 0 : 1).putFloat(0);
+            }
+        }
+    }
+
 
     /** Captured celestial source, independent of optional sun beams and camera flare. */
     public static final class SunTransmission {
@@ -129,7 +206,9 @@ public final class WaterVisuals {
         if (!client.isPaused()) {
             lightingBlend += Math.clamp(target - lightingBlend, -elapsed, elapsed);
         }
-        return lightingBlend * lightingBlend * (3 - 2 * lightingBlend);
+        // A shared lightmap cannot tint only half a frame. During the crossing,
+        // leave it neutral and apply the water palette per pixel in the optics pass.
+        return Waterline.active() ? 0 : lightingBlend * lightingBlend * (3 - 2 * lightingBlend);
     }
 
     private static boolean underwaterSkylightActive() {
@@ -140,7 +219,7 @@ public final class WaterVisuals {
     public static int underwaterLightingTint() {
         var client = Minecraft.getInstance();
         var level = client.level;
-        if (level == null || !underwaterSkylightActive()) return -1;
+        if (level == null || Waterline.active() || !underwaterSkylightActive()) return -1;
         return net.minecraft.client.renderer.BiomeColors.getAverageWaterColor(level, client.gameRenderer.mainCamera().blockPosition());
     }
 
@@ -160,6 +239,7 @@ public final class WaterVisuals {
         private static volatile net.minecraft.world.level.lighting.@org.jspecify.annotations.Nullable LevelLightEngine engine;
         private static volatile net.minecraft.world.level.lighting.@org.jspecify.annotations.Nullable LayerLightEventListener original;
         private static final java.util.Map<Long, OpticalChunk> chunks = new java.util.concurrent.ConcurrentHashMap<>();
+        private static final ThreadLocal<boolean[]> rawLight = ThreadLocal.withInitial(() -> new boolean[1]);
         private static final java.util.Set<BlockPos> changed = new java.util.HashSet<>();
         private static final it.unimi.dsi.fastutil.longs.LongOpenHashSet dirtySections = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
 
@@ -172,9 +252,32 @@ public final class WaterVisuals {
                     dirtySections.add(net.minecraft.core.SectionPos.asLong(x + dx, y, z + dz));
         }
         private static void publishDirtySections(ClientLevel world) {
-            for (long section : dirtySections)
-                world.getChunkSource().onLightUpdate(net.minecraft.world.level.LightLayer.SKY, net.minecraft.core.SectionPos.of(section));
+            for (long section : dirtySections) {
+                var pos = net.minecraft.core.SectionPos.of(section);
+                var chunk = world.getChunkSource().getChunkNow(pos.x(), pos.z());
+                // Empty/unloaded sections own no terrain mesh. Their neighbors
+                // remain independently dirty, including fitted overhanging snow.
+                if (chunk == null || pos.y() < world.getMinSectionY() || pos.y() > world.getMaxSectionY()
+                        || chunk.getSection(world.getSectionIndexFromSectionY(pos.y())).hasOnlyAir()) continue;
+                // Optical skylight only raises vanilla light. If the entire
+                // sampling halo is already 15, no resulting vertex can change.
+                if (fullyLitHalo(world, pos)) continue;
+                world.getChunkSource().onLightUpdate(net.minecraft.world.level.LightLayer.SKY, pos);
+            }
             dirtySections.clear();
+        }
+
+        private static boolean fullyLitHalo(ClientLevel world, net.minecraft.core.SectionPos pos) {
+            var vanilla = world.getLightEngine().getLayerListener(net.minecraft.world.level.LightLayer.SKY);
+            var raw = rawLight.get();
+            raw[0] = true;
+            try {
+                for (int y = -1; y <= 1; y++) for (int z = -1; z <= 1; z++) for (int x = -1; x <= 1; x++) {
+                    var data = vanilla.getDataLayerData(net.minecraft.core.SectionPos.of(pos.x() + x, pos.y() + y, pos.z() + z));
+                    if (data == null || !data.isDefinitelyFilledWith(15)) return false;
+                }
+                return true;
+            } finally { raw[0] = false; }
         }
 
         private static final class OpticalChunk implements net.minecraft.world.level.chunk.LightChunk {
@@ -217,14 +320,11 @@ public final class WaterVisuals {
         public static net.minecraft.world.level.chunk.@org.jspecify.annotations.Nullable DataLayer data(Object source, net.minecraft.core.SectionPos pos,
                 net.minecraft.world.level.chunk.@org.jspecify.annotations.Nullable DataLayer vanilla) {
             var current = engine;
-            if (source != original || current == null || !chunks.containsKey(net.minecraft.world.level.ChunkPos.pack(pos.x(), pos.z()))) return vanilla;
+            if (rawLight.get()[0] || source != original || current == null || !chunks.containsKey(net.minecraft.world.level.ChunkPos.pack(pos.x(), pos.z()))) return vanilla;
             var extra = current.getLayerListener(net.minecraft.world.level.LightLayer.SKY).getDataLayerData(pos);
             if (extra == null) return vanilla;
             if (vanilla == null) return extra;
-            var merged = vanilla.copy();
-            for (int y = 0; y < 16; y++) for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++)
-                merged.set(x, y, z, Math.max(vanilla.get(x, y, z), extra.get(x, y, z)));
-            return merged;
+            return naturality.client.api.rendering.LightLayers.mergeLightData(vanilla, extra);
         }
         private static void tick(Minecraft client) {
             var next = client.level;
@@ -273,8 +373,10 @@ public final class WaterVisuals {
             }
             // Load nearest columns first, with a bounded amount of work each tick.
             int added = 0;
-            outer: for (int radius = 0; radius <= range; radius++) for (int dz = -radius; dz <= radius; dz++) for (int dx = -radius; dx <= radius; dx++) {
-                if (Math.max(Math.abs(dx), Math.abs(dz)) != radius) continue;
+            // Keep the original row-major ring order and four-column admission
+            // budget, but do not iterate over the rejected square interiors.
+            outer: for (int radius = 0; radius <= range; radius++) for (int dz = -radius; dz <= radius; dz++)
+                    for (int dx = -radius, step = Math.abs(dz) == radius ? 1 : radius * 2; dx <= radius; dx += step) {
                 long key = net.minecraft.world.level.ChunkPos.pack(cx + dx, cz + dz);
                 if (chunks.containsKey(key)) continue;
                 var chunk = next.getChunkSource().getChunk(cx + dx, cz + dz, net.minecraft.world.level.chunk.status.ChunkStatus.FULL, false);
@@ -313,7 +415,7 @@ public final class WaterVisuals {
     // Retain overlap when the 256-block window moves; bound memory across travel.
     private static final it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap<ColumnTile> columnCache =
         new it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap<>(384);
-    private static final ByteBuffer frameData = ByteBuffer.allocateDirect(112).order(ByteOrder.nativeOrder());
+    private static final ByteBuffer frameData = ByteBuffer.allocateDirect(448).order(ByteOrder.nativeOrder());
     private static final class ColumnTile {
         final int[] pixels = new int[256], murk = new int[256];
         final java.lang.ref.WeakReference<net.minecraft.world.level.chunk.LevelChunk> chunk;
@@ -338,6 +440,7 @@ public final class WaterVisuals {
     }
     private static final int[] turbidity = new int[SIZE * SIZE];
     private static final float[] blurred = new float[SIZE * SIZE];
+    private static final boolean[] murkRows = new boolean[SIZE], filteredColumns = new boolean[SIZE];
     private static final BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
 
     private WaterVisuals() {}
@@ -360,7 +463,7 @@ public final class WaterVisuals {
     public static boolean ready() {
         var client = Minecraft.getInstance();
         var level = client.level;
-        return initialized && world == level && (wetColumns > 0
+        return initialized && world == level && (wetColumns > 0 || besideSubmergedWater
             || client.gameRenderer.mainCamera().getFluidInCamera() == FogType.WATER) && enabled();
     }
 
@@ -377,6 +480,7 @@ public final class WaterVisuals {
         Skylight.tick(client);
         var level = client.level;
         if (level == null) {
+            besideSubmergedWater = false;
             world = null;
             depthWorld = null;
             depthPosition = null;
@@ -389,8 +493,29 @@ public final class WaterVisuals {
         if (!enabled() || client.isPaused()) return;
         allocate();
         mapChanged = !initialized || world != level;
+        if (mapChanged) {
+            java.util.Arrays.fill(murkRows, true);
+            java.util.Arrays.fill(filteredColumns, true);
+        }
         if (world != level) { columnCache.clear(); java.util.Arrays.fill(mappedTiles, null); }
         var p = client.gameRenderer.mainCamera().blockPosition();
+        // A small dry pocket can sit below a roof, outside the exposed-column
+        // map. Remember nearby full water once per tick; this enables only the
+        // masked view through its boundary, never immersion/breathing in air.
+        besideSubmergedWater = false;
+        for (int dz = -1; dz <= 1 && !besideSubmergedWater; dz++) for (int dx = -1; dx <= 1; dx++) {
+            var chunk = level.getChunkSource().getChunk((p.getX() + dx) >> 4, (p.getZ() + dz) >> 4, false);
+            if (chunk == null) continue;
+            cursor.set(p.getX() + dx, p.getY(), p.getZ() + dz);
+            var fluid = chunk.getFluidState(cursor);
+            if (!fluid.is(FluidTags.WATER) || fallingWater(fluid)) continue;
+            cursor.move(0, 1, 0);
+            var above = chunk.getBlockState(cursor);
+            if (above.getFluidState().is(FluidTags.WATER) || above.isSolidRender()) {
+                besideSubmergedWater = true;
+                break;
+            }
+        }
         int x = Math.floorDiv(p.getX(), 32) * 32 - SIZE / 2;
         int z = Math.floorDiv(p.getZ(), 32) * 32 - SIZE / 2;
         if (!initialized || world != level || x != originX || z != originZ) {
@@ -435,7 +560,8 @@ public final class WaterVisuals {
                 cached.murk[local] = 0;
                 if (chunk != null) {
                     int wx = originX + x, wz = originZ + z;
-                    int top = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, x & 15, z & 15);
+                    int highestBlock = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, x & 15, z & 15);
+                    int top = highestBlock;
                     cursor.set(wx, top, wz);
                     // Lily pads / vegetation above the water are permitted; solid roofs are not.
                     for (int i = 0; i < 16 && top > world.getMinY(); i++, top--) {
@@ -463,7 +589,10 @@ public final class WaterVisuals {
                         cursor.setY(top);
                         if (poolTop != Integer.MIN_VALUE) {
                             int murk = cached.murk[local] + 1;
-                            int height = Math.clamp(poolTop - world.getMinY(), 0, 65535);
+                            // Reserve the high height bit for a geometric sky-cover flag.
+                            // WORLD_SURFACE includes ice, snow and other non-opaque covers.
+                            int height = Math.clamp(poolTop - world.getMinY(), 0, 32767);
+                            if (highestBlock > poolTop) height |= 0x8000;
                             packed = murk << 24 | (height & 255) << 16 | (height >> 8) << 8 | (poolTop - bottom + 1);
                         }
                     }
@@ -474,12 +603,24 @@ public final class WaterVisuals {
             cached.wet = wet;
             cached.dirty = false;
         }
+        int minMurkX = SIZE, maxMurkX = -1;
         for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
             int local = z * 16 + x, index = (sz + z) * SIZE + sx + x;
-            if (rawPixels[index] != cached.pixels[local] || turbidity[index] != cached.murk[local]) mapChanged = true;
+            if (rawPixels[index] != cached.pixels[local]) {
+                filteredColumns[sx + x] = true;
+                mapChanged = true;
+            }
+            if (turbidity[index] != cached.murk[local]) {
+                murkRows[sz + z] = true;
+                minMurkX = Math.min(minMurkX, sx + x);
+                maxMurkX = Math.max(maxMurkX, sx + x);
+                mapChanged = true;
+            }
             rawPixels[index] = cached.pixels[local];
             turbidity[index] = cached.murk[local];
         }
+        if (maxMurkX >= minMurkX)
+            java.util.Arrays.fill(filteredColumns, Math.max(0, minMurkX - 12), Math.min(SIZE, maxMurkX + 13), true);
         wetColumns += cached.wet - wetTiles[tile];
         wetTiles[tile] = cached.wet;
         mappedTiles[tile] = cached;
@@ -492,6 +633,8 @@ public final class WaterVisuals {
         if (image == null) return;
         final int radius = 12, span = radius * 2 + 1;
         for (int z = 0; z < SIZE; z++) {
+            if (!murkRows[z]) continue;
+            murkRows[z] = false;
             int sum = 0;
             for (int i = -radius; i <= radius; i++) sum += turbidity[z * SIZE + Math.clamp(i, 0, SIZE - 1)];
             for (int x = 0; x < SIZE; x++) {
@@ -501,6 +644,10 @@ public final class WaterVisuals {
             }
         }
         for (int x = 0; x < SIZE; x++) {
+            if (!filteredColumns[x]) continue;
+            filteredColumns[x] = false;
+            // Retain the full vertical accumulation order: restarting a float
+            // sum at a dirty rectangle can change rounding at biome boundaries.
             float sum = 0;
             for (int i = -radius; i <= radius; i++) sum += blurred[Math.clamp(i, 0, SIZE - 1) * SIZE + x];
             for (int z = 0; z < SIZE; z++) {
@@ -521,7 +668,7 @@ public final class WaterVisuals {
         if (!initialized || world != Minecraft.getInstance().level || x < originX || z < originZ
                 || x >= originX + SIZE || z >= originZ + SIZE) return Float.NaN;
         int p = image.getPixel(x - originX, z - originZ);
-        return (p >>> 24) == 0 ? Float.NaN : world.getMinY() + ((p >> 16) & 255) + ((p >> 8) & 255) * 256 + 0.875F;
+        return (p >>> 24) == 0 ? Float.NaN : world.getMinY() + ((p >> 16) & 255) + ((p >> 8) & 127) * 256 + 0.875F;
     }
 
     public static float turbidityAt(int x, int z) {
@@ -554,7 +701,9 @@ public final class WaterVisuals {
             tint = net.minecraft.client.renderer.BiomeColors.getAverageWaterColor(level, camera.blockPosition());
             localLight = Math.max(level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, camera.blockPosition()),
                 level.getBrightness(net.minecraft.world.level.LightLayer.SKY, camera.blockPosition()) * sun) / 15.0F;
-            if (immersed && !inWaterfall) {
+            boolean roofedAirPocket = !immersed && besideSubmergedWater
+                && !level.canSeeSky(camera.blockPosition());
+            if ((immersed || roofedAirPocket) && !inWaterfall) {
                 // Reuse identical camera-column queries between frames. Vertical
                 // motion also invalidates roof recovery and preserves the exact
                 // depth arithmetic, including near-surface clamping.
@@ -567,9 +716,10 @@ public final class WaterVisuals {
                             && level.getFluidState(scan).is(FluidTags.WATER)
                             && !fallingWater(level.getFluidState(scan))) scan.move(0, 1, 0);
                     cameraDepth = Math.max(0, (float) (scan.getY() - 0.125 - p.y));
-                    boolean cachedRoof = !level.getBlockState(scan).isAir() && !fallingWater(level.getFluidState(scan));
-                    // A solid overhang is not the water surface. Recover the local
-                    // exposed water level instead of treating its underside as air.
+                    boolean cachedRoof = !level.canSeeSky(scan) && !fallingWater(level.getFluidState(scan));
+                    // Air below a roof is not the open water surface either.
+                    // Recover ocean depth across geodes/air pockets, including
+                    // the dry side of their boundary, without forcing immersion.
                     if (cachedRoof) {
                         float sum = 0, weight = 0;
                         for (int dz = -16; dz <= 16; dz += 2) for (int dx = -16; dx <= 16; dx += 2) {
@@ -591,27 +741,64 @@ public final class WaterVisuals {
             }
         }
         frameDepth = cameraDepth;
+        float murk = cameraMurk(client);
+        float renderDistanceBlocks = client.options.getEffectiveRenderDistance() * 16.0F;
+        float visibility = visibilityRange(renderDistanceBlocks, murk);
+        frameVisibilityRange = active && immersed && c.waterDepth && !Waterline.active() ? visibility : Float.POSITIVE_INFINITY;
+        // Nearer visible pixels can refract from farther source pixels. The
+        // optics depth rejection reaches at most max(2.25, 0.09 * distance).
+        float shadeLimit = Float.isFinite(frameVisibilityRange)
+            ? visibility + Math.max(3.0F, visibility * 0.10F) + 0.25F : 0.0F;
+
         ByteBuffer data = frameData.clear();
         data.putInt(originX).putInt(originZ).putInt(world == null ? 0 : world.getMinY()).putInt(active ? 1 : 0);
         data.putFloat((float) (p.x - originX)).putFloat((float) p.y).putFloat((float) (p.z - originZ)).putFloat(sun);
-        data.putFloat(0).putFloat(0).putFloat(c.waterPixelSize).putFloat(client.options.getEffectiveRenderDistance() * 16.0F);
+        data.putFloat(visibility).putFloat(shadeLimit).putFloat(c.waterPixelSize).putFloat(renderDistanceBlocks);
         data.putInt(c.waterDepth ? 1 : 0).putInt(c.waterDistortion ? 1 : 0).putInt(c.waterShimmer ? 1 : 0).putInt(nightVision ? 1 : 0);
-        data.putFloat(ProceduralFluids.ticks() / 20.0F).putFloat(immersed ? 1 : 0).putFloat(cameraDepth).putFloat(localLight);
+        data.putFloat((ProceduralFluids.ticks() + client.getDeltaTracker().getGameTimeDeltaPartialTick(false)) / 20.0F)
+            .putFloat(immersed ? 1 : 0).putFloat(cameraDepth).putFloat(localLight);
         data.putFloat(((tint >> 16) & 255) / 255.0F).putFloat(((tint >> 8) & 255) / 255.0F)
-            .putFloat((tint & 255) / 255.0F).putFloat(cameraMurk(client));
+            .putFloat((tint & 255) / 255.0F).putFloat(murk);
         boolean atmosphere = level != null && level.dimension().equals(net.minecraft.world.level.Level.OVERWORLD)
-            && camera.getFluidInCamera() == FogType.NONE
+            && (camera.getFluidInCamera() == FogType.NONE || Waterline.active())
             && !(camera.entity() instanceof LivingEntity e && (e.hasEffect(MobEffects.BLINDNESS) || e.hasEffect(MobEffects.DARKNESS)))
             && !client.gui.hud.getBossOverlay().shouldCreateWorldFog();
         var weather = level == null ? null : naturality.systems.weather.framework.WeatherSystem.renderState(level);
         float rainFog = atmosphere && weather != null ? weather.heavyRainFog() : 0;
         data.putInt(atmosphere ? 1 : 0).putInt(inWaterfall ? 1 : 0)
-            .putInt(Float.floatToRawIntBits(rainFog)).putInt(0);
+            .putInt(Float.floatToRawIntBits(rainFog)).putInt(besideSubmergedWater ? 1 : 0);
+        Waterline.write(data, camera);
+        writeFogColor(data, active, (float) (p.x - originX), (float) p.y, (float) (p.z - originZ),
+            sun, localLight, nightVision, tint);
         data.flip();
         var ring = uniform;
         if (ring == null) { ring = new MappableRingBuffer(() -> "Naturality water frame", 130, data.capacity()); uniform = ring; }
         else ring.rotate();
         try (var mapped = ring.currentBuffer().map(false, true)) { mapped.data().put(data); }
+    }
+
+    private static void writeFogColor(ByteBuffer data, boolean active, float x, float y, float z,
+            float sun, float localLight, boolean nightVision, int tint) {
+        // Decode the uploaded map, not a fresh world query. Use the same float
+        // camera coordinates, floor, inclusive heights and packed channels as
+        // naturality_water_geometry, including at negative/world-border positions.
+        var image = WaterVisuals.image;
+        var world = WaterVisuals.world;
+        int cellX = (int) Math.floor(x), cellZ = (int) Math.floor(z);
+        boolean exposed = false;
+        if (active && image != null && world != null && cellX >= 0 && cellX < SIZE && cellZ >= 0 && cellZ < SIZE) {
+            int pixel = image.getPixel(cellX, cellZ);
+            float top = (float) (world.getMinY() + ((pixel >> 16) & 255) + ((pixel >> 8) & 127) * 256) + 0.875F;
+            float bottom = top - (pixel & 255) + 0.125F;
+            exposed = (pixel >>> 24) != 0 && y >= bottom && y <= top;
+        }
+        float daylight = exposed ? sun : 0.0F;
+        float ambient = Math.min(localLight, sun);
+        float light = nightVision ? 1.0F : Math.clamp(Math.max(ambient, daylight), 0.0F, 1.0F);
+        float brightness = 0.70F * (float) Math.sqrt(light);
+        data.putFloat(((tint >> 16) & 255) / 255.0F * brightness)
+            .putFloat(((tint >> 8) & 255) / 255.0F * brightness)
+            .putFloat((tint & 255) / 255.0F * brightness).putFloat(0.0F);
     }
 
     public static void bind(RenderPass pass) {
@@ -639,7 +826,22 @@ public final class WaterVisuals {
         pass.setUniform("NaturalityWaterOpaqueDepth", WaterComposite.depthView() == null ? view : WaterComposite.depthView(), sampler);
     }
 
+    public static void bindSurfaceMask(RenderPass pass) {
+        allocate();
+        var sampler = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST);
+        var surface = WaterComposite.maskView();
+        var maskedDepth = WaterComposite.maskDepthView();
+        var opaqueDepth = WaterComposite.depthView();
+        // Identical fallback depth samplers cannot report a hull. Never reuse
+        // a previous frame's capture or sample a depth attachment being written.
+        boolean captured = surface != null && maskedDepth != null && opaqueDepth != null;
+        pass.setUniform("NaturalityWaterMask", captured ? surface : view, sampler);
+        pass.setUniform("NaturalityWaterMaskDepth", captured ? maskedDepth : view, sampler);
+        pass.setUniform("NaturalityWaterOpaqueDepth", captured ? opaqueDepth : view, sampler);
+    }
+
     public static void close() {
+        frameVisibilityRange = Float.POSITIVE_INFINITY;
         SunTransmission.close();
         if (uniform != null) { uniform.close(); uniform = null; }
         if (view != null) { view.close(); view = null; }
@@ -652,6 +854,7 @@ public final class WaterVisuals {
         java.util.Arrays.fill(turbidity, 0);
         world = null;
         wetColumns = 0;
+        besideSubmergedWater = false;
         java.util.Arrays.fill(wetTiles, 0);
     }
 }

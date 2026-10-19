@@ -25,12 +25,18 @@ public final class WindPush {
             0x57494E44L, 1 - Math.pow(.65, 1.0 / 6000), 8000, 24000, 4200,
             profile -> profile.minWind, profile -> profile.maxWind);
 
+    /** Nether uses the full slider range while retaining ordinary wind motion and audio. */
+    public static WeatherState netherState(WeatherState state) {
+        return new WeatherState(0, state.wind(), 50, state.direction(), true);
+    }
+
     private WindPush() {}
     /** @return true when solid surroundings leave no safe escape this tick. */
     public static boolean resolve(Player player) {
         if(player.isSpectator() || player.noPhysics || !WindShapes.active(player.level()))return false;
         var level=player.level();
         var box=player.getBoundingBox();
+        var inset=box.deflate(1e-7);
         var overlaps=new ArrayList<AABB>();
         for(var pos:BlockPos.betweenClosed(BlockPos.containing(box.minX-1,box.minY-1,box.minZ-1),
                 BlockPos.containing(box.maxX+1,box.maxY+1,box.maxZ+1))) {
@@ -39,7 +45,7 @@ public final class WindPush {
             if(!WindShapes.eligible(state) || WindShapes.offset(level,pos,state).equals(Vec3.ZERO))continue;
             for(var part:state.getCollisionShape(level,pos).toAabbs()) {
                 var world=part.move(pos);
-                if(world.intersects(box.deflate(1e-7)))overlaps.add(world);
+                if(world.intersects(inset))overlaps.add(world);
             }
         }
         if(overlaps.isEmpty())return false;
@@ -61,8 +67,8 @@ public final class WindPush {
             // Do not escape through a wall to reach an otherwise empty destination.
             var swept=box.minmax(target).deflate(1e-7);
             boolean blocked=false;
-            for(var shape:level.getBlockCollisions(player,swept))for(var part:shape.toAabbs()) {
-                if(part.intersects(swept) && !part.intersects(box))blocked=true;
+            collision: for(var shape:level.getBlockCollisions(player,swept))for(var part:shape.toAabbs()) {
+                if(part.intersects(swept) && !part.intersects(box)) { blocked=true; break collision; }
             }
             if(blocked)continue;
             player.setPos(player.getX()+shift.x,player.getY()+shift.y,player.getZ()+shift.z);
@@ -160,7 +166,8 @@ public final class WindPush {
                 }
                 return Vec3.ZERO;
             }
-            if(!state.getFluidState().isEmpty() || !WindShelter.hasOpenSkyPath(level,pos,p -> level.getBrightness(LightLayer.SKY,p)))return Vec3.ZERO;
+            if(!state.getFluidState().isEmpty() || !level.dimension().equals(Level.NETHER)
+                    && !WindShelter.hasOpenSkyPath(level,pos,p -> level.getBrightness(LightLayer.SKY,p)))return Vec3.ZERO;
             boolean leaf=state.is(BlockTags.LEAVES);
             Vec3 shift=broad(weather,level.getGameTime(),pos,leaf);
             if(leaf)return shift;
@@ -195,14 +202,13 @@ public final class WindPush {
         }
         public static Vec3 broad(WeatherState weather,long tick,BlockPos pos,boolean leaf) {
             // This branch is exactly the severe=1 result below; skip both spatial sine waves.
-            if(weather.wind()>=100)return new Vec3(weather.windX()*(leaf?.12:.22),0,weather.windZ()*(leaf?.12:.22));
+            if(!weather.regularWindOnly() && weather.wind()>=100)return new Vec3(weather.windX()*(leaf?.12:.22),0,weather.windZ()*(leaf?.12:.22));
             double x=((pos.getX()>>4)<<4)%4096+(pos.getX()&15)+.5;
             double z=((pos.getZ()>>4)<<4)%4096+(pos.getZ()&15)+.5;
             double phase=(x*111+z*85)*(Math.PI*2/4096)+(leaf?0:(pos.getY()+.5)*.08);
             double time=(tick%24000)/20.0;
             double wave=Math.sin(time*1.256637+phase)*.7+Math.sin(time*3.141593+phase*2)*.3;
-            double severe=Math.clamp((weather.wind()/100.0-.8)/.2,0,1);
-            severe=severe*severe*(3-2*severe);
+            double severe=weather.severeWindBlend();
             double amount=(wave*(1-severe)+severe)*(leaf?.12:.22);
             return new Vec3(weather.windX()*amount,0,weather.windZ()*amount);
         }

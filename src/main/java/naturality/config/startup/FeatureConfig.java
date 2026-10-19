@@ -21,7 +21,7 @@ public final class FeatureConfig {
     public Map<String, Boolean> features = new LinkedHashMap<>();
 
     public FeatureConfig() { for (var feature : Feature.values()) features.put(feature.key(), true); }
-    public boolean get(Feature feature) { return !Boolean.FALSE.equals(features.get(feature.key())); }
+    public boolean get(Feature feature) { return feature.available() && !Boolean.FALSE.equals(features.get(feature.key())); }
     public void set(Feature feature, boolean value) { features.put(feature.key(), value); }
     public boolean effective(Feature feature) {
         return get(feature) && (feature.parent == null || effective(feature.parent));
@@ -71,6 +71,7 @@ public final class FeatureConfig {
         MOUNTAIN_WATERFALLS(Group.CONTENT, CONTENT),
         END_TERRAIN(Group.CONTENT, CONTENT),
         OCEAN_TERRAIN(Group.CONTENT, CONTENT),
+        NETHER_TERRAIN(Group.CONTENT, CONTENT),
         END_MATERIALS(Group.CONTENT, CONTENT),
         LIRESTONE_CRAGS(Group.CONTENT, END_MATERIALS),
         END_WILDS(Group.CONTENT, END_MATERIALS),
@@ -145,6 +146,9 @@ public final class FeatureConfig {
         Feature(Group group) { this(group, null); }
         Feature(Group group, @org.jspecify.annotations.Nullable Feature parent) { this.group = group; this.parent = parent; }
         public String key() { return name().toLowerCase(java.util.Locale.ROOT); }
+        // Temporarily suspend custom Nether shapes, including terraced lava, while
+        // preserving the saved choice and the independent CONTENT decorations.
+        public boolean available() { return this != NETHER_TERRAIN; }
         public boolean enabled() { return FeatureConfig.active(this); }
     }
 
@@ -161,6 +165,9 @@ public final class FeatureConfig {
                     || Feature.END_TERRAIN.enabled();
             }
             if (!namespace.equals("minecraft")) return true;
+            // These models express mandatory block-state behavior, independently of optional visual overrides.
+            if (path.equals("blockstates/cauldron.json") || path.equals("blockstates/water_cauldron.json")
+                    || path.equals("blockstates/lava_cauldron.json") || path.equals("blockstates/powder_snow_cauldron.json")) return true;
             // These descriptions provide sprites required by their independently enabled providers.
             if (path.equals("particles/poof.json")) return Feature.DEATH_SMOKE.enabled();
             if (path.equals("particles/dragon_breath.json")) return Feature.VISUAL_OVERHAUL.enabled();

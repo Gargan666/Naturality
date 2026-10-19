@@ -8,11 +8,7 @@ uniform sampler2D Sampler0;
 uniform sampler2D Sampler1;
 uniform sampler2D NaturalityWaterMask;
 uniform sampler2D NaturalityWaterSunAtlas;
-layout(std140) uniform NaturalityWaterSun {
-    mat4 WaterSunInversePose;
-    vec4 WaterSunBounds;
-    vec4 WaterSunAppearance; // rain/cloud transmission, reserved
-};
+#include <naturality:water_sun.glsl>
 layout(location = 0) in vec2 texCoord;
 layout(location = 1) flat in mat4 waterInverseProjection;
 layout(location = 0) out vec4 fragColor;
@@ -28,6 +24,7 @@ vec3 surface_offset(vec2 uv, float depth) {
 void main() {
     vec4 original = texture(Sampler0, texCoord);
     fragColor = original;
+    if (WaterLens.z > 0.5 && naturality_water_lens_depth(surface_offset(texCoord, 1.0)) < 0.0) return;
     vec4 surface = texture(NaturalityWaterMask, texCoord);
     float foreground = texture(Sampler1, texCoord).r;
     if (surface.r <= 0.0 || surface.a <= 0.0 || foreground > surface.r + 0.000001) return;
@@ -36,6 +33,8 @@ void main() {
     vec4 column = naturality_water_geometry(position.xz);
     if (column.w == 0.0 || abs(position.y - column.x) > 0.15 || offset.y <= 0.0) return;
     vec2 slope = naturality_water_ripple_slope(position, ivec3(WaterMap.x, 0, WaterMap.y));
+    float transmission = 1.0 - naturality_water_fresnel(dot(
+        normalize(vec3(-slope.x, 1.0, -slope.y)), normalize(offset)));
     vec3 viewSlope = mat3(ModelViewMat) * vec3(slope.x, 0.0, slope.y);
     vec2 size = vec2(textureSize(Sampler0, 0));
     // Small angular deflection, quantized to screen pixels. No transparency holes.
@@ -43,6 +42,7 @@ void main() {
     if (WaterSwitches.y == 0) delta = vec2(0.0);
     vec2 uv = texCoord + round(delta * size) / size;
     if (any(lessThan(uv, 0.5 / size)) || any(greaterThan(uv, 1.0 - 0.5 / size))) return;
+    if (WaterLens.z > 0.5 && naturality_water_lens_depth(surface_offset(uv, 1.0)) < 0.0) return;
     vec4 other = texture(NaturalityWaterMask, uv);
     float otherDepth = texture(Sampler1, uv).r;
     // Reject foreground samples and unrelated water surfaces at silhouettes.
@@ -51,7 +51,7 @@ void main() {
     float separation = abs(length(otherOffset) - length(offset));
     float tolerance = max(0.5, length(offset) * 0.03);
     float weight = (1.0 - smoothstep(tolerance, tolerance * 2.0, separation))
-        * smoothstep(0.0, 0.25, normalize(offset).y) * min(surface.a, other.a);
+        * smoothstep(0.0, 0.25, normalize(offset).y) * min(surface.a, other.a) * transmission;
     fragColor = mix(original, texture(Sampler0, uv), weight);
     // Reconstruct only the actual sun sprite, never bright clouds or scenery.
     // Opaque geometry beyond the water also blocks the source; clouds additionally
@@ -67,7 +67,8 @@ void main() {
                 vec4 source = texture(NaturalityWaterSunAtlas, mix(WaterSunBounds.xy, WaterSunBounds.zw, sunUV));
                 float luminance = dot(source.rgb, vec3(0.2126, 0.7152, 0.0722));
                 float core = smoothstep(0.65, 0.92, luminance) * source.a;
-                float visibility = WaterSunAppearance.x * min(surface.a, other.a);
+                float visibility = WaterSunAppearance.x * min(surface.a, other.a) * transmission
+                    * naturality_water_sun_transmission();
                 vec2 center = sunUV - 0.5;
                 float halo = exp(-dot(center, center) / 0.045) * 0.12 * visibility;
                 fragColor.rgb += WaterTint.rgb * halo;

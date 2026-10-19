@@ -22,6 +22,8 @@ public final class PlayerSwimmingClient {
     private static final Identifier COOLDOWN = Identifier.withDefaultNamespace("hud/jump_bar_cooldown");
 
     public interface RenderState {
+        float naturality$strokeAmplitude();
+        void naturality$strokeAmplitude(float value);
         float naturality$brace();
         void naturality$brace(float value);
         boolean naturality$physicalSwimming();
@@ -37,15 +39,16 @@ public final class PlayerSwimmingClient {
         model.head.xRot = (float)Math.toRadians(state.xRot);
     }
     public static void gentleSwim(HumanoidModel<?> model, HumanoidRenderState state, float phase, float blend) {
-        strokeLegs(model, phase, blend, model.leftLeg.xRot, model.rightLeg.xRot);
+        float amplitude = state instanceof RenderState swimming ? swimming.naturality$strokeAmplitude() : 1;
+        strokeLegs(model, phase, blend, model.leftLeg.xRot, model.rightLeg.xRot, amplitude);
         if (blend <= 0 || state.isUsingItem) return;
         var swing = state.currentSwing;
         if ((swing == null || swing.hand().asArm(state.mainArm) != HumanoidArm.LEFT)
                 && (state.leftArmPose == HumanoidModel.ArmPose.EMPTY || state.leftArmPose == HumanoidModel.ArmPose.ITEM))
-            gentleArm(model.leftArm, blend, strokeAngles(phase, -1));
+            gentleArm(model.leftArm, blend, strokeAngles(phase, -1, amplitude));
         if ((swing == null || swing.hand().asArm(state.mainArm) != HumanoidArm.RIGHT)
                 && (state.rightArmPose == HumanoidModel.ArmPose.EMPTY || state.rightArmPose == HumanoidModel.ArmPose.ITEM))
-            gentleArm(model.rightArm, blend, strokeAngles(phase, 1));
+            gentleArm(model.rightArm, blend, strokeAngles(phase, 1, amplitude));
     }
     public static void brace(HumanoidModel<?> model, float blend) {
         model.body.xRot = Mth.rotLerpRad(blend, model.body.xRot, 0.5F);
@@ -58,18 +61,38 @@ public final class PlayerSwimmingClient {
         model.leftArm.y += 3.2F * blend;
         model.rightArm.y += 3.2F * blend;
     }
+    public static void sprintAmplitude(HumanoidModel<?> model, HumanoidRenderState state, float amplitude, float blend) {
+        if (amplitude <= 1 || state.isUsingItem || state.currentSwing != null) return;
+        float boost = (amplitude - 1) * blend;
+        if (state.leftArmPose == HumanoidModel.ArmPose.EMPTY || state.leftArmPose == HumanoidModel.ArmPose.ITEM)
+            widenStroke(model.leftArm, boost);
+        if (state.rightArmPose == HumanoidModel.ArmPose.EMPTY || state.rightArmPose == HumanoidModel.ArmPose.ITEM)
+            widenStroke(model.rightArm, boost);
+    }
+    private static void widenStroke(ModelPart arm, float boost) {
+        arm.xRot *= 1 + boost;
+        // The native stroke wraps at +/-PI; scale its excursion, not the wrapped angle.
+        float excursion = Mth.wrapDegrees((arm.zRot - (float)Math.PI) * Mth.RAD_TO_DEG) * Mth.DEG_TO_RAD;
+        arm.zRot += excursion * boost;
+    }
     public static void strokeLegs(HumanoidModel<?> model, float phase, float blend, float left, float right) {
+        strokeLegs(model, phase, blend, left, right, 1);
+    }
+    public static void strokeLegs(HumanoidModel<?> model, float phase, float blend, float left, float right, float amplitude) {
         // Vanilla's crawl arms and kicks have different periods. Use one closed cycle so
         // wrapping the reversible arm clock never introduces a discontinuity in the legs.
-        float kick = 0.3F * (float)Math.cos(phase);
+        float kick = 0.3F * amplitude * (float)Math.cos(phase);
         model.leftLeg.xRot = Mth.rotLerpRad(blend, left, -kick);
         model.rightLeg.xRot = Mth.rotLerpRad(blend, right, kick);
     }
     public static Vec3 strokeAngles(float phase, int side) {
+        return strokeAngles(phase, side, 1);
+    }
+    public static Vec3 strokeAngles(float phase, int side, float amplitude) {
         // Reach forward, sweep outward/down, then recover inward. Mirrored closed loops keep
         // both hands below the shoulders throughout the stroke instead of freezing a crawl pose.
         double reach = Math.cos(phase), sweep = Math.sin(phase);
-        return new Vec3(-0.65 - 0.45 * reach, side * (0.35 + 0.35 * sweep), side * (0.425 - 0.275 * reach));
+        return new Vec3(-0.65 - 0.45 * amplitude * reach, side * (0.35 + 0.35 * amplitude * sweep), side * (0.425 - 0.275 * amplitude * reach));
     }
     private static void gentleArm(ModelPart arm, float blend, Vec3 angles) {
         arm.xRot = Mth.rotLerpRad(blend, arm.xRot, (float)angles.x);

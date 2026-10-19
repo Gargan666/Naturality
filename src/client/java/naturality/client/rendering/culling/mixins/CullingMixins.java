@@ -102,7 +102,7 @@ public final class CullingMixins {
         private static int naturality$fogMask(int mask, @Local(index = 15) int x,
                 @Local(index = 16) int y, @Local(index = 17) int z) {
             int drop = naturality.config.gameplay.GameplaySettings.clientSnowWrapping()
-                ? naturality.client.blocks.snow.SurfaceSnowModel.SnowSectionVisibility.MAX_DROP : 0;
+                ? naturality.client.api.rendering.layers.SurfaceLayerModel.SnowSectionVisibility.MAX_DROP : 0;
             return FogCulling.active() && FogCulling.sectionHidden(x << 4, y << 4, z << 4, drop) ? 0 : mask;
         }
     }

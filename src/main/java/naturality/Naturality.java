@@ -31,6 +31,8 @@ public class Naturality implements ModInitializer {
             NaturalityBlocks.initialize();
             NaturalityItems.initialize();
             naturality.worldgen.overworld.clover.CloverPatchesFeature.initialize();
+            naturality.worldgen.overworld.sand.SandLayersFeature.initialize();
+            naturality.worldgen.nether.basaltdeltas.BasaltDeltasFeature.initialize();
             naturality.worldgen.overworld.moss.TreeMossFeature.initialize();
             naturality.worldgen.overworld.waterfalls.MountainWaterfallFeature.initialize();
             naturality.entities.maddened.MaddenedCreepers.initialize();

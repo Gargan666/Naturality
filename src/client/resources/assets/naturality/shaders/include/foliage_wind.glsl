@@ -6,7 +6,50 @@ float naturality_wind_detail(vec3 cameraRelative) {
     // Identical shared-edge coordinates give matching weights across blocks.
     return 1.0 - smoothstep(64.0 * 64.0, 96.0 * 96.0, dot(cameraRelative.xz, cameraRelative.xz));
 }
-layout(std140) uniform NaturalityWind { vec4 NaturalityWindValue; vec4 NaturalityWindShape; }; // direction X/Z, severe blend, magnitude
+struct NaturalityBrush { vec4 lower; vec4 upper; vec4 shape; };
+layout(std140) uniform NaturalityWind {
+    vec4 NaturalityWindValue;
+    vec4 NaturalityWindShape;
+    ivec4 NaturalityBrushCount;
+    NaturalityBrush NaturalityBrushes[32];
+    vec4 NaturalityBrushNodes[512];
+};
+vec3 naturality_brush_offset(vec3 Position, ivec3 ChunkPosition, int tag) {
+    // Leaves and fitted snow retain their own geometry contracts.
+    if (tag == 255 || tag == 240 || (tag >= 128 && tag <= 192)
+            || (tag >= 224 && tag <= 231) || tag >= 245 || tag == 242) return vec3(0.0);
+    vec3 relative = Position + vec3(ChunkPosition - NaturalityBrushCount.yzw);
+    vec2 owner = floor(relative.xz + 0.002);
+    bool anchored = tag >= 64 && tag <= 99;
+    bool crop = tag >= 120 && tag <= 127;
+    if (anchored) {
+        int encoded = tag - 64;
+        owner -= vec2(encoded % 3 - 1, (encoded / 3) % 3 - 1);
+    } else if (crop) {
+        int encoded = tag - 120;
+        owner -= vec2(encoded & 1, (encoded >> 1) & 1);
+    }
+    vec3 offset = vec3(0.0);
+    for (int i = 0; i < NaturalityBrushCount.x; i++) {
+        NaturalityBrush brush = NaturalityBrushes[i];
+        // Encoded plant roots identify their column even when model offsets
+        // extend past a cell edge. Other strands stay within their exact column.
+        if (anchored || crop) {
+            if (any(notEqual(owner, brush.lower.xz))) continue;
+        } else if (any(lessThan(relative.xz, brush.lower.xz - 0.0001))
+                || any(greaterThan(relative.xz, brush.upper.xz + 0.0001))) continue;
+        if (relative.y < brush.lower.y - 0.0626 || relative.y > brush.upper.y + 0.0001) continue;
+        float height = clamp(relative.y - brush.lower.y, 0.0, brush.upper.w - 1.0);
+        int first = int(brush.lower.w);
+        int node = int(floor(height));
+        int next = min(node + 1, int(brush.upper.w) - 1);
+        // Both blocks meeting at a join read the same node, including its
+        // vertical correction. A whole strand no longer shares one rigid bend.
+        offset += mix(NaturalityBrushNodes[first + node].xyz,
+            NaturalityBrushNodes[first + next].xyz, fract(height));
+    }
+    return offset;
+}
 vec2 naturality_leaf_wind_at(vec2 worldXZ) {
     if (all(equal(NaturalityWindValue.xy, vec2(0.0)))) return vec2(0.0);
     float phase = dot(worldXZ, vec2(111.0, 85.0)) * (6.28318530718 / 4096.0);
@@ -43,14 +86,16 @@ vec2 naturality_wind_offset(vec3 Position, ivec3 ChunkPosition, int foliageTag) 
     // adjacent leaf's exact block-edge vertex, not that inset plane.
     if (foliageTag == 232) return naturality_leaf_wind_at(round(Position.xz)
         + vec2(ChunkPosition.x % 4096, ChunkPosition.z % 4096));
-    // A travelling gust flows down hanging strands. Depth only controls the
+    // The same travelling gust flows down hanging strands and up rising strands. Depth controls the
     // attachment envelope; world Y keeps long strands and section joins in phase.
     bool leafHanging = foliageTag == 118 || (foliageTag >= 233 && foliageTag <= 239);
-    if (leafHanging || (foliageTag >= 193 && foliageTag <= 200)) {
-        float depth = float(leafHanging ? (foliageTag == 118 ? 0 : foliageTag - 232) : foliageTag - 193);
+    bool rising = foliageTag >= 201 && foliageTag <= 208;
+    if (rising || leafHanging || (foliageTag >= 193 && foliageTag <= 200)) {
+        float depth = float(leafHanging ? (foliageTag == 118 ? 0 : foliageTag - 232) : rising ? foliageTag - 201 : foliageTag - 193);
         vec2 worldXZ = floor(Position.xz * 16.0 + 0.5) / 16.0
             + vec2(ChunkPosition.x % 4096, ChunkPosition.z % 4096);
         float worldY = Position.y + float(ChunkPosition.y);
+        if (rising) worldY = -worldY; // Mirror the hanging wave through its attachment plane.
         float phase = dot(worldXZ, vec2(111.0,85.0)) * (6.28318530718 / 4096.0);
         float time = NaturalityWindValue.z;
         float wave = sin(time * 1.256637 + worldY * 0.55 + phase) * 0.7
@@ -62,7 +107,7 @@ vec2 naturality_wind_offset(vec3 Position, ivec3 ChunkPosition, int foliageTag) 
         vec2 direction = NaturalityWindShape.xy;
         flow += direction * (sin(time * 9.1 + worldY * 1.4 + phase) * 0.065
             + sin(time * 13.7 + worldY * 0.8 + phase * 2.0) * 0.025) * severe;
-        flow = sign(flow) * floor(abs(flow) * 16.0 + 0.5) / 16.0 * envelope;
+        flow *= envelope; // Smooth strand motion; the root envelope keeps the attachment fixed.
         if (leafHanging) {
             // Interpolate the supporting leaf's corner motion at the attachment
             // plane instead of sampling a different phase at the vine center.
@@ -113,7 +158,7 @@ vec2 naturality_wind_offset(vec3 Position, ivec3 ChunkPosition, int foliageTag) 
     bool attachedLeaf = foliageTag >= 160 && foliageTag <= 191;
     bool supportedVine = foliageTag >= 102 && foliageTag <= 117;
     bool connectedPlant = foliageTag == 100 || foliageTag == 101 || supportedVine;
-    if (!(connectedPlant || anchoredPlant || attachedLeaf || (foliageTag >= 201 && foliageTag <= 223) || foliageTag == 240)) return vec2(0.0);
+    if (!(connectedPlant || anchoredPlant || attachedLeaf || foliageTag == 240)) return vec2(0.0);
         // Sample on the world's 1/16-block grid, before camera subtraction.
         // Section origins are whole blocks; wrapping X/Z preserves the periodic
         // phase while retaining precision far from spawn (including negatives).
@@ -140,7 +185,7 @@ vec2 naturality_wind_offset(vec3 Position, ivec3 ChunkPosition, int foliageTag) 
             + (attachedLeaf ? 0.0 : worldPos.y * 0.08);
         float wave = sin(NaturalityWindValue.z * 1.256637 + phase) * 0.7
             + sin(NaturalityWindValue.z * 3.141593 + phase * 2.0) * 0.3;
-        float weight = foliageTag == 101 ? 0.0 : connectedPlant ? 0.22 : (attachedLeaf || foliageTag == 240) ? 0.12 : anchoredPlant ? 0.22 : 0.22 * float(foliageTag - 201) / 19.0;
+        float weight = foliageTag == 101 ? 0.0 : connectedPlant ? 0.22 : (attachedLeaf || foliageTag == 240) ? 0.12 : 0.22;
         // Faster, stronger gusts layer onto the broad bend once wind becomes severe.
         float shake = NaturalityWindShape.z;
         // At severe wind, foliage stays stretched near its full downwind bend;

@@ -63,9 +63,10 @@ public final class RenderingMixins {
                 naturality.client.rendering.distantdetail.DistantTextures.loaded(texturesByName);
                 naturality.client.rendering.shadows.BlockGridShadow.reset();
                 naturality.client.api.geometry.ModelCapture.FlatModelAlpha.clear();
-                naturality.client.blocks.snow.SurfaceSnowModel.SnowOverlayModel.atlasLoaded(texturesByName);
+                naturality.client.api.rendering.layers.SurfaceLayerModel.SnowOverlayModel.atlasLoaded(texturesByName);
                 naturality.client.blocks.snow.SnowTextureAtlas.loaded((TextureAtlas)(Object)this,texturesByName);
                 ProceduralFluids.atlasLoaded(texturesByName);
+                naturality.client.blocks.glass.GlassShine.loaded(texturesByName);
                 naturality.client.blocks.fire.ProceduralFire.atlasLoaded(texturesByName);
             }
         }
@@ -74,12 +75,23 @@ public final class RenderingMixins {
     @Mixin(RenderPipelines.class)
     @org.jspecify.annotations.NullMarked
     public static abstract class FluidPipelineMixin {
+        @Redirect(method = "<clinit>", at = @At(value = "INVOKE", target = "Lcom/mojang/renderpearl/api/pipeline/RenderPipeline$Builder;withLocation(Ljava/lang/String;)Lcom/mojang/renderpearl/api/pipeline/RenderPipeline$Builder;"))
+        private static RenderPipeline.Builder naturality$opaqueWaterShading(RenderPipeline.Builder builder, String location) {
+            // Explicit opt-in: never affect cutout, translucent, mask or optional renderer pipelines.
+            if (location.equals("pipeline/solid_terrain") || location.equals("pipeline/solid_terrain_multidraw"))
+                builder.withShaderDefine("NATURALITY_WATER_OPAQUE_TERRAIN");
+            return builder.withLocation(location);
+        }
+
         @Redirect(method = "<clinit>", at = @At(value = "INVOKE", target = "Lcom/mojang/renderpearl/api/pipeline/RenderPipeline$Builder;withFragmentShader(Ljava/lang/String;)Lcom/mojang/renderpearl/api/pipeline/RenderPipeline$Builder;"))
         private static RenderPipeline.Builder naturality$fluidLayout(RenderPipeline.Builder builder, String shader) {
             if (shader.equals("core/terrain")) {
                 builder.withBindGroupLayout(naturality.client.ui.menus.previews.MenuSurface.MenuFog.LAYOUT);
                 builder.withBindGroupLayout(naturality.client.systems.weather.wind.WindRendering.LAYOUT);
                 builder.withBindGroupLayout(ProceduralFluids.LAYOUT);
+                builder.withBindGroupLayout(naturality.client.blocks.glass.GlassShine.LAYOUT);
+                // Glass visibility needs the same lightmap in every OIT stage.
+                builder.withBindGroupLayout(net.minecraft.client.renderer.BindGroupLayouts.SAMPLER2);
                 builder.withBindGroupLayout(naturality.client.blocks.fire.ProceduralFire.LAYOUT);
                 builder.withBindGroupLayout(naturality.client.fluids.water.WaterVisuals.LAYOUT);
                 builder.withBindGroupLayout(naturality.client.fluids.water.WaterVisuals.SCENE_LAYOUT);
@@ -96,6 +108,7 @@ public final class RenderingMixins {
                 GpuTextureView atlas, GpuTextureView lightmap, RenderPipeline override,
                 RenderPipeline multidrawOverride, CallbackInfo ci) {
             ProceduralFluids.bind(pass);
+            naturality.client.blocks.glass.GlassShine.bind(pass);
             naturality.client.ui.menus.previews.MenuSurface.MenuFog.bind(pass);
             naturality.client.systems.weather.wind.WindRendering.bind(pass);
             naturality.client.blocks.fire.ProceduralFire.bind(pass);
@@ -131,7 +144,7 @@ public final class RenderingMixins {
             if (!(level instanceof RenderSectionRegion)) return;
             var modelOffset = blockState.getOffset(pos);
             int windTag = naturality.client.systems.weather.wind.WindRendering.tag(blockState);
-            if (windTag != 255 && blockState.getFluidState().isEmpty()) {
+            if (windTag != 255) {
                 for (int i = 0; i < 4; i++) {
                     int color = quad.color(i);
                     int tag = naturality.client.systems.weather.wind.WindRendering.vertexTag(level, pos, blockState, quad.x(i)+(float)modelOffset.x, quad.y(i)+(float)modelOffset.y, quad.z(i)+(float)modelOffset.z);
@@ -204,7 +217,7 @@ public final class RenderingMixins {
             if (!(level instanceof RenderSectionRegion)) return;
             var modelOffset = state.getOffset(pos);
             int windTag = naturality.client.systems.weather.wind.WindRendering.tag(state);
-            if (windTag != 255 && state.getFluidState().isEmpty()) {
+            if (windTag != 255) {
                 for (int i = 0; i < 4; i++) {
                     int color = quadInstance.getColor(i);
                     int tag = naturality.client.systems.weather.wind.WindRendering.vertexTag(level, pos, state, quad.position(i).x()+(float)modelOffset.x, quad.position(i).y()+(float)modelOffset.y, quad.position(i).z()+(float)modelOffset.z);

@@ -228,7 +228,7 @@ public final class SunBeams implements AutoCloseable {
         public static void renderOverlay() {
             var effect = pending;
             pending = null;
-            if (effect == null) return;
+            if (effect == null || underwater()) return;
             float transmitted = 0;
             for (var end : effect.clearSunRays)
                 transmitted += naturality.client.sky.shared.clouds.CloudLayerRenderer.CloudSunOcclusion.transmission(effect.visibilityEye, end);
@@ -271,6 +271,10 @@ public final class SunBeams implements AutoCloseable {
         }
 
         public void prepare(Matrix4f sunView, PoseStack sunPose, float closeness, float rain, int color) {
+            if (underwater()) {
+                pending = null;
+                return;
+            }
             float alpha = strength(closeness) * rain
                 * Math.clamp(naturality.config.live.NaturalityConfig.get().effects.cameraFlareMaxOpacity, 0, 100) / 14F;
             if (alpha <= 0.00001F || sunView.m32() >= 0) return;
@@ -284,6 +288,11 @@ public final class SunBeams implements AutoCloseable {
             parameters.translation(sunView.m30(), sunView.m31(), sunView.m32()).scale(closeness, warmth, 1);
             tint.set(ARGB.red(color) / 255F, ARGB.green(color) / 255F, ARGB.blue(color) / 255F, alpha);
             pending = this;
+        }
+
+        private static boolean underwater() {
+            return Minecraft.getInstance().gameRenderer.mainCamera().getFluidInCamera()
+                == net.minecraft.world.level.material.FogType.WATER;
         }
 
         private void draw(RenderPass pass, net.minecraft.client.renderer.texture.AbstractTexture[] textures) {

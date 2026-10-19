@@ -60,7 +60,17 @@ layout(location = 15) flat in int naturalitySubmerged;
 layout(location = 0) out vec4 fragColor;
 #endif
 
+#ifndef NATURALITY_SODIUM
+layout(location = 16) flat in int naturalityGlassKind;
+layout(location = 17) in vec3 naturalityGlassRelative;
+layout(location = 18) flat in vec3 naturalityGlassForward;
+#include <naturality:glass_shine.glsl>
+#endif
+
 vec4 calculateFinalColor(vec4 color, bool waterSprite, bool submergedTerrain) {
+    vec3 waterOffset = naturalityBlockPosition
+        + vec3(naturalitySectionOrigin - ivec3(WaterMap.x, 0, WaterMap.y)) - WaterCamera.xyz;
+    float immersion = naturality_water_view_immersion(waterOffset);
     #ifdef OIT_ACCUMULATE
     color = sampleColorForAccumulation(color);
     vec4 fogColor = vec4(FogColor.rgb * color.a, FogColor.a);
@@ -69,13 +79,26 @@ vec4 calculateFinalColor(vec4 color, bool waterSprite, bool submergedTerrain) {
     #endif
     // The underside already has premultiplied water haze. Vanilla water fog
     // would add a moon-independent bright band before our distance extinction.
-    if (waterSprite && WaterMap.w != 0 && WaterSwitches.x != 0 && WaterTime.y > 0.5)
+    if (waterSprite && WaterMap.w != 0 && WaterSwitches.x != 0 && immersion > 0.5)
         return color;
     if (waterSprite && WaterMap.w != 0 && WaterSwitches.x != 0 && WaterEnvironment.x != 0 && NATURALITY_FOG_ENABLED)
         return color;
     // Atmospheric environmental fog and distance fog are separate vanilla
     // inputs. Neither should whiten scenery behind the water surface.
-    if (submergedTerrain && WaterEnvironment.x != 0) return color;
+    if (submergedTerrain && WaterEnvironment.x != 0) {
+        if (immersion > 0.5) return color;
+        // The water map can outlive the visible surface mesh. Even those
+        // uncovered seabed pixels must disappear at the camera's draw limit.
+        float distance = max(length(waterOffset.xz), abs(waterOffset.y));
+        float fade = naturality_water_fog_coverage(smoothstep(
+            FogRenderDistanceEnd * 0.80, FogRenderDistanceEnd, distance));
+        vec2 uv = gl_FragCoord.xy / vec2(textureSize(NaturalityWaterAtmosphere, 0));
+        vec3 atmosphere = textureLod(NaturalityWaterAtmosphere, uv, 0.0).rgb;
+        #ifdef OIT_ACCUMULATE
+        atmosphere *= color.a;
+        #endif
+        return vec4(mix(color.rgb, atmosphere, fade), color.a);
+    }
     // Water absorption owns submerged scenery. Do not brighten the seabed
     // toward the atmosphere at the render-distance boundary. Keep environmental
     // fog (blindness, etc.) and the dry terrain/surface paths independent.
@@ -102,21 +125,44 @@ vec4 calculateFinalColor(vec4 color, bool waterSprite, bool submergedTerrain) {
     // Underwater surface extinction belongs to the depth-tested water draw,
     // not a fullscreen pass using opaque depth behind translucent entities.
     if (waterSprite && WaterMap.w != 0 && WaterSwitches.x != 0) {
-        vec3 waterFogColor = naturality_water_fog_color();
+        vec3 waterFogColor = naturality_water_directional_fog_color(normalize(waterOffset).y);
         #ifdef OIT_ACCUMULATE
         waterFogColor *= color.a;
         #endif
-        result.rgb = mix(result.rgb, waterFogColor, naturality_water_distance_fade(sphericalVertexDistance));
+        result.rgb = mix(result.rgb, waterFogColor, naturality_water_surface_fade(sphericalVertexDistance, waterOffset));
     }
     return result;
 }
 
 void main() {
-    bool waterSprite = false;
-    for (int i = 0; i < 2; i++) {
-        vec4 bounds = NaturalityFluidBounds[i];
-        waterSprite = waterSprite || (bounds.x >= 0.0 && all(greaterThanEqual(texCoord0, bounds.xy)) && all(lessThanEqual(texCoord0, bounds.zw)));
+    #if defined(NATURALITY_WATER_OPAQUE_TERRAIN) && !defined(ALPHA_CUTOUT) && !defined(OIT_ALPHA_ONLY) && !defined(OIT_ACCUMULATE) && !defined(NATURALITY_WATER_MASK)
+    // Section-uniform selection keeps derivative-based shading in neighboring
+    // visible primitives intact. Include fitted snow's 32-block downward reach
+    // and wind/model displacement. Keep depth and raster coverage unchanged.
+    if (WaterMap.w != 0 && WaterTime.y > 0.5 && WaterSwitches.x != 0
+            && WaterParams.y > 0.0 && MenuBounds.w == 0.0 && chunkVisibility >= 1.0
+            && naturalityFluidKind < 0 && naturalityFireKind < 0) {
+        vec3 origin = vec3(naturalitySectionOrigin - ivec3(WaterMap.x, 0, WaterMap.y));
+        vec3 nearest = clamp(WaterCamera.xyz, origin - vec3(2.0, 34.0, 2.0), origin + vec3(18.0));
+        vec3 delta = nearest - WaterCamera.xyz;
+        if (dot(delta, delta) > WaterParams.y * WaterParams.y) {
+            // The following optics pass replaces this RGB completely with fog.
+            // Opaque terrain still writes its original fragment depth.
+            // Retain the original alpha contract even for resource packs with
+            // alpha in solid-layer textures. Only the unused RGB work is skipped.
+            float lod = naturality_texture_lod_weight(texCoord0, NaturalityLodBounds, sphericalVertexDistance);
+            vec2 average = naturality_texture_average_uv(texCoord0, NaturalityLodBounds);
+            vec4 sampled = lod >= 1.0 ? textureLod(Sampler0, average, 0.0)
+                : naturality_texture_detail(Sampler0, texCoord0, 1.0 / TextureSize,
+                    dFdx(texCoord0), dFdy(texCoord0), UseRgss == 1);
+            float shadeAlpha = int(round(naturalityShade.a * 255.0)) == 242 ? 1.0 : naturalityShade.a;
+            fragColor = vec4(0.0, 0.0, 0.0, sampled.a * (vertexColor.a * shadeAlpha));
+            return;
+        }
     }
+    #endif
+    // Atlas-edge interpolation must not discard individual water-mask pixels.
+    bool waterSprite = naturalitySubmerged < 0;
     bool fallingFluidTail = naturalityFlow.z < -0.5;
     // Each sixteenth-block row has constant opacity; the lowest row is invisible.
     float tailOpacity = clamp(floor(fract(naturalityBlockPosition.y) * 16.0) / 15.0, 0.0, 1.0);
@@ -167,6 +213,7 @@ void main() {
         texelLighting ? 1.0 : naturalityShade.a);
     vec4 light = vec4(naturality_pixel_lighting_grid(lightingGrid, vertexColor.rgb), vertexColor.a);
     vec3 waterPosition = naturalityBlockPosition + vec3(naturalitySectionOrigin - ivec3(WaterMap.x, 0, WaterMap.y));
+    float waterImmersion = naturality_water_view_immersion(waterPosition - WaterCamera.xyz);
     // Offset perpendicular to the visible face, rather than diagonally toward
     // the camera (which selected different columns along cliffs when moving).
     vec3 surfaceNormal = abs(cross(positionDx, positionDy));
@@ -190,6 +237,10 @@ void main() {
     }
     // Both images live in the existing atlas; geometry, light and metadata stay
     // unchanged. The blend follows the camera every frame, including while paused.
+    bool glassSprite = false;
+    #ifndef NATURALITY_SODIUM
+    glassSprite = naturalityGlassKind >= 0;
+    #endif
     float textureFade = naturality_texture_lod_weight(texCoord0, NaturalityLodBounds, sphericalVertexDistance);
     vec2 averageUV = naturality_texture_average_uv(texCoord0, NaturalityLodBounds);
     #ifdef ALPHA_CUTOUT
@@ -197,11 +248,13 @@ void main() {
     // when solid-leaf LOD is disabled. Only RGB transitions to the average.
     vec4 sampledColor = UseRgss == 1 ? sampleRGSS(Sampler0, texCoord0, 1.0f / TextureSize)
         : sampleNearest(Sampler0, texCoord0, 1.0f / TextureSize);
-    if (naturalityFluidKind < 0 && naturalityFireKind < 0 && !waterSprite)
+    if (naturalityFluidKind < 0 && naturalityFireKind < 0 && !waterSprite && !glassSprite)
         sampledColor = naturality_cutout_pixels(Sampler0, texCoord0, TextureSize, sampledColor);
     // All derivatives used by ordinary terrain have been captured above. Fluid
-    // and fire shaders can replace alpha, so keep those on their original path.
-    if (naturalityFluidKind < 0 && naturalityFireKind < 0 && !waterSprite
+    // fire and glass shaders can replace alpha. Translucent terrain also defines
+    // ALPHA_CUTOUT, so source-alpha-zero glass must reach its shine calculation
+    // before the final alpha threshold is applied below.
+    if (naturalityFluidKind < 0 && naturalityFireKind < 0 && !waterSprite && !glassSprite
             && sampledColor.a * (light.a * shade.a) < ALPHA_CUTOUT) discard;
     if (textureFade > 0.0)
         sampledColor.rgb = mix(sampledColor.rgb, textureLod(Sampler0, averageUV, 0.0).rgb, textureFade);
@@ -221,6 +274,11 @@ void main() {
     if (naturalityFluidKind >= 0)
         surfaceColor = naturality_fluid_color(naturalityFluidKind, naturalityBlockPosition, naturalitySectionOrigin, naturalityFluidUV, naturalityFlow);
     vec4 color = surfaceColor * lighting;
+    #ifndef NATURALITY_SODIUM
+    // Shade the original texture before adding the face-shading-independent reflection.
+    if (glassSprite) color.rgb = naturality_shadow_saturation(color.rgb, lighting.rgb);
+    color = naturality_glass_shine(color, light.rgb, positionDx, positionDy);
+    #endif
     if (naturalityFireKind >= 0)
         color = naturality_fire_color(naturalityFireKind, naturalityFireUV,
             naturality_fire_resolution(naturalityBlockPosition, naturalityFireUV), naturalityFireSeed);
@@ -229,13 +287,9 @@ void main() {
         // not holes revealing the terrain below.
         color.a = 0.60;
     }
-    if (waterSprite && WaterMap.w != 0 && WaterSwitches.x != 0 && WaterTime.y > 0.5
+    if (waterSprite && WaterMap.w != 0 && WaterSwitches.x != 0 && waterImmersion > 0.5
             && waterPosition.y > WaterCamera.y
             && surfaceNormal.y > max(surfaceNormal.x, surfaceNormal.z) * 4.0) {
-        vec2 slope = naturality_water_ripple_slope(naturalityBlockPosition, naturalitySectionOrigin);
-        vec3 toSurface = normalize(waterPosition - WaterCamera.xyz);
-        float facing = clamp(dot(normalize(vec3(-slope.x, 1.0, -slope.y)), toSurface), 0.0, 1.0);
-        float grazing = 1.0 - smoothstep(0.10, 0.75, facing);
         // Use exactly the topside simulation, world-texel lattice and filtering.
         // Texture contrast belongs in RGB; transmission varies only with angle.
         float pattern = dot(surfaceColor.rgb, vec3(0.2126, 0.7152, 0.0722));
@@ -243,25 +297,42 @@ void main() {
         // pushing its troughs toward black or making its highlights transparent.
         float contrast = mix(0.82, 1.20, smoothstep(0.44, 0.78, pattern));
         color.rgb = surfaceColor.rgb * lighting.rgb * contrast;
-        color.a = mix(0.48, 0.70, grazing);
+        color.a = 0.48;
     }
     if (waterSprite && WaterMap.w != 0 && WaterSwitches.x != 0) {
-        // The overhead surface remains visible nearby, but recedes into biome haze
-        // over a substantially longer range than submerged scenery.
-        float surfaceFade = naturality_water_distance_fade(sphericalVertexDistance);
-        vec3 surfaceFog = naturality_water_fog_color();
+        vec3 normal = normalize(derivativeNormal);
+        if (surfaceNormal.y > max(surfaceNormal.x, surfaceNormal.z) * 4.0) {
+            vec2 slope = naturality_water_ripple_slope(naturalityBlockPosition, naturalitySectionOrigin);
+            normal = normalize(vec3(-slope.x, 1.0, -slope.y));
+        }
+        float facing = dot(normal, normalize(waterPosition - WaterCamera.xyz));
+        float opacity = naturality_water_fresnel(facing);
+        if (waterImmersion < 0.5) {
+            // Bound the transparent window horizontally around the camera.
+            // Altitude must not close the view into water directly below;
+            // the outer ring still hides seabed beyond underwater visibility.
+            float range = naturality_water_visibility_range();
+            float distanceOpacity = naturality_water_fog_coverage(smoothstep(
+                range * 0.65, range, length(waterPosition.xz - WaterCamera.xz)));
+            opacity = max(opacity, distanceOpacity);
+        }
+        color.a = mix(color.a, 1.0, opacity);
+        // Every water face must meet the same directional haze as the scenery.
+        // A flat tint here leaves bright side/bottom faces in the dark lower view.
+        float surfaceFade = naturality_water_surface_fade(sphericalVertexDistance, waterPosition - WaterCamera.xyz);
+        vec3 surfaceFog = naturality_water_directional_fog_color(normalize(waterPosition - WaterCamera.xyz).y);
         vec3 foggedSurface = mix(color.rgb * color.a, surfaceFog, surfaceFade);
         color.a = mix(color.a, 1.0, surfaceFade);
         color.rgb = foggedSurface / max(color.a, 0.0001);
-        // Missing-bed darkness is already behind all translucent draws in the
-        // optics pass. Opaque depth cannot see ice: making this face opaque
-        // here would hide that ice in both sorted and OIT transparency.
+        // Coverage is evaluated on the water geometry in both sorted and OIT
+        // passes, so foreground translucent objects retain their own ordering.
     }
-    if (naturalityFireKind < 0) color.rgb = naturality_shadow_saturation(color.rgb, lighting.rgb);
+    if (naturalityFireKind < 0 && !glassSprite) color.rgb = naturality_shadow_saturation(color.rgb, lighting.rgb);
     // Keep fog on the depth-tested water geometry rather than over the final
     // entity image. Coverage must match in the alpha and accumulation OIT phases.
     float waterFog = linear_fog_value(cylindricalVertexDistance, FogRenderDistanceStart, FogRenderDistanceEnd);
-    if (waterSprite && WaterMap.w != 0 && WaterSwitches.x != 0 && WaterEnvironment.x != 0 && NATURALITY_FOG_ENABLED) {
+    if (waterSprite && WaterMap.w != 0 && WaterSwitches.x != 0 && waterImmersion < 0.5
+            && WaterEnvironment.x != 0 && NATURALITY_FOG_ENABLED) {
         vec2 fogUV = gl_FragCoord.xy / vec2(textureSize(NaturalityWaterAtmosphere, 0));
         float fogOpacity = abs(FogColor.a) >= 2.0 ? 1.0 : FogColor.a;
         float coverage = total_fog_value(sphericalVertexDistance, cylindricalVertexDistance,
@@ -286,8 +357,15 @@ void main() {
     // branch; divergent derivative sampling caused unstable shimmer at edges.
     vec2 shimmerDx = positionDx.xz;
     vec2 shimmerDy = positionDy.xz;
-    if (WaterSwitches.z != 0 && waterDepth > 0.02 && waterPosition.y >= waterColumn.y - 0.08
-            && waterPosition.y <= waterColumn.y + 0.08 && surfaceNormal.y > max(surfaceNormal.x, surfaceNormal.z) * 4.0) {
+    // Any exposed model top within the water column receives shimmer, including
+    // stacked waterlogged stairs/trapdoors well above the seabed. Extend one block
+    // below the wet interval for partial models and the exposed support below them.
+    vec3 shimmerNormal = normalize(derivativeNormal);
+    shimmerNormal *= dot(shimmerNormal, WaterCamera.xyz - waterPosition) < 0.0 ? -1.0 : 1.0;
+    bool floorSurface = waterColumn.w > 0.0 && waterPosition.y >= waterColumn.y - 1.0
+        && waterPosition.y < waterColumn.x - 0.02;
+    if (WaterSwitches.z != 0 && !waterSprite && naturalityFluidKind < 2 && floorSurface
+            && shimmerNormal.y > 0.9) {
         float pattern = naturality_still_water_pattern(naturalityBlockPosition, naturalitySectionOrigin, shimmerDx, shimmerDy);
         // Project the SAME still-water field and lattice vertically onto exposed
         // floor tops. Dark sprite areas contribute zero, never a dark decal.
@@ -295,9 +373,10 @@ void main() {
             pattern = dot(textureGrad(Sampler0, shimmerUV, shimmerUVDx, shimmerUVDy).rgb, vec3(0.2126, 0.7152, 0.0722));
         }
         float highlight = smoothstep(0.47, 0.82, pattern);
-        // The column map already restricts this to exposed floor tops. Sampling
+        // The column map already restricts this to exposed floor blocks. Sampling
         // attenuated seabed skylight again made deep-water shimmer disappear.
-        float sun = WaterCamera.w;
+        float shimmerDepth = max(WaterTime.z, waterColumn.x - waterPosition.y);
+        float sun = WaterCamera.w * (1.0 - smoothstep(8.0, 80.0, shimmerDepth));
         float luminance = dot(color.rgb, vec3(0.2126, 0.7152, 0.0722));
         vec3 saturated = max(vec3(0), mix(vec3(luminance), color.rgb, 1.65));
         vec3 shimmerTint = mix(vec3(1.0), WaterTint.rgb, 0.25);
@@ -329,7 +408,9 @@ void main() {
         color.rgb = mix(color.rgb, atmosphere, menuEdge);
     }
     #ifdef ALPHA_CUTOUT
-    if (color.a < ALPHA_CUTOUT) {
+    // OIT depth bounds discard alpha below 0.01. Use that same threshold for
+    // glass in every pass, so emerging cells never accumulate without bounds.
+    if (color.a < (glassSprite ? 0.01 : ALPHA_CUTOUT)) {
         discard;
     }
     #endif
@@ -339,7 +420,7 @@ void main() {
     #else
     // A shoreline cube extends above its neighbor's fluid surface. Its exposed
     // strip must keep atmospheric fog even though the lower face is submerged.
-    bool submergedTerrain = naturalitySubmerged != 0 && WaterSwitches.x != 0
+    bool submergedTerrain = naturalitySubmerged > 0 && WaterSwitches.x != 0
         && (naturalitySubmerged == 9 || fract(naturalityBlockPosition.y) < float(naturalitySubmerged) / 9.0);
     #ifdef NATURALITY_SODIUM
     submergedTerrain = !waterSprite && waterDepth > 0.02 && WaterSwitches.x != 0;

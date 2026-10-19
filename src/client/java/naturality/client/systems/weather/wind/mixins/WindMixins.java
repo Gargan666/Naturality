@@ -82,6 +82,13 @@ public final class WindMixins {
         }
     }
 
+    @Mixin(net.minecraft.world.level.lighting.LevelLightEngine.class)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class WindLightEngineMixin implements naturality.client.systems.weather.wind.WindRendering.WindWorldAccess {
+        @org.spongepowered.asm.mixin.gen.Accessor("levelHeightAccessor")
+        @Override public abstract net.minecraft.world.level.LevelHeightAccessor naturality$windLevel();
+    }
+
     /** Keep exposure rays inside Sodium's immutable meshing snapshot. */
     @Pseudo
     @Mixin(targets="net.caffeinemc.mods.sodium.client.world.LevelSlice", remap=false)

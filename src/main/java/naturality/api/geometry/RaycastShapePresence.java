@@ -43,7 +43,7 @@ public final class RaycastShapePresence {
                     presence=KNOWN;
                     if(!section.hasOnlyAir()) {
                         if(section.maybeHas(s -> s.getBlock() instanceof BaseFireBlock))presence|=FIRE;
-                        if(section.maybeHas(s -> s.is(Blocks.SNOW)))presence|=SNOW;
+                        if(section.maybeHas(s -> s.is(Blocks.SNOW) || naturality.blocks.ash.Ash.isLayer(s)))presence|=SNOW;
                         if(section.maybeHas(WindShapes::eligible))presence|=WIND;
                     }
                 }

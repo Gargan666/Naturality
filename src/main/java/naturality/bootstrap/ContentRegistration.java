@@ -28,6 +28,57 @@ public final class ContentRegistration {
     private ContentRegistration() {}
 
     public static final class NaturalityBlocks {
+        public static final Block ASH = Blocks.register(
+            ResourceKey.create(Registries.BLOCK, Naturality.id("ash")), naturality.blocks.ash.Ash.Layer::new,
+            BlockBehaviour.Properties.ofFullCopy(Blocks.SAND).noOcclusion().dynamicShape());
+        public static final BlockItem ASH_ITEM = Registry.register(BuiltInRegistries.ITEM,
+            ResourceKey.create(Registries.ITEM, Naturality.id("ash")),
+            new BlockItem(ASH, new Item.Properties().setId(ResourceKey.create(Registries.ITEM, Naturality.id("ash")))
+                .useBlockDescriptionPrefix()));
+        public static final Block ASH_BLOCK = Blocks.register(
+            ResourceKey.create(Registries.BLOCK, Naturality.id("ash_block")),
+            properties -> new net.minecraft.world.level.block.SandBlock(new net.minecraft.util.ColorRGBA(0x777777), properties),
+            BlockBehaviour.Properties.ofFullCopy(Blocks.SAND));
+        public static final BlockItem ASH_BLOCK_ITEM = Registry.register(BuiltInRegistries.ITEM,
+            ResourceKey.create(Registries.ITEM, Naturality.id("ash_block")),
+            new BlockItem(ASH_BLOCK, new Item.Properties().setId(ResourceKey.create(Registries.ITEM, Naturality.id("ash_block")))
+                .useBlockDescriptionPrefix()));
+
+        public static final Block BASALT_WALL = Blocks.register(
+            ResourceKey.create(Registries.BLOCK, Naturality.id("basalt_wall")),
+            net.minecraft.world.level.block.WallBlock::new, BlockBehaviour.Properties.ofFullCopy(Blocks.BASALT));
+        public static final BlockItem BASALT_WALL_ITEM = Registry.register(BuiltInRegistries.ITEM,
+            ResourceKey.create(Registries.ITEM, Naturality.id("basalt_wall")),
+            new BlockItem(BASALT_WALL, new Item.Properties()
+                .setId(ResourceKey.create(Registries.ITEM, Naturality.id("basalt_wall"))).useBlockDescriptionPrefix()));
+        public static final Block POLISHED_BASALT_WALL = Blocks.register(
+            ResourceKey.create(Registries.BLOCK, Naturality.id("polished_basalt_wall")),
+            net.minecraft.world.level.block.WallBlock::new, BlockBehaviour.Properties.ofFullCopy(Blocks.POLISHED_BASALT));
+        public static final BlockItem POLISHED_BASALT_WALL_ITEM = Registry.register(BuiltInRegistries.ITEM,
+            ResourceKey.create(Registries.ITEM, Naturality.id("polished_basalt_wall")),
+            new BlockItem(POLISHED_BASALT_WALL, new Item.Properties()
+                .setId(ResourceKey.create(Registries.ITEM, Naturality.id("polished_basalt_wall"))).useBlockDescriptionPrefix()));
+
+        public static final Block SAND_LAYER = Blocks.register(
+            ResourceKey.create(Registries.BLOCK, Naturality.id("sand_layer")),
+            naturality.blocks.sand.SandLayerBlock::new,
+            BlockBehaviour.Properties.ofFullCopy(Blocks.SAND).noOcclusion());
+        public static final BlockItem SAND_LAYER_ITEM = Registry.register(BuiltInRegistries.ITEM,
+            ResourceKey.create(Registries.ITEM, Naturality.id("sand_layer")),
+            new BlockItem(SAND_LAYER, new Item.Properties()
+                .setId(ResourceKey.create(Registries.ITEM, Naturality.id("sand_layer")))
+                .useBlockDescriptionPrefix()));
+
+        public static final Block SEDIMENT = Blocks.register(
+            ResourceKey.create(Registries.BLOCK, Naturality.id("sediment")),
+            properties -> new net.minecraft.world.level.block.SandBlock(new net.minecraft.util.ColorRGBA(14406560), properties),
+            BlockBehaviour.Properties.ofFullCopy(Blocks.SAND).sound(net.minecraft.world.level.block.SoundType.GRAVEL));
+        public static final BlockItem SEDIMENT_ITEM = Registry.register(BuiltInRegistries.ITEM,
+            ResourceKey.create(Registries.ITEM, Naturality.id("sediment")),
+            new BlockItem(SEDIMENT, new Item.Properties()
+                .setId(ResourceKey.create(Registries.ITEM, Naturality.id("sediment")))
+                .useBlockDescriptionPrefix()));
+
         public static final Block SMOOTH_ENDSTONE = Blocks.register(
             ResourceKey.create(Registries.BLOCK, Naturality.id("smooth_endstone")),
             BlockBehaviour.Properties.ofFullCopy(Blocks.END_STONE));
@@ -133,6 +184,24 @@ public final class ContentRegistration {
                 .useBlockDescriptionPrefix()));
 
         public static void initialize() {
+            naturality.api.blocks.FallingLayerBlock.initialize();
+            ASH_ITEM.registerBlocks(Item.BY_BLOCK, ASH_ITEM);
+            ASH_BLOCK_ITEM.registerBlocks(Item.BY_BLOCK, ASH_BLOCK_ITEM);
+            CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.NATURAL_BLOCKS)
+                .register(output -> output.insertAfter(Blocks.SAND, ASH_BLOCK, ASH));
+            BASALT_WALL_ITEM.registerBlocks(Item.BY_BLOCK, BASALT_WALL_ITEM);
+            POLISHED_BASALT_WALL_ITEM.registerBlocks(Item.BY_BLOCK, POLISHED_BASALT_WALL_ITEM);
+            CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.BUILDING_BLOCKS)
+                .register(output -> {
+                    output.insertAfter(Blocks.BASALT, BASALT_WALL);
+                    output.insertAfter(Blocks.POLISHED_BASALT, POLISHED_BASALT_WALL);
+                });
+            SAND_LAYER_ITEM.registerBlocks(Item.BY_BLOCK, SAND_LAYER_ITEM);
+            CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.NATURAL_BLOCKS)
+                .register(output -> output.insertAfter(Blocks.SAND, SAND_LAYER));
+            SEDIMENT_ITEM.registerBlocks(Item.BY_BLOCK, SEDIMENT_ITEM);
+            CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.NATURAL_BLOCKS)
+                .register(output -> output.insertBefore(Blocks.SAND, SEDIMENT));
             CLOVERS_ITEM.registerBlocks(Item.BY_BLOCK, CLOVERS_ITEM);
             CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.NATURAL_BLOCKS)
                 .register(output -> output.insertAfter(Blocks.WILDFLOWERS, CLOVERS));
@@ -159,6 +228,11 @@ public final class ContentRegistration {
     }
 
     public static final class NaturalityItems {
+        public static final Item HEAVY_BOOTS = Registry.register(BuiltInRegistries.ITEM,
+            ResourceKey.create(Registries.ITEM, Naturality.id("heavy_boots")),
+            new Item(new Item.Properties().setId(ResourceKey.create(Registries.ITEM, Naturality.id("heavy_boots")))
+                .humanoidArmor(net.minecraft.world.item.equipment.ArmorMaterials.IRON,
+                    net.minecraft.world.item.equipment.ArmorType.BOOTS)));
         public static final Item FOUR_LEAF_CLOVER = Registry.register(BuiltInRegistries.ITEM,
             ResourceKey.create(Registries.ITEM, Naturality.id("four_leaf_clover")),
             new Item(new Item.Properties().setId(ResourceKey.create(Registries.ITEM, Naturality.id("four_leaf_clover")))));
@@ -168,6 +242,8 @@ public final class ContentRegistration {
         public static void initialize() {
             CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.INGREDIENTS)
                 .register(output -> output.insertAfter(Items.RABBIT_FOOT, FOUR_LEAF_CLOVER));
+            CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.COMBAT)
+                .register(output -> output.insertAfter(Items.IRON_BOOTS, HEAVY_BOOTS));
         }
     }
 
@@ -228,6 +304,8 @@ public final class ContentRegistration {
         public static final SoundEvent END_AMBIENCE = Registry.register(
             BuiltInRegistries.SOUND_EVENT, Naturality.id("end_ambience"),
             SoundEvent.createVariableRangeEvent(Naturality.id("end_ambience")));
+        public static final SoundEvent WIND_NETHER = Registry.register(BuiltInRegistries.SOUND_EVENT,
+            Naturality.id("wind_nether"), SoundEvent.createVariableRangeEvent(Naturality.id("wind_nether")));
         public static final SoundEvent WIND_WEAK = Registry.register(BuiltInRegistries.SOUND_EVENT,
             Naturality.id("wind_weak"), SoundEvent.createVariableRangeEvent(Naturality.id("wind_weak")));
         public static final SoundEvent WIND_STRONG = Registry.register(BuiltInRegistries.SOUND_EVENT,

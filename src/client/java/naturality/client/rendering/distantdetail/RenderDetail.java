@@ -203,6 +203,9 @@ public final class RenderDetail {
                 for (int i = 0; i < 4; i++) { u += quad.u(i); v += quad.v(i); }
                 var source = DistantTextures.find(u / 4, v / 4);
                 if (source == null) return true;
+                // Glass needs its original sprite/mask and transparent interior,
+                // including custom Fabric quads that still arrive as cutout.
+                if (naturality.client.blocks.glass.GlassShine.isGlass(source.contents().name())) return true;
                 boolean cubeLeaf = solidLeaf && fullFace(quad);
                 if (!average && !cubeLeaf) return true;
                 var variant = DistantTextures.variant(source, cubeLeaf, average);

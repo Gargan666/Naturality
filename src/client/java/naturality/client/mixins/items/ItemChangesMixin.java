@@ -33,15 +33,20 @@ public final class ItemChangesMixin {
         private final naturality.client.ui.items.HotbarPickupScale.Animation naturality$hotbarAnimation =
             new naturality.client.ui.items.HotbarPickupScale.Animation();
 
-        @com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod(method = "extractItemHotbar")
+        @com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod(method = "extractHotbarAndDecorations")
         private void naturality$raisedHotbar(GuiGraphicsExtractor graphics, DeltaTracker delta, Operation<Void> original) {
-            var player = net.minecraft.client.Minecraft.getInstance().player;
-            if (player != null) naturality$hotbarAnimation.update(player, delta.getGameTimeDeltaPartialTick(false));
             graphics.pose().pushMatrix();
             try {
                 graphics.pose().translate(0, -naturality.config.live.NaturalityConfig.get().effects.hotbarOffset);
                 original.call(graphics, delta);
             } finally { graphics.pose().popMatrix(); }
+        }
+
+        @com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod(method = "extractItemHotbar")
+        private void naturality$updateHotbarAnimation(GuiGraphicsExtractor graphics, DeltaTracker delta, Operation<Void> original) {
+            var player = net.minecraft.client.Minecraft.getInstance().player;
+            if (player != null) naturality$hotbarAnimation.update(player, delta.getGameTimeDeltaPartialTick(false));
+            original.call(graphics, delta);
         }
 
         @WrapOperation(method = "extractSlot", at = @At(value = "INVOKE",

@@ -62,9 +62,9 @@ public final class SnowMixins {
         @Inject(method = "isViewBlocking", at = @At("HEAD"), cancellable = true)
         private void naturality$displacedSnowDoesNotBlockCamera(BlockGetter level, BlockPos pos, AABB nearPlane,
                 CallbackInfoReturnable<Boolean> cir) {
-            if (!naturality.config.gameplay.GameplaySettings.snowWrapping(level)) return;
+
             var state = (BlockState)(Object)this;
-            if (state.is(Blocks.SNOW) && !SnowGeometry.usesVanillaGeometry(level, pos))
+            if (naturality.blocks.ash.Ash.isLayer(state) || state.is(Blocks.SNOW) && naturality.config.gameplay.GameplaySettings.snowWrapping(level) && !SnowGeometry.usesVanillaGeometry(level, pos))
                 cir.setReturnValue(false);
         }
         @Inject(method = "getCollisionShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/phys/shapes/VoxelShape;", at = @At("RETURN"), cancellable = true)
@@ -73,9 +73,10 @@ public final class SnowMixins {
         }
         @Inject(method = "getCollisionShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/shapes/CollisionContext;)Lnet/minecraft/world/phys/shapes/VoxelShape;", at = @At("RETURN"), cancellable = true)
         private void naturality$snowCollision(BlockGetter level, BlockPos pos, CollisionContext context, CallbackInfoReturnable<VoxelShape> cir) {
-            if (!naturality.config.gameplay.GameplaySettings.snowWrapping(level)) return;
+
             var state=(BlockState)(Object)this;
-            if (state.is(Blocks.SNOW)) { cir.setReturnValue(SnowGeometry.collisionShape(level,pos,state.getValue(SnowLayerBlock.LAYERS))); return; }
+            if (naturality.blocks.ash.Ash.isLayer(state)) { cir.setReturnValue(naturality.api.geometry.SurfaceLayers.collisionShape(level,pos,state.getValue(SnowLayerBlock.LAYERS),state.getBlock())); return; }
+            if (state.is(Blocks.SNOW) && naturality.config.gameplay.GameplaySettings.snowWrapping(level)) { cir.setReturnValue(SnowGeometry.collisionShape(level,pos,state.getValue(SnowLayerBlock.LAYERS))); return; }
             if (state.isAir()) return;
             var result=cir.getReturnValue();
             // Added snow is intersected with the unit cell below. A full collision
@@ -83,10 +84,10 @@ public final class SnowMixins {
             if(net.minecraft.world.level.block.Block.isShapeFullBlock(result))return;
             for (int above=1;above<=SnowGeometry.MAX_DEPTH;above++) {
                 var owner=pos.above(above); var snow=level.getBlockState(owner);
-                if (!snow.is(Blocks.SNOW)) { if(above>=2 && !SnowGeometry.exposesGround(level,owner)) break; continue; }
+                if (!naturality.blocks.ash.Ash.isLayer(snow) && !(snow.is(Blocks.SNOW) && naturality.config.gameplay.GameplaySettings.snowWrapping(level))) { if(above>=2 && !SnowGeometry.exposesGround(level,owner)) break; continue; }
                 if (snow.getValue(SnowLayerBlock.LAYERS)==1) continue;
-                if(SnowGeometry.usesVanillaGeometry(level,owner))continue;
-                var displaced=SnowGeometry.collisionShape(level,owner,snow.getValue(SnowLayerBlock.LAYERS)).move(0,above,0);
+                if(naturality.api.geometry.SurfaceLayers.usesVanillaGeometry(level,owner,snow.getBlock()))continue;
+                var displaced=naturality.api.geometry.SurfaceLayers.collisionShape(level,owner,snow.getValue(SnowLayerBlock.LAYERS),snow.getBlock()).move(0,above,0);
                 // Include only the part that belongs in this traversed collision cell.
                 result=Shapes.or(result,Shapes.join(displaced,Shapes.block(),BooleanOp.AND));
             }
@@ -101,7 +102,7 @@ public final class SnowMixins {
         private boolean naturality$validSnowHit(ServerboundUseItemOnPacket packet) {
             var hit=packet.hitResult();var pos=hit.getBlockPos();var state=player.level().getBlockState(pos);
             boolean displaced=!naturality.systems.weather.wind.WindPush.WindShapes.offset(player.level(),pos,state).equals(Vec3.ZERO);
-            if(!displaced && (!naturality.config.gameplay.GameplaySettings.snowWrapping(player.level()) || !state.is(Blocks.SNOW)))return false;
+            if(!displaced && (!naturality.config.gameplay.GameplaySettings.snowWrapping(player.level()) || !state.is(Blocks.SNOW)) && !naturality.blocks.ash.Ash.isLayer(state))return false;
             var point=hit.getLocation().subtract(pos.getX(),pos.getY(),pos.getZ());
             return state.getShape(player.level(),pos).toAabbs()
                 .stream().anyMatch(b -> b.inflate(1e-5).contains(point));
@@ -197,7 +198,7 @@ public final class SnowMixins {
     public interface SnowPickingMixin {
         @WrapMethod(method="clip")
         private BlockHitResult naturality$snowContext(ClipContext context, Operation<BlockHitResult> original) {
-            if (!naturality.config.gameplay.GameplaySettings.snowWrapping((BlockGetter)this)) return original.call(context);
+
             var previous=SnowGeometry.PICK.get(); SnowGeometry.PICK.set(context);
             try { return original.call(context); }
             finally { if(previous==null) SnowGeometry.PICK.remove(); else SnowGeometry.PICK.set(previous); }
@@ -205,14 +206,14 @@ public final class SnowMixins {
         @Inject(method="clipWithInteractionOverride",at=@At("RETURN"),cancellable=true)
         private void naturality$snowHit(Vec3 from, Vec3 to, BlockPos pos, VoxelShape shape, BlockState state,
                 CallbackInfoReturnable<BlockHitResult> cir) {
-            if (!naturality.config.gameplay.GameplaySettings.snowWrapping((BlockGetter)this)) return;
+
             var context=SnowGeometry.PICK.get(); if(context==null)return;
             BlockGetter level=(BlockGetter)this;
             if(!naturality.api.geometry.RaycastShapePresence.mayContain(level,naturality.api.geometry.RaycastShapePresence.SNOW,
                     pos.getX(),pos.getY()+1,pos.getZ(),pos.getX(),pos.getY()+SnowGeometry.MAX_DEPTH,pos.getZ()))return;
             var best=cir.getReturnValue(); double distance=best==null?Double.POSITIVE_INFINITY:best.getLocation().distanceToSqr(from);
             for(int offset=1;offset<=SnowGeometry.MAX_DEPTH;offset++) {
-                var owner=pos.above(offset);var snow=level.getBlockState(owner);if(!snow.is(Blocks.SNOW)) { if(offset>=2 && !SnowGeometry.exposesGround(level,owner)) break; continue; }
+                var owner=pos.above(offset);var snow=level.getBlockState(owner);if(!naturality.blocks.ash.Ash.isLayer(snow) && !(snow.is(Blocks.SNOW) && naturality.config.gameplay.GameplaySettings.snowWrapping(level))) { if(offset>=2 && !SnowGeometry.exposesGround(level,owner)) break; continue; }
                 var hit=context.getBlockShape(snow,level,owner).clip(from,to,owner);
                 if(hit!=null && new AABB(pos).inflate(1e-6).contains(hit.getLocation()) && hit.getLocation().distanceToSqr(from)<distance) {
                     best=hit;distance=hit.getLocation().distanceToSqr(from);
@@ -410,9 +411,11 @@ public final class SnowMixins {
         @Inject(method = "walkingStepSound", at = @At("HEAD"), cancellable = true)
         private void naturality$displacedSnowStepSound(BlockPos pos, BlockState state, CallbackInfo ci) {
             Entity entity = (Entity)(Object)this;
-            if (state.is(Blocks.SNOW) || !naturality.config.gameplay.GameplaySettings.snowWrapping(entity.level())) return;
-            if (SnowGeometry.coversFoot(entity.level(), pos, entity.getBoundingBox())) {
-                this.playStepSound(pos, Blocks.SNOW.defaultBlockState());
+            if (state.is(Blocks.SNOW) || naturality.blocks.ash.Ash.isLayer(state)) return;
+            var contact = naturality.api.geometry.SurfaceLayers.footstepState(entity.level(),pos,entity.getBoundingBox(),
+                naturality.config.gameplay.GameplaySettings.snowWrapping(entity.level()));
+            if (contact != null) {
+                this.playStepSound(pos, contact);
                 ci.cancel();
             }
         }

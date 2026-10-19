@@ -121,7 +121,7 @@ public final class WeatherSystem {
         return new WeatherState(from.rain() + (to.rain() - from.rain()) * t,
             from.wind() + (to.wind() - from.wind()) * t,
             from.temperature() + (to.temperature() - from.temperature()) * t,
-            (from.direction() + angularDistance(from.direction(), to.direction()) * t + 360) % 360);
+            (from.direction() + angularDistance(from.direction(), to.direction()) * t + 360) % 360, to.regularWindOnly());
     }
     public static Biome.Precipitation precipitation(Level level, Biome biome, BlockPos pos) {
         var normal = biome.getPrecipitationAt(pos, level.getSeaLevel());
@@ -194,6 +194,7 @@ public final class WeatherSystem {
         var windCycle = WIND_CYCLES.computeIfAbsent(level, _ -> new WeatherChannel(seed ^ WIND.seedSalt()));
         float rain = RAIN.tick(rainCycle, cycle, time, p, rate);
         float wind = WIND.tick(windCycle, cycle, time, p, rate);
+
         float temp = old == null ? 50 : automaticTemperature(p, seed, time);
         float direction = automaticDirection(seed, time);
         if (!cycle && old != null) { wind = old.wind(); temp = old.temperature(); direction = old.direction(); }
@@ -204,12 +205,14 @@ public final class WeatherSystem {
         if (old == null) {
             STATES.put(level, new WeatherState(p.overrideRain ? p.rain : 0,
                 p.overrideWind ? p.wind : 0, p.overrideTemperature ? p.temperature : 50, targetDirection));
+            if (level.dimension().equals(Level.NETHER)) STATES.computeIfPresent(level, (_, state) -> naturality.systems.weather.wind.WindPush.netherState(state));
             return;
         }
         var target = new WeatherState(p.overrideRain ? p.rain : rain, p.overrideWind ? p.wind : wind,
             p.overrideTemperature ? p.temperature : temp, targetDirection);
         if (old != null) target = new WeatherState(approach(old.rain(), target.rain(), .5F * rate),
             approach(old.wind(), target.wind(), .5F * rate), approach(old.temperature(), target.temperature(), (p.overrideTemperature ? .25F : .005F) * rate), targetDirection);
+        if (level.dimension().equals(Level.NETHER)) target = naturality.systems.weather.wind.WindPush.netherState(target);
         STATES.put(level, target);
     }
     private static String key(ServerLevel level) { return "weather/"+level.dimension().identifier(); }
@@ -219,6 +222,7 @@ public final class WeatherSystem {
         if(saved.isEmpty())return;
         STATES.put(level,new WeatherState(EnvironmentWorldData.number(saved,"rain"),EnvironmentWorldData.number(saved,"wind"),
             EnvironmentWorldData.number(saved,"temperature"),EnvironmentWorldData.number(saved,"direction")));
+        if (level.dimension().equals(Level.NETHER)) STATES.computeIfPresent(level, (_, state) -> naturality.systems.weather.wind.WindPush.netherState(state));
         CLOCKS.put(level,saved.getOrDefault("clock",0L));
         long seed=level.getSeed() ^ level.dimension().identifier().hashCode();
         var rain=new WeatherChannel(seed ^ RAIN.seedSalt());rain.restore(data.read(key(level)+"/rain"));RAIN_CYCLES.put(level,rain);
@@ -327,7 +331,10 @@ public final class WeatherSystem {
     }
 
     /** Independent channels. Temperature is a climate offset: 50 preserves biome temperature. */
-    public record WeatherState(float rain, float wind, float temperature, float direction) {
+    public record WeatherState(float rain, float wind, float temperature, float direction, boolean regularWindOnly) {
+        public WeatherState(float rain, float wind, float temperature, float direction) {
+            this(rain, wind, temperature, direction, false);
+        }
         public static final WeatherState CLEAR = new WeatherState(0, 0, 50, 0);
         public WeatherState {
             rain = clamp(rain); wind = clamp(wind); temperature = clamp(temperature);
@@ -361,9 +368,9 @@ public final class WeatherSystem {
         }
         /** Probability of retaining a vanilla ground impact; does not alter rain sounds. */
         public float groundImpactChance() { float t = rain / 100; return t * t; }
-        /** Wind motion reaches its former maximum at 75, then rises sharply to 3x at 100. */
+        /** Ordinary wind scales linearly; dimensions allowing severe wind rise sharply above 75. */
         public float windEffect() {
-            if (wind <= 75) return wind / 75;
+            if (regularWindOnly || wind <= 75) return wind / 75;
             float severe = (wind - 75) / 25;
             return 1 + 2 * severe * severe;
         }
@@ -371,7 +378,17 @@ public final class WeatherSystem {
         public float windZ() { return (float)Math.sin(Math.toRadians(direction)) * windEffect(); }
         public float weakWindGain() { return wind / 100 * (1 - strongBlend()); }
         public float strongWindGain() { return wind / 100 * strongBlend(); }
-        private float strongBlend() { float t = Math.clamp((wind - 30) / 50, 0, 1); return t * t * (3 - 2 * t); }
+        /** Shared severe-mode blend for geometry and shaders; Nether only increases ordinary sway. */
+        public float severeWindBlend() {
+            if (regularWindOnly) return 0;
+            float t = Math.clamp((wind - 80) / 20, 0, 1);
+            return t * t * (3 - 2 * t);
+        }
+        private float strongBlend() {
+            if (regularWindOnly) return 0;
+            float t = Math.clamp((wind - 30) / 50, 0, 1);
+            return t * t * (3 - 2 * t);
+        }
     }
 
     /** Per-world dimension pool/ranges and independently selectable manual channels. */
@@ -426,6 +443,10 @@ public final class WeatherSystem {
     }
 
     public record WeatherPayload(Identifier dimension, long worldSession, boolean enabled, WeatherState state) implements CustomPacketPayload {
+        public WeatherPayload {
+            // Wind mode follows dimension identity, without changing the persisted or wire format.
+            if (dimension.equals(Level.NETHER.identifier())) state = naturality.systems.weather.wind.WindPush.netherState(state);
+        }
         public static final Type<WeatherPayload> TYPE = new Type<>(Naturality.id("weather"));
         public static final StreamCodec<RegistryFriendlyByteBuf, WeatherPayload> CODEC = new StreamCodec<@org.jspecify.annotations.NonNull RegistryFriendlyByteBuf, @org.jspecify.annotations.NonNull WeatherPayload>() {
             public WeatherPayload decode(RegistryFriendlyByteBuf b) {
@@ -455,13 +476,22 @@ public final class WeatherSystem {
         public WeatherWorldData() {
             profiles = new ConcurrentHashMap<>();
             profiles.put("minecraft:overworld", new WeatherProfile(true));
-            profiles.put("minecraft:the_nether", new WeatherProfile(false));
+            profiles.put("minecraft:the_nether", new WeatherProfile(true));
             profiles.put("minecraft:the_end", new WeatherProfile(false));
         }
 
         private WeatherWorldData(Map<String, WeatherProfile> profiles) {
             this.profiles = new ConcurrentHashMap<>(profiles);
             if (this.profiles.isEmpty()) this.profiles.putAll(new WeatherWorldData().profiles);
+            // Previous releases stored an inert Nether profile; wind now runs here by default.
+            var nether = this.profiles.computeIfAbsent("minecraft:the_nether", _ -> new WeatherProfile(true));
+            if (!nether.enabled && !nether.overrideRain && !nether.overrideWind
+                    && !nether.overrideTemperature && !nether.overrideDirection
+                    && nether.minWind == 0 && nether.maxWind == 100
+                    && nether.minTemperature == 15 && nether.maxTemperature == 75) {
+                nether.enabled = true;
+                setDirty();
+            }
         }
 
         public static WeatherWorldData get(MinecraftServer server) {

@@ -1,0 +1,139 @@
+{
+  "pools": [
+    {
+      "condition": {
+        "type": "minecraft:survives_explosion"
+      },
+      "rolls": 1,
+      "entries": [
+        {
+          "children": [
+            {
+              "condition": {
+                "blocks": "naturality:sand_layer",
+                "state": {
+                  "layers": "1"
+                },
+                "type": "minecraft:match_block"
+              },
+              "modifier": {
+                "type": "minecraft:set_count",
+                "count": 1
+              },
+              "name": "naturality:sand_layer",
+              "type": "minecraft:item"
+            },
+            {
+              "condition": {
+                "blocks": "naturality:sand_layer",
+                "state": {
+                  "layers": "2"
+                },
+                "type": "minecraft:match_block"
+              },
+              "modifier": {
+                "type": "minecraft:set_count",
+                "count": 2
+              },
+              "name": "naturality:sand_layer",
+              "type": "minecraft:item"
+            },
+            {
+              "condition": {
+                "blocks": "naturality:sand_layer",
+                "state": {
+                  "layers": "3"
+                },
+                "type": "minecraft:match_block"
+              },
+              "modifier": {
+                "type": "minecraft:set_count",
+                "count": 3
+              },
+              "name": "naturality:sand_layer",
+              "type": "minecraft:item"
+            },
+            {
+              "condition": {
+                "blocks": "naturality:sand_layer",
+                "state": {
+                  "layers": "4"
+                },
+                "type": "minecraft:match_block"
+              },
+              "modifier": {
+                "type": "minecraft:set_count",
+                "count": 4
+              },
+              "name": "naturality:sand_layer",
+              "type": "minecraft:item"
+            },
+            {
+              "condition": {
+                "blocks": "naturality:sand_layer",
+                "state": {
+                  "layers": "5"
+                },
+                "type": "minecraft:match_block"
+              },
+              "modifier": {
+                "type": "minecraft:set_count",
+                "count": 5
+              },
+              "name": "naturality:sand_layer",
+              "type": "minecraft:item"
+            },
+            {
+              "condition": {
+                "blocks": "naturality:sand_layer",
+                "state": {
+                  "layers": "6"
+                },
+                "type": "minecraft:match_block"
+              },
+              "modifier": {
+                "type": "minecraft:set_count",
+                "count": 6
+              },
+              "name": "naturality:sand_layer",
+              "type": "minecraft:item"
+            },
+            {
+              "condition": {
+                "blocks": "naturality:sand_layer",
+                "state": {
+                  "layers": "7"
+                },
+                "type": "minecraft:match_block"
+              },
+              "modifier": {
+                "type": "minecraft:set_count",
+                "count": 7
+              },
+              "name": "naturality:sand_layer",
+              "type": "minecraft:item"
+            },
+            {
+              "condition": {
+                "blocks": "naturality:sand_layer",
+                "state": {
+                  "layers": "8"
+                },
+                "type": "minecraft:match_block"
+              },
+              "modifier": {
+                "type": "minecraft:set_count",
+                "count": 8
+              },
+              "name": "naturality:sand_layer",
+              "type": "minecraft:item"
+            }
+          ],
+          "type": "minecraft:alternatives"
+        }
+      ]
+    }
+  ],
+  "random_sequence": "naturality:blocks/sand_layer",
+  "type": "minecraft:block"
+}

@@ -55,7 +55,7 @@ public final class FogCulling {
 
     public static boolean sectionHidden(int x, int y, int z) {
         if (!sectionHidden(x,y,z,0)) return false;
-        int drop = naturality.client.blocks.snow.SurfaceSnowModel.SnowSectionVisibility.below(
+        int drop = naturality.client.api.rendering.layers.SurfaceLayerModel.SnowSectionVisibility.below(
             net.minecraft.core.SectionPos.asLong(x >> 4,y >> 4,z >> 4));
         return drop == 0 || sectionHidden(x,y,z,drop);
     }

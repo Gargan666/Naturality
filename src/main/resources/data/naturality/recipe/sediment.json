@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "building",
+  "ingredients": [
+    "minecraft:sand",
+    "minecraft:gravel"
+  ],
+  "result": {
+    "id": "naturality:sediment",
+    "count": 1
+  }
+}

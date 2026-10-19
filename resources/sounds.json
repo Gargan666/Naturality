@@ -60,6 +60,10 @@
       }
     ]
   },
+  "wind_nether": {
+    "subtitle": "subtitles.naturality.wind",
+    "sounds": [{ "name": "naturality:wind_nether", "stream": true }]
+  },
   "wind_weak": {
     "subtitle": "subtitles.naturality.wind",
     "sounds": [

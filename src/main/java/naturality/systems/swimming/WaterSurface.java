@@ -37,6 +37,7 @@ public final class WaterSurface {
     }
 
     private static boolean eligible(LivingEntity entity) {
+        if (naturality.items.heavyboots.HeavyBoots.worn(entity)) return false;
         if (entity.tickCount < state(entity).bubbleUntil) return false;
         if (entity.tickCount < state(entity).riptideUntil) return false;
         // Preserve sinking for the zombie family; drowned retain their swimming behavior.

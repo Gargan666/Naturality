@@ -21,6 +21,10 @@ vec3 world_offset(vec2 uv, float depth) {
 }
 
 void main() {
+    if (WaterLens.z > 0.5 && naturality_water_lens_depth(world_offset(texCoord, 1.0)) >= 0.0) {
+        fragColor = vec4(0);
+        return;
+    }
     float depth = texture(Sampler1, texCoord).r;
     vec4 water = texture(NaturalityWaterMask, texCoord);
     bool waterSurface = WaterMap.w != 0 && WaterSwitches.x != 0 && water.r > 0.0 && water.a > 0.0;

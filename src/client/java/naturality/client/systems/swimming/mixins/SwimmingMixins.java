@@ -54,6 +54,9 @@ public final class SwimmingMixins {
 
     @Mixin(AvatarRenderState.class)
     public static abstract class PlayerSwimmingRenderStateMixin implements PlayerSwimmingClient.RenderState {
+        @Unique private float naturality$strokeAmplitude = 1;
+        public float naturality$strokeAmplitude() { return naturality$strokeAmplitude; }
+        public void naturality$strokeAmplitude(float value) { naturality$strokeAmplitude = value; }
         @Unique private float naturality$brace;
         public float naturality$brace() { return naturality$brace; }
         public void naturality$brace(float value) { naturality$brace = value; }
@@ -77,6 +80,7 @@ public final class SwimmingMixins {
             ((PlayerSwimmingClient.RenderState)state).naturality$brace(entity instanceof Player player ? PlayerSwimming.braceBlend(player, partial) : 0);
             ((PlayerSwimmingClient.RenderState)state).naturality$gentleStroke(entity instanceof Player player ? PlayerSwimming.gentleStroke(player, partial) : 0);
             ((PlayerSwimmingClient.RenderState)state).naturality$strokePhase(entity instanceof Player player ? PlayerSwimming.strokePhase(player, partial) : 0);
+            ((PlayerSwimmingClient.RenderState)state).naturality$strokeAmplitude(entity instanceof Player player ? PlayerSwimming.strokeAmplitude(player, partial) : 1);
             if (swimming) state.isVisuallySwimming = true;
         }
         // The zero-angle entry pose must also bypass vanilla's extra swimming tilt/translation.
@@ -112,9 +116,13 @@ public final class SwimmingMixins {
             float leftLeg = model.leftLeg.xRot, rightLeg = model.rightLeg.xRot;
             if (state instanceof PlayerSwimmingClient.RenderState swimming)
                 animation = swimming.naturality$strokePhase() * (26F / (2F * (float)Math.PI));
-            original.call(model, state, animation, amount);
+            float armAmount = state instanceof PlayerSwimmingClient.RenderState swimming
+                ? amount * Math.min(1, swimming.naturality$strokeAmplitude()) : amount;
+            original.call(model, state, animation, armAmount);
             if (state instanceof PlayerSwimmingClient.RenderState swimming)
-                PlayerSwimmingClient.strokeLegs(model, swimming.naturality$strokePhase(), amount, leftLeg, rightLeg);
+                PlayerSwimmingClient.sprintAmplitude(model, state, swimming.naturality$strokeAmplitude(), amount);
+            if (state instanceof PlayerSwimmingClient.RenderState swimming)
+                PlayerSwimmingClient.strokeLegs(model, swimming.naturality$strokePhase(), amount, leftLeg, rightLeg, swimming.naturality$strokeAmplitude());
         }
         @Inject(method = "setupSwimAnimation", at = @At("RETURN"))
         private void naturality$physicalHead(HumanoidRenderState state, float animation, float amount, CallbackInfo ci) {

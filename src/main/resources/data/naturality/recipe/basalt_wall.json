@@ -1,0 +1,14 @@
+{
+  "pattern": [
+    "###",
+    "###"
+  ],
+  "type": "minecraft:crafting_shaped",
+  "key": {
+    "#": "minecraft:basalt"
+  },
+  "result": {
+    "id": "naturality:basalt_wall",
+    "count": 6
+  }
+}

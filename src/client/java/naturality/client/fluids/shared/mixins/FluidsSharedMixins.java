@@ -86,17 +86,17 @@ public final class FluidsSharedMixins {
         private void naturality$connectExposedFaces(Args args) {
             var corners = naturality$corners.get();
             if (corners == null) return;
-            var tintSource = corners.tintSource;
-            if (tintSource != null) {
+            var tintSamples = corners.tintSamples;
+            if (tintSamples != null) {
                 float x = args.get(0), y = args.get(1), z = args.get(2);
-                int tint = BiomeTint.at(tintSource, corners.level, corners.block, corners.pos,
+                int tint = tintSamples.at(
                     x - (corners.pos.getX() & 15), y - (corners.pos.getY() & 15), z - (corners.pos.getZ() & 15));
                 args.set(3, BiomeTint.replaceFluidTint(args.get(3), corners.baseTint, tint));
             }
             // Apply after flow encoding: side vertices must retain their side tag.
-            args.set(0, naturality.client.fluids.shared.FluidGeometry.connectedCoordinate(corners.level, corners.pos, args.get(0), true));
-            args.set(1, naturality.client.fluids.shared.FluidGeometry.connectedHeight(corners.level, corners.pos, args.get(1)));
-            args.set(2, naturality.client.fluids.shared.FluidGeometry.connectedCoordinate(corners.level, corners.pos, args.get(2), false));
+            args.set(0, corners.boundaries.coordinate(args.get(0), true));
+            args.set(1, corners.boundaries.height(args.get(1)));
+            args.set(2, corners.boundaries.coordinate(args.get(2), false));
         }
 
         @WrapMethod(method = "tesselate")
@@ -144,9 +144,9 @@ public final class FluidsSharedMixins {
                 int color, float u, float v, int originalLight) {
             var corners = naturality$corners.get();
             if(corners==null)return light;
-            x = naturality.client.fluids.shared.FluidGeometry.connectedCoordinate(corners.level, corners.pos, x, true);
-            y = naturality.client.fluids.shared.FluidGeometry.connectedHeight(corners.level, corners.pos, y);
-            z = naturality.client.fluids.shared.FluidGeometry.connectedCoordinate(corners.level, corners.pos, z, false);
+            x = corners.boundaries.coordinate(x, true);
+            y = corners.boundaries.height(y);
+            z = corners.boundaries.coordinate(z, false);
             return corners.light(x,y,z,light);
         }
 
@@ -154,16 +154,17 @@ public final class FluidsSharedMixins {
             final BlockAndTintGetter level;
             final BlockPos pos;
             final FluidState fluid;
-            final BlockState block;
-            final BiomeTint.@org.jspecify.annotations.Nullable Source tintSource;
+            final BiomeTint.@org.jspecify.annotations.Nullable Samples tintSamples;
             final int baseTint;
+            final naturality.client.fluids.shared.FluidGeometry.BoundaryCache boundaries;
             final int[] angles = {-1, -1, -1, -1};
             final java.util.Map<BlockPos, Integer> lights = new java.util.HashMap<>();
             FlowCorners(BlockAndTintGetter level, BlockPos pos, BlockState block, FluidState fluid,
                     net.minecraft.client.color.block.@org.jspecify.annotations.Nullable BlockTintSource source) {
                 this.level = level; this.pos = pos.immutable(); this.fluid = fluid;
-                this.block = block;
-                this.tintSource = source instanceof BiomeTint.Source biome ? biome : null;
+                this.boundaries = new naturality.client.fluids.shared.FluidGeometry.BoundaryCache(level, this.pos);
+                this.tintSamples = source instanceof BiomeTint.Source biome
+                    ? new BiomeTint.Samples(biome, level, block, this.pos) : null;
                 this.baseTint = source == null ? -1 : source.colorInWorld(block, level, pos);
             }
             int light(float x, float y, float z, int fallback) {

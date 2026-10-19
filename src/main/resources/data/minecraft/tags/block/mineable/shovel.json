@@ -1,0 +1,9 @@
+{
+  "replace": false,
+  "values": [
+    "naturality:sediment",
+    "naturality:sand_layer",
+    "naturality:ash",
+    "naturality:ash_block"
+  ]
+}

@@ -48,34 +48,39 @@ public final class WeatherSnow {
             for (int i=0; i<8; i++) {
                 int x=chunk.getPos().getMinBlockX()+random.nextInt(16);
                 int z=chunk.getPos().getMinBlockZ()+random.nextInt(16);
-                var surface = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING, new BlockPos(x,0,z));
+                var surface = new BlockPos(x, chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, x & 15, z & 15) + 1, z);
                 // Thin snow may sit above the heightmap; ice and thick snow are below it.
-                boolean thawed = random.nextFloat() < snowChance && thawAt(level, surface);
-                if (!thawed) thawed = random.nextFloat() < snowChance && thawAt(level, surface.below());
+                boolean thawed = random.nextFloat() < snowChance && thawAt(level, chunk, surface, weather.temperature());
+                if (!thawed) thawed = random.nextFloat() < snowChance && thawAt(level, chunk, surface.below(), weather.temperature());
                 if (!thawed) {
                     // Snow above signs/other non-motion-blocking shapes lives above
                     // the ordinary weather heightmap but must still thaw normally.
-                    var visible = level.getHeightmapPos(Heightmap.Types.WORLD_SURFACE, new BlockPos(x,0,z)).below();
+                    var visible = new BlockPos(x, chunk.getHeight(Heightmap.Types.WORLD_SURFACE, x & 15, z & 15), z);
                     if (visible.getY() > surface.getY() && random.nextFloat() < snowChance)
-                        thawed = thawAt(level, visible);
+                        thawed = thawAt(level, chunk, visible, weather.temperature());
                 }
                 if (!thawed) {
                     // Ice melts as soon as the custom climate classifies this biome
                     // as rainy, independent of the faster high-temperature thaw roll.
-                    thawRainIceAt(level, surface);
-                    thawRainIceAt(level, surface.below());
-                    thawRainIceAt(level, surface.below(2));
-                    var visible = level.getHeightmapPos(Heightmap.Types.WORLD_SURFACE, new BlockPos(x,0,z)).below();
-                    if (visible.getY() > surface.getY()) thawRainIceAt(level, visible);
+                    thawRainIceAt(level, chunk, surface);
+                    thawRainIceAt(level, chunk, surface.below());
+                    thawRainIceAt(level, chunk, surface.below(2));
+                    var visible = new BlockPos(x, chunk.getHeight(Heightmap.Types.WORLD_SURFACE, x & 15, z & 15), z);
+                    if (visible.getY() > surface.getY()) thawRainIceAt(level, chunk, visible);
                 }
             }
         }
         public static boolean thawAt(ServerLevel level, BlockPos pos) {
             var weather = WeatherSystem.state(level);
             if (!naturality.config.gameplay.GameplaySettings.NaturalityServerConfig.get().weatherThaw || weather == null || weather.temperature() <= 50 || !naturality.api.worlds.LoadedChunks.has(level, pos)) return false;
-            var block = level.getBlockState(pos);
+            var chunk = level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
+            return chunk != null && thawAt(level, chunk, pos, weather.temperature());
+        }
+        private static boolean thawAt(ServerLevel level, LevelChunk chunk, BlockPos pos, float temperature) {
+            if (temperature <= 50) return false;
+            var block = chunk.getBlockState(pos);
             if (!block.is(Blocks.SNOW) && !block.is(Blocks.ICE)) return false;
-            if (level.getHeight(Heightmap.Types.MOTION_BLOCKING, pos.getX(), pos.getZ()) > pos.getY()+1
+            if (chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, pos.getX() & 15, pos.getZ() & 15) + 1 > pos.getY()+1
                     || WeatherSystem.precipitation(level,
                     level.getBiome(pos).value(), pos) == Biome.Precipitation.SNOW) return false;
             if (block.is(Blocks.SNOW)) {
@@ -89,11 +94,9 @@ public final class WeatherSnow {
             return true;
         }
 
-        private static boolean thawRainIceAt(ServerLevel level, BlockPos pos) {
-            var weather = WeatherSystem.state(level);
-            if (!naturality.config.gameplay.GameplaySettings.NaturalityServerConfig.get().weatherThaw || weather == null
-                    || !naturality.api.worlds.LoadedChunks.has(level, pos)
-                    || !level.getBlockState(pos).is(Blocks.ICE)
+        private static boolean thawRainIceAt(ServerLevel level, LevelChunk chunk, BlockPos pos) {
+            // The caller already checked the setting and weather for this chunk tick.
+            if (!chunk.getBlockState(pos).is(Blocks.ICE)
                     || WeatherSystem.precipitation(level, level.getBiome(pos).value(), pos) != Biome.Precipitation.RAIN)
                 return false;
             level.setBlockAndUpdate(pos, Blocks.WATER.defaultBlockState());
