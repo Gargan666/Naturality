@@ -24,6 +24,7 @@ public final class TableItemRendering {
         private final ItemStackRenderState lapis = new ItemStackRenderState();
         private boolean upright;
         private float ticks;
+        private float closedBookLift;
 
         public void extract(EnchantingTableBlockEntity entity, float partialTick) {
             item.clear(); lapis.clear();
@@ -33,6 +34,10 @@ public final class TableItemRendering {
             var stack = table.getItem(0);
             upright = stack.is(ItemTags.SWORDS) || stack.has(DataComponents.TOOL);
             ticks = (level.getGameTime() % 2400) + partialTick;
+            float closed = 1f - net.minecraft.util.Mth.clamp(
+                net.minecraft.util.Mth.lerp(partialTick, entity.oOpen, entity.open), 0f, 1f);
+            // Follow the interpolated cover animation, easing to rest at either end.
+            closedBookLift = .35f * closed * closed * (3f - 2f * closed);
             var resolver = Minecraft.getInstance().getItemModelResolver();
             int seed = entity.getBlockPos().hashCode();
             // NONE preserves the authored sprite orientation before the blade-up rotation.
@@ -43,7 +48,7 @@ public final class TableItemRendering {
         public void submit(PoseStack pose, SubmitNodeCollector collector, int light) {
             double bob = Math.sin(ticks * Math.PI / 40) * .06;
             pose.pushPose();
-            pose.translate(.5, 1.55 + bob, .5);
+            pose.translate(.5, 1.55 + closedBookLift + bob, .5);
             pose.rotateDegrees(Axis.YP, ticks * .6F);
             if (upright) pose.rotateDegrees(Axis.ZP, 45);
             pose.scale(.7F, .7F, .7F);
@@ -51,7 +56,7 @@ public final class TableItemRendering {
             pose.popPose();
             double orbit = ticks * Math.PI / 120;
             pose.pushPose();
-            pose.translate(.5 + Math.cos(orbit) * .48, 1.45 + Math.sin(ticks * Math.PI / 40 + 1) * .06,
+            pose.translate(.5 + Math.cos(orbit) * .48, 1.45 + closedBookLift + Math.sin(ticks * Math.PI / 40 + 1) * .06,
                 .5 + Math.sin(orbit) * .48);
             pose.rotateDegrees(Axis.YP, ticks * .9F);
             pose.scale(.35F, .35F, .35F);

@@ -19,7 +19,7 @@ import net.minecraft.resources.Identifier;
 public final class DecipheringPuzzle extends AbstractWidget {
     private static final FontDescription ALT = new FontDescription.Resource(Identifier.withDefaultNamespace("alt"));
     private final Enchanting.Menu menu;
-    private final int left, top;
+    private int left, top;
     private long puzzleId;
     private int revealed;
     private final long[] revealedAt = new long[26];
@@ -27,6 +27,14 @@ public final class DecipheringPuzzle extends AbstractWidget {
     private long hoverTime;
     private int start = -1, end = -1;
     private boolean dragging, moved;
+    private Deciphering.@org.jspecify.annotations.Nullable Puzzle displayed;
+    private Deciphering.@org.jspecify.annotations.Nullable Puzzle fading;
+    private long animationStarted, failureStarted;
+    private int lastBudget = 3;
+    private boolean failed;
+
+    private float secondsSince(long time) { return (System.nanoTime() - time) / 1_000_000_000f; }
+    private float typingStart() { return fading == null ? 0 : Deciphering.FADE_TICKS / 20f; }
 
     public DecipheringPuzzle(Enchanting.Menu menu, int left, int top) {
         super(left + 20, top + 36, 120, Deciphering.ROWS * 9, Component.empty());
@@ -35,18 +43,53 @@ public final class DecipheringPuzzle extends AbstractWidget {
         this.top = top;
     }
 
+    public void moveTo(int left, int top) {
+        this.left = left;
+        this.top = top;
+        setPosition(left + 20, top + 36);
+    }
+
     public void update() {
         var puzzle = Deciphering.puzzle(menu);
-        visible = active = (menu.phase() == Enchanting.DECIPHER || menu.phase() == Enchanting.EMPOWERING) && puzzle != null;
-        if (puzzle == null || puzzle.id() != puzzleId) {
+        boolean deciphering = menu.phase() == Enchanting.DECIPHER || menu.phase() == Enchanting.EMPOWERING;
+        int budget = menu.subject().getOrDefault(Deciphering.ATTEMPT_BUDGET, 3);
+        if (menu.phase() == Enchanting.FAILED && displayed != null && !failed) {
+            failed = true;
+            fading = displayed;
+            failureStarted = animationStarted = System.nanoTime();
+        }
+        if (puzzle != null && deciphering && (displayed == null || puzzle.id() != puzzleId)) {
+            boolean failure = failed || displayed != null && budget > lastBudget;
+            fading = failure ? displayed : null;
+            failed = failure;
+            animationStarted = System.nanoTime();
+            if (displayed == null && !failure) {
+                // The saved deadline belongs to the puzzle, not this screen instance.
+                // Reopening resumes its presentation instead of starting it over.
+                long remaining = menu.subject().getOrDefault(Deciphering.READY_AT, 0L) - menu.gameTime();
+                long elapsed = Deciphering.TYPE_TICKS - Math.clamp(remaining, 0L, Deciphering.TYPE_TICKS);
+                animationStarted -= elapsed * 50_000_000L;
+            }
+            if (failure && failureStarted == 0) failureStarted = animationStarted;
             start = end = -1;
             dragging = moved = false;
             java.util.Arrays.fill(revealedAt, 0);
             java.util.Arrays.fill(hoverScale, 0);
             hoverTime = 0;
-            revealed = puzzle == null ? 0 : puzzle.revealed();
-            if (puzzle != null) puzzleId = puzzle.id();
+            revealed = puzzle.revealed();
+            puzzleId = puzzle.id();
+            displayed = puzzle;
+        } else if (puzzle != null && deciphering) displayed = puzzle;
+        if (!deciphering && menu.phase() != Enchanting.FAILED) {
+            displayed = fading = null;
+            failed = false;
+            failureStarted = 0;
         }
+        lastBudget = budget;
+        visible = displayed != null;
+        active = visible && deciphering && menu.gameTime() >= menu.subject().getOrDefault(Deciphering.READY_AT, 0L)
+            && secondsSince(animationStarted) >= typingStart() + Deciphering.TYPE_TICKS / 20f;
+        if (active) { failed = false; failureStarted = 0; }
     }
 
     private void updateReveals(Deciphering.Puzzle puzzle) {
@@ -57,7 +100,7 @@ public final class DecipheringPuzzle extends AbstractWidget {
         revealed = puzzle.revealed();
     }
 
-    public boolean canSubmit() { return visible && start >= 0 && end >= 0 && moved && !dragging; }
+    public boolean canSubmit() { return active && start >= 0 && end >= 0 && moved && !dragging; }
     public void submit() { if (canSubmit()) send(true); }
 
     private void send(boolean submit) {
@@ -80,25 +123,28 @@ public final class DecipheringPuzzle extends AbstractWidget {
     }
 
     @Override public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
-        if (!dragging || event.button() != 1) return false;
+        if (!active || !dragging || event.button() != 1) return false;
         end = start / Deciphering.COLUMNS * Deciphering.COLUMNS + cell(event.x(), event.y()) % Deciphering.COLUMNS;
         moved |= start != end;
         return true;
     }
 
     @Override public boolean mouseReleased(MouseButtonEvent event) {
-        if (!dragging || event.button() != 1) return false;
+        if (!active || !dragging || event.button() != 1) return false;
         dragging = false;
         if (!moved) { send(false); start = end = -1; }
         return true;
     }
 
     @Override protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-        var puzzle = Deciphering.puzzle(menu);
+        update();
+        float age = secondsSince(animationStarted);
+        boolean fadingOut = fading != null && (age < typingStart() || menu.phase() == Enchanting.FAILED);
+        var puzzle = fadingOut ? fading : displayed;
         if (puzzle == null) return;
-        updateReveals(puzzle);
+        if (!fadingOut) updateReveals(puzzle);
         var font = Minecraft.getInstance().font;
-        int hovered = isMouseOver(mouseX, mouseY) ? cell(mouseX, mouseY) : -1;
+        int hovered = active && isMouseOver(mouseX, mouseY) ? cell(mouseX, mouseY) : -1;
         long now = System.nanoTime();
         float dt = hoverTime == 0 ? 0 : Math.min(.1f, (now - hoverTime) / 1_000_000_000f);
         hoverTime = now;
@@ -128,10 +174,18 @@ public final class DecipheringPuzzle extends AbstractWidget {
             graphics.pose().scale(scale, scale);
             int glyphX = -font.width(text) / 2;
             int glyphAlpha = puzzle.visible(letter) ? Math.round(255 * (1f - .3f * elapsed)) : 255;
-            graphics.text(font, text, glyphX, -4, glyphAlpha << 24 | 0x493625, false);
+            float duration = (fadingOut ? Deciphering.FADE_TICKS : Deciphering.TYPE_TICKS) / 20f;
+            float position = (fadingOut ? Deciphering.CELLS - 1 - i : i) / (float)Deciphering.CELLS;
+            float letterFade = Math.clamp((age - (fadingOut ? 0 : typingStart()) - position * (duration - .15f)) / .15f, 0, 1);
+            glyphAlpha = Math.round(glyphAlpha * (fadingOut ? 1 - letterFade : letterFade));
+            if (glyphAlpha > 0) graphics.text(font, text, glyphX, -4, glyphAlpha << 24 | 0x493625, false);
             graphics.pose().popMatrix();
         }
-        graphics.blit(RenderPipelines.GUI_TEXTURED, Naturality.id("textures/gui/enchanting_library.png"),
+        int shakeStep = failureStarted == 0 ? 10 : (int)(secondsSince(failureStarted) / .07f);
+        int shake = shakeStep >= 10 ? 0 : (10 - shakeStep) * (shakeStep % 2 == 0 ? -1 : 1);
+        graphics.pose().pushMatrix();
+        graphics.pose().translate(shake, 0);
+        graphics.blit(RenderPipelines.GUI_TEXTURED, Naturality.id("textures/gui/enchanting_decipher.png"),
             left - 36, top + 182, 0, 0, 106, 94, 144, 178, 144, 178);
         graphics.text(font, Component.literal("Find:"), left - 31, top + 190, 0xFF493625, false);
         graphics.pose().pushMatrix();
@@ -148,6 +202,9 @@ public final class DecipheringPuzzle extends AbstractWidget {
             ? "To submit a word, click, drag and highlight the word you want to attempt."
             : "Attempts left: " + puzzle.attempts();
         graphics.textWithWordWrap(font, Component.literal(instruction), 0, 0, 128, 0xFF493625, false);
+        graphics.pose().popMatrix();
+        if (failed) graphics.blit(RenderPipelines.GUI_TEXTURED, Naturality.id("textures/gui/enchanting_decipher_fail.png"),
+            left - 36, top + 182, 0, 0, 106, 94, 144, 178, 144, 178);
         graphics.pose().popMatrix();
     }
 

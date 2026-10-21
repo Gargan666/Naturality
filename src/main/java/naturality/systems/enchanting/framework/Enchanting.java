@@ -54,7 +54,7 @@ import org.jspecify.annotations.Nullable;
 @org.jspecify.annotations.NullMarked
 public final class Enchanting {
     public static final int DECIPHER = 0, READY = 1, WRITING = 2, FAILED = 3, EMPOWERING = 4, COMPLETE = 5;
-    public static final int SUCCEED = 0, FAIL = 1, RETRY = 2, EMPOWER = 3, IMBUE = 4, PROGRESS = 5, NEXT = 6, DECLINE = 7;
+    public static final int SUCCEED = 0, FAIL = 1, RETRY = 2, EMPOWER = 3, IMBUE = 4, PROGRESS = 5, NEXT = 6, DECLINE = 7, REROLL = 8;
     public static final int WRITING_LAPIS = 1;
     public static final DataComponentType<Integer> EMPOWER_COUNT = component("empower_count", Codec.intRange(0, 255));
 
@@ -70,6 +70,8 @@ public final class Enchanting {
     public static final net.minecraft.sounds.SoundEvent STAMP_SOUND = sound("enchanting_stamp");
     public static final net.minecraft.sounds.SoundEvent LAPIS_SOUND = sound("lapis_crush");
     public static final net.minecraft.sounds.SoundEvent WRITE_SOUND = sound("enchanting_write");
+    public static final net.minecraft.sounds.SoundEvent HUM_SOUND = sound("enchanting_hum");
+    public static final net.minecraft.sounds.SoundEvent PAGE_FLIP_SOUND = sound("enchanting_pageflip");
 
     private static net.minecraft.sounds.SoundEvent sound(String name) {
         var id = Naturality.id(name);
@@ -405,6 +407,11 @@ public final class Enchanting {
     public static final class Table extends SimpleContainer {
         private final @Nullable BlockEntity owner;
         private boolean loading;
+        private final java.util.Map<String, String> lastClues = new java.util.HashMap<>();
+        public @Nullable String lastClue(String enchantment) { return lastClues.get(enchantment); }
+        public void rememberClue(String enchantment, String word) {
+            if (!word.equals(lastClues.put(enchantment, word))) setChanged();
+        }
         public Table(@Nullable BlockEntity owner) { super(3); this.owner = owner; }
         @Override public void setChanged() {
             super.setChanged();
@@ -418,8 +425,13 @@ public final class Enchanting {
                 }
             }
         }
-        public void save(ValueOutput output) { output.store("naturality_enchanting", ItemStack.OPTIONAL_CODEC.listOf(), List.of(getItem(0), getItem(1), getItem(2))); }
+        public void save(ValueOutput output) {
+            output.store("naturality_enchanting", ItemStack.OPTIONAL_CODEC.listOf(), List.of(getItem(0), getItem(1), getItem(2)));
+            output.store("naturality_last_clues", Codec.unboundedMap(Codec.STRING, Codec.STRING), lastClues);
+        }
         public void load(ValueInput input) {
+            lastClues.clear();
+            lastClues.putAll(input.read("naturality_last_clues", Codec.unboundedMap(Codec.STRING, Codec.STRING)).orElse(java.util.Map.of()));
             var items = input.read("naturality_enchanting", ItemStack.OPTIONAL_CODEC.listOf()).orElse(List.of());
             loading = true;
             try {
@@ -471,7 +483,8 @@ public final class Enchanting {
                     if (!source.is(Items.ENCHANTED_BOOK) || !source.getOrDefault(REVEALED, false)) continue;
                     var book = source.copyWithCount(1);
                     migrateCurseName(book, level.registryAccess());
-                    result.add(new LibraryEntry(index * 6 + slot, book));
+                    if (result.stream().noneMatch(entry -> ItemStack.isSameItemSameComponents(entry.book(), book)))
+                        result.add(new LibraryEntry(index * 6 + slot, book));
                 }
             }
             return List.copyOf(result);
@@ -490,6 +503,7 @@ public final class Enchanting {
         private int libraryTicks;
         private boolean decipherResult;
         private boolean writingResult;
+        private boolean finishingDeciphering;
         public Menu(int id, Inventory inventory) { this(id, inventory, new Table(null)); }
         public Menu(int id, Inventory inventory, Table table) {
             super(MENU, id);
@@ -500,6 +514,7 @@ public final class Enchanting {
                 @Override public boolean mayPlace(ItemStack stack) {
                     if (phase() == WRITING || stack.isEmpty()) return false;
                     if (stack.is(Items.BOOK) || stack.is(Items.ENCHANTED_BOOK)) return true;
+                    if (!hasFreeSlot(stack)) return false;
                     // ENCHANTABLE is vanilla table eligibility, not whether an item supports enchantments.
                     return player.registryAccess().lookupOrThrow(Registries.ENCHANTMENT).listElements()
                         .anyMatch(enchantment -> enchantment.value().canEnchant(stack));
@@ -533,6 +548,12 @@ public final class Enchanting {
         }
 
         public ItemStack subject() { return table.getItem(0); }
+        public long gameTime() { return player.level().getGameTime(); }
+        private boolean hasFreeSlot(ItemStack stack) {
+            return pairs(stack.copy(), player.registryAccess()).size() + standaloneSlots(stack) < stack.getOrDefault(CAPACITY, 3);
+        }
+        public boolean hasFreeSlot() { return !subject().isEmpty() && hasFreeSlot(subject()); }
+        public boolean canReroll() { return phase() == DECIPHER && !book() && hasFreeSlot(); }
         public List<LibraryEntry> library() { return library; }
         public int libraryRevision() { return libraryRevision; }
         public void receiveLibrary(LibraryPayload payload) {
@@ -578,6 +599,7 @@ public final class Enchanting {
             if (selected.isEmpty() || !canSelectLibrary(selected.get())) return;
             int quality = table.shelves();
             subject().remove(Deciphering.PUZZLE);
+            subject().remove(Deciphering.ATTEMPT_BUDGET);
             subject().remove(LIBRARY_SINGLE);
             var offer = selected.get().offer();
             if (offer.isEmpty()) {
@@ -672,7 +694,11 @@ public final class Enchanting {
         }
 
         private void roll() {
+            roll(null);
+        }
+        private void roll(@Nullable Holder<Enchantment> previous) {
             var item = subject();
+            item.remove(Deciphering.ATTEMPT_BUDGET);
             item.remove(EMPOWER_COUNT);
             item.remove(Deciphering.PUZZLE);
             item.remove(LIBRARY_SINGLE);
@@ -683,12 +709,15 @@ public final class Enchanting {
                 .filter(h -> item.is(Items.BOOK) || h.value().canEnchant(item))
                 .filter(h -> accepts(item, new Pair(h, 1, fallbackCurse(registry), 0), registry)).toList();
             if (candidates.isEmpty()) return;
-            var selected = candidates.get(player.getRandom().nextInt(candidates.size()));
+            var alternatives = candidates.stream().filter(h -> !h.equals(previous)).toList();
+            var choices = alternatives.isEmpty() ? candidates : alternatives;
+            var selected = choices.get(player.getRandom().nextInt(choices.size()));
             int quality = table.shelves();
             item.set(WORK, new Work(Optional.of(new Pair(selected, 1, fallbackCurse(registry), 0)), DECIPHER, quality * 3, quality));
         }
 
         @Override public void broadcastChanges() {
+            if (finishingDeciphering) return;
             if (!player.level().isClientSide()) {
                 prepare();
                 if (!librarySent || ++libraryTicks >= 10) { libraryTicks = 0; refreshLibrary(); }
@@ -724,15 +753,24 @@ public final class Enchanting {
 
         public void finishDeciphering(boolean success) {
             if (!canDecipher()) return;
+            int nextBudget = (int)Math.min(Integer.MAX_VALUE, (long)subject().getOrDefault(Deciphering.ATTEMPT_BUDGET, 3) + 1);
             boolean retry = phase() == DECIPHER;
             decipherResult = true;
+            finishingDeciphering = true;
             try {
                 if (clickMenuButton(player, success ? SUCCEED : FAIL)) {
                     if (success) playTableSound(net.minecraft.sounds.SoundEvents.VILLAGER_WORK_LIBRARIAN, 2f, 1f);
-                    else if (retry) clickMenuButton(player, RETRY);
+                    else {
+                        subject().set(Deciphering.ATTEMPT_BUDGET, nextBudget);
+                        if (retry) clickMenuButton(player, RETRY);
+                        table.setChanged();
+                        broadcastChanges();
+                    }
                 }
             } finally {
                 decipherResult = false;
+                finishingDeciphering = false;
+                broadcastChanges();
             }
         }
 
@@ -791,14 +829,29 @@ public final class Enchanting {
             if ((phase() == DECIPHER || phase() == EMPOWERING) && !decipherResult && (action == SUCCEED || action == FAIL || action == PROGRESS)) return false;
             if (action == RETRY && phase() == FAILED) subject().remove(Deciphering.PUZZLE);
             var item = subject();
+            if (action == REROLL) {
+                if (!canReroll()) return false;
+                var current = work();
+                @Nullable Holder<Enchantment> previous = null;
+                if (current != null && current.offer().isPresent()) previous = current.offer().get().benefit();
+                item.remove(WORK);
+                roll(previous);
+                table.setChanged();
+                broadcastChanges();
+                return true;
+            }
             if (pendingSingle().size() == 1) return clickSingle(action);
             var work = work();
             if (work == null) return false;
             int phase = work.phase();
             var offer = work.offer().orElse(null);
             if (action == RETRY && phase == FAILED) {
-                if (offer != null) item.set(WORK, work.at(DECIPHER)); else { item.remove(WORK); roll(); }
-            } else if (action == NEXT && phase == COMPLETE && !book()) {
+                if (offer != null) item.set(WORK, work.at(DECIPHER)); else {
+                    int budget = item.getOrDefault(Deciphering.ATTEMPT_BUDGET, 3);
+                    item.remove(WORK); roll();
+                    item.set(Deciphering.ATTEMPT_BUDGET, budget);
+                }
+            } else if (action == NEXT && phase == COMPLETE && !book() && hasFreeSlot()) {
                 item.remove(WORK);
                 roll();
             } else if (action == DECLINE && phase == READY && !book()) {
@@ -837,6 +890,7 @@ public final class Enchanting {
             } else if (action == EMPOWER && phase == READY && offer != null) {
                 if (!canEmpower() || !pay(empowerCost())) return false;
                 item.remove(Deciphering.PUZZLE);
+                item.remove(Deciphering.ATTEMPT_BUDGET);
                 item.set(WORK, work.at(EMPOWERING));
             } else if (action == IMBUE && phase == READY && offer != null) {
                 if (book() || !accepts(table.getItem(0), offer, player.registryAccess()) || !table.getItem(2).is(Items.LAPIS_LAZULI)
@@ -856,6 +910,8 @@ public final class Enchanting {
         private static void clearPending(ItemStack stack) {
             stack.remove(WORK);
             stack.remove(Deciphering.PUZZLE);
+            stack.remove(Deciphering.ATTEMPT_BUDGET);
+            stack.remove(Deciphering.READY_AT);
             stack.remove(WRITING_ID);
             stack.remove(WRITING_TARGET);
             stack.remove(WRITING_DRAFT);
@@ -925,6 +981,7 @@ public final class Enchanting {
             } else if (action == EMPOWER && phase == READY) {
                 if (!canEmpower() || !pay(empowerCost())) return false;
                 item.remove(Deciphering.PUZZLE);
+                item.remove(Deciphering.ATTEMPT_BUDGET);
                 item.set(WORK, work.at(EMPOWERING));
             } else if (action == SUCCEED && phase == EMPOWERING) {
                 var entry = pendingSingle().entrySet().iterator().next();

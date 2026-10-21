@@ -204,6 +204,7 @@
     "naturality.client.systems.enchanting.mixins.EnchantingMixins$HotbarBookIcons",
     "naturality.client.systems.enchanting.mixins.EnchantingMixins$TableItemState",
     "naturality.client.systems.enchanting.mixins.EnchantingMixins$TableItems",
+    "naturality.client.systems.enchanting.mixins.EnchantingMixins$TableHum",
     "naturality.client.systems.enchanting.mixins.EnchantingMixins$ImbuingItemSilhouette",
     "naturality.client.items.durability.mixins.DurabilityMixins$DurabilitySpritePixelsMixin",
     "naturality.client.items.durability.mixins.DurabilityMixins$DurabilitySpriteLoaderMixin",

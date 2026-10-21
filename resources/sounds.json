@@ -117,5 +117,7 @@
   "block.echo_coral.step": { "subtitle": "subtitles.block.generic.footsteps", "sounds": ["naturality:blocks/echo_coral/step1", "naturality:blocks/echo_coral/step2", "naturality:blocks/echo_coral/step3", "naturality:blocks/echo_coral/step4"] },
   "enchanting_stamp": {"sounds": ["naturality:enchanting/stamp_1", "naturality:enchanting/stamp_2"]},
   "lapis_crush": {"sounds": ["naturality:enchanting/lapis_crush"]},
-  "enchanting_write": {"sounds": ["naturality:enchanting/write_1", "naturality:enchanting/write_2", "naturality:enchanting/write_3", "naturality:enchanting/write_4", "naturality:enchanting/write_5", "naturality:enchanting/write_6"]}
+  "enchanting_write": {"sounds": ["naturality:enchanting/write_1", "naturality:enchanting/write_2", "naturality:enchanting/write_3", "naturality:enchanting/write_4", "naturality:enchanting/write_5", "naturality:enchanting/write_6"]},
+  "enchanting_hum": {"sounds": ["naturality:enchanting/hum"]},
+  "enchanting_pageflip": {"sounds": ["naturality:enchanting/pageflip_1", "naturality:enchanting/pageflip_2", "naturality:enchanting/pageflip_3", "naturality:enchanting/pageflip_4"]}
 }

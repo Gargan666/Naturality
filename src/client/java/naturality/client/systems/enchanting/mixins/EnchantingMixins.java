@@ -40,6 +40,19 @@ import net.minecraft.client.gui.Font;
 
 public final class EnchantingMixins {
     private EnchantingMixins() {}
+    @Mixin(net.minecraft.world.level.block.entity.EnchantingTableBlockEntity.class)
+    public static abstract class TableHum implements EnchantingClient.TableAudioAccess {
+        @Unique private final EnchantingClient.TableAudio naturality$audio = new EnchantingClient.TableAudio();
+        @Override public EnchantingClient.TableAudio naturality$tableAudio() { return naturality$audio; }
+
+        @Inject(method = "bookAnimationTick", at = @At("TAIL"))
+        private static void naturality$hum(net.minecraft.world.level.Level level, net.minecraft.core.BlockPos position,
+                net.minecraft.world.level.block.state.BlockState state,
+                net.minecraft.world.level.block.entity.EnchantingTableBlockEntity table, CallbackInfo ci) {
+            ((EnchantingClient.TableAudioAccess)table).naturality$tableAudio().tick(table);
+        }
+    }
+
     @Mixin(net.minecraft.client.gui.render.GuiRenderer.class)
     public static abstract class ImbuingItemSilhouette {
         @Inject(method = "submitBlitFromItemAtlas", at = @At("TAIL"))

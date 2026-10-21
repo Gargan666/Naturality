@@ -51,6 +51,84 @@ public final class EnchantingClient {
         });
     }
 
+    public interface TableAudioAccess {
+        TableAudio naturality$tableAudio();
+    }
+
+    /** Positional overlapping hum clips and page audio, independent of inventory or menu state. */
+    public static final class TableAudio {
+        private final List<HumLoop> hums = new ArrayList<>();
+        private int pageSoundCooldown;
+
+        public void tick(net.minecraft.world.level.block.entity.EnchantingTableBlockEntity table) {
+            var client = Minecraft.getInstance();
+            if (pageSoundCooldown > 0) pageSoundCooldown--;
+            var level = table.getLevel();
+            // Sound at the midpoint of each page turn, away from the integer
+            // targets where the animation eases to a stop.
+            if (level != null && audible(client, table) && table.open >= .5f && pageSoundCooldown == 0
+                    && Math.abs(table.flip - table.oFlip) > .01f
+                    && Math.floor(table.flip + .5f) != Math.floor(table.oFlip + .5f)) {
+                var position = table.getBlockPos();
+                level.playLocalSound(position.getX() + .5, position.getY() + 1, position.getZ() + .5,
+                    Enchanting.PAGE_FLIP_SOUND, net.minecraft.sounds.SoundSource.BLOCKS,
+                    .5f, .95f + level.getRandom().nextFloat() * .1f, false);
+                pageSoundCooldown = 6;
+            }
+            if (!audible(client, table)) {
+                for (var sound : hums) client.getSoundManager().stop(sound);
+                hums.clear();
+            } else {
+                hums.removeIf(sound -> sound.isStopped() || sound.age > 5 && !client.getSoundManager().isActive(sound));
+                if (hums.isEmpty() || hums.getLast().age >= HumLoop.DURATION - HumLoop.FADE) {
+                    var started = new HumLoop(table);
+                    hums.add(started);
+                    client.getSoundManager().play(started);
+                }
+                float total = 0;
+                for (var sound : hums) total += sound.envelope();
+                float pulse = .8f + .2f * (float)Math.cos(table.time * (Math.PI * 2 / 240));
+                for (var sound : hums) sound.setGain(.5f * pulse / Math.max(1f, total));
+            }
+        }
+
+        private static boolean audible(Minecraft client, net.minecraft.world.level.block.entity.EnchantingTableBlockEntity table) {
+            var level = client.level;
+            var camera = client.getCameraEntity();
+            return level != null && camera != null && table.getLevel() == level && !table.isRemoved()
+                && camera.position().distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(table.getBlockPos())) < 16 * 16
+                && naturality.api.worlds.LoadedChunks.has(level, table.getBlockPos()) && level.getBlockEntity(table.getBlockPos()) == table;
+        }
+
+        private static final class HumLoop extends net.minecraft.client.resources.sounds.AbstractTickableSoundInstance {
+            // Supplied hum.ogg: 1,814,400 samples at 44,100 Hz. End just before its physical seam.
+            private static final int DURATION = 822, FADE = 40;
+            private final net.minecraft.world.level.block.entity.EnchantingTableBlockEntity table;
+            private int age;
+
+            HumLoop(net.minecraft.world.level.block.entity.EnchantingTableBlockEntity table) {
+                super(Enchanting.HUM_SOUND, net.minecraft.sounds.SoundSource.BLOCKS, net.minecraft.util.RandomSource.create());
+                this.table = table;
+                looping = false;
+                delay = 0;
+                volume = 0;
+                pitch = 1f;
+                relative = false;
+                attenuation = net.minecraft.client.resources.sounds.SoundInstance.Attenuation.LINEAR;
+                x = table.getBlockPos().getX() + .5;
+                y = table.getBlockPos().getY() + .5;
+                z = table.getBlockPos().getZ() + .5;
+            }
+
+            @Override public boolean canStartSilent() { return true; }
+            private float envelope() { return Math.max(0, Math.min(1f, Math.min(age, DURATION - age) / (float)FADE)); }
+            private void setGain(float gain) { volume = gain * envelope(); }
+            @Override public void tick() {
+                if (!audible(Minecraft.getInstance(), table) || ++age >= DURATION) { stop(); return; }
+            }
+        }
+    }
+
     public static Component label(Holder<Enchantment> enchantment, int level) {
         return label(enchantment, level, false);
     }
@@ -305,7 +383,7 @@ public final class EnchantingClient {
         private static final net.minecraft.resources.Identifier LIBRARY_BACKGROUND = Naturality.id("textures/gui/enchanting_library.png");
         private static final net.minecraft.resources.Identifier LIBRARY_TAB = Naturality.id("textures/gui/enchanting_library_tab.png");
         private static final net.minecraft.resources.Identifier LIBRARY_TAB_OPEN = Naturality.id("textures/gui/enchanting_library_tab_open.png");
-        private static final net.minecraft.resources.Identifier LIBRARY_ROW = Naturality.id("textures/gui/enchanting_library_row.png");
+        private static final net.minecraft.resources.Identifier LIBRARY_EMPTY = Naturality.id("textures/gui/enchanting_library_empty.png");
         private static final int LIBRARY_WIDTH = 144, LIBRARY_HEIGHT = 178, LIBRARY_ROWS = 4;
         private static final int INK = 0xFF493625;
         private static final int LEFT_TEXT = 20, RIGHT_TEXT = 176, TEXT_WIDTH = 124;
@@ -318,7 +396,9 @@ public final class EnchantingClient {
         private final ImbuingSilhouette silhouette = new ImbuingSilhouette();
         private long writingAttempt;
         private boolean writingVisible;
-        private boolean libraryOpen;
+        // Keep this player-local UI preference across screen instances during this client session.
+        private static boolean rememberedLibraryOpen;
+        private boolean libraryOpen = rememberedLibraryOpen;
         private int libraryPage;
         private record Control(Button button, int action) {}
         public Screen(Enchanting.Menu menu, Inventory inventory, Component title) {
@@ -333,6 +413,7 @@ public final class EnchantingClient {
             libraryRows.clear();
             var bookmark = new Button(leftPos + 20, topPos - 20, 24, 20, Component.literal("Library"), _ -> {
                 libraryOpen = !libraryOpen;
+                rememberedLibraryOpen = libraryOpen;
                 rebuildWidgets();
             }, narration -> narration.get()) {
                 // The full bookmark is drawn behind the book in extractBackground.
@@ -356,17 +437,23 @@ public final class EnchantingClient {
             button("Imbue", Enchanting.IMBUE);
             button("Decline", Enchanting.DECLINE);
             button("Next enchantment", Enchanting.NEXT);
-            var page = new DecipheringPuzzle(menu, leftPos, topPos);
+            button("Reroll", Enchanting.REROLL);
+            var page = deciphering;
+            if (page == null) page = new DecipheringPuzzle(menu, leftPos, topPos);
+            else page.moveTo(leftPos, topPos);
             deciphering = addRenderableWidget(page);
-            submitPuzzle = addRenderableWidget(Button.builder(Component.literal("Submit"), _ -> page.submit())
+            var puzzlePage = page;
+            submitPuzzle = addRenderableWidget(Button.builder(Component.literal("Submit"), _ -> puzzlePage.submit())
                 .bounds(leftPos - 14, topPos + 254, 62, 16).build());
-            var input = new net.minecraft.client.gui.components.EditBox(font, leftPos + LEFT_TEXT, topPos + 134,
+            var input = inscription;
+            if (input == null) input = new net.minecraft.client.gui.components.EditBox(font, leftPos + LEFT_TEXT, topPos + 134,
                 TEXT_WIDTH, 16, Component.literal("Imbuement"));
+            else input.setPosition(leftPos + LEFT_TEXT, topPos + 134);
             input.setMaxLength(256);
             inscription = addRenderableWidget(input);
-            writingVisible = false;
+            var inscriptionInput = input;
             input.setResponder(value -> {
-                input.setSuggestion(value.isEmpty() ? menu.inscriptionTarget() : null);
+                inscriptionInput.setSuggestion(value.isEmpty() ? menu.inscriptionTarget() : null);
                 sendInscription(false);
             });
             confirmInscription = addRenderableWidget(Button.builder(Component.literal("Confirm"), _ -> sendInscription(true))
@@ -379,6 +466,7 @@ public final class EnchantingClient {
             ClientPlayNetworking.send(new Enchanting.Inscription(menu.containerId, writingAttempt, input.getValue(), confirm));
         }
         @Override public boolean keyPressed(net.minecraft.client.input.KeyEvent event) {
+            updateControls();
             if (writingVisible) {
                 if (event.key() == 257 || event.key() == 335) { sendInscription(true); return true; }
                 var input = inscription;
@@ -424,6 +512,16 @@ public final class EnchantingClient {
             controls.add(new Control(button, action));
         }
         @Override public void containerTick() { super.containerTick(); updateControls(); }
+        @Override public void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+            // Slot/payload updates may arrive between ticks. Widgets and labels must
+            // consume the same state before any of this frame's widgets are extracted.
+            updateControls();
+            super.extractContents(graphics, mouseX, mouseY, partialTick);
+        }
+        @Override public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event, boolean doubleClick) {
+            updateControls();
+            return super.mouseClicked(event, doubleClick);
+        }
         private void updateControls() {
             libraryPage = Math.clamp(libraryPage, 0, Math.max(0, (menu.library().size() - 1) / LIBRARY_ROWS));
             for (var row : libraryRows) row.update();
@@ -459,7 +557,8 @@ public final class EnchantingClient {
                     case Enchanting.EMPOWER -> phase == Enchanting.READY && menu.canEmpower();
                     case Enchanting.IMBUE -> phase == Enchanting.READY && !menu.book();
                     case Enchanting.DECLINE -> phase == Enchanting.READY && !menu.book();
-                    case Enchanting.NEXT -> phase == Enchanting.COMPLETE;
+                    case Enchanting.NEXT -> phase == Enchanting.COMPLETE && menu.hasFreeSlot() && !menu.book();
+                    case Enchanting.REROLL -> menu.canReroll();
                     default -> false;
                 };
                 control.button().active = control.button().visible;
@@ -489,14 +588,17 @@ public final class EnchantingClient {
         @Override protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
             if (libraryOpen) {
                 text(graphics, "Library", -LIBRARY_WIDTH + 8, 9);
-                if (menu.library().isEmpty()) graphics.textWithWordWrap(font, Component.literal(
-                    "Your library is empty. Insert enchanted books into Chiseled Bookshelves around your enchantment table to begin your library."),
-                    -LIBRARY_WIDTH + 8, 30, LIBRARY_WIDTH - 16, INK, false);
+                if (menu.library().isEmpty()) {
+                    var message = Component.literal("Your library is empty. Insert enchanted books into Chiseled Bookshelves around your enchantment table to begin your library.");
+                    graphics.blit(RenderPipelines.GUI_TEXTURED, LIBRARY_EMPTY,
+                        -LIBRARY_WIDTH + 6, 24, 0, 0, 132, 66, 132, 66);
+                    graphics.textWithWordWrap(font, message, -LIBRARY_WIDTH + 12, 30, LIBRARY_WIDTH - 24, INK, false);
+                }
                 String page = (libraryPage + 1) + "/" + Math.max(1, (menu.library().size() + LIBRARY_ROWS - 1) / LIBRARY_ROWS);
                 text(graphics, page, -LIBRARY_WIDTH / 2 - font.width(page) / 2, 163);
             }
             graphics.text(font, title, LEFT_TEXT, 16, INK, false);
-            text(graphics, menu.book() ? Component.translatable("item.minecraft.book").getString() : "Imbuement", RIGHT_TEXT, 16);
+            text(graphics, "Info", RIGHT_TEXT, 16);
             if (Enchanting.creativeBook(menu.subject()) && menu.phase() == Enchanting.READY) {
                 var entries = bookTooltip(menu.subject()).entrySet().stream()
                     .map(entry -> new Entry(entry.getKey(), entry.getIntValue(), false)).toList();
@@ -505,8 +607,7 @@ public final class EnchantingClient {
             }
             var work = menu.work();
             if (work == null) {
-                paragraph(graphics, "Insert an item or book.", LEFT_TEXT, 36);
-                paragraph(graphics, "Place your item and materials below.", RIGHT_TEXT, 42);
+                paragraph(graphics, "Insert an item.", LEFT_TEXT, 36);
                 return;
             }
             String state = switch (work.phase()) {
@@ -544,7 +645,8 @@ public final class EnchantingClient {
                 return;
             }
             boolean deciphering = work.phase() == Enchanting.DECIPHER || work.phase() == Enchanting.EMPOWERING;
-            if (!deciphering && work.phase() == Enchanting.FAILED) paragraph(graphics, state, LEFT_TEXT, 36);
+            if (!deciphering && work.phase() == Enchanting.FAILED && (this.deciphering == null || !this.deciphering.visible))
+                paragraph(graphics, state, LEFT_TEXT, 36);
             if (!deciphering && work.phase() != Enchanting.FAILED) {
                 List<Entry> entries = new ArrayList<>();
                 work.offer().ifPresent(p -> {
@@ -622,9 +724,13 @@ public final class EnchantingClient {
             @Override protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
                 var entry = entry();
                 if (entry.isEmpty()) return;
-                graphics.blit(RenderPipelines.GUI_TEXTURED, LIBRARY_ROW, getX(), getY(), 0, 0, 128, 30, 128, 30);
-                if (isHoveredOrFocused()) graphics.fill(getX() + 1, getY() + 1, getX() + 127, getY() + 29, 0x25FFFFFF);
                 var entries = tooltipEntries(entry.get().book(), DataComponents.STORED_ENCHANTMENTS);
+                int nameWidth = entries.stream().mapToInt(e -> font.width(label(e.enchantment(), e.level()))).max().orElse(0);
+                int variant = nameWidth <= 61 ? 3 : nameWidth <= 77 ? 2 : 1;
+                int rowWidth = variant == 3 ? 80 : variant == 2 ? 96 : 128;
+                graphics.blit(RenderPipelines.GUI_TEXTURED, Naturality.id("textures/gui/enchanting_library_row_" + variant + ".png"),
+                    getX(), getY(), 0, 0, 128, 30, 128, 30);
+                if (isHoveredOrFocused()) graphics.fill(getX() + 1, getY() + 1, getX() + rowWidth - 1, getY() + 29, 0x25FFFFFF);
                 int y = getY() + (entries.size() == 1 ? 10 : 3);
                 for (var enchantment : entries) {
                     if (y + 10 > getY() + 30) break;
@@ -645,6 +751,9 @@ public final class EnchantingClient {
             var entry = menu.library().get(index);
             if (!menu.canSelectLibrary(entry)) return;
             ClientPlayNetworking.send(new Enchanting.LibrarySelection(menu.containerId, menu.libraryRevision(), entry.shelfSlot()));
+            libraryOpen = false;
+            rememberedLibraryOpen = false;
+            rebuildWidgets();
         }
         private void text(GuiGraphicsExtractor graphics, String text, int x, int y) {
             graphics.text(font, Component.literal(text), x, y, INK, false);
@@ -691,3 +800,4 @@ public final class EnchantingClient {
         }
     }
 }
+

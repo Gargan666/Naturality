@@ -25,6 +25,11 @@ import org.jspecify.annotations.Nullable;
 @org.jspecify.annotations.NullMarked
 public final class Deciphering {
     public static final int COLUMNS = 20, ROWS = 13, CELLS = COLUMNS * ROWS;
+    public static final int TYPE_TICKS = 48, FADE_TICKS = 24;
+    public static final DataComponentType<Integer> ATTEMPT_BUDGET = Registry.register(BuiltInRegistries.DATA_COMPONENT_TYPE,
+        Naturality.id("deciphering_attempt_budget"), DataComponentType.<Integer>builder().persistent(Codec.intRange(3, Integer.MAX_VALUE)).build());
+    public static final DataComponentType<Long> READY_AT = Registry.register(BuiltInRegistries.DATA_COMPONENT_TYPE,
+        Naturality.id("deciphering_ready_at"), DataComponentType.<Long>builder().persistent(Codec.LONG).build());
     public static final DataComponentType<Puzzle> PUZZLE = Registry.register(BuiltInRegistries.DATA_COMPONENT_TYPE,
         Naturality.id("deciphering_puzzle"), DataComponentType.<Puzzle>builder().persistent(Puzzle.CODEC).ignoreSwapAnimation().build());
     private static final net.minecraft.resources.Identifier WORDS_FILE = Naturality.id("enchanting/related_words.json");
@@ -121,7 +126,7 @@ public final class Deciphering {
             Codec.STRING.fieldOf("text").forGetter(Puzzle::text),
             Codec.STRING.fieldOf("target").forGetter(Puzzle::target),
             Codec.intRange(0, (1 << 26) - 1).fieldOf("revealed").forGetter(Puzzle::revealed),
-            Codec.intRange(0, 3).fieldOf("attempts").forGetter(Puzzle::attempts),
+            Codec.intRange(0, Integer.MAX_VALUE).fieldOf("attempts").forGetter(Puzzle::attempts),
             Codec.intRange(0, Integer.MAX_VALUE).fieldOf("revision").forGetter(Puzzle::revision)
         ).apply(i, Puzzle::new));
         public boolean visible(char letter) { return letter >= 'a' && letter <= 'z' && (revealed & (1 << (letter - 'a'))) != 0; }
@@ -188,8 +193,16 @@ public final class Deciphering {
             if (menu.subject().has(PUZZLE)) { menu.subject().remove(PUZZLE); menu.table.setChanged(); }
             return;
         }
+        var work = menu.work();
+        if (work == null) return;
+        Holder<Enchantment> benefit;
+        if (work.offer().isPresent()) benefit = work.offer().orElseThrow().benefit();
+        else if (menu.pendingSingle().size() == 1) benefit = menu.pendingSingle().keySet().iterator().next();
+        else return;
+        String enchantment = Enchanting.name(benefit);
         var existing = puzzle(menu);
         if (existing != null) {
+            menu.table.rememberClue(enchantment, existing.target());
             // Untouched saved puzzles may still contain the retired automatic shelf reveals.
             if (existing.revision() == 0 && existing.revealed() != 0) {
                 menu.subject().set(PUZZLE, new Puzzle(existing.id(), existing.text(), existing.target(), 0, existing.attempts(), 0));
@@ -197,20 +210,25 @@ public final class Deciphering {
             }
             return;
         }
-        var work = menu.work();
-        if (work == null) return;
-        Holder<Enchantment> benefit;
-        if (work.offer().isPresent()) benefit = work.offer().orElseThrow().benefit();
-        else if (menu.pendingSingle().size() == 1) benefit = menu.pendingSingle().keySet().iterator().next();
-        else return;
         var candidates = words(benefit, serverWords);
         if (candidates.isEmpty()) return;
-        menu.subject().set(PUZZLE, generate(random, candidates));
+        var generated = generate(random, candidates, menu.table.lastClue(enchantment));
+        int budget = menu.subject().getOrDefault(ATTEMPT_BUDGET, 3);
+        generated = new Puzzle(generated.id(), generated.text(), generated.target(), 0, budget, 0);
+        menu.subject().set(READY_AT, menu.gameTime() + TYPE_TICKS + (budget > 3 ? FADE_TICKS : 0));
+        menu.subject().set(PUZZLE, generated);
+        menu.table.rememberClue(enchantment, generated.target());
         menu.table.setChanged();
     }
 
     public static Puzzle generate(RandomSource random, List<String> candidates) {
-        String target = candidates.get(random.nextInt(candidates.size()));
+        return generate(random, candidates, null);
+    }
+
+    public static Puzzle generate(RandomSource random, List<String> candidates, @Nullable String previous) {
+        var alternatives = candidates.stream().filter(word -> !word.equals(previous)).toList();
+        var choices = alternatives.isEmpty() ? candidates : alternatives;
+        String target = choices.get(random.nextInt(choices.size()));
         var vocabulary = serverWords;
         var gibberish = vocabulary.entries().getOrDefault("gibberish", List.of()).stream()
             .filter(word -> !candidates.contains(word)).toList();
@@ -245,6 +263,7 @@ public final class Deciphering {
 
     public static void act(Enchanting.Menu menu, Action action) {
         if (!menu.canDecipher() || action.menu() != menu.containerId) return;
+        if (menu.gameTime() < menu.subject().getOrDefault(READY_AT, 0L)) return;
         var puzzle = puzzle(menu);
         if (puzzle == null || puzzle.id() != action.puzzle() || puzzle.revision() != action.revision()) return;
         if (action.start() < 0 || action.start() >= CELLS || action.end() < 0 || action.end() >= CELLS) return;
