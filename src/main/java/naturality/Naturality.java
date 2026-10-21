@@ -22,6 +22,7 @@ public class Naturality implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
+        naturality.systems.enchanting.framework.Enchanting.initialize();
         naturality.systems.rotation.PlayerRotation.initialize();
         naturality.systems.navigation.NavigationInstruments.NavigationTargetPayload.initialize();
         if (naturality.config.startup.FeatureConfig.Feature.NAVIGATION_INSTRUMENTS.enabled()) naturality.systems.navigation.NavigationInstruments.initialize();

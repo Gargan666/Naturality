@@ -26,6 +26,8 @@ public final class FeatureMixinPlugin implements IMixinConfigPlugin {
         if (name.startsWith("Iris") && !net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("iris")) return false;
         boolean client = mixin.startsWith("naturality.client.");
         if (mixin.contains(".items.durability.mixins.")) return true;
+        if (mixin.contains(".systems.enchanting.mixins.") || mixin.contains(".systems.enchanting.framework.mixins.")
+                || mixin.contains(".systems.enchanting.bookshelves.mixins.") || mixin.contains(".systems.enchanting.curses.mixins.")) return true;
         if (client && name.equals("LayerOverlayUpdatesMixin")) return CONTENT.enabled() || VISUAL_OVERHAUL.enabled();
         if (client && name.equals("AshAtlasLifecycleMixin")) return CONTENT.enabled() && !VISUAL_OVERHAUL.enabled();
         // Ash needs the shared coating snapshots, atlas and lighting even in content-only play.

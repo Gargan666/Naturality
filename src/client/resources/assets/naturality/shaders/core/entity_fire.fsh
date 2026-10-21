@@ -11,6 +11,7 @@ layout(location = 2) in vec2 texCoord0;
 layout(location = 3) in vec4 vertexColor;
 layout(location = 4) in vec3 firePosition;
 layout(location = 5) flat in int fireKind;
+layout(location = 6) flat in vec2 fireResolution;
 #ifndef OIT_ALPHA_ONLY
 layout(location = 0) out vec4 fragColor;
 #endif
@@ -34,7 +35,7 @@ vec4 flameField(vec2 p, int frame) {
 }
 
 void main() {
-    vec2 resolution = naturality_fire_resolution(firePosition, texCoord0);
+    vec2 resolution = fireResolution;
     vec2 cell = floor(clamp(texCoord0, 0.0, 0.999999) * resolution);
     vec2 point = (cell + 0.5) / resolution;
     ivec3 key = ivec3(round(vertexColor.rgb * 255.0));

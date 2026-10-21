@@ -1,0 +1,296 @@
+{
+  "gibberish": [
+    "shenanigans",
+    "sigma",
+    "cthulhu",
+    "mojang",
+    "minceraft",
+    "what",
+    "or",
+    "yo",
+    "bro",
+    "dude",
+    "pal",
+    "ok",
+    "the",
+    "a",
+    "zzz",
+    "vibe",
+    "lol",
+    "markiplier",
+    "welcome",
+    "seven",
+    "are",
+    "is",
+    "little",
+    "big",
+    "biiiiigggg",
+    "problematicmedias",
+    "lostmedias",
+    "aura",
+    "heck",
+    "freak",
+    "no",
+    "yes",
+    "ooga",
+    "booga",
+    "eh"
+  ],
+  "minecraft:aqua_affinity": [
+    "breath",
+    "water",
+    "submerged"
+  ],
+  "minecraft:bane_of_arthropods": [
+    "spider",
+    "squash",
+    "bug"
+  ],
+  "minecraft:binding_curse": [
+    "binding",
+    "restricted",
+    "trap"
+  ],
+  "minecraft:blast_protection": [
+    "blast",
+    "shelter",
+    "block"
+  ],
+  "minecraft:breach": [
+    "break",
+    "crack",
+    "smash"
+  ],
+  "minecraft:channeling": [
+    "lightning",
+    "channel",
+    "thunder"
+  ],
+  "minecraft:density": [
+    "gravity",
+    "weight",
+    "mass",
+    "dense"
+  ],
+  "minecraft:depth_strider": [
+    "depths",
+    "swim",
+    "stride"
+  ],
+  "minecraft:efficiency": [
+    "haste",
+    "labour",
+    "resource"
+  ],
+  "minecraft:feather_falling": [
+    "feather",
+    "air",
+    "descent",
+    "fall",
+    "light"
+  ],
+  "minecraft:fire_aspect": [
+    "burn",
+    "singe",
+    "flame"
+  ],
+  "minecraft:fire_protection": [
+    "ward",
+    "shelter",
+    "guard"
+  ],
+  "minecraft:flame": [
+    "burn",
+    "blaze",
+    "fire"
+  ],
+  "minecraft:fortune": [
+    "fortune",
+    "mine",
+    "resource"
+  ],
+  "minecraft:frost_walker": [
+    "ice",
+    "freeze",
+    "step"
+  ],
+  "minecraft:impaling": [
+    "hydrodynamic",
+    "harpoon"
+  ],
+  "minecraft:infinity": [
+    "endless",
+    "boundless",
+    "limitless"
+  ],
+  "minecraft:knockback": [
+    "fling",
+    "push",
+    "distance"
+  ],
+  "minecraft:looting": [
+    "pillage",
+    "plunder",
+    "steal"
+  ],
+  "minecraft:loyalty": [
+    "fork",
+    "return",
+    "rebound"
+  ],
+  "minecraft:luck_of_the_sea": [
+    "bounty",
+    "allure",
+    "treasure",
+    "ocean",
+    "dredge"
+  ],
+  "minecraft:lunge": [
+    "dash",
+    "propel",
+    "move"
+  ],
+  "minecraft:lure": [
+    "fish",
+    "bait",
+    "catch"
+  ],
+  "minecraft:mending": [
+    "restore",
+    "endure",
+    "preserve"
+  ],
+  "minecraft:multishot": [
+    "triple",
+    "duplicate",
+    "spread",
+    "split"
+  ],
+  "minecraft:piercing": [
+    "impale",
+    "pierce",
+    "penetrate"
+  ],
+  "minecraft:power": [
+    "blade",
+    "strike",
+    "force"
+  ],
+  "minecraft:projectile_protection": [
+    "shield",
+    "reflect",
+    "guard",
+    "armor"
+  ],
+  "minecraft:protection": [
+    "ward",
+    "safe",
+    "guard",
+    "armor",
+    "reinforce"
+  ],
+  "minecraft:punch": [
+    "fling",
+    "push",
+    "distance"
+  ],
+  "minecraft:quick_charge": [
+    "reload",
+    "ammo",
+    "time",
+    "fast"
+  ],
+  "minecraft:respiration": [
+    "breath",
+    "oxygen",
+    "sea",
+    "duration"
+  ],
+  "minecraft:riptide": [
+    "soar",
+    "propel",
+    "splash",
+    "rain",
+    "tide"
+  ],
+  "minecraft:sharpness": [
+    "sharp",
+    "blade",
+    "sword",
+    "pain",
+    "cut"
+  ],
+  "minecraft:silk_touch": [
+    "soft",
+    "preserve",
+    "gentle",
+    "obtain"
+  ],
+  "minecraft:smite": [
+    "blade",
+    "strike",
+    "undead",
+    "purify"
+  ],
+  "minecraft:soul_speed": [
+    "energy",
+    "dispel",
+    "soul",
+    "relieve"
+  ],
+  "minecraft:sweeping_edge": [
+    "cleave",
+    "blade",
+    "swing",
+    "sweep"
+  ],
+  "minecraft:swift_sneak": [
+    "tread",
+    "crouch",
+    "undetected",
+    "covert"
+  ],
+  "minecraft:thorns": [
+    "prickly",
+    "rebound",
+    "redirect",
+    "reflect"
+  ],
+  "minecraft:unbreaking": [
+    "lasting",
+    "endure",
+    "persevere",
+    "durable"
+  ],
+  "minecraft:vanishing_curse": [
+    "disappear",
+    "lost",
+    "vanish",
+    "gone",
+    "grave"
+  ],
+  "minecraft:wind_burst": [
+    "ascend",
+    "lift",
+    "gust",
+    "force"
+  ],
+  "naturality:fragility_curse": [
+    "fragile",
+    "broken",
+    "shatter"
+  ],
+  "naturality:harvesting": [
+    "multiply",
+    "plenty",
+    "abundance",
+    "harvest"
+  ],
+  "naturality:lethality": [
+    "destroy",
+    "strike",
+    "force",
+    "swing",
+    "hurt"
+  ]
+}

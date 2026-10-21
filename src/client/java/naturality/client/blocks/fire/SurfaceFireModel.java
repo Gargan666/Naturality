@@ -175,12 +175,16 @@ public final class SurfaceFireModel extends WrapperBlockStateModel {
             for (int side = 0; side < 4; side++) {
                 var a = corners[side]; var c = corners[(side + 1) % 4];
                 int seed = 0xFF000000 | ((data.naturality$fireSeed() + side * 7919) & 0x0FFFFF);
+                // The GUI pose scales world units into pixels. Preserve the original
+                // sheet lattice in the otherwise unused full-bright light attribute.
+                int width = (int)Math.clamp(Math.rint(Math.hypot(c[0]-a[0], c[1]-a[1])*16), 1, 128);
+                int height = (int)Math.clamp(Math.rint(b.getYsize()*16), 1, 128);
                 for (int v = 0; v < 4; v++) {
                     var p = v < 2 ? a : c;
                     boolean top = v == 0 || v == 3;
                     buffer.addVertex(submit.pose(), (float)p[0], (float)(top ? b.maxY : b.minY), (float)p[1])
                         .setUv(v < 2 ? sprite.getU0() : sprite.getU1(), top ? sprite.getV0() : sprite.getV1())
-                        .setColor(seed).setLight(15728880);
+                        .setColor(seed).setLight(width | (height << 16));
                 }
             }
         }

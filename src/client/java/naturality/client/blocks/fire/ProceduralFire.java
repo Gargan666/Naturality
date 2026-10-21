@@ -217,6 +217,7 @@ public final class ProceduralFire {
                 .withLocation(Naturality.id("pipeline/entity_fire"))
                 .withVertexShader(Naturality.id("core/fire_fade"))
                 .withFragmentShader(Naturality.id("core/entity_fire"))
+                .withShaderDefine("NATURALITY_ENTITY_FIRE")
                 .withBindGroupLayout(ProceduralFire.LAYOUT).withCull(false)
                 .withDepthStencilState(new DepthStencilState(CompareOp.GREATER_THAN_OR_EQUAL, true))
                 .withColorTargetState(ColorTargetState.DEFAULT).build()))

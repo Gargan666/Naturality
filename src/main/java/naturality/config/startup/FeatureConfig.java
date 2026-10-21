@@ -165,9 +165,6 @@ public final class FeatureConfig {
                     || Feature.END_TERRAIN.enabled();
             }
             if (!namespace.equals("minecraft")) return true;
-            // These models express mandatory block-state behavior, independently of optional visual overrides.
-            if (path.equals("blockstates/cauldron.json") || path.equals("blockstates/water_cauldron.json")
-                    || path.equals("blockstates/lava_cauldron.json") || path.equals("blockstates/powder_snow_cauldron.json")) return true;
             // These descriptions provide sprites required by their independently enabled providers.
             if (path.equals("particles/poof.json")) return Feature.DEATH_SMOKE.enabled();
             if (path.equals("particles/dragon_breath.json")) return Feature.VISUAL_OVERHAUL.enabled();

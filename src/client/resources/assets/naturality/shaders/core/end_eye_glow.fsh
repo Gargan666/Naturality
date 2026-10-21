@@ -9,6 +9,9 @@ layout(location = 0) in float sphericalVertexDistance;
 layout(location = 1) in float cylindricalVertexDistance;
 layout(location = 2) in vec2 texCoord0;
 layout(location = 3) in vec4 vertexColor;
+#ifdef NATURALITY_PIXEL_GLOW
+layout(location = 4) flat in vec2 brightnessRange;
+#endif
 #ifndef OIT_ALPHA_ONLY
 layout(location = 0) out vec4 fragColor;
 #endif
@@ -16,10 +19,19 @@ void main() {
     float life = vertexColor.r;
     if (life <= 0.0) discard;
     float slice = floor(texCoord0.x * 16.0);
+#ifdef NATURALITY_PIXEL_GLOW
+    float pixelSize = 1.0 / max(round(brightnessRange.x * 32767.0), 1.0);
+    slice = floor(texCoord0.x / pixelSize);
+#endif
     float wave = sin(6.28318530718 * (slice / 24.0 - GameTime * 200.0));
     float reach = (0.65 + wave * (1.5 / 16.0)) * life;
-    if (texCoord0.y >= reach) discard;
-    float progress = clamp(texCoord0.y / max(reach, 0.00001), 0.0, 1.0);
+    float distance = texCoord0.y;
+#ifdef NATURALITY_PIXEL_GLOW
+    reach = ceil(reach * 0.35 / pixelSize) * pixelSize;
+    distance = floor(distance / pixelSize) * pixelSize;
+#endif
+    if (distance >= reach) discard;
+    float progress = clamp(distance / max(reach, 0.00001), 0.0, 1.0);
     float index = smoothstep(0.0, 1.0, progress) * 255.0;
     int low = int(floor(index));
     vec4 palette = mix(texelFetch(Sampler0, ivec2(low, 0), 0),

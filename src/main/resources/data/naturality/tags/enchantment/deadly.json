@@ -1,0 +1,9 @@
+{
+  "values": [
+    "minecraft:binding_curse",
+    "minecraft:vanishing_curse",
+    "naturality:vulnerability_curse",
+    "naturality:breaking_curse",
+    "naturality:poverty_curse"
+  ]
+}

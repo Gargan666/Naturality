@@ -17,6 +17,26 @@ import org.joml.Matrix4fc;
 public final class UselessItemRendering {
     private UselessItemRendering() {}
 
+    private static final java.util.Map<net.minecraft.resources.Identifier, java.util.List<net.minecraft.resources.Identifier>> ARMOR_TEXTURES = new java.util.HashMap<>();
+
+    public static net.minecraft.resources.Identifier armorTexture(net.minecraft.resources.Identifier original,
+            net.minecraft.world.item.ItemStack stack, net.minecraft.client.resources.model.EquipmentClientInfo info,
+            net.minecraft.client.resources.model.EquipmentClientInfo.LayerType type,
+            net.minecraft.resources.ResourceKey<net.minecraft.world.item.equipment.EquipmentAsset> asset) {
+        // Worn wings use equipment textures too; only the elytra item icon keeps
+        // vanilla's dedicated broken sprite.
+        if (!stack.isBroken()) return original;
+        var id = naturality.Naturality.id("useless_armor/" + asset.identifier().getNamespace() + "/"
+            + asset.identifier().getPath() + "/" + type.getSerializedName() + "/" + original.getNamespace() + "/" + original.getPath());
+        var layers = info.getLayers(type).stream().map(layer -> layer.getTextureLocation(type)).toList();
+        if (!layers.equals(ARMOR_TEXTURES.get(id))) {
+            net.minecraft.client.Minecraft.getInstance().getTextureManager().registerAndLoad(id,
+                new UselessSprites.ArmorTexture(original, layers, 31L * asset.identifier().hashCode() + type.getSerializedName().hashCode()));
+            ARMOR_TEXTURES.put(id, layers);
+        }
+        return id;
+    }
+
     public static ItemModel bake(ItemModel intact, CuboidItemModelWrapper.Unbaked unbaked,
             ItemModel.BakingContext context, Matrix4fc transformation) {
         var baker = context.blockModelBaker();
@@ -27,7 +47,9 @@ public final class UselessItemRendering {
             textures.addTexture(slot, new Material(UselessSprites.id(material.sprite()), material.forceTranslucent())));
         var brokenSlots = new TextureSlots.Resolver().addLast(textures.build()).resolve(resolved);
         // Supplying real materials before extrusion builds every new exposed pixel edge.
-        var geometry = resolved.bakeTopGeometry(brokenSlots, baker, BlockModelRotation.IDENTITY);
+        // ResolvedModel caches bakeTopGeometry by model state alone, ignoring texture slots.
+        // Bake the geometry directly so its extrusion sees the broken material's alpha.
+        var geometry = resolved.getTopGeometry().bake(brokenSlots, baker, BlockModelRotation.IDENTITY, resolved);
         var properties = ModelRenderProperties.fromResolvedModel(baker, resolved, brokenSlots);
         var broken = DurabilityModelFactory.naturality$newModel(unbaked.tints(), geometry, properties,
             Transformation.compose(transformation, unbaked.transformation()));

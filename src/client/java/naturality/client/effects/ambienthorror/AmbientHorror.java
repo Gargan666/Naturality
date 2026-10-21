@@ -201,7 +201,7 @@ public final class AmbientHorror {
         if (cooldown > 0) { cooldown--; return; }
         if (++rolls < 100) return;
         rolls = 0;
-        if (walker == null && RANDOM.nextInt(100) == 0) {
+        if (walker == null && RANDOM.nextInt(1000) == 0) {
             spawnWalker(listenerEntity.position(), 12, RANDOM.nextInt(5) == 0);
         }
         if (eyes == null && RANDOM.nextInt(140) == 0) {

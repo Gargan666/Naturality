@@ -7,6 +7,10 @@
 layout(location = 0) in vec3 Position;
 layout(location = 1) in vec2 UV0;
 layout(location = 2) in vec4 Color;
+#ifdef NATURALITY_ENTITY_FIRE
+layout(location = 3) in ivec2 UV2;
+layout(location = 6) flat out vec2 fireResolution;
+#endif
 layout(location = 0) out float sphericalVertexDistance;
 layout(location = 1) out float cylindricalVertexDistance;
 layout(location = 2) out vec2 texCoord0;
@@ -14,6 +18,9 @@ layout(location = 3) out vec4 vertexColor;
 layout(location = 4) out vec3 firePosition;
 layout(location = 5) flat out int fireKind;
 void main() {
+#ifdef NATURALITY_ENTITY_FIRE
+    fireResolution = vec2(UV2);
+#endif
     gl_Position = ProjMat * ModelViewMat * vec4(Position, 1.0);
     sphericalVertexDistance = fog_spherical_distance(Position);
     cylindricalVertexDistance = fog_cylindrical_distance(Position);

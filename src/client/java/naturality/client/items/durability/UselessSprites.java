@@ -47,6 +47,10 @@ public final class UselessSprites {
     }
 
     public static NativeImage recolor(NativeImage source, int frameWidth, int frameHeight, long seed) {
+        return cutout(source, frameWidth, frameHeight, seed, true);
+    }
+
+    public static NativeImage cutout(NativeImage source, int frameWidth, int frameHeight, long seed, boolean darkenEdges) {
         NativeImage result = new NativeImage(source.getWidth(), source.getHeight(), true);
         result.copyFrom(source);
         int darkest = 0, minimum = Integer.MAX_VALUE;
@@ -70,7 +74,8 @@ public final class UselessSprites {
                 }
                 Random random = new Random(seed);
                 int selected = Math.round(count * 0.2F);
-                for (int i = 0; i < selected; i++) {
+                if (darkenEdges) selectItemPixels(source, left, top, frameWidth, frameHeight, visible, count, selected, random, removed);
+                else for (int i = 0; i < selected; i++) {
                     int index = i + random.nextInt(count - i);
                     int pixel = visible[index];
                     visible[index] = visible[i];
@@ -83,7 +88,7 @@ public final class UselessSprites {
                     int color = source.getPixel(left + x, top + y);
                     if (removed[pixel]) {
                         result.setPixel(left + x, top + y, 0);
-                    } else if (ARGB.alpha(color) > 0 && (
+                    } else if (darkenEdges && ARGB.alpha(color) > 0 && (
                             (x > 0 && removed[pixel - 1])
                             || (x + 1 < frameWidth && removed[pixel + 1])
                             || (y > 0 && removed[pixel - frameWidth])
@@ -95,4 +100,78 @@ public final class UselessSprites {
         }
         return result;
     }
+
+    private static void selectItemPixels(NativeImage source, int left, int top, int width, int height,
+            int[] visible, int count, int selected, Random random, boolean[] removed) {
+        int[] edges = new int[count], interior = new int[count];
+        int edgeCount = 0, interiorCount = 0;
+        for (int i = 0; i < count; i++) {
+            int pixel = visible[i], x = pixel % width, y = pixel / width;
+            boolean edge = x == 0 || y == 0 || x == width - 1 || y == height - 1
+                || ARGB.alpha(source.getPixel(left + x - 1, top + y)) == 0
+                || ARGB.alpha(source.getPixel(left + x + 1, top + y)) == 0
+                || ARGB.alpha(source.getPixel(left + x, top + y - 1)) == 0
+                || ARGB.alpha(source.getPixel(left + x, top + y + 1)) == 0;
+            if (edge) edges[edgeCount++] = pixel;
+            else interior[interiorCount++] = pixel;
+        }
+        shuffle(edges, edgeCount, random);
+        shuffle(interior, interiorCount, random);
+        // Reserve at least half of the original silhouette. Never repeatedly erode newly exposed edges.
+        int availableEdges = edgeCount / 2;
+        for (int i = 0; i < selected; i++) {
+            // Eligible edge pixels are four times as likely as individual interior pixels.
+            double edgeWeight = 4.0 * availableEdges;
+            if (availableEdges > 0 && random.nextDouble() * (edgeWeight + interiorCount) < edgeWeight)
+                removed[edges[--availableEdges]] = true;
+            else removed[interior[--interiorCount]] = true;
+        }
+    }
+
+    private static void shuffle(int[] pixels, int count, Random random) {
+        for (int i = count - 1; i > 0; i--) {
+            int j = random.nextInt(i + 1), pixel = pixels[i];
+            pixels[i] = pixels[j];
+            pixels[j] = pixel;
+        }
+    }
+
+    /** TextureManager owns loading, resource-pack reloads and GPU disposal of these variants. */
+    public static final class ArmorTexture extends net.minecraft.client.renderer.texture.ReloadableTexture {
+        private final List<Identifier> layers;
+        private final long seed;
+
+        public ArmorTexture(Identifier source, List<Identifier> layers, long seed) {
+            super(source);
+            this.layers = List.copyOf(layers);
+            this.seed = seed;
+        }
+
+        @Override public net.minecraft.client.renderer.texture.TextureContents loadContents(
+                net.minecraft.server.packs.resources.ResourceManager resources) throws java.io.IOException {
+            try (var source = net.minecraft.client.renderer.texture.TextureContents.load(resources, resourceId());
+                 var union = new NativeImage(source.image().getWidth(), source.image().getHeight(), true)) {
+                union.copyFrom(source.image());
+                // Use the union of equipment layers so leather's overlay cannot fill the base layer's holes.
+                for (var layer : layers) {
+                    if (layer.equals(resourceId()) || resources.getResource(layer).isEmpty()) continue;
+                    try (var image = net.minecraft.client.renderer.texture.TextureContents.load(resources, layer)) {
+                        for (int y = 0; y < union.getHeight(); y++) for (int x = 0; x < union.getWidth(); x++) {
+                            int color = image.image().getPixel(x * image.image().getWidth() / union.getWidth(),
+                                y * image.image().getHeight() / union.getHeight());
+                            if (ARGB.alpha(color) > 0) union.setPixel(x, y, color);
+                        }
+                    }
+                }
+                try (var mask = cutout(union, union.getWidth(), union.getHeight(), seed, false)) {
+                    var result = new NativeImage(union.getWidth(), union.getHeight(), true);
+                    result.copyFrom(source.image());
+                    for (int y = 0; y < union.getHeight(); y++) for (int x = 0; x < union.getWidth(); x++)
+                        if (ARGB.alpha(mask.getPixel(x, y)) == 0) result.setPixel(x, y, 0);
+                    return new net.minecraft.client.renderer.texture.TextureContents(result, source.metadata());
+                }
+            }
+        }
+    }
+
 }

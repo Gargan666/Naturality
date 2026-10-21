@@ -84,4 +84,20 @@ public final class DurabilityMixins {
             throw new AssertionError("Mixin constructor invoker was not applied");
         }
     }
+
+    @Mixin(net.minecraft.client.renderer.entity.layers.EquipmentLayerRenderer.class)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class DurabilityArmorTextureMixin {
+        @com.llamalad7.mixinextras.injector.ModifyExpressionValue(
+            method = "renderLayers(Lnet/minecraft/client/resources/model/EquipmentClientInfo$LayerType;Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/client/model/Model;Ljava/lang/Object;Lnet/minecraft/world/item/ItemStack;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;ILnet/minecraft/resources/Identifier;II)V",
+            at = @At(value = "INVOKE", target = "Ljava/util/function/Function;apply(Ljava/lang/Object;)Ljava/lang/Object;", ordinal = 0))
+        private Object naturality$damagedArmor(Object texture,
+                @com.llamalad7.mixinextras.sugar.Local(argsOnly = true) net.minecraft.world.item.ItemStack stack,
+                @com.llamalad7.mixinextras.sugar.Local(argsOnly = true) net.minecraft.client.resources.model.EquipmentClientInfo.LayerType type,
+                @com.llamalad7.mixinextras.sugar.Local(argsOnly = true) net.minecraft.resources.ResourceKey<net.minecraft.world.item.equipment.EquipmentAsset> asset,
+                @com.llamalad7.mixinextras.sugar.Local net.minecraft.client.resources.model.EquipmentClientInfo info) {
+            return texture instanceof Identifier id ? UselessItemRendering.armorTexture(id, stack, info, type, asset) : texture;
+        }
+    }
+
 }

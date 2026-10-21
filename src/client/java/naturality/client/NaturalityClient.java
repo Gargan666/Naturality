@@ -9,6 +9,7 @@ import static naturality.config.startup.FeatureConfig.Feature.*;
 public class NaturalityClient implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
+        naturality.client.systems.enchanting.EnchantingClient.initialize();
         net.fabricmc.fabric.api.client.rendering.v1.BlockColorRegistry.register(
             java.util.List.of(net.minecraft.client.color.block.BlockTintSources.foliage(),
                 net.minecraft.client.color.block.BlockTintSources.foliage()), naturality.bootstrap.ContentRegistration.NaturalityBlocks.CLOVERS);

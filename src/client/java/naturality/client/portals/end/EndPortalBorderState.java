@@ -172,7 +172,7 @@ public final class EndPortalBorderState {
 
     /** Only vanilla insertion events create entries; existing eyes never auto-start. */
     public static final class EndEyeGlow {
-        public static final int DURATION_TICKS = 40;
+        public static final int DURATION_TICKS = naturality.client.api.rendering.PlacementGlow.DURATION_TICKS;
         private static final class Flash {
             final long start;
             boolean seenEye;
@@ -192,8 +192,7 @@ public final class EndPortalBorderState {
         }
 
         public static float envelope(float age) {
-            float t = Math.clamp(age / DURATION_TICKS, 0, 1);
-            return 1 - t * t * (3 - 2 * t);
+            return naturality.client.api.rendering.PlacementGlow.envelope(age);
         }
 
         public static boolean isActive(BlockPos pos) { return ACTIVE.containsKey(pos); }

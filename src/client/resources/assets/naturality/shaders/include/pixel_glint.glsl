@@ -23,8 +23,8 @@ vec3 naturality_glint_palette(sampler2D paletteTexture) {
 // Base UVs are atlas UVs for items and texture UVs for armor. In either case,
 // multiplying by the BASE texture dimensions gives the actual texel grid.
 // Atlas sprite origins are integer texels, so no per-sprite lookup is needed.
-vec4 naturality_pixel_glint(sampler2D baseTexture, sampler2D paletteTexture, vec2 uv) {
-    vec2 pixel = floor(uv * vec2(textureSize(baseTexture, 0))) + 0.5;
+vec4 naturality_pixel_glint_at(sampler2D paletteTexture, vec2 texel) {
+    vec2 pixel = floor(texel) + 0.5;
     float time = GameTime * 1200.0;
     // UV axes point right/down. Sampling p - velocity*t with negative X/Y
     // velocity moves the whole grid up-left in the sprite's own orientation.
@@ -45,6 +45,10 @@ vec4 naturality_pixel_glint(sampler2D baseTexture, sampler2D paletteTexture, vec
     // Vanilla squares RGB when adding glint. Apply 90% peak opacity inside
     // the square root to preserve that contribution after compositing.
     return vec4(tint * sqrt(coverage * 0.90), 1.0);
+}
+
+vec4 naturality_pixel_glint(sampler2D baseTexture, sampler2D paletteTexture, vec2 uv) {
+    return naturality_pixel_glint_at(paletteTexture, uv * vec2(textureSize(baseTexture, 0)));
 }
 
 #endif
