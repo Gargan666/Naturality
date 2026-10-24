@@ -38,6 +38,18 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public final class EnchantingMixins {
     private EnchantingMixins() {}
 
+    @Mixin(net.minecraft.world.entity.npc.villager.AbstractVillager.class)
+    public static abstract class VillagerBooks {
+        @Inject(method = "getOffers", at = @At("RETURN"))
+        private void naturality$curseBooks(CallbackInfoReturnable<net.minecraft.world.item.trading.MerchantOffers> result) {
+            var villager = (net.minecraft.world.entity.npc.villager.AbstractVillager)(Object)this;
+            if (villager.level().isClientSide()) return;
+            for (var offer : result.getReturnValue()) {
+                Enchanting.curseTradeBook(offer.getResult(), villager.registryAccess(), villager.getRandom());
+            }
+        }
+    }
+
     @Mixin(CreativeModeTabs.class)
     public static abstract class CreativeBooks {
         @Inject(method = "generateEnchantmentBookTypesOnlyMaxLevel", at = @At("HEAD"), cancellable = true)

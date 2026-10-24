@@ -1,0 +1,6 @@
+{
+    "textures":  {
+                     "flowerbed":  "naturality:block/four_leaf_clovers"
+                 },
+    "parent":  "naturality:block/clovers_4"
+}

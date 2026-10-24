@@ -33,6 +33,58 @@ public final class LirestoneCrags {
     public static final ResourceKey<Biome> BIOME=ResourceKey.create(Registries.BIOME,Naturality.id("lirestone_crags"));
     private LirestoneCrags() {}
 
+    /** Seeded bowls are evaluated in world coordinates, but only edit the supplied chunk. */
+    public static void carveCraters(net.minecraft.world.level.chunk.ChunkAccess chunk, long seed,
+            net.minecraft.world.level.biome.BiomeResolver biomes) {
+        if (!naturality.config.startup.FeatureConfig.Feature.LIRESTONE_CRAGS.enabled()) return;
+        int minX = chunk.getPos().getMinBlockX(), minZ = chunk.getPos().getMinBlockZ();
+        var pos = new BlockPos.MutableBlockPos();
+        // One jittered candidate per 24-block cell; neighboring cells supply border-crossing bowls.
+        for (int gz = Math.floorDiv(minZ - 9, 24); gz <= Math.floorDiv(minZ + 24, 24); gz++) {
+            for (int gx = Math.floorDiv(minX - 9, 24); gx <= Math.floorDiv(minX + 24, 24); gx++) {
+                var random = RandomSource.create(seed ^ 0x435241544552534CL
+                    ^ (long)gx * 341873128712L ^ (long)gz * 132897987541L);
+                if (random.nextInt(4) == 0) continue;
+                int cx = gx * 24 + random.nextInt(24), cz = gz * 24 + random.nextInt(24);
+                if (Math.hypot(cx, cz) < 1280
+                        || !biomes.getNoiseBiome(QuartPos.fromBlock(cx), 0, QuartPos.fromBlock(cz)).is(BIOME)) continue;
+                double radius = 4 + random.nextDouble() * 3;
+                double stretch = .85 + random.nextDouble() * .3;
+                double depth = 3 + random.nextDouble() * 2;
+                double phase = random.nextDouble() * Math.PI * 2;
+                for (int z = Math.max(minZ, cz - 9); z <= Math.min(minZ + 15, cz + 9); z++) {
+                    for (int x = Math.max(minX, cx - 9); x <= Math.min(minX + 15, cx + 9); x++) {
+                        if (!biomes.getNoiseBiome(QuartPos.fromBlock(x), 0, QuartPos.fromBlock(z)).is(BIOME)) continue;
+                        double dx = (x - cx) / stretch, dz = (z - cz) * stretch;
+                        double angle = Math.atan2(dz, dx);
+                        double edge = radius * (1 + .08 * Math.sin(angle * 3 + phase));
+                        double distance = (dx * dx + dz * dz) / (edge * edge);
+                        int cut = (int)Math.floor(depth * (1 - distance) + .5);
+                        if (cut <= 0) continue;
+                        // Find the upper rock surface without querying or loading a neighboring chunk.
+                        int top = chunk.getMaxY();
+                        while (top >= chunk.getMinY()) {
+                            pos.set(x, top, z);
+                            if (!chunk.getBlockState(pos).isAir()) break;
+                            top--;
+                        }
+                        int thickness = 0;
+                        while (thickness < cut + 2 && top - thickness >= chunk.getMinY()) {
+                            pos.set(x, top - thickness, z);
+                            if (!LirestoneBoulderFeature.isEndStone(chunk.getBlockState(pos))) break;
+                            thickness++;
+                        }
+                        // Thin outcrops retain at least two blocks rather than opening into the void.
+                        for (int i = 0; i < Math.min(cut, thickness - 2); i++) {
+                            pos.set(x, top - i, z);
+                            chunk.setBlockState(pos, Blocks.AIR.defaultBlockState());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     public static void initialize() {
         if (!naturality.config.startup.FeatureConfig.Feature.LIRESTONE_CRAGS.enabled()) return;
         TheEndBiomes.addHighlandsBiome(BIOME,1.5);

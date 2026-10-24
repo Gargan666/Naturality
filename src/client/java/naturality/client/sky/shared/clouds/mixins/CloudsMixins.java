@@ -83,8 +83,10 @@ public final class CloudsMixins {
         private void naturality$render(CloudStatus status, RenderPass pass, CallbackInfo ci) {
             if (!naturality$active) return;
             // Both layers must populate depth before either contributes translucent color.
-            naturality$base.renderDepth(pass);
-            naturality$upper.renderDepth(pass);
+            if (!CloudLayerRenderer.WaterOrder.splitting()) {
+                naturality$base.renderDepth(pass);
+                naturality$upper.renderDepth(pass);
+            }
             (naturality$upperFirst ? naturality$upper : naturality$base).render(status, pass);
             (naturality$upperFirst ? naturality$base : naturality$upper).render(status, pass);
             ci.cancel();

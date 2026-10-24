@@ -55,7 +55,7 @@
                       "type": "minecraft:y_above",
                       "add_stone_depth": true,
                       "anchor": {
-                        "absolute": 30
+                        "relative_to_sea_level": -2
                       },
                       "surface_depth_multiplier": 0
                     },
@@ -67,7 +67,7 @@
                           "type": "minecraft:y_above",
                           "add_stone_depth": true,
                           "anchor": {
-                            "absolute": 35
+                            "relative_to_sea_level": 3
                           },
                           "surface_depth_multiplier": 0
                         }
@@ -157,7 +157,7 @@
                       "type": "minecraft:y_above",
                       "add_stone_depth": true,
                       "anchor": {
-                        "absolute": 30
+                        "relative_to_sea_level": -2
                       },
                       "surface_depth_multiplier": 0
                     },
@@ -169,7 +169,7 @@
                           "type": "minecraft:y_above",
                           "add_stone_depth": true,
                           "anchor": {
-                            "absolute": 35
+                            "relative_to_sea_level": 3
                           },
                           "surface_depth_multiplier": 0
                         }
@@ -218,7 +218,7 @@
                 "type": "minecraft:y_above",
                 "add_stone_depth": false,
                 "anchor": {
-                  "absolute": 32
+                  "relative_to_sea_level": 0
                 },
                 "surface_depth_multiplier": 0
               }
@@ -238,7 +238,7 @@
             "type": "minecraft:condition",
             "if_true": {
               "type": "minecraft:biome",
-              "biome_is": "minecraft:warped_forest"
+              "biome_is": ["minecraft:warped_forest", "naturality:warped_plains"]
             },
             "then_run": {
               "type": "minecraft:condition",
@@ -257,7 +257,7 @@
                   "type": "minecraft:y_above",
                   "add_stone_depth": false,
                   "anchor": {
-                    "absolute": 31
+                    "relative_to_sea_level": -1
                   },
                   "surface_depth_multiplier": 0
                 },
@@ -290,7 +290,7 @@
             "type": "minecraft:condition",
             "if_true": {
               "type": "minecraft:biome",
-              "biome_is": "minecraft:crimson_forest"
+              "biome_is": ["minecraft:crimson_forest", "naturality:crimson_plains"]
             },
             "then_run": {
               "type": "minecraft:condition",
@@ -309,7 +309,7 @@
                   "type": "minecraft:y_above",
                   "add_stone_depth": false,
                   "anchor": {
-                    "absolute": 31
+                    "relative_to_sea_level": -1
                   },
                   "surface_depth_multiplier": 0
                 },
@@ -378,7 +378,7 @@
                         "type": "minecraft:y_above",
                         "add_stone_depth": true,
                         "anchor": {
-                          "absolute": 30
+                          "relative_to_sea_level": -2
                         },
                         "surface_depth_multiplier": 0
                       },
@@ -390,7 +390,7 @@
                             "type": "minecraft:y_above",
                             "add_stone_depth": true,
                             "anchor": {
-                              "absolute": 35
+                              "relative_to_sea_level": 3
                             },
                             "surface_depth_multiplier": 0
                           }
@@ -419,7 +419,7 @@
                 "type": "minecraft:y_above",
                 "add_stone_depth": false,
                 "anchor": {
-                  "absolute": 31
+                  "relative_to_sea_level": -1
                 },
                 "surface_depth_multiplier": 0
               },
@@ -431,7 +431,7 @@
                     "type": "minecraft:y_above",
                     "add_stone_depth": true,
                     "anchor": {
-                      "absolute": 35
+                      "relative_to_sea_level": 3
                     },
                     "surface_depth_multiplier": 0
                   }
@@ -453,7 +453,7 @@
                           "type": "minecraft:y_above",
                           "add_stone_depth": false,
                           "anchor": {
-                            "absolute": 32
+                            "relative_to_sea_level": 0
                           },
                           "surface_depth_multiplier": 0
                         },

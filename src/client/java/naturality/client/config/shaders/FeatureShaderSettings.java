@@ -11,6 +11,7 @@ public final class FeatureShaderSettings {
         var c = NaturalityConfig.get();
         return "#ifndef NATURALITY_FEATURE_SETTINGS\n#define NATURALITY_FEATURE_SETTINGS\n"
             + "const bool NATURALITY_DISTANT_WIND = " + c.effects.distantWind + ";\n"
+            + "const float NATURALITY_GLASS_SHINE_OPACITY = " + Math.clamp(c.effects.glassShineOpacity, 0, 100) / 100.0 + ";\n"
             + "const bool NATURALITY_EMISSIVE_LAVA = " + (c.liquids.lava && c.liquids.emissiveLava) + ";\n"
             + "const bool NATURALITY_PIXEL_GLINT_ENABLED = " + c.effects.pixelGlint + ";\n"
             + "const bool NATURALITY_STAR_PULSES = " + c.effects.starPulses + ";\n"

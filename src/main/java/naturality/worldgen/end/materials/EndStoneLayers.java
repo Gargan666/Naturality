@@ -30,6 +30,8 @@ public final class EndStoneLayers {
     public static void apply(ChunkAccess chunk, long seed, EndTerrainDensity.Sampler terrain,
             net.minecraft.world.level.biome.BiomeResolver biomes,
             net.minecraft.world.level.biome.BiomeManager surfaceBiomes) {
+        // Carve before layering so newly exposed crater floors receive the normal surface material.
+        if (biomes != null) LirestoneCrags.carveCraters(chunk, seed, biomes);
         var patches = new LirestonePatches(seed);
         var heathPatches=surfaceBiomes==null?null:new LyrenHeathPatches(seed);
         boolean[] crags=biomes==null?null:LirestoneCrags.conversionColumns(biomes,chunk.getPos().getMinBlockX(),chunk.getPos().getMinBlockZ(),seed);

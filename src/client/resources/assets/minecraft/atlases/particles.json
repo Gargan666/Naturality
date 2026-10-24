@@ -2,6 +2,16 @@
   "sources": [
     {
       "type": "minecraft:single",
+      "resource": "naturality:particle/stunned_circle",
+      "sprite": "naturality:particle/stunned_circle"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "naturality:particle/stunned_star",
+      "sprite": "naturality:particle/stunned_star"
+    },
+    {
+      "type": "minecraft:single",
       "resource": "naturality:particle/nether_portal_glow",
       "sprite": "naturality:particle/nether_portal_glow"
     }

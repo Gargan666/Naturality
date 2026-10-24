@@ -272,6 +272,25 @@ public final class Enchanting {
         return new Pair(benefit, level, curse, Math.min(curse.value().getMaxLevel(), book ? Math.max(1, level / 2) : level));
     }
 
+    /** Mutates the saved offer result once, so reopening and repeat purchases keep the same curse. */
+    public static void curseTradeBook(ItemStack book, RegistryAccess registries, RandomSource random) {
+        if (!book.is(Items.ENCHANTED_BOOK)) return;
+        book.remove(CREATIVE_ENCHANTMENTS);
+        normalizeBook(book, registries);
+        var stored = book.getOrDefault(DataComponents.STORED_ENCHANTMENTS, ItemEnchantments.EMPTY);
+        if (stored.entrySet().stream().anyMatch(entry -> entry.getKey().is(EnchantmentTags.CURSE))) return;
+        List<Pair> pairs = book.getOrDefault(PAIRS, List.of());
+        if (pairs.isEmpty()) return;
+        var original = pairs.getFirst();
+        // Book curses may be weaker than their benefit; do not exclude lower-maximum curses.
+        var choices = curseChoices(original.benefit(), book, registries, 1, false);
+        if (choices.isEmpty()) return;
+        var curse = choices.get(random.nextInt(choices.size()));
+        applyPairs(book, List.of(new Pair(original.benefit(), original.level(), curse,
+            Math.min(curse.value().getMaxLevel(), Math.max(1, original.level() / 2)))));
+        book.remove(REVEALED);
+    }
+
     public static void normalizeBook(ItemStack book, RegistryAccess registries) {
         if (!book.is(Items.ENCHANTED_BOOK)) return;
         migrateCurseName(book, registries);

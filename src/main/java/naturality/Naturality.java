@@ -22,6 +22,8 @@ public class Naturality implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
+        naturality.effects.stunned.Stunned.initialize();
+        naturality.items.swords.SwordCounter.initialize();
         naturality.systems.enchanting.framework.Enchanting.initialize();
         naturality.systems.rotation.PlayerRotation.initialize();
         naturality.systems.navigation.NavigationInstruments.NavigationTargetPayload.initialize();
@@ -34,6 +36,7 @@ public class Naturality implements ModInitializer {
             naturality.worldgen.overworld.clover.CloverPatchesFeature.initialize();
             naturality.worldgen.overworld.sand.SandLayersFeature.initialize();
             naturality.worldgen.nether.basaltdeltas.BasaltDeltasFeature.initialize();
+            naturality.worldgen.nether.plains.NetherPlains.initialize();
             naturality.worldgen.overworld.moss.TreeMossFeature.initialize();
             naturality.worldgen.overworld.waterfalls.MountainWaterfallFeature.initialize();
             naturality.entities.maddened.MaddenedCreepers.initialize();

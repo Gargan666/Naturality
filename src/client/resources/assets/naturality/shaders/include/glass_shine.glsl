@@ -65,7 +65,7 @@ vec4 naturality_glass_shine(vec4 color, vec3 light, vec3 dx, vec3 dy) {
     // Physical level zero is the centre of the first lightmap texel (8 / 256).
     // Keep dim light dim, rather than revealing a uniformly fullbright streak.
     float hasLight = max(texelLevels.x, texelLevels.y) > 8.001 / 256.0 ? 1.0 : 0.0;
-    float shine = coverage * hasLight;
+    float shine = coverage * hasLight * NATURALITY_GLASS_SHINE_OPACITY;
     vec3 reflection = GlassColors[naturalityGlassKind].rgb * texelLight;
     float alpha = color.a + shine * (1.0 - color.a);
     vec3 rgb = (color.rgb * color.a * (1.0 - shine) + reflection * shine) / max(alpha, 0.00001);

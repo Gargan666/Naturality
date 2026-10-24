@@ -60,7 +60,8 @@ public record CloverPatchesFeature() implements Feature {
         // Reject isolated patches; commit only after the full group has been validated.
         if (patches.size() < 2) return false;
         for (List<BlockPos> patch : patches) for (BlockPos pos : patch) {
-            level.setBlock(pos, NaturalityBlocks.CLOVERS.defaultBlockState()
+            var clovers = random.nextFloat() < 0.01F ? NaturalityBlocks.FOUR_LEAF_CLOVERS : NaturalityBlocks.CLOVERS;
+            level.setBlock(pos, clovers.defaultBlockState()
                 .setValue(FlowerBedBlock.FACING, Direction.from2DDataValue(random.nextInt(4)))
                 .setValue(FlowerBedBlock.AMOUNT, 2 + random.nextInt(3)), 2);
         }

@@ -25,7 +25,11 @@ public final class FeatureMixinPlugin implements IMixinConfigPlugin {
         if (name.startsWith("ScalableLux") && !net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("scalablelux")) return false;
         if (name.startsWith("Iris") && !net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("iris")) return false;
         boolean client = mixin.startsWith("naturality.client.");
+        if (mixin.contains(".ui.inventory.mixins.")) return true;
         if (mixin.contains(".items.durability.mixins.")) return true;
+        if (mixin.contains(".items.swords.mixins.")) return true;
+        if (mixin.contains(".effects.stunned.mixins.")) return true;
+        if (mixin.contains(".particles.sparks.mixins.")) return true;
         if (mixin.contains(".systems.enchanting.mixins.") || mixin.contains(".systems.enchanting.framework.mixins.")
                 || mixin.contains(".systems.enchanting.bookshelves.mixins.") || mixin.contains(".systems.enchanting.curses.mixins.")) return true;
         if (client && name.equals("LayerOverlayUpdatesMixin")) return CONTENT.enabled() || VISUAL_OVERHAUL.enabled();
@@ -73,7 +77,9 @@ public final class FeatureMixinPlugin implements IMixinConfigPlugin {
             return LIRESTONE_CRAGS.enabled() || END_WILDS.enabled();
         if (name.equals("EndTerrainDensityMixin")) return END_TERRAIN.enabled();
         if (name.equals("OceanTerrainMixin")) return OCEAN_TERRAIN.enabled();
-        if (name.equals("NetherTerrainMixin")) return NETHER_TERRAIN.enabled();
+        if (name.equals("NetherLavaLakesMixin") || name.equals("NetherLavaSurfaceMixin")
+                || name.equals("NetherLavaUpdatesMixin")) return NETHER_LAVA_LAKES.enabled();
+        if (name.equals("BasaltDeltaPoolMixin")) return CONTENT.enabled();
         if (name.startsWith("OceanMonument")) return OCEAN_TERRAIN.enabled();
         if (name.equals("EndStoneTerrainMixin") || name.equals("SmallEndIslandLayersMixin")) return END_MATERIALS.enabled();
         if (name.equals("ElytraMomentumMixin")) return ELYTRA_MOMENTUM.enabled();

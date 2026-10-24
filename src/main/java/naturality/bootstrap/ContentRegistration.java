@@ -183,6 +183,16 @@ public final class ContentRegistration {
                 .setId(ResourceKey.create(Registries.ITEM, Naturality.id("clovers")))
                 .useBlockDescriptionPrefix()));
 
+        public static final Block FOUR_LEAF_CLOVERS = Blocks.register(
+            ResourceKey.create(Registries.BLOCK, Naturality.id("four_leaf_clovers")),
+            properties -> new net.minecraft.world.level.block.FlowerBedBlock(properties, 3),
+            BlockBehaviour.Properties.ofFullCopy(Blocks.WILDFLOWERS));
+        public static final BlockItem FOUR_LEAF_CLOVERS_ITEM = Registry.register(BuiltInRegistries.ITEM,
+            ResourceKey.create(Registries.ITEM, Naturality.id("four_leaf_clovers")),
+            new BlockItem(FOUR_LEAF_CLOVERS, new Item.Properties()
+                .setId(ResourceKey.create(Registries.ITEM, Naturality.id("four_leaf_clovers")))
+                .useBlockDescriptionPrefix()));
+
         public static void initialize() {
             naturality.api.blocks.FallingLayerBlock.initialize();
             ASH_ITEM.registerBlocks(Item.BY_BLOCK, ASH_ITEM);
@@ -203,8 +213,9 @@ public final class ContentRegistration {
             CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.NATURAL_BLOCKS)
                 .register(output -> output.insertBefore(Blocks.SAND, SEDIMENT));
             CLOVERS_ITEM.registerBlocks(Item.BY_BLOCK, CLOVERS_ITEM);
+            FOUR_LEAF_CLOVERS_ITEM.registerBlocks(Item.BY_BLOCK, FOUR_LEAF_CLOVERS_ITEM);
             CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.NATURAL_BLOCKS)
-                .register(output -> output.insertAfter(Blocks.WILDFLOWERS, CLOVERS));
+                .register(output -> output.insertAfter(Blocks.WILDFLOWERS, CLOVERS, FOUR_LEAF_CLOVERS));
             MOSS_ITEM.registerBlocks(Item.BY_BLOCK, MOSS_ITEM);
             CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.NATURAL_BLOCKS)
                 .register(output -> output.insertAfter(Blocks.GLOW_LICHEN, MOSS));
@@ -228,6 +239,9 @@ public final class ContentRegistration {
     }
 
     public static final class NaturalityItems {
+        public static final Item BAROMETER = Registry.register(BuiltInRegistries.ITEM,
+            ResourceKey.create(Registries.ITEM, Naturality.id("barometer")),
+            new Item(new Item.Properties().setId(ResourceKey.create(Registries.ITEM, Naturality.id("barometer")))));
         public static final Item HEAVY_BOOTS = Registry.register(BuiltInRegistries.ITEM,
             ResourceKey.create(Registries.ITEM, Naturality.id("heavy_boots")),
             new Item(new Item.Properties().setId(ResourceKey.create(Registries.ITEM, Naturality.id("heavy_boots")))
@@ -242,6 +256,8 @@ public final class ContentRegistration {
         public static void initialize() {
             CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.INGREDIENTS)
                 .register(output -> output.insertAfter(Items.RABBIT_FOOT, FOUR_LEAF_CLOVER));
+            CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.TOOLS_AND_UTILITIES)
+                .register(output -> output.insertAfter(Items.CLOCK, BAROMETER));
             CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.COMBAT)
                 .register(output -> output.insertAfter(Items.IRON_BOOTS, HEAVY_BOOTS));
         }
@@ -268,6 +284,10 @@ public final class ContentRegistration {
     }
 
     public static final class NaturalityParticles {
+        public static final SimpleParticleType SHULKER_BULLET_EXPLOSION=Registry.register(BuiltInRegistries.PARTICLE_TYPE,
+            Naturality.id("shulker_bullet_explosion"),FabricParticleTypes.simple(true));
+        public static final SimpleParticleType SWORD_COUNTER_SPARK=Registry.register(BuiltInRegistries.PARTICLE_TYPE,
+            Naturality.id("sword_counter_spark"),FabricParticleTypes.simple());
         public static final SimpleParticleType END_CRYSTAL_TEXT=Registry.register(BuiltInRegistries.PARTICLE_TYPE,
             Naturality.id("end_crystal_text"),FabricParticleTypes.simple());
         public static final SimpleParticleType END_EXPLOSION=Registry.register(BuiltInRegistries.PARTICLE_TYPE,
@@ -295,6 +315,7 @@ public final class ContentRegistration {
     }
 
     public static final class NaturalitySounds {
+        public static final SoundEvent PARRY = register("parry");
         public static final SoundEvent CAVE_AMBIENCE = register("cave_ambience");
         public static final java.util.List<SoundEvent> END_AMBIENCE_CLIPS = java.util.stream.IntStream.rangeClosed(1, 5)
             .mapToObj(index -> {

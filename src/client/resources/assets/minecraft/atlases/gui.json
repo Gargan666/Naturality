@@ -1,0 +1,9 @@
+{
+  "sources": [
+    {
+      "type": "minecraft:single",
+      "resource": "naturality:item/trashslot_icon",
+      "sprite": "naturality:container/slot/trash"
+    }
+  ]
+}

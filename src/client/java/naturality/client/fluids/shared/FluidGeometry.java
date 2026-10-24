@@ -86,6 +86,12 @@ public final class FluidGeometry {
     }
 
     private static boolean openBoundary(BlockAndTintGetter level, BlockPos pos, Direction side) {
+        var self = level.getBlockState(pos);
+        // Waterlogged blocks share this cell with the fluid. Keep vanilla's
+        // inset at their outer faces too, so doors and other partial blocks
+        // remain in front of the water instead of sharing its depth plane.
+        if (self.getRenderShape() != net.minecraft.world.level.block.RenderShape.INVISIBLE
+                && !self.getCollisionShape(level, pos).getFaceShape(side).isEmpty()) return false;
         var neighborPos = pos.relative(side);
         var neighbor = level.getBlockState(neighborPos);
         // Air is not the only empty visual boundary: barriers are invisible,

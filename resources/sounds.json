@@ -1,4 +1,7 @@
 {
+  "parry": {
+    "sounds": ["naturality:parry"]
+  },
   "cave_ambience": {
     "sounds": [{ "name": "naturality:cave_ambience_nice1", "stream": true }]
   },

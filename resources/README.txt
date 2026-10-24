@@ -84,7 +84,7 @@ textures are simple bordered boxes in the same textures/gui/ directory:
 Keep these canvas sizes when replacing the placeholders. The bookmark begins at
 (20,-20) relative to the main book and extends 12 pixels underneath its page area.
 The panel begins at (-144,0). Four rows start at panel (8,24), spaced 34 pixels;
-the heading is at (8,9), and page controls are at y=160. Labels/icons are drawn by
+the heading is horizontally centered at x=72 with its top at y=12, and page controls are at y=160. Labels/icons are drawn by
 the menu; do not bake them into the artwork. Arrow buttons use the vanilla GUI.
 The book and library are centered together while open. Mouse wheel and arrows page
 through the collection; hovering a row shows the source book's full tooltip.
@@ -254,9 +254,10 @@ inventory sprite for naturality:moss. Uses vanilla moss sounds. Edit and rebuild
 
 CLOVERS
 textures/block/clovers.png and clovers_stem.png supply wildflower-style foliage.
+textures/block/four_leaf_clovers.png and textures/item/four_leaf_clovers.png supply the rare block top and item; its models reuse clovers_stem.png.
 Both model pieces receive biome foliage tint. Edit and rebuild/relaunch.
 
 
 FOUR LEAF CLOVER
-textures/item/four_leaf_clover.png supplies the rare Clovers drop and Luck brewing ingredient.
+textures/item/four_leaf_clover.png supplies the guaranteed Four Leaf Clovers drop and Luck brewing ingredient.
 

@@ -66,10 +66,32 @@ public final class SurfaceLayerModel extends WrapperBlockStateModel {
                 BlockStateModel coated = isLayer(state) ? new SurfaceLayerModel(model)
                     : state.isAir() || state.getBlock() instanceof net.minecraft.world.level.block.BaseFireBlock
                         ? model : new SnowOverlayModel(model);
+                if (state.getBlock() instanceof SnowLayerBlock
+                        || state.getBlock() instanceof naturality.api.blocks.FallingLayerBlock)
+                    coated = new LayerLightingModel(coated);
                 return naturality.blocks.ash.Ash.isLayer(state)
                     || net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(state.getBlock()).equals(AshTopRotationModel.ASH_BLOCK)
                     ? new AshTopRotationModel(coated) : coated;
             }));
+    }
+
+    /** Partial layer tops must not inherit full-cube corner occlusion from adjacent terrain. */
+    private static final class LayerLightingModel extends WrapperBlockStateModel {
+        private LayerLightingModel(BlockStateModel wrapped) { super(wrapped); }
+
+        @Override
+        public void emitQuads(QuadEmitter emitter, BlockAndTintGetter level, BlockPos pos, BlockState state,
+                RandomSource random, Predicate<@org.jspecify.annotations.Nullable Direction> cull) {
+            emitter.pushTransform(quad -> {
+                // Enhanced lighting interpolates inset faces at their actual height.
+                // Disabling AO also disables smooth lightmaps, causing flat-lit tops.
+                quad.ambientOcclusion(net.fabricmc.fabric.api.util.TriState.DEFAULT)
+                    .shadeMode(net.fabricmc.fabric.api.client.renderer.v1.mesh.ShadeMode.ENHANCED);
+                return true;
+            });
+            try { wrapped.emitQuads(emitter,level,pos,state,random,cull); }
+            finally { emitter.popTransform(); }
+        }
     }
 
     /** Rotate only the ash sprite's upward faces, including the patches emitted by fitted layers. */
@@ -260,7 +282,7 @@ public final class SurfaceLayerModel extends WrapperBlockStateModel {
                 p.x(),p.y()+offset,p.z(),p.ux(),p.uz(),p.vx(),p.vz()));
             if(tops.isEmpty()) { wrapped.emitQuads(e,level,pos,state,random,cull);return; }
             boolean leaves=state.getBlock() instanceof LeavesBlock || foliage;
-            var edgeOcclusion=new EdgeOcclusion(level,pos,snowBoxes);
+            var edgeOcclusion=new EdgeOcclusion(level,pos,owner,snowBoxes);
             e.pushTransform(q -> {
                 if(q.cullFace()!=null && cull.test(q.cullFace()))return true;
                 if(q.lightFace().getAxis()==Direction.Axis.Y)return true;
@@ -349,21 +371,30 @@ public final class SurfaceLayerModel extends WrapperBlockStateModel {
             private record Column(int x,int z,int bottom,int top) { }
             private final BlockAndTintGetter level;
             private final BlockPos pos;
+            private final BlockPos owner;
+            private final boolean internalBarFaces;
             private final net.minecraft.world.phys.shapes.VoxelShape snow;
             private final Map<Column,net.minecraft.world.phys.shapes.VoxelShape> columns=new HashMap<>();
             private final Map<BlockPos,net.minecraft.world.phys.shapes.VoxelShape> cells=new HashMap<>();
-            EdgeOcclusion(BlockAndTintGetter level,BlockPos pos,List<net.minecraft.world.phys.AABB> boxes) {
+            EdgeOcclusion(BlockAndTintGetter level,BlockPos pos,BlockPos owner,List<net.minecraft.world.phys.AABB> boxes) {
                 this.level=level;this.pos=pos.immutable();
+                this.owner=owner.immutable();
+                internalBarFaces=level.getBlockState(pos).is(Blocks.IRON_BARS);
                 var shape=net.minecraft.world.phys.shapes.Shapes.empty();
                 for(var box:boxes)shape=net.minecraft.world.phys.shapes.Shapes.or(shape,
                     net.minecraft.world.phys.shapes.Shapes.create(box));
                 snow=shape;
             }
             private net.minecraft.world.phys.shapes.VoxelShape column(Column column) {
-                var blockers=snow;
+                // Iron-bar faces lie inside their collision-shaped coating. That
+                // coating must not hide its own painted overlay on the centre
+                // planes; neighboring blocks still participate in occlusion.
+                var blockers=internalBarFaces
+                    ? net.minecraft.world.phys.shapes.Shapes.empty() : snow;
                 for(int y=column.bottom;y<=column.top;y++) {
                     var cell=pos.offset(column.x,y,column.z);
                     var shape=cells.computeIfAbsent(cell,p -> {
+                        if(internalBarFaces && p.equals(owner)) return net.minecraft.world.phys.shapes.Shapes.empty();
                         var state=level.getBlockState(p);
                         var local=isLayer(state)?layerShape(level,p,state.getValue(SnowLayerBlock.LAYERS))
                             :state.getOcclusionShape();

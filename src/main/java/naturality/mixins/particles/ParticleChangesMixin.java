@@ -31,6 +31,16 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public final class ParticleChangesMixin {
     private ParticleChangesMixin() {}
 
+    @Mixin(net.minecraft.world.entity.projectile.ShulkerBullet.class)
+    public static abstract class ShulkerBulletExplosionMixin {
+        @org.spongepowered.asm.mixin.injection.ModifyArg(method = "onHitBlock", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/server/level/ServerLevel;sendParticles(Lnet/minecraft/core/particles/ParticleOptions;DDDIDDDD)I"), index = 0)
+        private ParticleOptions naturality$vanillaImpact(ParticleOptions particle) {
+            return Feature.EXPLOSION_PARTICLES.enabled() && particle == ParticleTypes.EXPLOSION
+                ? NaturalityParticles.SHULKER_BULLET_EXPLOSION : particle;
+        }
+    }
+
     @Mixin(EnderDragon.class)
     @org.jspecify.annotations.NullMarked
     public static abstract class DragonDeathExplosionMixin {

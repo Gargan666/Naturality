@@ -24,6 +24,26 @@ public final class SurfaceLayers {
     public static final int MAX_DEPTH = 32;
     private SurfaceLayers() {}
 
+    /** Conservative live palette check: absence proves the vertical search cannot add a coating. */
+    public static boolean mayHaveDisplacedLayers(BlockGetter view, BlockPos pos) {
+        if (!(view instanceof net.minecraft.world.level.Level level)) return true;
+        var chunk = level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
+        // Unknown/custom views keep the original search; never request chunk loading here.
+        if (chunk == null) return true;
+        int first = Math.max(level.getMinY(), pos.getY() + 1);
+        int last = Math.min(level.getMaxY(), pos.getY() + MAX_DEPTH);
+        if (first > last) return false;
+        for (int section = chunk.getSectionIndex(first); section <= chunk.getSectionIndex(last); section++) {
+            if (chunk.getSection(section).maybeHas(SurfaceLayers::isCollidableLayer)) return true;
+        }
+        return false;
+    }
+
+    private static boolean isCollidableLayer(BlockState state) {
+        return (state.is(Blocks.SNOW) || naturality.blocks.ash.Ash.isLayer(state))
+            && state.getValue(SnowLayerBlock.LAYERS) > 1;
+    }
+
     public static @Nullable BlockState footstepState(BlockGetter level,
             BlockPos supportPos, net.minecraft.world.phys.AABB feet, boolean snowEnabled) {
         for (int depth = 0; depth <= MAX_DEPTH; depth++) {

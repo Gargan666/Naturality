@@ -398,6 +398,21 @@ public final class PreviewsMixins {
     @Mixin(Minecraft.class)
     @org.jspecify.annotations.NullMarked
     public static abstract class MenuStartupConnectionMixin implements MenuPreviewConnection {
+        @WrapOperation(method = "updateLevelInEngines(Lnet/minecraft/client/multiplayer/ClientLevel;Z)V", at = @At(value = "INVOKE",
+                target = "Lnet/minecraft/client/sounds/SoundManager;stop()V"))
+        private void naturality$keepMenuAudio(SoundManager sounds, Operation<Void> original) {
+            // Native world attachment stops every sound, including the menu track.
+            // Only our private background server may bypass that gameplay reset.
+            if (!MenuPreview.privateServer(singleplayerServer)) original.call(sounds);
+        }
+        @Inject(method = "getSituationalMusic", at = @At("HEAD"), cancellable = true)
+        private void naturality$menuMusic(CallbackInfoReturnable<net.minecraft.sounds.Music> cir) {
+            if (MenuPreview.privateServer(singleplayerServer)) cir.setReturnValue(net.minecraft.sounds.Musics.MENU);
+        }
+        @Inject(method = "getMusicVolume", at = @At("HEAD"), cancellable = true)
+        private void naturality$menuMusicVolume(CallbackInfoReturnable<Float> cir) {
+            if (MenuPreview.privateServer(singleplayerServer)) cir.setReturnValue(1.0F);
+        }
         @Shadow private @org.jspecify.annotations.Nullable IntegratedServer singleplayerServer;
         @Shadow private @org.jspecify.annotations.Nullable Connection pendingConnection;
         @Shadow private boolean isLocalServer;

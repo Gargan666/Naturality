@@ -44,6 +44,10 @@ public final class SurfaceSupportModels {
         });
     }
     private static List<AABB> bake(BlockState state) {
+        // Iron-bar model planes include decorative, overlapping faces. Their
+        // state-defined hitbox gives both coatings one connected support volume.
+        if (state.is(Blocks.IRON_BARS)) return List.copyOf(state.getCollisionShape(
+            net.minecraft.world.level.EmptyBlockGetter.INSTANCE, BlockPos.ZERO).toAabbs());
         String id=BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
         var definition=resource("blockstates",id);
         var result=new ArrayList<AABB>();

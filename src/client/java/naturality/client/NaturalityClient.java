@@ -10,9 +10,11 @@ public class NaturalityClient implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
         naturality.client.systems.enchanting.EnchantingClient.initialize();
+        naturality.client.particles.sparks.SparkParticle.initialize();
         net.fabricmc.fabric.api.client.rendering.v1.BlockColorRegistry.register(
             java.util.List.of(net.minecraft.client.color.block.BlockTintSources.foliage(),
-                net.minecraft.client.color.block.BlockTintSources.foliage()), naturality.bootstrap.ContentRegistration.NaturalityBlocks.CLOVERS);
+                net.minecraft.client.color.block.BlockTintSources.foliage()), naturality.bootstrap.ContentRegistration.NaturalityBlocks.CLOVERS,
+                naturality.bootstrap.ContentRegistration.NaturalityBlocks.FOUR_LEAF_CLOVERS);
         naturality.client.ui.menus.previews.MenuPreview.MenuWorld.initialize();
         naturality.client.systems.navigation.NavigationClient.initialize();
         if (VISUAL_OVERHAUL.enabled()) naturality.client.entities.endcrystals.CrystalVisuals.CrystalTextParticle.initialize();

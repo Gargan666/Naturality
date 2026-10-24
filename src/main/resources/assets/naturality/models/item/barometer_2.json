@@ -1,0 +1,6 @@
+{
+  "textures": {
+    "layer0": "naturality:item/barometer_2"
+  },
+  "parent": "minecraft:item/generated"
+}

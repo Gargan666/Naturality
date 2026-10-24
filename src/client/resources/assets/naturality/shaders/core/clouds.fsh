@@ -16,6 +16,11 @@ layout(location = 6) flat in vec3 cloudBase;
 layout(location = 7) flat in int edgeMask;
 layout(location = 8) flat in int cloudDirection;
 
+#ifdef CLOUD_WATER_ORDER
+uniform sampler2D CloudNearestDepth;
+uniform sampler2D CloudWaterMask;
+#endif
+
 layout(std140) uniform CloudInfo {
     vec4 CloudColor;
     vec3 CloudOffset;
@@ -80,6 +85,18 @@ vec4 calculateFinalColor(vec4 color) {
 }
 
 void main() {
+    #ifdef CLOUD_WATER_ORDER
+    ivec2 pixelPosition = ivec2(gl_FragCoord.xy);
+    float nearestCloud = texelFetch(CloudNearestDepth, pixelPosition, 0).r;
+    if (gl_FragCoord.z < nearestCloud) discard;
+    vec4 water = texelFetch(CloudWaterMask, pixelPosition, 0);
+    bool inFront = water.r > 0.0 && water.a > 0.0 && gl_FragCoord.z > water.r;
+    #ifdef CLOUD_WATER_FRONT
+    if (!inFront) discard;
+    #else
+    if (inFront) discard;
+    #endif
+    #endif
     // Horizontal caps are outward faces; a two-sided cap exposes cloud tops from below.
     if (cloudDirection >= 0 && cloudDirection < 2 && !gl_FrontFacing) discard;
     // Use the same side as the cap blend: physical slab in gameplay, level orbit in menus.

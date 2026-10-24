@@ -400,6 +400,7 @@ public final class EnchantingClient {
         private static boolean rememberedLibraryOpen;
         private boolean libraryOpen = rememberedLibraryOpen;
         private int libraryPage;
+        private float layoutScale = 1f;
         private record Control(Button button, int action) {}
         public Screen(Enchanting.Menu menu, Inventory inventory, Component title) {
             super(menu, inventory, title, Enchanting.Menu.WIDTH, Enchanting.Menu.HEIGHT);
@@ -408,7 +409,14 @@ public final class EnchantingClient {
         }
         @Override protected void init() {
             super.init();
-            if (libraryOpen) leftPos = Math.max(LIBRARY_WIDTH, (width - imageWidth - LIBRARY_WIDTH) / 2 + LIBRARY_WIDTH);
+            // Include the bookmark, clue tab (and its failure shake), and inventory.
+            int leftExtension = libraryOpen ? LIBRARY_WIDTH : 46;
+            int fullWidth = imageWidth + leftExtension;
+            int fullHeight = imageHeight + 20;
+            layoutScale = Math.min(1f, Math.min(Math.max(1, width - 8) / (float)fullWidth,
+                Math.max(1, height - 8) / (float)fullHeight));
+            leftPos = leftExtension + (int)((width / layoutScale - fullWidth) / 2);
+            topPos = 20 + (int)((height / layoutScale - fullHeight) / 2);
             controls.clear();
             libraryRows.clear();
             var bookmark = new Button(leftPos + 20, topPos - 20, 24, 20, Component.literal("Library"), _ -> {
@@ -516,11 +524,26 @@ public final class EnchantingClient {
             // Slot/payload updates may arrive between ticks. Widgets and labels must
             // consume the same state before any of this frame's widgets are extracted.
             updateControls();
-            super.extractContents(graphics, mouseX, mouseY, partialTick);
+            graphics.pose().pushMatrix();
+            graphics.pose().scale(layoutScale, layoutScale);
+            super.extractContents(graphics, (int)(mouseX / layoutScale), (int)(mouseY / layoutScale), partialTick);
+            graphics.pose().popMatrix();
+        }
+        @Override public void extractCarriedItem(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+            graphics.pose().pushMatrix();
+            graphics.pose().scale(layoutScale, layoutScale);
+            super.extractCarriedItem(graphics, (int)(mouseX / layoutScale), (int)(mouseY / layoutScale));
+            graphics.pose().popMatrix();
+        }
+        private net.minecraft.client.input.MouseButtonEvent layoutEvent(net.minecraft.client.input.MouseButtonEvent event) {
+            return new net.minecraft.client.input.MouseButtonEvent(event.x() / layoutScale, event.y() / layoutScale, event.buttonInfo());
+        }
+        @Override public void mouseMoved(double x, double y) {
+            super.mouseMoved(x / layoutScale, y / layoutScale);
         }
         @Override public boolean mouseClicked(net.minecraft.client.input.MouseButtonEvent event, boolean doubleClick) {
             updateControls();
-            return super.mouseClicked(event, doubleClick);
+            return super.mouseClicked(layoutEvent(event), doubleClick);
         }
         private void updateControls() {
             libraryPage = Math.clamp(libraryPage, 0, Math.max(0, (menu.library().size() - 1) / LIBRARY_ROWS));
@@ -577,17 +600,19 @@ public final class EnchantingClient {
         }
         @Override public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
             super.extractBackground(graphics, mouseX, mouseY, partialTick);
+            graphics.pose().pushMatrix();
+            graphics.pose().scale(layoutScale, layoutScale);
             graphics.blit(RenderPipelines.GUI_TEXTURED, libraryOpen ? LIBRARY_TAB_OPEN : LIBRARY_TAB,
                 leftPos + 20, topPos - 20, 0, 0, 24, 32, 24, 32);
             if (libraryOpen) graphics.blit(RenderPipelines.GUI_TEXTURED, LIBRARY_BACKGROUND,
                 leftPos - LIBRARY_WIDTH, topPos, 0, 0, LIBRARY_WIDTH, LIBRARY_HEIGHT, LIBRARY_WIDTH, LIBRARY_HEIGHT);
             graphics.blit(RenderPipelines.GUI_TEXTURED, BACKGROUND, leftPos, topPos, 0, 0,
                 imageWidth, imageHeight, Enchanting.Menu.WIDTH, Enchanting.Menu.HEIGHT);
-
+            graphics.pose().popMatrix();
         }
         @Override protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
             if (libraryOpen) {
-                text(graphics, "Library", -LIBRARY_WIDTH + 8, 9);
+                text(graphics, "Library", -LIBRARY_WIDTH / 2 - font.width("Library") / 2, 12);
                 if (menu.library().isEmpty()) {
                     var message = Component.literal("Your library is empty. Insert enchanted books into Chiseled Bookshelves around your enchantment table to begin your library.");
                     graphics.blit(RenderPipelines.GUI_TEXTURED, LIBRARY_EMPTY,
@@ -659,7 +684,7 @@ public final class EnchantingClient {
         }
         public void captureInscriptionItem(net.minecraft.client.renderer.state.gui.GuiItemRenderState item,
                 net.minecraft.client.gui.render.GuiItemAtlas.SlotView slot) {
-            if (menu.phase() == Enchanting.WRITING && Math.abs(item.pose().m00()) >= 5.9f)
+            if (menu.phase() == Enchanting.WRITING && Math.abs(item.pose().m00()) >= 5.9f * layoutScale)
                 silhouette.capture(item, slot);
         }
 
@@ -669,17 +694,23 @@ public final class EnchantingClient {
         }
 
         @Override public boolean mouseDragged(net.minecraft.client.input.MouseButtonEvent event, double dx, double dy) {
+            event = layoutEvent(event);
+            dx /= layoutScale;
+            dy /= layoutScale;
             var page = deciphering;
             if (page != null && page.mouseDragged(event, dx, dy)) return true;
             return super.mouseDragged(event, dx, dy);
         }
         @Override public boolean mouseReleased(net.minecraft.client.input.MouseButtonEvent event) {
+            event = layoutEvent(event);
             var page = deciphering;
             if (page != null && page.mouseReleased(event)) { updateControls(); return true; }
             return super.mouseReleased(event);
         }
 
         @Override public boolean mouseScrolled(double x, double y, double scrollX, double scrollY) {
+            x /= layoutScale;
+            y /= layoutScale;
             if (libraryOpen && inLibrary(x, y)) {
                 if (scrollY != 0) changeLibraryPage(scrollY > 0 ? -1 : 1);
                 return true;
@@ -741,7 +772,8 @@ public final class EnchantingClient {
                         active ? enchantment.enchantment().is(EnchantmentTags.CURSE) ? 0xFF8B3030 : INK : 0xFF777777, false);
                     y += 14;
                 }
-                if (isHovered()) graphics.setTooltipForNextFrame(font, entry.get().book(), mouseX, mouseY);
+                if (isHovered()) graphics.setTooltipForNextFrame(font, entry.get().book(),
+                    (int)(mouseX * layoutScale), (int)(mouseY * layoutScale));
             }
         }
 

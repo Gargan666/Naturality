@@ -73,7 +73,6 @@ public final class Deciphering {
                     throw new IllegalArgumentException("Words must contain 1-" + COLUMNS + " English letters: " + entry.getKey());
                 if (!words.contains(word)) words.add(word);
             }
-            if (words.isEmpty() && !gibberish) throw new IllegalArgumentException("Empty word list for " + entry.getKey());
             entries.put(entry.getKey(), List.copyOf(words));
         }
         return entries;
@@ -178,7 +177,8 @@ public final class Deciphering {
     private static List<String> words(Holder<Enchantment> enchantment, Vocabulary vocabulary) {
         String id = Enchanting.name(enchantment);
         var configured = vocabulary.entries().get(id);
-        if (configured != null) return configured;
+        // Empty authoring slots use the same ID-derived fallback as unconfigured enchantments.
+        if (configured != null && !configured.isEmpty()) return configured;
         return Arrays.stream(id.substring(id.indexOf(':') + 1).split("[^a-z]+"))
             .filter(word -> !word.isEmpty()).map(word -> word.substring(0, Math.min(COLUMNS, word.length()))).distinct().toList();
     }

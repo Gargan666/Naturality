@@ -31,6 +31,7 @@ public final class NaturalityConfig {
         public int elasticHandsSpeed = 100;
         public int elasticHandsStrength = 100;
         public int cameraFlareMaxOpacity = 14;
+        public int glassShineOpacity = 100;
         public boolean starPulses = true;
         public int auroraSegments = 2;
         public boolean smoke = true;
@@ -57,7 +58,7 @@ public final class NaturalityConfig {
         public boolean handGlintContours = true;
         public boolean previewGlintContours = true;
         public boolean inventoryGlintContours = true;
-        public void sanitize() { hotbarOffset = Math.clamp(hotbarOffset, 0, 10); elasticHandsSpeed = Math.clamp(elasticHandsSpeed, 25, 300); elasticHandsStrength = Math.clamp(elasticHandsStrength, 0, 200); leafRestTicks = Math.clamp(leafRestTicks, 0, 200); auroraSegments = Math.clamp(auroraSegments, 1, 12); cameraFlareMaxOpacity = Math.clamp(cameraFlareMaxOpacity, 0, 100); }
+        public void sanitize() { hotbarOffset = Math.clamp(hotbarOffset, 0, 10); elasticHandsSpeed = Math.clamp(elasticHandsSpeed, 25, 300); elasticHandsStrength = Math.clamp(elasticHandsStrength, 0, 200); leafRestTicks = Math.clamp(leafRestTicks, 0, 200); auroraSegments = Math.clamp(auroraSegments, 1, 12); cameraFlareMaxOpacity = Math.clamp(cameraFlareMaxOpacity, 0, 100); glassShineOpacity = Math.clamp(glassShineOpacity, 0, 100); }
     }
     public PortalChanges portalChanges = new PortalChanges();
     public Lighting lighting = new Lighting();

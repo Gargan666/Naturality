@@ -21,7 +21,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 
-/** Supported sand aprons on slopes and thin caps along sandy cliff rims. */
+/** Smooth sandy surfaces by cutting high edges and filling low edges with supported layers. */
 @org.jspecify.annotations.NullMarked
 public record SandLayersFeature() implements Feature {
     public static final MapCodec<SandLayersFeature> CODEC = MapCodec.unit(SandLayersFeature::new);
@@ -42,37 +42,51 @@ public record SandLayersFeature() implements Feature {
         int[][] heights = new int[22][22];
         boolean[][] sand = new boolean[22][22];
         var pos = new BlockPos.MutableBlockPos();
-        // Read a three-block halo, but write only this chunk. Strip existing layer caps
-        // from the snapshot so adjacent chunks do not grow each other's deposits.
+        // Read a three-block halo, but write only this chunk. In 26.3 the WG
+        // heightmaps stop updating after TERRAIN; feature writes update the final
+        // heightmaps instead. Keep those original elevations, including where a
+        // neighboring chunk has already replaced its top sand with a partial layer.
         for (int z = 0; z < 22; z++) for (int x = 0; x < 22; x++) {
             int wx = startX + x - 3, wz = startZ + z - 3;
             int y = level.getHeight(Heightmap.Types.OCEAN_FLOOR_WG, wx, wz) - 1;
-            if (level.getBlockState(pos.set(wx, y, wz)).is(NaturalityBlocks.SAND_LAYER)) y--;
             heights[x][z] = y;
-            sand[x][z] = level.getBlockState(pos.set(wx, y, wz)).is(Blocks.SAND);
+            var surface = level.getBlockState(pos.set(wx, y, wz));
+            sand[x][z] = surface.is(Blocks.SAND) || surface.is(NaturalityBlocks.SAND_LAYER);
         }
         boolean placed = false;
         for (int z = 3; z < 19; z++) for (int x = 3; x < 19; x++) {
             if (!sand[x][z]) continue;
             int y = heights[x][z];
-            int layers = 0;
+            int wx = startX + x - 3, wz = startZ + z - 3;
+            double radius = 2.5 + 0.5 * variation(level.getSeed(), wx, wz);
+            double totalWeight = 1.0;
+            double heightChange = 0.0;
             for (int dz = -3; dz <= 3; dz++) for (int dx = -3; dx <= 3; dx++) {
-                int distance = Math.abs(dx) + Math.abs(dz);
-                if (distance == 0 || distance > 3) continue;
+                double distance = Math.sqrt(dx * dx + dz * dz);
+                if (distance == 0 || distance >= radius) continue;
+                // Do not pull sand toward exposed rock or other surface materials.
+                if (!sand[x + dx][z + dz]) continue;
+                double weight = 1.0 - distance / radius;
+                weight *= weight;
+                totalWeight += weight;
                 int difference = heights[x + dx][z + dz] - y;
-                if (difference > 0 && sand[x + dx][z + dz]) {
-                    layers = Math.max(layers, 8 - 2 * distance);
-                } else if (difference <= -3) {
-                    // A thin lip sits on the cliff's sand top, never unsupported over its side.
-                    layers = Math.max(layers, 4 - distance);
-                }
+                // Use actual height differences, rather than just their sign, so
+                // successive terraces blend into one surface. Bound cliff influence.
+                heightChange += Math.clamp(difference, -2, 2) * weight;
             }
-            if (layers == 0) continue;
-            pos.set(startX + x - 3, y + 1, startZ + z - 3);
+            int eighths = Math.clamp((int) Math.round(8.0 * heightChange / totalWeight), -7, 8);
+            if (eighths == 0) continue;
+            // At most the top sand block is cut or one cap is added. Keeping at
+            // least one layer avoids exposing the substrate or opening water holes.
+            pos.set(wx, y + 1, wz);
+            var above = level.getBlockState(pos);
+            boolean water = above.is(Blocks.WATER) && above.getFluidState().isSource();
+            if (!above.isAir() && !water) continue;
+            if (eighths < 0) pos.setY(y);
             if (!level.ensureCanWrite(pos)) continue;
             var previous = level.getBlockState(pos);
-            boolean water = previous.is(Blocks.WATER) && previous.getFluidState().isSource();
-            if (!previous.isAir() && !water) continue;
+            if (eighths < 0 ? !previous.is(Blocks.SAND) : !previous.isAir() && !water) continue;
+            int layers = eighths < 0 ? 8 + eighths : eighths;
             var state = NaturalityBlocks.SAND_LAYER.defaultBlockState()
                 .setValue(SandLayerBlock.LAYERS, layers).setValue(SandLayerBlock.WATERLOGGED, water);
             if (state.canSurvive(level, pos)) {
@@ -81,5 +95,23 @@ public record SandLayersFeature() implements Feature {
             }
         }
         return placed;
+    }
+
+    /** Smooth world-seeded variation, independent of chunk order and feature RNG. */
+    private static double variation(long seed, int x, int z) {
+        int cellX = Math.floorDiv(x, 8), cellZ = Math.floorDiv(z, 8);
+        double fx = Math.floorMod(x, 8) / 8.0, fz = Math.floorMod(z, 8) / 8.0;
+        fx = fx * fx * (3.0 - 2.0 * fx);
+        fz = fz * fz * (3.0 - 2.0 * fz);
+        double north = sample(seed, cellX, cellZ) * (1.0 - fx) + sample(seed, cellX + 1, cellZ) * fx;
+        double south = sample(seed, cellX, cellZ + 1) * (1.0 - fx) + sample(seed, cellX + 1, cellZ + 1) * fx;
+        return north * (1.0 - fz) + south * fz;
+    }
+
+    private static double sample(long seed, int x, int z) {
+        long hash = seed ^ (x * 0x632be59bd9b4e019L) ^ (z * 0x9e3779b97f4a7c15L);
+        hash = (hash ^ (hash >>> 30)) * 0xbf58476d1ce4e5b9L;
+        hash = (hash ^ (hash >>> 27)) * 0x94d049bb133111ebL;
+        return ((hash ^ (hash >>> 31)) >>> 11) * 0x1.0p-53;
     }
 }

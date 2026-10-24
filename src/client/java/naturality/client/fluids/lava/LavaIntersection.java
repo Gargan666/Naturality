@@ -63,7 +63,41 @@ public final class LavaIntersection extends QuadParticleRenderState {
         final List<PlanarGeometry.Rect> first=new ArrayList<>(),second=new ArrayList<>();
         Tile(LavaSurface surface) {this.surface=surface;}
     }
-    private final List<Pixel> pixels=new ArrayList<>();
+    /** Extraction-owned packed vertices: no per-pixel records or four temporary vectors. */
+    private static final class SurfacePixels {
+        private float[] positions=new float[0];
+        private int[] attributes=new int[0];
+        private int count;
+        int size(){return count;}
+        boolean isEmpty(){return count==0;}
+        void clear(){count=0;}
+        void add(LavaSurface surface,int x,int z,Vec3 eye,int color,int light) {
+            if(count*2==attributes.length) {
+                int capacity=Math.max(64,attributes.length);
+                attributes=Arrays.copyOf(attributes,capacity*2);
+                positions=Arrays.copyOf(positions,capacity*12);
+            }
+            double left=x/16.0,right=(x+1)/16.0,bottom=z/16.0,top=(z+1)/16.0;
+            put(count*12,surface,left,bottom,eye);
+            put(count*12+3,surface,left,top,eye);
+            put(count*12+6,surface,right,top,eye);
+            put(count*12+9,surface,right,bottom,eye);
+            attributes[count*2]=color; attributes[count*2+1]=light; count++;
+        }
+        private void put(int index,LavaSurface surface,double x,double z,Vec3 eye) {
+            positions[index]=(float)(surface.pos().getX()-eye.x+x);
+            positions[index+1]=(float)(surface.height(x,z)-eye.y+1.0/1024);
+            positions[index+2]=(float)(surface.pos().getZ()-eye.z+z);
+        }
+        void build(VertexConsumer buffer) {
+            for(int pixel=0;pixel<count;pixel++) for(int corner=0;corner<4;corner++) {
+                int index=pixel*12+corner*3;
+                buffer.addVertex(positions[index],positions[index+1],positions[index+2]).setUv(0,0)
+                    .setColor(attributes[pixel*2]).setLight(attributes[pixel*2+1]);
+            }
+        }
+    }
+    private final SurfacePixels pixels=new SurfacePixels();
     private final List<Pixel> splashPixels=new ArrayList<>();
     public static void initialize() {}
     public static int lastPixelCount;
@@ -143,8 +177,7 @@ public final class LavaIntersection extends QuadParticleRenderState {
             alpha*=0.86F+Math.floorMod(hash,15)/100F;
             if(WAKES.size()<12000)WAKES.put(p+"/"+x+"/"+z,new Wake(p,x,z,alpha,tick));
             int color=ARGB.colorFromFloat(alpha,r,g,b);
-            pixels.add(new Pixel(vertex(s,x/16.0,z/16.0,eye),vertex(s,x/16.0,(z+1)/16.0,eye),
-                vertex(s,(x+1)/16.0,(z+1)/16.0,eye),vertex(s,(x+1)/16.0,z/16.0,eye),color,light));
+            pixels.add(s,x,z,eye,color,light);
         }
     }
     void splashQuad(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int tint,int light){splashPixels.add(new Pixel(a,b,c,d,tint,light));}
@@ -157,7 +190,8 @@ public final class LavaIntersection extends QuadParticleRenderState {
     @Override public boolean isEmpty(){return pixels.isEmpty()&&splashPixels.isEmpty();}
     @Override public void clear(){pixels.clear();splashPixels.clear();}
     @Override public void buildLayer(SingleQuadParticle.Layer layer,VertexConsumer buffer) {
-        var draws=layer==SPLASH_LAYER?splashPixels:layer==LAYER?pixels:List.<Pixel>of();
+        if(layer==LAYER){pixels.build(buffer);return;}
+        var draws=layer==SPLASH_LAYER?splashPixels:List.<Pixel>of();
         for(var pixel:draws) {
             vertex(buffer,pixel.a,pixel.color,pixel.light);
             vertex(buffer,pixel.b,pixel.color,pixel.light);
@@ -181,20 +215,14 @@ public final class LavaIntersection extends QuadParticleRenderState {
             int tint=LavaEffects.brightColor();
             int color=ARGB.colorFromFloat(alpha,ARGB.red(tint)/255F,ARGB.green(tint)/255F,ARGB.blue(tint)/255F);
             int light=LightCoordsUtil.getLightCoords(level,w.pos.above());
-            pixels.add(new Pixel(vertex(surface,w.x/16.0,w.z/16.0,eye),vertex(surface,w.x/16.0,(w.z+1)/16.0,eye),
-                vertex(surface,(w.x+1)/16.0,(w.z+1)/16.0,eye),vertex(surface,(w.x+1)/16.0,w.z/16.0,eye),color,light));
+            pixels.add(surface,w.x,w.z,eye,color,light);
         }
     }
     void ripplePixel(LavaSurface surface,int x,int z,Vec3 eye,float alpha,int tint,int light) {
         float r=ARGB.red(tint)/255F;
         float g=ARGB.green(tint)/255F;
         float b=ARGB.blue(tint)/255F;
-        pixels.add(new Pixel(vertex(surface,x/16.0,z/16.0,eye),vertex(surface,x/16.0,(z+1)/16.0,eye),
-            vertex(surface,(x+1)/16.0,(z+1)/16.0,eye),vertex(surface,(x+1)/16.0,z/16.0,eye),
-            ARGB.colorFromFloat(alpha,r,g,b),light));
-    }
-    private static Vec3 vertex(LavaSurface s,double x,double z,Vec3 eye) {
-        return new Vec3(s.pos().getX()-eye.x+x,s.height(x,z)-eye.y+1.0/1024,s.pos().getZ()-eye.z+z);
+        pixels.add(surface,x,z,eye,ARGB.colorFromFloat(alpha,r,g,b),light);
     }
     @Override public void submit(SubmitNodeCollector collector,CameraRenderState camera){if(!isEmpty())collector.submitQuadParticleGroup(this);}
 
@@ -293,6 +321,15 @@ public final class LavaIntersection extends QuadParticleRenderState {
             }
             return false;
         }
+        // Radius is rounded by coverage(): these four integer lattices are exact,
+        // including the faint shoulders, and do not depend on position or time.
+        private static final float[][] RING_COVERAGE=ringCoverage();
+        private static float[][] ringCoverage() {
+            float[][] result=new float[4][169];
+            for(int radius=1;radius<=4;radius++) for(int x=-6;x<=6;x++) for(int z=-6;z<=6;z++)
+                result[radius-1][(x+6)*13+z+6]=coverage(x,z,radius);
+            return result;
+        }
         static void addTo(LavaIntersection output,ClientLevel level,Vec3 eye,Frustum frustum,float partial) {
             sync(level);
             lastPixelCount=0;
@@ -305,10 +342,11 @@ public final class LavaIntersection extends QuadParticleRenderState {
                 if(origin==null || origin.cauldron()!=r.cauldron
                     || Math.abs(origin.height(r.x-r.origin.getX(),r.z-r.origin.getZ())-r.y)>0.02) continue;
                 double radius=1+3*Math.min(1,age/12);
+                var coverage=RING_COVERAGE[Math.clamp((int)Math.round(radius),1,4)-1];
                 float fade=Math.min(1,age/2)*Math.min(1,(LIFETIME-age)/6);
                 int cx=(int)Math.floor(r.x*16),cz=(int)Math.floor(r.z*16);
                 for(int dx=-6;dx<=6;dx++) for(int dz=-6;dz<=6;dz++) {
-                    float alpha=coverage(dx,dz,radius)*fade;
+                    float alpha=coverage[(dx+6)*13+dz+6]*fade;
                     if(alpha<=0) continue;
                     int px=cx+dx,pz=cz+dz;
                     var pos=new BlockPos(Math.floorDiv(px,16),r.origin.getY(),Math.floorDiv(pz,16));

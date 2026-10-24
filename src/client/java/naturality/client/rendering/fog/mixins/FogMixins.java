@@ -88,6 +88,7 @@ public final class FogMixins {
             naturality.client.systems.weather.wind.WindRendering.beginFrame();
             naturality.client.ui.menus.previews.MenuSurface.MenuFog.prepare();
             naturality.client.fluids.water.WaterComposite.beginFrame();
+            naturality.client.sky.shared.clouds.CloudLayerRenderer.WaterOrder.beginFrame();
             naturality.client.fluids.water.WaterVisuals.prepareFrame();
             naturality$fog = fog;
             naturality$clouds = null;
@@ -113,6 +114,7 @@ public final class FogMixins {
             var target = targets.main.get();
             var color = target.getColorTextureView();
             if (color == null || !naturality$needsBackgroundClouds()) return;
+            naturality.client.sky.shared.clouds.CloudLayerRenderer.WaterOrder.prepare(target,cloudRenderer,optionsRenderState.cloudStatus);
             try (var pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
                     () -> "Naturality clouds before scene transparency", color, Optional.empty(),
                     target.getDepthTextureView(), OptionalDouble.empty())) {
@@ -132,7 +134,7 @@ public final class FogMixins {
             RenderSystem.bindDefaultUniforms(pass);
             // Test against opaque scene depth before partially transparent glass,
             // water and particles write depth. Their later colors blend over clouds.
-            cloudRenderer.render(optionsRenderState.cloudStatus, pass);
+            naturality.client.sky.shared.clouds.CloudLayerRenderer.WaterOrder.render(cloudRenderer,optionsRenderState.cloudStatus,pass,false);
             naturality$backgroundClouds = true;
         }
         @Inject(method = "addMainPass", at = @At("HEAD"))
@@ -174,6 +176,8 @@ public final class FogMixins {
             var waterChunks = naturality$waterChunks;
             if (waterChunks != null) {
                 naturality.client.fluids.water.WaterComposite.render(target, waterChunks, features, false);
+                if(naturality$needsBackgroundClouds())
+                    naturality.client.sky.shared.clouds.CloudLayerRenderer.WaterOrder.prepare(target,cloudRenderer,optionsRenderState.cloudStatus);
                 naturality$replayTransparency = true;
                 try (var pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
                         () -> "Naturality transparency after underwater optics", colorView, Optional.empty(),
@@ -188,6 +192,15 @@ public final class FogMixins {
             naturality.client.rendering.heatwaves.HeatWaves.render(target);
             EndFogComposite.render(target, naturality$fog);
             naturality.client.sky.shared.aurora.AuroraRenderer.render(target);
+            if(naturality$backgroundClouds) {
+                try(var pass=RenderSystem.getDevice().createCommandEncoder().createRenderPass(
+                        () -> "Naturality clouds in front of water",colorView,Optional.empty(),
+                        target.getDepthTextureView(),OptionalDouble.empty())) {
+                    RenderSystem.bindDefaultUniforms(pass);
+                    naturality.client.sky.shared.clouds.CloudLayerRenderer.WaterOrder.render(
+                        cloudRenderer,optionsRenderState.cloudStatus,pass,true);
+                }
+            }
             var clouds = naturality$clouds;
             var cloudStatus = naturality$cloudStatus;
             if (clouds == null || cloudStatus == null) {
@@ -213,6 +226,7 @@ public final class FogMixins {
             naturality.client.rendering.heatwaves.HeatWaves.close();
             naturality.client.sky.shared.aurora.AuroraRenderer.close();
             naturality.client.fluids.water.WaterComposite.close();
+            naturality.client.sky.shared.clouds.CloudLayerRenderer.WaterOrder.close();
             naturality.client.fluids.water.WaterVisuals.close();
         }
     }

@@ -82,6 +82,7 @@ public final class SnowMixins {
             // Added snow is intersected with the unit cell below. A full collision
             // cube already contains every possible addition, so no search is needed.
             if(net.minecraft.world.level.block.Block.isShapeFullBlock(result))return;
+            if(!naturality.api.geometry.SurfaceLayers.mayHaveDisplacedLayers(level,pos))return;
             for (int above=1;above<=SnowGeometry.MAX_DEPTH;above++) {
                 var owner=pos.above(above); var snow=level.getBlockState(owner);
                 if (!naturality.blocks.ash.Ash.isLayer(snow) && !(snow.is(Blocks.SNOW) && naturality.config.gameplay.GameplaySettings.snowWrapping(level))) { if(above>=2 && !SnowGeometry.exposesGround(level,owner)) break; continue; }

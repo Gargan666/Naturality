@@ -1,0 +1,16 @@
+{
+  "result": {
+    "id": "naturality:barometer"
+  },
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "key": {
+    "X": "minecraft:redstone",
+    "#": "minecraft:copper_ingot"
+  },
+  "pattern": [
+    " # ",
+    "#X#",
+    " # "
+  ]
+}

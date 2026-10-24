@@ -24,6 +24,8 @@ public final class FlatExplosionParticle extends SingleQuadParticle {
 
     public static void initialize() {
         var registry = ParticleProviderRegistry.getInstance();
+        registry.register(naturality.bootstrap.ContentRegistration.NaturalityParticles.SHULKER_BULLET_EXPLOSION,
+            net.minecraft.client.particle.HugeExplosionParticle.Provider::new);
         registry.register(ParticleTypes.EXPLOSION, sprites ->
             (_, level, x, y, z, vx, vy, _, _) -> create(level, x, y, z, sprites, vx, vy));
         registry.register(ParticleTypes.EXPLOSION_EMITTER, sprites ->

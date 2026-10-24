@@ -197,6 +197,12 @@ public class NaturalityCategoryScreen extends OptionsSubScreen {
         addFeatureOptions(category);
         if (category == Category.VISUALS) {
             var c = NaturalityConfig.get().effects;
+            String label = "naturality.config.effects.glassShineOpacity";
+            addReset(new OptionInstance<>(label,
+                OptionInstance.cachedConstantTooltip(Component.translatable(label + ".tooltip")),
+                (caption, amount) -> Component.literal(caption.getString() + ": " + amount + "%"),
+                new OptionInstance.IntRange(0, 100), c.glassShineOpacity,
+                value -> c.glassShineOpacity = value), 100);
             number("effects.hotbarOffset", c.hotbarOffset, 3, 0, 10, v -> c.hotbarOffset = v);
             toggle("effects.elasticHands", c.elasticHands, true, v -> c.elasticHands = v);
             number("effects.elasticHandsSpeed", c.elasticHandsSpeed, 100, 25, 300, v -> c.elasticHandsSpeed = v);
@@ -455,7 +461,7 @@ public class NaturalityCategoryScreen extends OptionsSubScreen {
                 FeatureConfig.get().get(feature), value -> FeatureConfig.get().set(feature, value));
             var reset = addReset(option, true, VisualPerformance.estimate("feature." + feature.key()));
             var button = optionsList().findOption(option);
-            boolean editable = feature.available() && (feature.group == Feature.Group.VISUAL || minecraft.level == null);
+            boolean editable = feature.group == Feature.Group.VISUAL || minecraft.level == null;
             if (button != null) button.active = editable;
             if (reset != null) reset.active = editable;
         }
@@ -691,7 +697,7 @@ public class NaturalityCategoryScreen extends OptionsSubScreen {
 
         public static Category category(Feature feature) {
             return switch (feature) {
-                case CONTENT, MOUNTAIN_WATERFALLS, OCEAN_TERRAIN, NETHER_TERRAIN -> Category.CONTENT;
+                case CONTENT, MOUNTAIN_WATERFALLS, OCEAN_TERRAIN, NETHER_LAVA_LAKES -> Category.CONTENT;
                 case END_TERRAIN, END_MATERIALS, LIRESTONE_CRAGS, END_WILDS, LIRESTONE_BOULDERS,
                     WILDS_BOULDERS, LYREN_PLANTS -> Category.END_WORLDGEN;
                 case CHORUS_FLOWERS, CHORUS_CROWNS, CHORUS_SPROUTS -> Category.CHORUS;

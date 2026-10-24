@@ -1,0 +1,138 @@
+{
+  "model": {
+    "type": "minecraft:range_dispatch",
+    "property": "naturality:barometer",
+    "fallback": {
+      "type": "minecraft:model",
+      "model": "naturality:item/barometer_0"
+    },
+    "entries": [
+      {
+        "model": {
+          "type": "minecraft:model",
+          "model": "naturality:item/barometer_0"
+        },
+        "threshold": 0
+      },
+      {
+        "model": {
+          "type": "minecraft:model",
+          "model": "naturality:item/barometer_1"
+        },
+        "threshold": 1
+      },
+      {
+        "model": {
+          "type": "minecraft:model",
+          "model": "naturality:item/barometer_2"
+        },
+        "threshold": 2
+      },
+      {
+        "model": {
+          "type": "minecraft:model",
+          "model": "naturality:item/barometer_3"
+        },
+        "threshold": 3
+      },
+      {
+        "model": {
+          "type": "minecraft:model",
+          "model": "naturality:item/barometer_4"
+        },
+        "threshold": 4
+      },
+      {
+        "model": {
+          "type": "minecraft:model",
+          "model": "naturality:item/barometer_5"
+        },
+        "threshold": 5
+      },
+      {
+        "model": {
+          "type": "minecraft:model",
+          "model": "naturality:item/barometer_6"
+        },
+        "threshold": 6
+      },
+      {
+        "model": {
+          "type": "minecraft:model",
+          "model": "naturality:item/barometer_7"
+        },
+        "threshold": 7
+      },
+      {
+        "model": {
+          "type": "minecraft:model",
+          "model": "naturality:item/barometer_8"
+        },
+        "threshold": 8
+      },
+      {
+        "model": {
+          "type": "minecraft:model",
+          "model": "naturality:item/barometer_9"
+        },
+        "threshold": 9
+      },
+      {
+        "model": {
+          "type": "minecraft:model",
+          "model": "naturality:item/barometer_10"
+        },
+        "threshold": 10
+      },
+      {
+        "model": {
+          "type": "minecraft:model",
+          "model": "naturality:item/barometer_11"
+        },
+        "threshold": 11
+      },
+      {
+        "model": {
+          "type": "minecraft:model",
+          "model": "naturality:item/barometer_12"
+        },
+        "threshold": 12
+      },
+      {
+        "model": {
+          "type": "minecraft:model",
+          "model": "naturality:item/barometer_13"
+        },
+        "threshold": 13
+      },
+      {
+        "model": {
+          "type": "minecraft:model",
+          "model": "naturality:item/barometer_14"
+        },
+        "threshold": 14
+      },
+      {
+        "model": {
+          "type": "minecraft:model",
+          "model": "naturality:item/barometer_15"
+        },
+        "threshold": 15
+      },
+      {
+        "model": {
+          "type": "minecraft:model",
+          "model": "naturality:item/barometer_16"
+        },
+        "threshold": 16
+      },
+      {
+        "model": {
+          "type": "minecraft:model",
+          "model": "naturality:item/barometer_17"
+        },
+        "threshold": 17
+      }
+    ]
+  }
+}
