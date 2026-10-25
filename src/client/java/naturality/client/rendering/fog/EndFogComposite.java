@@ -33,6 +33,7 @@ public final class EndFogComposite {
     public static void beginFrame(Vector4f color) { captured = false; background.set(color); }
 
     private static boolean active() {
+        if (naturality.client.api.rendering.ShaderPacks.active()) return false;
         var client = Minecraft.getInstance();
         var level = client.level;
         return level != null && (naturality.client.ui.menus.previews.MenuPreview.active()
@@ -127,6 +128,7 @@ public final class EndFogComposite {
         }
 
         public static boolean isActive(ClientLevel level, Camera camera) {
+            if (naturality.client.api.rendering.ShaderPacks.active()) return false;
             if (!naturality.config.live.NaturalityConfig.get().fog.enabled) return false;
             if ((!level.dimension().equals(Level.END) && !level.dimension().equals(Level.OVERWORLD))
                     || (camera.getFluidInCamera() != FogType.NONE

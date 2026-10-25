@@ -34,7 +34,8 @@ public final class DistantLightningClient {
     private static @org.jspecify.annotations.Nullable ClientLevel world;
     private DistantLightningClient() {}
     public static void initialize() {
-        ClientPlayNetworking.registerGlobalReceiver(DistantLightningPayload.TYPE,(p,c) -> c.client().execute(() -> receive(p)));
+        if (!naturality.config.startup.FeatureConfig.clientOnly())
+            ClientPlayNetworking.registerGlobalReceiver(DistantLightningPayload.TYPE,(p,c) -> c.client().execute(() -> receive(p)));
         naturality.client.systems.sleep.SleepVisuals.register(client -> {
             if(world!=client.level) { BOLTS.clear();world=client.level; }
             if(client.isPaused())return;

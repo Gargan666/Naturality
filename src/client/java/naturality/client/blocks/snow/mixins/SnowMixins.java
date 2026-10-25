@@ -31,6 +31,15 @@ import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
 import net.minecraft.world.phys.AABB;
 import java.util.HashMap;
 import naturality.client.api.rendering.layers.SurfaceLayerModel.SnowRenderRegion;
+import naturality.client.api.rendering.layers.SurfaceLayerModel.CoatingSection;
+import naturality.client.api.rendering.layers.SurfaceLayerModel.CoatingSectionAccess;
+import naturality.client.api.rendering.layers.SurfaceLayerModel.CoatingSnapshot;
+import naturality.client.api.rendering.layers.SurfaceLayerModel.CoatingSnapshotAccess;
+import naturality.client.api.rendering.layers.SurfaceLayerModel.CoatingLightAccess;
+import naturality.client.api.rendering.layers.SurfaceLayerModel.CoatingMeshes;
+import naturality.client.api.rendering.layers.SurfaceLayerModel.CoatingRenderer;
+import naturality.client.api.rendering.layers.SurfaceLayerModel.CoatingRenderView;
+import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
 
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.chunk.RenderRegionCache;
@@ -311,11 +320,185 @@ public final class SnowMixins {
         }
     }
 
+    /** Extend only tagged terrain lighting; positions and geometry are restored even on failure. */
+    @Pseudo
+    @Mixin(targets="net.caffeinemc.mods.sodium.client.render.model.AbstractBlockRenderContext",remap=false)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class SodiumSnowLightingMixin implements CoatingRenderView {
+        @SuppressWarnings("null") @Shadow protected BlockAndTintGetter level;
+        @SuppressWarnings("null") @Shadow protected BlockPos pos;
+        @Override public BlockAndTintGetter naturality$coatingView() { return level; }
+
+        @WrapMethod(method="shadeQuad")
+        private void naturality$surfaceLight(@Coerce Object sodiumQuad, @Coerce Object mode,
+                boolean emissive, @Coerce Object shadeMode, Operation<Void> original) {
+            // This adapter needs the matching bounded terrain snapshot and array-cache extension.
+            if (!(level instanceof CoatingSnapshotAccess)) {
+                original.call(sodiumQuad,mode,emissive,shadeMode);return;
+            }
+            var quad=naturality.client.api.rendering.RendererQuads.sodium(sodiumQuad);
+            if ((quad.tag() & 0xFFFFFF00)!=0x534E0000) {
+                original.call(sodiumQuad,mode,emissive,shadeMode);return;
+            }
+            int shift=(quad.tag()&255)-64;
+            if (shift==0) { original.call(sodiumQuad,mode,emissive,shadeMode);return; }
+            var owner=pos;
+            pos=owner.above(shift);
+            quad.translate(0,-shift,0);
+            try { original.call(sodiumQuad,mode,emissive,shadeMode); }
+            finally { quad.translate(0,shift,0);pos=owner; }
+        }
+    }
+
+    /** Replay uses Sodium's normal state preparation, shader metadata, material and vertex encoder. */
+    @Pseudo
+    @Mixin(targets="net.caffeinemc.mods.sodium.client.render.chunk.compile.pipeline.BlockRenderer",remap=false)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class SodiumSnowMeshRendererMixin implements CoatingRenderer {
+        @Shadow public abstract void renderModel(BlockStateModel model,BlockState state,BlockPos pos,BlockPos relative);
+        @Override public void naturality$renderCoating(BlockStateModel model,BlockState state,BlockPos owner,BlockPos relative) {
+            CoatingMeshes.shaderMetadata(this,state,relative);
+            renderModel(model,state,owner,relative);
+        }
+    }
+
+    /** A cached clone owns immutable palettes; copy published light once per clone lifetime. */
+    @Pseudo
+    @Mixin(targets="net.caffeinemc.mods.sodium.client.world.cloned.ClonedChunkSection",remap=false)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class SodiumSnowClonedSectionMixin implements CoatingSectionAccess {
+        @Shadow @Final private net.minecraft.world.level.chunk.@Nullable PalettedContainerRO<BlockState> blockData;
+        @SuppressWarnings("null") @Shadow @Final private net.minecraft.world.level.chunk.@Nullable DataLayer[] lightDataArrays;
+        @Shadow @Final private it.unimi.dsi.fastutil.ints.@Nullable Int2ReferenceMap<BlockEntity> blockEntityMap;
+        @Unique private @Nullable CoatingSection naturality$coatingSection;
+
+        @Override public CoatingSection naturality$coatingSection() {
+            var snapshot=naturality$coatingSection;
+            if (snapshot==null) {
+                var entities=blockEntityMap;
+                snapshot=new CoatingSection(blockData,
+                    lightDataArrays[net.minecraft.world.level.LightLayer.BLOCK.ordinal()],
+                    lightDataArrays[net.minecraft.world.level.LightLayer.SKY.ordinal()],
+                    entities==null ? Map.of() : entities);
+                naturality$coatingSection=snapshot;
+            }
+            return snapshot;
+        }
+    }
+
+    /** Queued jobs own the capture before a worker copies it into its reusable LevelSlice. */
+    @Pseudo
+    @Mixin(targets="net.caffeinemc.mods.sodium.client.world.cloned.ChunkRenderContext",remap=false)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class SodiumSnowContextMixin implements CoatingSnapshotAccess {
+        @Unique private CoatingSnapshot naturality$coatings=CoatingSnapshot.EMPTY;
+        @Override public CoatingSnapshot naturality$coatingSnapshot() { return naturality$coatings; }
+        @Override public void naturality$coatingSnapshot(CoatingSnapshot snapshot) { naturality$coatings=snapshot; }
+    }
+
+    /** Sodium's ordinary 20-cubed read volume cannot describe displaced coating supports. */
+    @Pseudo
+    @Mixin(targets="net.caffeinemc.mods.sodium.client.world.LevelSlice",remap=false)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class SodiumSnowLevelSliceMixin implements CoatingSnapshotAccess {
+        @SuppressWarnings("null") @Shadow private BoundingBox volume;
+        @Unique private CoatingSnapshot naturality$coatings=CoatingSnapshot.EMPTY;
+        @Override public CoatingSnapshot naturality$coatingSnapshot() { return naturality$coatings; }
+        @Override public void naturality$coatingSnapshot(CoatingSnapshot snapshot) { naturality$coatings=snapshot; }
+
+        @Inject(method="prepare",at=@At("RETURN"))
+        private static void naturality$captureCoatings(Level level,SectionPos origin,@Coerce Object cache,
+                CallbackInfoReturnable<@Nullable Object> cir) {
+            var context=cir.getReturnValue();
+            if (context!=null && level instanceof ClientLevel client)
+                ((CoatingSnapshotAccess)context).naturality$coatingSnapshot(CoatingSnapshot.capture(client,origin,cache));
+        }
+
+        @Inject(method="copyData",at=@At("HEAD"))
+        private void naturality$receiveCoatings(@Coerce Object context,CallbackInfo ci) {
+            naturality$coatings=((CoatingSnapshotAccess)context).naturality$coatingSnapshot();
+        }
+
+        @Inject(method="reset",at=@At("HEAD"))
+        private void naturality$releaseCoatings(CallbackInfo ci) { naturality$coatings=CoatingSnapshot.EMPTY; }
+
+        @Inject(method="getBlockState(III)Lnet/minecraft/world/level/block/state/BlockState;",at=@At("HEAD"),cancellable=true)
+        private void naturality$block(int x,int y,int z,CallbackInfoReturnable<BlockState> cir) {
+            if (!volume.isInside(x,y,z)) cir.setReturnValue(naturality$coatings.block(x,y,z));
+        }
+
+        @Inject(method="getBrightness",at=@At("HEAD"),cancellable=true)
+        private void naturality$light(net.minecraft.world.level.LightLayer layer,BlockPos pos,CallbackInfoReturnable<Integer> cir) {
+            if (!volume.isInside(pos)) cir.setReturnValue(naturality$coatings.light(layer,pos));
+        }
+
+        @Inject(method="getRawBrightness",at=@At("HEAD"),cancellable=true)
+        private void naturality$rawLight(BlockPos pos,int darkness,CallbackInfoReturnable<Integer> cir) {
+            if (!volume.isInside(pos)) cir.setReturnValue(Math.max(
+                naturality$coatings.light(net.minecraft.world.level.LightLayer.BLOCK,pos),
+                naturality$coatings.light(net.minecraft.world.level.LightLayer.SKY,pos)-darkness));
+        }
+
+        @Inject(method="getBlockEntity(III)Lnet/minecraft/world/level/block/entity/BlockEntity;",at=@At("HEAD"),cancellable=true)
+        private void naturality$entity(int x,int y,int z,CallbackInfoReturnable<@Nullable BlockEntity> cir) {
+            if (!volume.isInside(x,y,z)) cir.setReturnValue(naturality$coatings.entity(x,y,z));
+        }
+    }
+
+    /** Shadow on the declaring class; the view is absent before initialization/after release. */
+    @Pseudo
+    @Mixin(targets="net.caffeinemc.mods.sodium.client.model.light.data.LightDataAccess",remap=false)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class SodiumSnowLightDataMixin implements CoatingLightAccess {
+        @Shadow protected @Nullable BlockAndTintGetter level;
+        @Shadow protected abstract int compute(int x,int y,int z);
+        @Override public boolean naturality$coatingLightView() { return level instanceof CoatingSnapshotAccess; }
+        @Override public int naturality$computeLight(int x,int y,int z) { return compute(x,y,z); }
+    }
+
+    /** Keep Sodium's fast array for native coordinates; shifted AO uses a bounded per-build map. */
+    @Pseudo
+    @Mixin(targets="net.caffeinemc.mods.sodium.client.model.light.data.ArrayLightDataCache",remap=false)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class SodiumSnowLightCacheMixin {
+        @Shadow private int xOffset;
+        @Shadow private int yOffset;
+        @Shadow private int zOffset;
+        @Unique private final it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap naturality$extendedLight=
+            new it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap();
+
+        @Inject(method="reset",at=@At("HEAD"))
+        private void naturality$clearLight(SectionPos section,CallbackInfo ci) { naturality$extendedLight.clear(); }
+
+        @Inject(method="get(III)I",at=@At("HEAD"),cancellable=true)
+        private void naturality$extendedLight(int x,int y,int z,CallbackInfoReturnable<Integer> cir) {
+            int dx=x-xOffset,dy=y-yOffset,dz=z-zOffset;
+            if (dx>=0 && dx<20 && dy>=0 && dy<20 && dz>=0 && dz<20) return;
+            var access=(CoatingLightAccess)this;
+            if (!access.naturality$coatingLightView()) return;
+            long key=BlockPos.asLong(x,y,z);
+            int light=naturality$extendedLight.get(key);
+            if (light==0) {
+                light=access.naturality$computeLight(x,y,z);
+                if (naturality$extendedLight.size()>=32768) naturality$extendedLight.clear();
+                naturality$extendedLight.put(key,light);
+            }
+            cir.setReturnValue(light);
+        }
+    }
+
     /** A Sodium LevelSlice is reused, so discard every cache at the end of its build. */
     @Pseudo
     @Mixin(targets="net.caffeinemc.mods.sodium.client.render.chunk.compile.tasks.ChunkBuilderMeshingTask", remap=false)
     @org.jspecify.annotations.NullMarked
     public static abstract class SodiumSnowGeometryCacheMixin {
+        @WrapOperation(method="execute(Lnet/caffeinemc/mods/sodium/client/render/chunk/compile/ChunkBuildContext;Lnet/caffeinemc/mods/sodium/client/util/task/CancellationToken;)Lnet/caffeinemc/mods/sodium/client/render/chunk/compile/ChunkBuildOutput;",
+            at=@At(value="INVOKE",target="Lnet/caffeinemc/mods/sodium/client/render/chunk/compile/pipeline/BlockRenderer;release()V"))
+        private void naturality$physicalCoatingMeshes(@Coerce Object renderer,Operation<Void> original) {
+            try { CoatingMeshes.append((CoatingRenderer)renderer,((CoatingRenderView)renderer).naturality$coatingView()); }
+            finally { original.call(renderer); }
+        }
+
         @WrapMethod(method="execute(Lnet/caffeinemc/mods/sodium/client/render/chunk/compile/ChunkBuildContext;Lnet/caffeinemc/mods/sodium/client/util/task/CancellationToken;)Lnet/caffeinemc/mods/sodium/client/render/chunk/compile/ChunkBuildOutput;")
         @Coerce
         private Object naturality$snowCache(@Coerce Object context, @Coerce Object token, Operation<Object> original) {

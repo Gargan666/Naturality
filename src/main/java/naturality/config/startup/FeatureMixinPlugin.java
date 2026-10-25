@@ -24,7 +24,30 @@ public final class FeatureMixinPlugin implements IMixinConfigPlugin {
         if (name.startsWith("Sodium") && !net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("sodium")) return false;
         if (name.startsWith("ScalableLux") && !net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("scalablelux")) return false;
         if (name.startsWith("Iris") && !net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("iris")) return false;
+        if (name.startsWith("AsyncParticles") && !net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("asyncparticles")) return false;
+        if (name.startsWith("ParticleCore") && !net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("particle_core")) return false;
+        if (name.startsWith("C2ME") && !net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("c2me")) return false;
         boolean client = mixin.startsWith("naturality.client.");
+        if (FeatureConfig.clientOnly()) {
+            // Common hooks are opt-in here: even an otherwise visual feature must
+            // not change server simulation, block states or synchronized entity data.
+            if (!client) return mixin.startsWith("naturality.api.worlds.mixins.DisposableWorldMixin$")
+                || name.equals("FeatureResourcesMixin") || name.equals("RaycastShapePresenceMixin")
+                || name.equals("FireShapeAccessor");
+            // These render/input hooks assume the corresponding gameplay state,
+            // registries or menu layout and must be absent before class resolution.
+            if (mixin.contains(".ui.inventory.mixins.") || mixin.contains(".items.durability.mixins.")
+                    || mixin.contains(".items.swords.mixins.") || mixin.contains(".effects.stunned.mixins.")
+                    || mixin.contains(".systems.enchanting.") || mixin.contains(".systems.rotation.mixins.")
+                    || mixin.contains(".systems.swimming.mixins.") || mixin.contains(".systems.gravity.mixins.")) return false;
+        }
+        // Encoded bookshelf glow is always active; only its opted-in world draws use this Iris boundary.
+        if (name.equals("IrisScenePipelineMixin") || name.equals("IrisSceneDrawMixin")) return client;
+        // This cache-boundary repair belongs to the two optional text adapters,
+        // including when Naturality's visual features are disabled.
+        if (name.equals("ImmediatelyFastTextBoundaryMixin")) return client
+            && net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("immediatelyfast")
+            && net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("essential");
         if (mixin.contains(".ui.inventory.mixins.")) return true;
         if (mixin.contains(".items.durability.mixins.")) return true;
         if (mixin.contains(".items.swords.mixins.")) return true;
@@ -46,6 +69,8 @@ public final class FeatureMixinPlugin implements IMixinConfigPlugin {
                 "MenuPreviewEntityMixin", "MenuWorldSelectionMixin", "MenuCreateWorldMixin", "MenuCreateWorldAccess",
                 "MenuPreviewPlayerMixin", "MenuPreviewSoundMixin", "MenuPreviewMobMixin", "MenuPreviewGenerationMobMixin", "MenuPresetSkyMixin").contains(name)) return true;
         if (name.equals("NavigationCompassMixin") || name.equals("NavigationHudMixin")) return NAVIGATION_INSTRUMENTS.enabled();
+        if (name.startsWith("LilypadMotion") || name.equals("LilypadFixedShapeMixin")) return CONTENT.enabled();
+        if (name.equals("GiantLilypadGenerationMixin")) return CONTENT.enabled();
         if (name.startsWith("HeavyBoots")) return CONTENT.enabled();
         if (name.startsWith("Insanity")) return CONTENT.enabled();
         if (name.equals("MaddenedSpawnMixin")) return CONTENT.enabled() && EVENT_CYCLES.enabled();

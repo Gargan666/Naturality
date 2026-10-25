@@ -12,6 +12,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
 import org.jspecify.annotations.Nullable;
 import java.util.*;
+import java.util.function.Predicate;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.schedule.Activity;
 import net.minecraft.world.level.block.DoorBlock;
@@ -20,6 +21,15 @@ import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 /** Registers villager work items and shared coordination with vanilla goal lists. */
 public final class VillagerWork {
     private VillagerWork() { }
+    public static void initialize() {
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STOPPED.register(VillagerWork::clearServer);
+    }
+    private static void clearServer(net.minecraft.server.MinecraftServer server) {
+        for (var level : server.getAllLevels()) DoorwayTraffic.LEVELS.remove(level);
+        naturality.systems.villagerwork.professions.AnimalCareWork.clearServer(server);
+        naturality.systems.villagerwork.professions.ButcherWork.clearServer(server);
+        ProfessionWork.FarmerSupplies.clearServer(server);
+    }
     public static ImmutableList<Pair<Integer, ? extends BehaviorControl<? super Villager>>> core(ImmutableList<Pair<Integer, ? extends BehaviorControl<? super Villager>>> original) {
         if (!naturality.config.startup.FeatureConfig.Feature.VILLAGER_GATES.enabled()) return original;
         var builder = ImmutableList.<Pair<Integer, ? extends BehaviorControl<? super Villager>>>builder();
@@ -58,14 +68,65 @@ public final class VillagerWork {
         void naturality$setDisplayingTrade(boolean value);
     }
 
+    /** Reusable nearest-first block search, with the same ties as a stable betweenClosed sort. */
+    public static final class NearestBlocks {
+        private final int horizontal, vertical, width, height;
+        private final int[] order;
+
+        public NearestBlocks(int horizontal, int vertical) {
+            if (horizontal < 0 || vertical < 0) throw new IllegalArgumentException("Negative search radius");
+            this.horizontal = horizontal; this.vertical = vertical;
+            width = Math.addExact(Math.multiplyExact(horizontal, 2), 1);
+            height = Math.addExact(Math.multiplyExact(vertical, 2), 1);
+            int size = Math.multiplyExact(Math.multiplyExact(width, height), width);
+            var sorted = new long[size];
+            for (int index = 0; index < size; index++) {
+                int x = index % width - horizontal;
+                int y = index / width % height - vertical;
+                int z = index / width / height - horizontal;
+                long distance = (long)x * x + (long)y * y + (long)z * z;
+                // x is fastest, then y, then z, exactly as BlockPos.betweenClosed.
+                sorted[index] = Math.addExact(Math.multiplyExact(distance, size), index);
+            }
+            Arrays.sort(sorted);
+            order = new int[size];
+            for (int i = 0; i < size; i++) order[i] = (int)(sorted[i] % size);
+        }
+
+        /** Availability reads a reusable cursor; reachability receives an immutable candidate. */
+        public @Nullable BlockPos find(BlockPos origin, Predicate<BlockPos> available,
+                int maxCandidates, Predicate<BlockPos> reachable) {
+            if (maxCandidates <= 0) return null;
+            var pos = new BlockPos.MutableBlockPos();
+            int candidates = 0;
+            for (int index : order) {
+                pos.set(origin.getX() + index % width - horizontal,
+                    origin.getY() + index / width % height - vertical,
+                    origin.getZ() + index / width / height - horizontal);
+                if (!available.test(pos)) continue;
+                var candidate = pos.immutable();
+                if (reachable.test(candidate)) return candidate;
+                if (++candidates >= maxCandidates) break;
+            }
+            return null;
+        }
+    }
+
     /** One villager owns a narrow door until it clears the threshold. */
     public static final class DoorwayTraffic {
         private record Claim(UUID owner, int side, long until) {}
-        private static final Map<ServerLevel, Map<BlockPos, Claim>> CLAIMS = new WeakHashMap<>();
-        private static final Map<Villager, Boolean> WAITING = new WeakHashMap<>();
-        public static boolean waiting(Villager body) { return WAITING.getOrDefault(body, false); }
+        private static final Map<ServerLevel, Traffic> LEVELS = Collections.synchronizedMap(new WeakHashMap<>());
+        private static final class Traffic {
+            private final Map<BlockPos, Claim> claims = new HashMap<>();
+            private final Map<Villager, Boolean> waiting = new WeakHashMap<>();
+        }
+        public static boolean waiting(Villager body) {
+            var traffic = LEVELS.get(body.level());
+            return traffic != null && traffic.waiting.getOrDefault(body, false);
+        }
         public static boolean yield(ServerLevel level, Villager body) {
-            WAITING.remove(body);
+            var previous = LEVELS.get(level);
+            if (previous != null) previous.waiting.remove(body);
             if (!naturality.config.startup.FeatureConfig.Feature.VILLAGER_GATES.enabled() || body.isSleeping() || body.isPassenger()) return false;
             var path = body.getNavigation().getPath();
             if (path == null || path.isDone()) return false;
@@ -81,7 +142,8 @@ public final class VillagerWork {
             var facing = level.getBlockState(door).getValue(DoorBlock.FACING);
             boolean xAxis = facing.getAxis() == net.minecraft.core.Direction.Axis.X;
             double center = xAxis ? door.getX() + .5 : door.getZ() + .5;
-            var claims = CLAIMS.computeIfAbsent(level, _ -> new HashMap<>());
+            var traffic = LEVELS.computeIfAbsent(level, _ -> new Traffic());
+            var claims = traffic.claims;
             long now = level.getGameTime();
             claims.entrySet().removeIf(entry -> entry.getValue().until < now);
             var claim = claims.get(door);
@@ -109,7 +171,7 @@ public final class VillagerWork {
                 claims.put(door, claim);
             }
             if (claim.owner.equals(body.getUUID())) return false;
-            WAITING.put(body, true);
+            traffic.waiting.put(body, true);
             body.setSpeed(0); body.setZza(0); body.setXxa(0);
             var velocity = body.getDeltaMovement();
             body.setDeltaMovement(0, velocity.y, 0);

@@ -15,7 +15,8 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -114,10 +115,10 @@ public abstract class FallingLeavesMixin extends SingleQuadParticle implements n
         }
     }
 
-    @Redirect(method = "tick", at = @At(value = "INVOKE",
+    @WrapOperation(method = "tick", at = @At(value = "INVOKE",
         target = "Lnet/minecraft/client/particle/FallingParticle;remove()V", ordinal = 1))
-    private void naturality$land(FallingParticle particle) {
-        if (!naturality.config.live.NaturalityConfig.get().effects.leaves) { particle.remove(); return; }
+    private void naturality$land(FallingParticle particle, Operation<Void> original) {
+        if (!naturality.config.live.NaturalityConfig.get().effects.leaves) { original.call(particle); return; }
         if ((Object) this instanceof FallingLeavesParticle && onGround) {
             naturality$landed = true;
             naturality$yaw += naturality$flightTicks * naturality$spin;
@@ -128,7 +129,7 @@ public abstract class FallingLeavesMixin extends SingleQuadParticle implements n
             yo = y;
             zo = z;
         } else if (!naturality.config.live.NaturalityConfig.get().effects.leaves || !((Object) this instanceof FallingLeavesParticle)) {
-            particle.remove();
+            original.call(particle);
         }
         // For airborne leaves, ignore vanilla's removal when an X/Z velocity
         // is blocked. Collision already clips that axis; gravity keeps sliding

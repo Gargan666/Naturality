@@ -41,8 +41,9 @@ public final class PortalOpeningClient {
     public static void initialize() {
         PortalOpeningRenderLayer.initialize();
         PortalOpeningManager.clientOpening = (level, pos) -> level == currentLevel && isOpening(pos);
-        ClientPlayNetworking.registerGlobalReceiver(PortalOpeningPayload.TYPE,
-            (payload, context) -> receive(context.client(), payload));
+        if (!naturality.config.startup.FeatureConfig.clientOnly())
+            ClientPlayNetworking.registerGlobalReceiver(PortalOpeningPayload.TYPE,
+                (payload, context) -> receive(context.client(), payload));
         ClientPlayConnectionEvents.DISCONNECT.register((_, _) -> { BLOCKS.clear(); currentLevel = null; });
     }
 

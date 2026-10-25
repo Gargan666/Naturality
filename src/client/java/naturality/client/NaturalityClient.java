@@ -9,14 +9,20 @@ import static naturality.config.startup.FeatureConfig.Feature.*;
 public class NaturalityClient implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
-        naturality.client.systems.enchanting.EnchantingClient.initialize();
+        if (CONTENT.enabled()) naturality.client.blocks.lilypad.LilypadVisuals.initialize();
+        boolean clientOnly = naturality.config.startup.FeatureConfig.clientOnly();
+        if (!clientOnly) naturality.client.systems.enchanting.EnchantingClient.initialize();
         naturality.client.particles.sparks.SparkParticle.initialize();
-        net.fabricmc.fabric.api.client.rendering.v1.BlockColorRegistry.register(
+        if (CONTENT.enabled()) net.fabricmc.fabric.api.client.rendering.v1.BlockColorRegistry.register(
             java.util.List.of(net.minecraft.client.color.block.BlockTintSources.foliage(),
                 net.minecraft.client.color.block.BlockTintSources.foliage()), naturality.bootstrap.ContentRegistration.NaturalityBlocks.CLOVERS,
                 naturality.bootstrap.ContentRegistration.NaturalityBlocks.FOUR_LEAF_CLOVERS);
+        if (CONTENT.enabled()) net.fabricmc.fabric.api.client.rendering.v1.BlockColorRegistry.register(
+            java.util.List.of(net.minecraft.client.color.block.BlockTintSources.constant(
+                net.minecraft.client.color.block.BlockColors.LILY_PAD_DEFAULT, net.minecraft.client.color.block.BlockColors.LILY_PAD_IN_WORLD)),
+            naturality.bootstrap.ContentRegistration.NaturalityBlocks.GIANT_LILYPAD);
         naturality.client.ui.menus.previews.MenuPreview.MenuWorld.initialize();
-        naturality.client.systems.navigation.NavigationClient.initialize();
+        if (!clientOnly) naturality.client.systems.navigation.NavigationClient.initialize();
         if (VISUAL_OVERHAUL.enabled()) naturality.client.entities.endcrystals.CrystalVisuals.CrystalTextParticle.initialize();
         if (VISUAL_OVERHAUL.enabled()) naturality.client.entities.fish.FishSwim.initialize();
         if (VISUAL_OVERHAUL.enabled()) naturality.client.entities.zombies.ZombieWalk.initialize();
@@ -24,8 +30,10 @@ public class NaturalityClient implements ClientModInitializer {
         naturality.client.ui.accessibility.EpilepsyWarning.initialize();
         naturality.client.systems.weather.overworld.lightning.DistantLightningClient.LightningFlashes.initialize();
         if (VISUAL_OVERHAUL.enabled() || GHAST_SQUASH.enabled() || GHAST_PHYSICS.enabled()) naturality.client.entities.floatingmobtilt.FloatingMobTilt.initialize();
-        naturality.client.entities.arrows.MobArrowLayer.MobArrowImpacts.initialize();
-        naturality.client.entities.fireballs.FireballModelRenderer.FireballImpactClient.initialize();
+        if (!clientOnly) {
+            naturality.client.entities.arrows.MobArrowLayer.MobArrowImpacts.initialize();
+            naturality.client.entities.fireballs.FireballModelRenderer.FireballImpactClient.initialize();
+        }
         if (GHAST_SQUASH.enabled()) naturality.client.entities.ghasts.GhastSquash.initialize();
         if (GHAST_SQUASH.enabled() || GHAST_PHYSICS.enabled()) {
             net.minecraft.client.renderer.entity.EntityRenderers.register(

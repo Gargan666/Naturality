@@ -6,6 +6,7 @@
 #include <sodium:chunk_vertex.glsl>
 #include <naturality:fluid_uniforms.glsl>
 #include <naturality:fire_uniforms.glsl>
+#include <naturality:glass_uniforms.glsl>
 #include <naturality:water.glsl>
 #include <naturality:foliage_wind.glsl>
 #include <naturality:menu_geometry.glsl>
@@ -42,6 +43,9 @@ layout(location=12) flat out int naturalityFireKind;
 layout(location=13) out vec2 naturalityFireUV;
 layout(location=14) flat out vec3 naturalityFireSeed;
 layout(location=15) flat out int naturalitySubmerged;
+layout(location=16) flat out int naturalityGlassKind;
+layout(location=17) out vec3 naturalityGlassRelative;
+layout(location=18) flat out vec3 naturalityGlassForward;
 
 void main() {
     _vert_init();
@@ -54,6 +58,17 @@ void main() {
     int arrival=texelFetch(u_SectionTimeInfo,int(u_RegionID*256u+_draw_id)).r;
     chunkVisibility=arrival<0?1.0:clamp(float(u_CurrentTime-arrival)*u_FadePeriodInv,0.0,1.0);
     texCoord0=_vert_tex_diffuse_coord+_vert_tex_diffuse_coord_bias*u_TexCoordShrink;
+    // Match native terrain's camera-relative glass coordinates before surface displacement.
+    naturalityGlassRelative=position;
+    naturalityGlassForward=transpose(mat3(u_ModelViewMatrix))*vec3(0.0,0.0,-1.0);
+    naturalityGlassKind=-1;
+    for(int i=0;i<34;i++) {
+        vec4 b=GlassBounds[i];
+        if(b.x>=0.0 && all(greaterThanEqual(texCoord0,b.xy)) && all(lessThanEqual(texCoord0,b.zw))) {
+            naturalityGlassKind=i;
+            break;
+        }
+    }
     naturalityBlockPosition=_vert_position;
     // Keep large integer map origins out of floating-point calculations.
     naturalitySectionOrigin=ivec3(round(translation+WaterCamera.xyz))+ivec3(WaterMap.x,0,WaterMap.y);
@@ -66,7 +81,7 @@ void main() {
     #endif
     naturalityFluidKind=-1;
     naturalityFluidUV=vec2(0.0);
-    naturalityFlow=vec3(0.0); // Shared shader reconstructs flow from UV derivatives.
+    naturalityFlow=vec3(0.0); // Unencoded handler geometry retains derivative-based flow.
     bool fluidSprite=false;
     naturalitySubmerged=0;
     for(int i=0;i<4;i++) {
@@ -76,8 +91,16 @@ void main() {
             naturalitySubmerged=i<2?-1:0;
             naturalityFluidKind=(NaturalityFluidInfo.w & (1<<i))!=0?i:-1;
             naturalityFluidUV=(texCoord0-b.xy)/(b.zw-b.xy);
+            int flowCode=int(round(_vert_color.a*255.0));
+            if((a_Position.x & (1u<<31u))!=0u && flowCode<255) {
+                float angle=(float(flowCode)+0.5)*(6.28318530718/254.0)-3.14159265359;
+                naturalityFlow=vec3(flowCode==254?vec2(0.0):vec2(cos(angle),sin(angle)),1.0);
+            }
         }
     }
+    // Compact position decoding masks bits 30..31; native fluid tails preserve
+    // their marker and ownership here without changing light, material or draw data.
+    if(fluidSprite && (a_Position.x & (1u<<30u))!=0u) naturalityFlow.z=-1.0;
     naturalityFireKind=-1;
     naturalityFireUV=vec2(0.0);
     naturalityFireSeed=_vert_color.rgb;

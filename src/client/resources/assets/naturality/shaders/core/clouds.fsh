@@ -5,6 +5,9 @@
 #include <minecraft:fog.glsl>
 #include <minecraft:oit.glsl>
 #include <minecraft:dynamictransforms.glsl>
+#ifdef CLOUD_MENU_OCCLUSION
+#include <minecraft:projection.glsl>
+#endif
 
 layout(location = 0) in float vertexDistance;
 layout(location = 1) in vec4 vertexColor;
@@ -18,6 +21,7 @@ layout(location = 8) flat in int cloudDirection;
 
 #ifdef CLOUD_WATER_ORDER
 uniform sampler2D CloudNearestDepth;
+uniform sampler2D CloudSceneDepth;
 uniform sampler2D CloudWaterMask;
 #endif
 
@@ -89,12 +93,29 @@ void main() {
     ivec2 pixelPosition = ivec2(gl_FragCoord.xy);
     float nearestCloud = texelFetch(CloudNearestDepth, pixelPosition, 0).r;
     if (gl_FragCoord.z < nearestCloud) discard;
+    #ifdef CLOUD_MENU_OCCLUSION
+    float sceneDepth = texelFetch(CloudSceneDepth, pixelPosition, 0).r;
+    if (sceneDepth > gl_FragCoord.z) {
+        vec2 uv = gl_FragCoord.xy / vec2(textureSize(CloudSceneDepth, 0));
+        float clipDepth = sceneDepth;
+        #ifndef RENDERPEARL_DEPTH_IS_ZERO_TO_ONE
+        clipDepth = clipDepth * 2.0 - 1.0;
+        #endif
+        vec4 view = inverse(ProjMat) * vec4(uv * 2.0 - 1.0, clipDepth, 1.0);
+        vec3 world = transpose(mat3(ModelViewMat)) * (view.xyz / view.w) + MenuEye.xyz;
+        // Outside the miniature, opaque terrain is an atmosphere-colored cutoff
+        // cover. Preserve its terrain depth but let clouds blend over that cover.
+        if (length(world.xz - MenuBounds.xy) < MenuBounds.w) discard;
+    }
+    #endif
+    #ifndef CLOUD_MENU_OCCLUSION
     vec4 water = texelFetch(CloudWaterMask, pixelPosition, 0);
     bool inFront = water.r > 0.0 && water.a > 0.0 && gl_FragCoord.z > water.r;
     #ifdef CLOUD_WATER_FRONT
     if (!inFront) discard;
     #else
     if (inFront) discard;
+    #endif
     #endif
     #endif
     // Horizontal caps are outward faces; a two-sided cap exposes cloud tops from below.

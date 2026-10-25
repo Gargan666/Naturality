@@ -95,7 +95,9 @@ public final class WindMixins {
                 if(dx==0 && dz==0)continue;
                 var owner=pos.offset(dx,0,dz);var candidate=level.getBlockState(owner);
                 if(!WindShapes.eligible(candidate))continue;
-                var hit=context.getBlockShape(candidate,level,owner).clip(from,to,owner);
+                var candidateShape=context.getBlockShape(candidate,level,owner);
+                if(!naturality.api.geometry.RaycastShapePresence.mayIntersect(candidateShape,from,to,owner))continue;
+                var hit=candidateShape.clip(from,to,owner);
                 if(hit!=null && cell.contains(hit.getLocation()) && from.distanceToSqr(hit.getLocation())<distance) {
                     best=hit;distance=from.distanceToSqr(hit.getLocation());
                 }
@@ -120,15 +122,25 @@ public final class WindMixins {
     @Mixin(BlockBehaviour.BlockStateBase.class)
     @org.jspecify.annotations.NullMarked
     public static abstract class WindShapeMixin {
-        @WrapMethod(method={"getShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/shapes/CollisionContext;)Lnet/minecraft/world/phys/shapes/VoxelShape;",
-            "getCollisionShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/shapes/CollisionContext;)Lnet/minecraft/world/phys/shapes/VoxelShape;"})
-        private VoxelShape naturality$wind(BlockGetter level,BlockPos pos,CollisionContext context,Operation<VoxelShape> original) {
-            var shape=WindShapes.raw(() -> original.call(level,pos,context));
+        @WrapMethod(method="getShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/shapes/CollisionContext;)Lnet/minecraft/world/phys/shapes/VoxelShape;")
+        private VoxelShape naturality$windOutline(BlockGetter level,BlockPos pos,CollisionContext context,Operation<VoxelShape> original) {
+            var args=WindShapes.beginShapeCall(level,pos,context);
+            VoxelShape shape;
+            try {shape=original.call(args);} finally {WindShapes.endShapeCall(args);}
+            return WindShapes.move(level,pos,(BlockState)(Object)this,shape);
+        }
+        @WrapMethod(method="getCollisionShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/shapes/CollisionContext;)Lnet/minecraft/world/phys/shapes/VoxelShape;")
+        private VoxelShape naturality$windCollision(BlockGetter level,BlockPos pos,CollisionContext context,Operation<VoxelShape> original) {
+            var args=WindShapes.beginShapeCall(level,pos,context);
+            VoxelShape shape;
+            try {shape=original.call(args);} finally {WindShapes.endShapeCall(args);}
             return WindShapes.move(level,pos,(BlockState)(Object)this,shape);
         }
         @WrapMethod(method="getCollisionShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/phys/shapes/VoxelShape;")
         private VoxelShape naturality$cachedWind(BlockGetter level,BlockPos pos,Operation<VoxelShape> original) {
-            var shape=WindShapes.raw(() -> original.call(level,pos));
+            var args=WindShapes.beginShapeCall(level,pos);
+            VoxelShape shape;
+            try {shape=original.call(args);} finally {WindShapes.endShapeCall(args);}
             return WindShapes.move(level,pos,(BlockState)(Object)this,shape);
         }
     }

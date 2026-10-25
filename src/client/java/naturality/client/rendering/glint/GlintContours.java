@@ -45,14 +45,18 @@ public final class GlintContours {
         lastItemDraws = lastArmorDraws = 0;
         previewScale = 0;
         handFrame = false;
-        capturing = naturality.config.live.NaturalityConfig.get().effects.worldGlintContours;
+        // Scene and hand color belong to Iris's intermediate targets while a
+        // pack is active. Its ordinary item/armor glint remains in that pipeline.
+        capturing = naturality.config.live.NaturalityConfig.get().effects.worldGlintContours
+            && !naturality.client.api.rendering.ShaderPacks.active();
     }
 
     public static void beginHandFrame() {
         endFrame();
         previewScale = 0;
         handFrame = true;
-        capturing = naturality.config.live.NaturalityConfig.get().effects.handGlintContours;
+        capturing = naturality.config.live.NaturalityConfig.get().effects.handGlintContours
+            && !naturality.client.api.rendering.ShaderPacks.active();
     }
 
     public static void beginPreview(float scale) {

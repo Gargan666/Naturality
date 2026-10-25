@@ -1,17 +1,14 @@
 package naturality.client.sky.overworld.stars.mixins;
 
 import com.mojang.renderpearl.api.buffers.GpuBuffer;
-import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import net.minecraft.client.renderer.SkyRenderer;
-import net.minecraft.client.renderer.DynamicGpuData;
-import org.joml.Matrix4f;
 import org.joml.Vector4f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(SkyRenderer.class)
@@ -28,12 +25,12 @@ public abstract class OverworldStarsMixin {
         naturality$starAngle = starAngle;
     }
 
-    @Redirect(method = "renderStars", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/client/renderer/DynamicGpuData;writeTransform(Lorg/joml/Matrix4f;Lorg/joml/Vector4f;)Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice;"))
-    private GpuBufferSlice naturality$passStarAngle(DynamicGpuData uniforms, Matrix4f transform, Vector4f color) {
+    @ModifyArg(method = "renderStars", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/renderer/DynamicGpuData;writeTransform(Lorg/joml/Matrix4f;Lorg/joml/Vector4f;)Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice;"), index = 1)
+    private Vector4f naturality$passStarAngle(Vector4f color) {
         // The stars shader does not use ColorModulator RGB for color; reserve R
         // for the sphere's rotation angle and retain vanilla brightness in alpha.
-        return uniforms.writeTransform(transform, new Vector4f(naturality$starAngle, 0.0F, 0.0F, color.w));
+        return new Vector4f(naturality$starAngle, 0.0F, 0.0F, color.w);
     }
 
     @Inject(method = "buildStars", at = @At("HEAD"), cancellable = true)

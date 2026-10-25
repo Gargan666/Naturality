@@ -35,6 +35,8 @@ public final class EndPortalBorderLayers {
         var pipeline = RenderPipelines.register(RenderPipeline.builder(RenderPipelines.PARTICLE_SNIPPET, effect)
             .withLocation(Naturality.id("pipeline/" + name)).withDepthStencilState(DEPTH)
             .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT)).build());
+        // Retain this encoded wall shader while writing to the active pack's scene.
+        naturality.client.api.rendering.ShaderPacks.registerScenePipeline(pipeline);
         var oit = RenderPipelines.register(OitPipelineSet.builder("naturality_" + name,
             RenderPipeline.builder(RenderPipelines.OIT_PARTICLE_SNIPPET, RenderPipelines.GLOBALS_SNIPPET, effect))
             .withDepthBoundsModifier(b -> b.withDepthStencilState(DEPTH))

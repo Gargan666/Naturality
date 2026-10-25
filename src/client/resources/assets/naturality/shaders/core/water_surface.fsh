@@ -7,6 +7,7 @@
 uniform sampler2D Sampler0;
 uniform sampler2D Sampler1;
 uniform sampler2D NaturalityWaterMask;
+uniform sampler2D NaturalityWaterOpaqueDepth;
 uniform sampler2D NaturalityWaterSunAtlas;
 #include <naturality:water_sun.glsl>
 layout(location = 0) in vec2 texCoord;
@@ -56,7 +57,9 @@ void main() {
     // Reconstruct only the actual sun sprite, never bright clouds or scenery.
     // Opaque geometry beyond the water also blocks the source; clouds additionally
     // use the renderer's cloud-coverage query, including transparent cloud layers.
-    bool clearSource = otherDepth <= 0.0 || abs(otherDepth - other.r) <= 0.000001;
+    // Main depth already contains water here, hiding opaque blockers beyond it.
+    // Use the pre-water capture along the same refracted ray as the scene color.
+    bool clearSource = texture(NaturalityWaterOpaqueDepth, uv).r <= 0.0;
     if (WaterSunAppearance.x > 0.0 && clearSource) {
         vec3 localRay = mat3(WaterSunInversePose) * normalize(otherOffset);
         if (localRay.y > 0.0) {

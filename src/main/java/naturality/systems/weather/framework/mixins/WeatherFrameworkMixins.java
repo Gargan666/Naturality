@@ -1,6 +1,8 @@
 package naturality.systems.weather.framework.mixins;
 
 import naturality.systems.weather.framework.WeatherSystem;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelReader;
@@ -25,15 +27,19 @@ public final class WeatherFrameworkMixins {
     @Mixin(Biome.class)
     @org.jspecify.annotations.NullMarked
     public static abstract class WeatherBiomeMixin {
-        @Redirect(method = "shouldSnow", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/biome/Biome;getPrecipitationAt(Lnet/minecraft/core/BlockPos;I)Lnet/minecraft/world/level/biome/Biome$Precipitation;"))
-        private Biome.Precipitation naturality$snow(Biome biome, BlockPos pos, int seaLevel, LevelReader reader, BlockPos ignored) {
-            return reader instanceof Level level ? WeatherSystem.precipitation(level, biome, pos) : biome.getPrecipitationAt(pos, seaLevel);
+        @WrapOperation(method = "shouldSnow", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/biome/Biome;getPrecipitationAt(Lnet/minecraft/core/BlockPos;I)Lnet/minecraft/world/level/biome/Biome$Precipitation;"))
+        private Biome.Precipitation naturality$snow(Biome biome, BlockPos pos, int seaLevel,
+                Operation<Biome.Precipitation> original, LevelReader reader, BlockPos ignored) {
+            var precipitation = original.call(biome, pos, seaLevel);
+            return reader instanceof Level level ? WeatherSystem.precipitation(level, biome, precipitation) : precipitation;
         }
-        @Redirect(method = "shouldFreeze(Lnet/minecraft/world/level/LevelReader;Lnet/minecraft/core/BlockPos;Z)Z", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/biome/Biome;warmEnoughToRain(Lnet/minecraft/core/BlockPos;I)Z"))
-        private boolean naturality$freeze(Biome biome, BlockPos pos, int seaLevel, LevelReader reader, BlockPos ignored, boolean neighbors) {
-            if (reader instanceof Level level && WeatherSystem.state(level) != null)
-                return WeatherSystem.precipitation(level, biome, pos) != Biome.Precipitation.SNOW;
-            return biome.warmEnoughToRain(pos, seaLevel);
+        @WrapOperation(method = "shouldFreeze(Lnet/minecraft/world/level/LevelReader;Lnet/minecraft/core/BlockPos;Z)Z", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/biome/Biome;warmEnoughToRain(Lnet/minecraft/core/BlockPos;I)Z"))
+        private boolean naturality$freeze(Biome biome, BlockPos pos, int seaLevel, Operation<Boolean> original,
+                LevelReader reader, BlockPos ignored, boolean neighbors) {
+            boolean warm = original.call(biome, pos, seaLevel);
+            if (!(reader instanceof Level level) || WeatherSystem.state(level) == null) return warm;
+            // A colder local climate can freeze rain; retain another mod's already-cold decision.
+            return warm && WeatherSystem.precipitation(level, biome, pos) != Biome.Precipitation.SNOW;
         }
     }
 
@@ -73,9 +79,9 @@ public final class WeatherFrameworkMixins {
             var s = WeatherSystem.state(level);
             if (s != null) cir.setReturnValue(level.canHaveWeather() && s.rain() > 70);
         }
-        @Redirect(method = "precipitationAt", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/biome/Biome;getPrecipitationAt(Lnet/minecraft/core/BlockPos;I)Lnet/minecraft/world/level/biome/Biome$Precipitation;"))
-        private Biome.Precipitation naturality$climate(Biome biome, BlockPos pos, int seaLevel) {
-            return WeatherSystem.precipitation((Level)(Object)this, biome, pos);
+        @WrapOperation(method = "precipitationAt", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/biome/Biome;getPrecipitationAt(Lnet/minecraft/core/BlockPos;I)Lnet/minecraft/world/level/biome/Biome$Precipitation;"))
+        private Biome.Precipitation naturality$climate(Biome biome, BlockPos pos, int seaLevel, Operation<Biome.Precipitation> original) {
+            return WeatherSystem.precipitation((Level)(Object)this, biome, original.call(biome, pos, seaLevel));
         }
     }
 
@@ -91,9 +97,9 @@ public final class WeatherFrameworkMixins {
                 org.spongepowered.asm.mixin.injection.callback.CallbackInfo ci) {
             naturality.systems.weather.overworld.snow.WeatherSnow.WeatherThaw.tick((ServerLevel)(Object)this, chunk, tickSpeed);
         }
-        @Redirect(method = "tickPrecipitation", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/biome/Biome;getPrecipitationAt(Lnet/minecraft/core/BlockPos;I)Lnet/minecraft/world/level/biome/Biome$Precipitation;"))
-        private Biome.Precipitation naturality$precipitation(Biome biome, BlockPos pos, int seaLevel) {
-            return WeatherSystem.precipitation((ServerLevel)(Object)this, biome, pos);
+        @WrapOperation(method = "tickPrecipitation", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/biome/Biome;getPrecipitationAt(Lnet/minecraft/core/BlockPos;I)Lnet/minecraft/world/level/biome/Biome$Precipitation;"))
+        private Biome.Precipitation naturality$precipitation(Biome biome, BlockPos pos, int seaLevel, Operation<Biome.Precipitation> original) {
+            return WeatherSystem.precipitation((ServerLevel)(Object)this, biome, original.call(biome, pos, seaLevel));
         }
     }
 }

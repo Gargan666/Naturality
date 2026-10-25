@@ -12,7 +12,6 @@ import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.protocol.game.ClientboundExplodePacket;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Redirect;
 import naturality.client.particles.sand.SandPlacementBurst.SandParticleSprites;
 import net.minecraft.client.particle.FallingDustParticle;
 import net.minecraft.client.particle.SpriteSet;
@@ -73,10 +72,11 @@ public final class ParticleChangesMixin {
     @Mixin(ClientPacketListener.class)
     @org.jspecify.annotations.NullMarked
     public static abstract class ExplosionParticleSizeMixin {
-        @Redirect(method = "handleExplosion", at = @At(value = "INVOKE",
+        @WrapOperation(method = "handleExplosion", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/multiplayer/ClientLevel;addParticle(Lnet/minecraft/core/particles/ParticleOptions;DDDDDD)V"))
         private void naturality$explosionScale(ClientLevel level, ParticleOptions particle,
-                double x, double y, double z, double vx, double vy, double vz, ClientboundExplodePacket packet) {
+                double x, double y, double z, double vx, double vy, double vz, Operation<Void> original,
+                @com.llamalad7.mixinextras.sugar.Local(argsOnly = true) ClientboundExplodePacket packet) {
             if (naturality.config.startup.FeatureConfig.Feature.VISUAL_OVERHAUL.enabled()
                     && (particle.getType() == ParticleTypes.EXPLOSION || particle.getType() == ParticleTypes.EXPLOSION_EMITTER
                         || particle.getType() == naturality.bootstrap.ContentRegistration.NaturalityParticles.END_EXPLOSION)) {
@@ -88,7 +88,7 @@ public final class ParticleChangesMixin {
                     vy = impact.face().get3DDataValue() + 1;
                 }
             }
-            level.addParticle(particle, x, y, z, vx, vy, vz);
+            original.call(level, particle, x, y, z, vx, vy, vz);
         }
     }
 

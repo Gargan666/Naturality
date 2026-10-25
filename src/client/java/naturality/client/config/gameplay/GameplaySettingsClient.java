@@ -13,6 +13,7 @@ public final class GameplaySettingsClient {
         ClientPlayConnectionEvents.INIT.register((_, _) ->
             GameplaySettings.setClientSettings(new GameplaySettingsPayload(false, true, false, false, false, false, false, 200, 30)));
         ClientPlayConnectionEvents.DISCONNECT.register((_, _) -> GameplaySettings.setClientSettings(null));
+        if (naturality.config.startup.FeatureConfig.clientOnly()) return;
         ClientPlayNetworking.registerGlobalReceiver(GameplaySettingsPayload.TYPE, (settings, context) -> {
             boolean changed = GameplaySettings.clientFireWrapping() != settings.fireWrapping()
                 || GameplaySettings.clientSnowWrapping() != settings.snowWrapping();

@@ -58,28 +58,89 @@ public final class WaterIntersection extends QuadParticleRenderState {
     private record Wake(BlockPos pos,int x,int z,float alpha,long tick) {}
     private static final Map<String,Wake> WAKES=new HashMap<>();
     private static @org.jspecify.annotations.Nullable ClientLevel wakeWorld;
-    private record Pixel(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int color,int light) {}
+    /** Each extracted state owns its packed quads; chunks never escape or share mutable storage. */
+    static final class QuadBuffer {
+        private static final int STRIDE=14, MAX_CHUNK=256*STRIDE;
+        private static final int[] EMPTY=new int[0];
+        private final List<int[]> chunks=new ArrayList<>();
+        private int[] current=EMPTY;
+        private int used,size;
+
+        int size(){return size;}
+        boolean isEmpty(){return size==0;}
+        void clear(){chunks.clear();current=EMPTY;used=size=0;}
+
+        private int reserve(int color,int light) {
+            if(used==current.length) {
+                // Growing chunks avoid recopying this frame's earlier pixels. Large
+                // extractions allocate one array per 256 quads, not five objects per quad.
+                current=new int[current.length==0?STRIDE:Math.min(MAX_CHUNK,current.length*2)];
+                chunks.add(current);used=0;
+            }
+            int offset=used;used+=STRIDE;size++;
+            current[offset+12]=color;current[offset+13]=light;
+            return offset;
+        }
+        private void position(int offset,double x,double y,double z) {
+            current[offset]=Float.floatToRawIntBits((float)x);
+            current[offset+1]=Float.floatToRawIntBits((float)y);
+            current[offset+2]=Float.floatToRawIntBits((float)z);
+        }
+        private void surfaceVertex(int offset,WaterSurface surface,double x,double z,Vec3 eye) {
+            position(offset,surface.pos().getX()-eye.x+x,surface.height(x,z)-eye.y+1.0/1024,
+                surface.pos().getZ()-eye.z+z);
+        }
+        void surfacePixel(WaterSurface surface,int x,int z,Vec3 eye,int color,int light) {
+            int offset=reserve(color,light);
+            surfaceVertex(offset,surface,x/16.0,z/16.0,eye);
+            surfaceVertex(offset+3,surface,x/16.0,(z+1)/16.0,eye);
+            surfaceVertex(offset+6,surface,(x+1)/16.0,(z+1)/16.0,eye);
+            surfaceVertex(offset+9,surface,(x+1)/16.0,z/16.0,eye);
+        }
+        void quad(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int color,int light) {
+            int offset=reserve(color,light);
+            position(offset,a.x,a.y,a.z);position(offset+3,b.x,b.y,b.z);
+            position(offset+6,c.x,c.y,c.z);position(offset+9,d.x,d.y,d.z);
+        }
+        void build(VertexConsumer buffer) {
+            for(int chunk=0;chunk<chunks.size();chunk++) {
+                var data=chunks.get(chunk);
+                int end=chunk==chunks.size()-1?used:data.length;
+                for(int offset=0;offset<end;offset+=STRIDE) {
+                    int color=data[offset+12],light=data[offset+13];
+                    for(int vertex=offset;vertex<offset+12;vertex+=3)
+                        buffer.addVertex(Float.intBitsToFloat(data[vertex]),Float.intBitsToFloat(data[vertex+1]),
+                            Float.intBitsToFloat(data[vertex+2])).setUv(0,0).setColor(color).setLight(light);
+                }
+            }
+        }
+    }
     private record Appearance(int tint,int light,int aboveLight) {}
     /** Render-thread lookups live for one extraction only, including cached absence. */
     private static final class SurfaceQueries {
         private static final int LIMIT=4096;
         private final ClientLevel level;
-        private final Map<BlockPos,@org.jspecify.annotations.Nullable WaterSurface> surfaces=new HashMap<>();
-        private final Map<BlockPos,Appearance> appearances=new HashMap<>();
+        private final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<@org.jspecify.annotations.Nullable WaterSurface> surfaces=new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
+        private final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<Appearance> appearances=new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
         SurfaceQueries(ClientLevel level) {this.level=level;}
         @org.jspecify.annotations.Nullable WaterSurface surface(BlockPos pos) {
-            if(surfaces.containsKey(pos)) return surfaces.get(pos);
+            long key=pos.asLong();
+            var cached=surfaces.get(key);
+            // Null is a cached absence too. Packed block coordinates cover the
+            // same world-coordinate range used by Minecraft's chunk lookups.
+            if(cached!=null || surfaces.containsKey(key)) return cached;
             var surface=WaterSurface.at(level,pos);
-            if(surfaces.size()<LIMIT) surfaces.put(pos.immutable(),surface);
+            if(surfaces.size()<LIMIT) surfaces.put(key,surface);
             return surface;
         }
         Appearance appearance(BlockPos pos) {
-            var cached=appearances.get(pos);
+            long key=pos.asLong();
+            var cached=appearances.get(key);
             if(cached!=null) return cached;
             int above=LightCoordsUtil.getLightCoords(level,pos.above());
             var result=new Appearance(BiomeColors.getAverageWaterColor(level,pos),
                 LightCoordsUtil.max(LightCoordsUtil.getLightCoords(level,pos),above),above);
-            if(appearances.size()<LIMIT) appearances.put(pos.immutable(),result);
+            if(appearances.size()<LIMIT) appearances.put(key,result);
             return result;
         }
     }
@@ -88,8 +149,8 @@ public final class WaterIntersection extends QuadParticleRenderState {
         final List<PlanarGeometry.Rect> first=new ArrayList<>(),second=new ArrayList<>();
         Tile(WaterSurface surface) {this.surface=surface;}
     }
-    private final List<Pixel> pixels=new ArrayList<>();
-    private final List<Pixel> splashPixels=new ArrayList<>();
+    private final QuadBuffer pixels=new QuadBuffer();
+    private final QuadBuffer splashPixels=new QuadBuffer();
     public static void initialize() {}
     public static int lastPixelCount;
 
@@ -179,11 +240,10 @@ public final class WaterIntersection extends QuadParticleRenderState {
             alpha*=0.86F+Math.floorMod(hash,15)/100F;
             if(WAKES.size()<12000)WAKES.put(p+"/"+x+"/"+z,new Wake(p,x,z,alpha,tick));
             int color=ARGB.colorFromFloat(alpha,r,g,b);
-            pixels.add(new Pixel(vertex(s,x/16.0,z/16.0,eye),vertex(s,x/16.0,(z+1)/16.0,eye),
-                vertex(s,(x+1)/16.0,(z+1)/16.0,eye),vertex(s,(x+1)/16.0,z/16.0,eye),color,light));
+            pixels.surfacePixel(s,x,z,eye,color,light);
         }
     }
-    void splashQuad(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int tint,int light){splashPixels.add(new Pixel(a,b,c,d,tint,light));}
+    void splashQuad(Vec3 a,Vec3 b,Vec3 c,Vec3 d,int tint,int light){splashPixels.quad(a,b,c,d,tint,light);}
     @Override public Set<SingleQuadParticle.Layer> layers() {
         var layers=new HashSet<SingleQuadParticle.Layer>();
         if(!pixels.isEmpty())layers.add(LAYER);
@@ -193,16 +253,8 @@ public final class WaterIntersection extends QuadParticleRenderState {
     @Override public boolean isEmpty(){return pixels.isEmpty()&&splashPixels.isEmpty();}
     @Override public void clear(){pixels.clear();splashPixels.clear();}
     @Override public void buildLayer(SingleQuadParticle.Layer layer,VertexConsumer buffer) {
-        var draws=layer==SPLASH_LAYER?splashPixels:layer==LAYER?pixels:List.<Pixel>of();
-        for(var pixel:draws) {
-            vertex(buffer,pixel.a,pixel.color,pixel.light);
-            vertex(buffer,pixel.b,pixel.color,pixel.light);
-            vertex(buffer,pixel.c,pixel.color,pixel.light);
-            vertex(buffer,pixel.d,pixel.color,pixel.light);
-        }
-    }
-    private static void vertex(VertexConsumer buffer,Vec3 p,int color,int light) {
-        buffer.addVertex((float)p.x,(float)p.y,(float)p.z).setUv(0,0).setColor(color).setLight(light);
+        if(layer==SPLASH_LAYER)splashPixels.build(buffer);
+        else if(layer==LAYER)pixels.build(buffer);
     }
     private void addWake(ClientLevel level,Vec3 eye,SurfaceQueries queries) {
         long tick=level.getGameTime();
@@ -218,20 +270,14 @@ public final class WaterIntersection extends QuadParticleRenderState {
             int tint=appearance.tint;
             int color=ARGB.colorFromFloat(alpha,ARGB.red(tint)/255F,ARGB.green(tint)/255F,ARGB.blue(tint)/255F);
             int light=appearance.aboveLight;
-            pixels.add(new Pixel(vertex(surface,w.x/16.0,w.z/16.0,eye),vertex(surface,w.x/16.0,(w.z+1)/16.0,eye),
-                vertex(surface,(w.x+1)/16.0,(w.z+1)/16.0,eye),vertex(surface,(w.x+1)/16.0,w.z/16.0,eye),color,light));
+            pixels.surfacePixel(surface,w.x,w.z,eye,color,light);
         }
     }
-    void ripplePixel(WaterSurface surface,int x,int z,Vec3 eye,float alpha,int tint,int light) {
+    public void ripplePixel(WaterSurface surface,int x,int z,Vec3 eye,float alpha,int tint,int light) {
         float r=Math.min(1,ARGB.red(tint)/255F*1.25F+0.22F);
         float g=Math.min(1,ARGB.green(tint)/255F*1.25F+0.22F);
         float b=Math.min(1,ARGB.blue(tint)/255F*1.25F+0.22F);
-        pixels.add(new Pixel(vertex(surface,x/16.0,z/16.0,eye),vertex(surface,x/16.0,(z+1)/16.0,eye),
-            vertex(surface,(x+1)/16.0,(z+1)/16.0,eye),vertex(surface,(x+1)/16.0,z/16.0,eye),
-            ARGB.colorFromFloat(alpha,r,g,b),light));
-    }
-    private static Vec3 vertex(WaterSurface s,double x,double z,Vec3 eye) {
-        return new Vec3(s.pos().getX()-eye.x+x,s.height(x,z)-eye.y+1.0/1024,s.pos().getZ()-eye.z+z);
+        pixels.surfacePixel(surface,x,z,eye,ARGB.colorFromFloat(alpha,r,g,b),light);
     }
     @Override public void submit(SubmitNodeCollector collector,CameraRenderState camera){if(!isEmpty())collector.submitQuadParticleGroup(this);}
 
@@ -358,6 +404,9 @@ public final class WaterIntersection extends QuadParticleRenderState {
                 frameTick=tick;
             }
             lastPixelCount=0;
+            // SurfaceQueries keys by packed coordinates and WaterSurface owns an
+            // immutable position, so neighboring pixels can share this cursor.
+            var cursor=new BlockPos.MutableBlockPos();
             for(var r:frame) {
                 float age=frameTick-r.born+partial;
                 if(age>=LIFETIME || !frustum.isVisible(new AABB(r.x-0.5,r.y-0.1,r.z-0.5,r.x+0.5,r.y+0.1,r.z+0.5))) continue;
@@ -371,7 +420,7 @@ public final class WaterIntersection extends QuadParticleRenderState {
                     float alpha=coverage(dx,dz,radius)*fade;
                     if(alpha<=0) continue;
                     int px=cx+dx,pz=cz+dz;
-                    var pos=new BlockPos(Math.floorDiv(px,16),r.origin.getY(),Math.floorDiv(pz,16));
+                    var pos=cursor.set(Math.floorDiv(px,16),r.origin.getY(),Math.floorDiv(pz,16));
                     if(r.cauldron && !pos.equals(r.origin)) continue;
                     var s=queries.surface(pos);
                     if(s==null || s.cauldron()!=r.cauldron) continue;

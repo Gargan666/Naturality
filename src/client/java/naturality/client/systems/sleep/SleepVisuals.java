@@ -44,7 +44,8 @@ public final class SleepVisuals {
     public static void initialize() {
         ClientPlayConnectionEvents.INIT.register((_, _) -> reset());
         ClientPlayConnectionEvents.DISCONNECT.register((_, _) -> reset());
-        ClientPlayNetworking.registerGlobalReceiver(SleepStatePayload.TYPE, (payload, _) -> accept(payload));
+        if (!naturality.config.startup.FeatureConfig.clientOnly())
+            ClientPlayNetworking.registerGlobalReceiver(SleepStatePayload.TYPE, (payload, _) -> accept(payload));
     }
     public static void accept(SleepStatePayload payload) {
         seconds(); // Commit the previous speed before changing it, including wake.

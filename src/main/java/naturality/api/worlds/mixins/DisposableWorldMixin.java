@@ -2,6 +2,8 @@ package naturality.api.worlds.mixins;
 
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.function.LongFunction;
 import java.util.function.Supplier;
 import naturality.api.worlds.DisposableWorlds;
 import net.minecraft.nbt.CompoundTag;
@@ -11,8 +13,10 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.world.level.storage.LevelStorageSource;
+import org.jspecify.annotations.Nullable;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -119,6 +123,27 @@ public final class DisposableWorldMixin {
         @Inject(method = "store(Lnet/minecraft/world/level/ChunkPos;Ljava/util/function/Supplier;)Ljava/util/concurrent/CompletableFuture;",
                 at = @At("HEAD"), cancellable = true)
         private void naturality$discard(ChunkPos pos, Supplier<CompoundTag> data, CallbackInfoReturnable<CompletableFuture<Void>> cir) {
+            if (naturality$discard) cir.setReturnValue(CompletableFuture.completedFuture(null));
+        }
+    }
+
+    /** C2ME overrides IOWorker stores and adds raw writes, bypassing the inherited method barrier. */
+    @Pseudo
+    @Mixin(targets = "com.ishland.c2me.rewrites.chunkio.common.C2MEStorageVanillaInterface", remap = false)
+    public abstract static class C2MERegions {
+        @Unique private boolean naturality$discard;
+        @Inject(method = "<init>", at = @At("RETURN"))
+        private void naturality$identify(net.minecraft.world.level.chunk.storage.RegionStorageInfo info, Path directory, boolean sync,
+                @Nullable LongFunction<Executor> executor, CallbackInfo ci) {
+            naturality$discard = DisposableWorlds.discards(directory);
+        }
+        @Inject(method = {
+                "store(Lnet/minecraft/world/level/ChunkPos;Lnet/minecraft/nbt/CompoundTag;)Ljava/util/concurrent/CompletableFuture;",
+                "store(Lnet/minecraft/world/level/ChunkPos;Ljava/util/function/Supplier;)Ljava/util/concurrent/CompletableFuture;",
+                "setRawChunkData(Lnet/minecraft/world/level/ChunkPos;[B)Ljava/util/concurrent/CompletableFuture;",
+                "setRawChunkData(Lnet/minecraft/world/level/ChunkPos;Ljava/util/concurrent/CompletableFuture;)Ljava/util/concurrent/CompletableFuture;"
+            }, at = @At("HEAD"), cancellable = true)
+        private void naturality$discard(CallbackInfoReturnable<CompletableFuture<Void>> cir) {
             if (naturality$discard) cir.setReturnValue(CompletableFuture.completedFuture(null));
         }
     }

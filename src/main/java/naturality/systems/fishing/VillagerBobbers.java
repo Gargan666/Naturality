@@ -239,7 +239,7 @@ public final class VillagerBobbers {
         public record Spot(BlockPos water, BlockPos stand) { }
         private static final int RADIUS = 16, WIDTH = 33, CELLS = WIDTH * WIDTH * 8;
         private static final int CELLS_PER_TICK = 512, MAX_SURVEYS = 64;
-        private static final Map<ServerLevel, Cache> LEVELS = new WeakHashMap<>();
+        private static final Map<ServerLevel, Cache> LEVELS = Collections.synchronizedMap(new WeakHashMap<>());
 
         private FishingSpots() { }
 
@@ -249,7 +249,11 @@ public final class VillagerBobbers {
             });
             ServerChunkEvents.CHUNK_LOAD.register((level, chunk, _) -> chunkChanged(level, chunk.getPos()));
             ServerChunkEvents.CHUNK_UNLOAD.register((level, chunk) -> chunkChanged(level, chunk.getPos()));
-            ServerLifecycleEvents.SERVER_STOPPED.register(_ -> LEVELS.clear());
+            ServerLifecycleEvents.SERVER_STOPPED.register(FishingSpots::clearServer);
+        }
+
+        private static void clearServer(net.minecraft.server.MinecraftServer server) {
+            for (var level : server.getAllLevels()) LEVELS.remove(level);
         }
 
         /** Nearby job sites share even unfinished/empty surveys; paths remain per villager. */

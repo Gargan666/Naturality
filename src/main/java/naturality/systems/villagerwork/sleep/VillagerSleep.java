@@ -1,7 +1,7 @@
 package naturality.systems.villagerwork.sleep;
 import naturality.systems.reputation.Reputation;
 
-import java.util.Comparator;
+import naturality.systems.villagerwork.framework.VillagerWork.NearestBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -13,6 +13,7 @@ import net.minecraft.world.level.block.state.properties.BedPart;
 
 /** Persistent sleep debt; recovery sleep overrides the daytime work schedule. */
 public final class VillagerSleep {
+    private static final NearestBlocks BED_SEARCH = new NearestBlocks(32, 8);
     public static long debt(Villager body) {
         var state = Reputation.state(body);
         long now = body.level().getOverworldClockTime();
@@ -50,12 +51,10 @@ public final class VillagerSleep {
         if (state.sleepBed == null && (state.bedSearchTick < 0 || body.tickCount - state.bedSearchTick >= 100)) {
             state.bedSearchTick = body.tickCount;
             var center = body.blockPosition();
-            var bed = BlockPos.betweenClosedStream(center.offset(-32, -8, -32), center.offset(32, 8, 32))
-                .filter(pos -> naturality.api.worlds.LoadedChunks.has(level, pos) && available(level, pos))
-                .map(BlockPos::immutable).sorted(Comparator.comparingDouble(pos -> pos.distSqr(center)))
-                .filter(pos -> { var path = body.getNavigation().createPath(pos, 1); return path != null && path.canReach(); })
-                .findFirst();
-            state.sleepBed = bed.isPresent() ? bed.orElseThrow() : null;
+            state.sleepBed = BED_SEARCH.find(center,
+                pos -> naturality.api.worlds.LoadedChunks.has(level, pos) && available(level, pos),
+                Integer.MAX_VALUE,
+                pos -> { var path = body.getNavigation().createPath(pos, 1); return path != null && path.canReach(); });
             if (state.sleepBed == null) {
                 var roam = net.minecraft.world.entity.ai.util.DefaultRandomPos.getPos(body, 16, 7);
                 if (roam != null) body.getNavigation().moveTo(roam.x, roam.y, roam.z, .6);

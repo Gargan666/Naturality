@@ -81,6 +81,7 @@ public final class AtmosphereMixins {
         @org.spongepowered.asm.mixin.Unique private naturality.client.sky.shared.atmosphere.@org.jspecify.annotations.Nullable SkyGradientRenderer naturality$gradient;
         @Inject(method = "render", at = @At("HEAD"))
         private void naturality$prepareGradient(GpuBufferSlice fog, SkyRenderState state, CallbackInfo ci) {
+            if (naturality.client.api.rendering.ShaderPacks.active()) return;
             if (state.skybox != net.minecraft.world.level.dimension.DimensionType.Skybox.OVERWORLD) return;
             var gradient = naturality$gradient;
             if (gradient == null) { gradient = new naturality.client.sky.shared.atmosphere.SkyGradientRenderer(); naturality$gradient = gradient; }
@@ -88,6 +89,7 @@ public final class AtmosphereMixins {
         }
         @Inject(method = "renderSkyDisc", at = @At("HEAD"), cancellable = true)
         private void naturality$gradient(RenderPass pass, Vector3fc color, CallbackInfo ci) {
+            if (naturality.client.api.rendering.ShaderPacks.active()) return;
             if (naturality$gradient == null) return;
             naturality$gradient.render(pass, topSkyBuffer, color);
             ci.cancel();
@@ -102,6 +104,7 @@ public final class AtmosphereMixins {
 
         @Inject(method = "renderSunriseAndSunset", at = @At("HEAD"))
         private void naturality$sunsetGrid(RenderPass pass, PoseStack pose, float angle, Vector4fc color, CallbackInfo ci) {
+            if (naturality.client.api.rendering.ShaderPacks.active()) return;
             if (naturality$gradient != null) naturality$gradient.bindPalette(pass);
         }
 
@@ -109,6 +112,7 @@ public final class AtmosphereMixins {
             target = "Lcom/mojang/blaze3d/systems/RenderSystem;getCompiledPipeline(Lcom/mojang/renderpearl/api/pipeline/RenderPipeline;)Lcom/mojang/renderpearl/api/pipeline/CompiledRenderPipeline;"), index = 0)
         private com.mojang.renderpearl.api.pipeline.RenderPipeline naturality$sunsetPalette(
                 com.mojang.renderpearl.api.pipeline.RenderPipeline original) {
+            if (naturality.client.api.rendering.ShaderPacks.active()) return original;
             return naturality.client.sky.overworld.sunset.SunsetPalette.PIPELINE;
         }
 

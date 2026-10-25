@@ -14,9 +14,11 @@ public final class CloudPipelines {
     public static final RenderPipeline FLAT = classic("flat");
     private static final BindGroupLayout WATER_ORDER = BindGroupLayout.builder()
         .withUniform("CloudNearestDepth", UniformType.COMBINED_IMAGE_SAMPLER)
+        .withUniform("CloudSceneDepth", UniformType.COMBINED_IMAGE_SAMPLER)
         .withUniform("CloudWaterMask", UniformType.COMBINED_IMAGE_SAMPLER).build();
     public static final RenderPipeline BEHIND_WATER = waterOrder(false);
     public static final RenderPipeline IN_FRONT_OF_WATER = waterOrder(true);
+    public static final RenderPipeline MENU = waterOrder(false, true);
     public static final OitPipelineSet OIT_VOLUME = oit("volume");
     public static final OitPipelineSet OIT_FLAT = oit("flat");
 
@@ -38,11 +40,16 @@ public final class CloudPipelines {
     }
 
     private static RenderPipeline waterOrder(boolean foreground) {
+        return waterOrder(foreground, false);
+    }
+
+    private static RenderPipeline waterOrder(boolean foreground, boolean menu) {
         var builder = shaders(RenderPipeline.builder(RenderPipelines.CLOUDS_SNIPPET))
-            .withLocation(Naturality.id("pipeline/cloud_water_" + (foreground ? "front" : "back")))
+            .withLocation(Naturality.id("pipeline/cloud_water_" + (foreground ? "front" : "back") + (menu ? "_menu" : "")))
             .withBindGroupLayout(WATER_ORDER).withShaderDefine("CLOUD_WATER_ORDER")
             .withDepthStencilState(DEPTH);
         if (foreground) builder.withShaderDefine("CLOUD_WATER_FRONT");
+        if (menu) builder.withShaderDefine("CLOUD_MENU_OCCLUSION").withDepthStencilState(java.util.Optional.empty());
         return RenderPipelines.register(builder.build());
     }
 

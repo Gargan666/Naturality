@@ -109,7 +109,7 @@ public final class WeatherSnow {
     public static final class SnowfallBudget {
         public static final int MAX_ATTEMPTS=32, MAX_CHANGES=8, MAX_SECTIONS=4;
         public static final long MAX_WORK_NANOS=1_000_000;
-        private static final WeakHashMap<ServerLevel,Budget> LEVELS=new WeakHashMap<>();
+        private static final java.util.Map<ServerLevel,Budget> LEVELS=java.util.Collections.synchronizedMap(new WeakHashMap<>());
         private static final class Budget {
             long tick=Long.MIN_VALUE,work;
             int attempts,changes,seen,start;

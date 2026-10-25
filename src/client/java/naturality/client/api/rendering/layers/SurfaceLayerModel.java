@@ -86,7 +86,9 @@ public final class SurfaceLayerModel extends WrapperBlockStateModel {
                 // Enhanced lighting interpolates inset faces at their actual height.
                 // Disabling AO also disables smooth lightmaps, causing flat-lit tops.
                 quad.ambientOcclusion(net.fabricmc.fabric.api.util.TriState.DEFAULT)
-                    .shadeMode(net.fabricmc.fabric.api.client.renderer.v1.mesh.ShadeMode.ENHANCED);
+                    .shadeMode((quad.tag() & 0xFFFFFF00)==0x534E0000
+                        ? net.fabricmc.fabric.api.client.renderer.v1.mesh.ShadeMode.VANILLA
+                        : net.fabricmc.fabric.api.client.renderer.v1.mesh.ShadeMode.ENHANCED);
                 return true;
             });
             try { wrapped.emitQuads(emitter,level,pos,state,random,cull); }
@@ -170,6 +172,7 @@ public final class SurfaceLayerModel extends WrapperBlockStateModel {
         var shape = layerShape(level,pos,state.getValue(SnowLayerBlock.LAYERS));
         var visibility = new SnowFaceVisibility(level,pos,shape);
         for (var p : shape.toAabbs()) {
+            if (!CoatingMeshes.visible(level,pos,p.minY)) continue;
             SnowSectionVisibility.record(pos,p.minY);
             float x=(float)p.minX, X=(float)p.maxX, z=(float)p.minZ, Z=(float)p.maxZ, y=(float)p.minY, Y=(float)p.maxY;
             // Moving leaf caps retain all faces: a static neighbor can reveal a face as they sway.
@@ -534,6 +537,223 @@ public final class SurfaceLayerModel extends WrapperBlockStateModel {
         boolean naturality$mayHaveSnow();
         void naturality$markSnowFree();
         void naturality$setSnowSections(Map<Long, SectionCopy> sections);
+    }
+
+    /** Optional renderer sections expose only their already-cloned state and copied light. */
+    public interface CoatingSectionAccess {
+        CoatingSection naturality$coatingSection();
+    }
+
+    public record CoatingSection(net.minecraft.world.level.chunk.@org.jspecify.annotations.Nullable PalettedContainerRO<BlockState> blocks,
+            net.minecraft.world.level.chunk.@org.jspecify.annotations.Nullable DataLayer blockLight,
+            net.minecraft.world.level.chunk.@org.jspecify.annotations.Nullable DataLayer skyLight,
+            Map<Integer, net.minecraft.world.level.block.entity.BlockEntity> entities) {
+        public CoatingSection(net.minecraft.world.level.chunk.@org.jspecify.annotations.Nullable PalettedContainerRO<BlockState> blocks,
+                net.minecraft.world.level.chunk.@org.jspecify.annotations.Nullable DataLayer blockLight,
+                net.minecraft.world.level.chunk.@org.jspecify.annotations.Nullable DataLayer skyLight,
+                Map<Integer, net.minecraft.world.level.block.entity.BlockEntity> entities) {
+            // Sodium omits all-air palettes and the SKY layer in dimensions without sky.
+            // Preserve its AIR/zero defaults while owning copies of published light.
+            this.blocks = blocks;
+            this.blockLight = blockLight == null ? null : blockLight.copy();
+            this.skyLight = skyLight == null ? null : skyLight.copy();
+            this.entities = Map.copyOf(entities);
+        }
+        public BlockState block(int x, int y, int z) {
+            return blocks == null ? Blocks.AIR.defaultBlockState() : blocks.get(x & 15, y & 15, z & 15);
+        }
+        public int light(net.minecraft.world.level.LightLayer layer, BlockPos pos) {
+            var data = layer == net.minecraft.world.level.LightLayer.SKY ? skyLight : blockLight;
+            return data == null ? 0 : data.get(pos.getX() & 15, pos.getY() & 15, pos.getZ() & 15);
+        }
+        public net.minecraft.world.level.block.entity.@org.jspecify.annotations.Nullable BlockEntity entity(int x, int y, int z) {
+            return entities.get((y & 15) << 8 | (z & 15) << 4 | (x & 15));
+        }
+    }
+
+    /** Travels with one queued build, then its worker-owned slice; never retained globally. */
+    public record CoatingSnapshot(SectionPos origin, Map<Long, CoatingSection> sections) {
+        public static final CoatingSnapshot EMPTY = new CoatingSnapshot(SectionPos.of(0,0,0),Map.of());
+        public CoatingSnapshot { sections = Map.copyOf(sections); }
+        public @org.jspecify.annotations.Nullable CoatingSection section(int x, int y, int z) {
+            return sections.get(SectionPos.asLong(x >> 4, y >> 4, z >> 4));
+        }
+        public BlockState block(int x, int y, int z) {
+            var section = section(x, y, z);
+            return section == null ? Blocks.AIR.defaultBlockState() : section.block(x, y, z);
+        }
+        public int light(net.minecraft.world.level.LightLayer layer, BlockPos pos) {
+            var section = section(pos.getX(), pos.getY(), pos.getZ());
+            return section == null ? 0 : section.light(layer, pos);
+        }
+        public net.minecraft.world.level.block.entity.@org.jspecify.annotations.Nullable BlockEntity entity(int x, int y, int z) {
+            var section = section(x, y, z);
+            return section == null ? null : section.entity(x, y, z);
+        }
+
+        /** LevelSlice.prepare runs before job submission, on the client thread. */
+        public static CoatingSnapshot capture(ClientLevel level, SectionPos origin, Object sodiumCache) {
+            if (!net.minecraft.client.Minecraft.getInstance().isSameThread())
+                throw new IllegalStateException("Coating snapshots must be captured before meshing workers start");
+            if (!SnowRegionPresence.mayHaveSnow(level, origin.asLong())) return EMPTY;
+            var sections = new HashMap<Long, CoatingSection>();
+            // Sodium's native read volume is only the section plus two blocks.
+            // Capture full neighboring sections for the 32-block support/owner
+            // search and its AO margin, reusing Sodium's invalidated clone cache.
+            for (int dz = -1; dz <= 1; dz++) for (int dx = -1; dx <= 1; dx++) {
+                int x = origin.x() + dx, z = origin.z() + dz;
+                if (level.getChunkSource().getChunk(x, z, false) == null) continue;
+                for (int y = Math.max(origin.y() - 3, level.getMinSectionY());
+                        y <= Math.min(origin.y() + 3, level.getMaxSectionY() - 1); y++) {
+                    var section = SodiumSections.acquire(sodiumCache, x, y, z);
+                    sections.put(SectionPos.asLong(x, y, z), section.naturality$coatingSection());
+                }
+            }
+            return new CoatingSnapshot(origin,sections);
+        }
+    }
+
+    public interface CoatingSnapshotAccess {
+        CoatingSnapshot naturality$coatingSnapshot();
+        void naturality$coatingSnapshot(CoatingSnapshot snapshot);
+    }
+
+    /** Sodium's array cache inherits its view and uncached computation from another class. */
+    public interface CoatingLightAccess {
+        boolean naturality$coatingLightView();
+        int naturality$computeLight(int x,int y,int z);
+    }
+
+    /** The terrain renderer keeps the saved layer's state, offset and material during replay. */
+    public interface CoatingRenderer {
+        void naturality$renderCoating(BlockStateModel model,BlockState state,BlockPos owner,BlockPos relative);
+    }
+
+    public interface CoatingRenderView {
+        BlockAndTintGetter naturality$coatingView();
+    }
+
+    /**
+     * Sodium's compact coordinates cover only [-8,24), and visibility belongs to the mesh section.
+     * Emit a displaced volume once from its physical section, using the original layer model and
+     * renderer state. Appending it to a support model would inherit that model's offset and lighting.
+     */
+    public static final class CoatingMeshes {
+        private static final ThreadLocal<@org.jspecify.annotations.Nullable Integer> DESTINATION = new ThreadLocal<>();
+        private CoatingMeshes() {}
+
+        private static int physicalSection(BlockPos owner,double localMinY) {
+            return SectionPos.blockToSectionCoord((int)Math.floor(owner.getY()+localMinY+1e-5));
+        }
+
+        private static boolean visible(BlockAndTintGetter view,BlockPos owner,double localMinY) {
+            if (!(view instanceof CoatingSnapshotAccess)) return true;
+            var destination=DESTINATION.get();
+            int section=destination==null ? SectionPos.blockToSectionCoord(owner.getY()) : destination;
+            return physicalSection(owner,localMinY)==section;
+        }
+
+        /** Runs before the prepared renderer releases its buffers; all reads use the worker snapshot. */
+        public static void append(CoatingRenderer renderer,BlockAndTintGetter view) {
+            if (!(view instanceof CoatingSnapshotAccess access)) return;
+            var snapshot=access.naturality$coatingSnapshot();
+            if (snapshot.sections().isEmpty()) return;
+            var origin=snapshot.origin();
+            var models=net.minecraft.client.Minecraft.getInstance().getModelManager().getBlockStateModelSet();
+            var previous=DESTINATION.get();
+            DESTINATION.set(origin.y());
+            try {
+                // Coatings only fall downward. Two sections above contain every owner capable of
+                // reaching this section; palette checks avoid scanning coating-free columns.
+                for (int sy=origin.y()+1;sy<=origin.y()+2;sy++) {
+                    var section=snapshot.sections().get(SectionPos.asLong(origin.x(),sy,origin.z()));
+                    if (section==null) continue;
+                    var blocks=section.blocks();
+                    if (blocks==null || !blocks.maybeHas(SurfaceLayerModel::isLayer)) continue;
+                    for (int y=0;y<16;y++) for (int z=0;z<16;z++) for (int x=0;x<16;x++) {
+                        var state=section.block(x,y,z);
+                        if (!isLayer(state) || !wrapping(state)) continue;
+                        var owner=new BlockPos(origin.minBlockX()+x,sy*16+y,origin.minBlockZ()+z);
+                        if (plainGeometry(view,owner)) continue;
+                        boolean reaches=false;
+                        for (var box:layerShape(view,owner,state.getValue(SnowLayerBlock.LAYERS)).toAabbs()) {
+                            if (physicalSection(owner,box.minY)==origin.y()) { reaches=true;break; }
+                        }
+                        if (reaches) renderer.naturality$renderCoating(models.get(state),state,owner,owner.subtract(origin.origin()));
+                    }
+                }
+            } finally {
+                if (previous==null) DESTINATION.remove();else DESTINATION.set(previous);
+            }
+        }
+
+        /** Iris normally sets this at the task-loop callsite, which an appended owner does not visit. */
+        public static void shaderMetadata(Object renderer,BlockState state,BlockPos relative) {
+            var metadata=ShaderMetadata.ACCESS.get(renderer.getClass());
+            if (metadata.isEmpty()) return;
+            try {
+                var bridge=metadata.get();
+                var ids=(it.unimi.dsi.fastutil.objects.@org.jspecify.annotations.Nullable Object2IntMap<?>)bridge.ids.invokeExact();
+                // The installed Iris renderer also exists while shader packs are disabled.
+                if (ids==null) return;
+                bridge.begin.invokeExact(renderer,ids.getOrDefault(state,-1),(byte)0,(byte)state.getLightEmission(),
+                    relative.getX(),relative.getY(),relative.getZ());
+            } catch (RuntimeException | Error failure) {
+                throw failure;
+            } catch (Throwable failure) {
+                throw new IllegalStateException("Cannot prepare Iris coating metadata",failure);
+            }
+        }
+
+        /** No Iris class is resolved unless its injected public renderer entry point exists. */
+        private record ShaderMetadata(java.lang.invoke.MethodHandle ids,java.lang.invoke.MethodHandle begin) {
+            private static final ClassValue<Optional<ShaderMetadata>> ACCESS=new ClassValue<>() {
+                @Override protected Optional<ShaderMetadata> computeValue(@org.jspecify.annotations.Nullable Class<?> type) {
+                    java.util.Objects.requireNonNull(type);
+                    java.lang.reflect.Method begin;
+                    try { begin=type.getMethod("beginBlock",int.class,byte.class,byte.class,int.class,int.class,int.class); }
+                    catch (NoSuchMethodException absent) { return Optional.empty(); }
+                    try {
+                        var settingsType=Class.forName("net.irisshaders.iris.shaderpack.materialmap.WorldRenderingSettings",false,type.getClassLoader());
+                        var settings=java.util.Objects.requireNonNull(settingsType.getField("INSTANCE").get(null));
+                        var lookup=java.lang.invoke.MethodHandles.publicLookup();
+                        return Optional.of(new ShaderMetadata(
+                            lookup.unreflect(settingsType.getMethod("getBlockStateIds")).bindTo(settings)
+                                .asType(java.lang.invoke.MethodType.methodType(it.unimi.dsi.fastutil.objects.Object2IntMap.class)),
+                            lookup.unreflect(begin).asType(java.lang.invoke.MethodType.methodType(void.class,
+                                Object.class,int.class,byte.class,byte.class,int.class,int.class,int.class))));
+                    } catch (ReflectiveOperationException failure) {
+                        throw new IllegalStateException("Unsupported Iris terrain metadata entry point",failure);
+                    }
+                }
+            };
+        }
+    }
+
+    /** Resolve once; this optional cache API is used only while capturing a build. */
+    private static final class SodiumSections {
+        private static final ClassValue<java.lang.invoke.MethodHandle> ACQUIRE = new ClassValue<>() {
+            @Override protected java.lang.invoke.MethodHandle computeValue(@org.jspecify.annotations.Nullable Class<?> type) {
+                java.util.Objects.requireNonNull(type);
+                try {
+                    return java.lang.invoke.MethodHandles.publicLookup()
+                        .unreflect(type.getMethod("acquire", int.class, int.class, int.class))
+                        .asType(java.lang.invoke.MethodType.methodType(CoatingSectionAccess.class,
+                            Object.class, int.class, int.class, int.class));
+                } catch (NoSuchMethodException | IllegalAccessException failure) {
+                    throw new IllegalStateException("Unsupported Sodium section snapshot cache", failure);
+                }
+            }
+        };
+        private static CoatingSectionAccess acquire(Object cache, int x, int y, int z) {
+            try {
+                return (CoatingSectionAccess) ACQUIRE.get(cache.getClass()).invokeExact(cache, x, y, z);
+            } catch (RuntimeException | Error failure) {
+                throw failure;
+            } catch (Throwable failure) {
+                throw new IllegalStateException("Cannot capture Sodium coating section", failure);
+            }
+        }
     }
 
     /** Conservative client-thread palette probe; never load chunks or inspect live terrain on workers. */

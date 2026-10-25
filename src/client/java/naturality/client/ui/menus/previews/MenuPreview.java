@@ -96,7 +96,6 @@ public final class MenuPreview {
         if (loading != null && destination != loading.screen) cancelPreparation();
         if (pending != null && destination != pending.screen) pending = null;
     }
-    private static boolean preparedDuringStartup;
     private static Screen backgroundScreen;
     private record Request(Screen screen, String saved, net.minecraft.client.gui.screens.worldselection.WorldCreationContext context, String key) { }
     private static Request pending;
@@ -135,6 +134,29 @@ public final class MenuPreview {
     }
     public static float radius() {
         return Math.min(96, Math.max(24, Minecraft.getInstance().options.renderDistance().get() * 16 - 16));
+    }
+    /** Storage covers the miniature plus a neighbor ring, independently of the external orbit. */
+    public static int terrainStorageRadius() {
+        return (int)Math.ceil((radius() + 4) / 16) + 1;
+    }
+    /** Loading, native terrain generation and meshing share a small preview-only CPU budget. */
+    public static net.minecraft.TracingExecutor backgroundExecutor() { return PreviewWorkers.EXECUTOR; }
+    private static final class PreviewWorkers {
+        private static final net.minecraft.TracingExecutor EXECUTOR = new net.minecraft.TracingExecutor(create());
+        private static ExecutorService create() {
+            int workers = Math.max(1, Math.min(2, Runtime.getRuntime().availableProcessors() / 4));
+            var pool = new java.util.concurrent.ThreadPoolExecutor(workers, workers, 10,
+                    java.util.concurrent.TimeUnit.SECONDS, new java.util.concurrent.LinkedBlockingQueue<>(), task -> {
+                        var thread = new Thread(task, "Naturality preview worker");
+                        thread.setDaemon(true);
+                        thread.setPriority(Thread.NORM_PRIORITY - 1);
+                        return thread;
+                    });
+            // Let queued native tasks finish their cancellation/cleanup paths;
+            // idle workers expire after the preview closes.
+            pool.allowCoreThreadTimeOut(true);
+            return pool;
+        }
     }
     public static void initialize() {
         ClientTickEvents.END_CLIENT_TICK.register(MenuPreview::tick);
@@ -191,8 +213,10 @@ public final class MenuPreview {
         // Existing non-menu test suites retain their own world ownership.
         String suites = System.getProperty("naturality.test.suites");
         String activeCheck = System.getProperty("naturality.test.activeCheck", "");
-        if (suites != null && !activeCheck.equals("menu-world") && !activeCheck.equals("menu-no-save")
-                && !activeCheck.equals("menu-world-entry")) return;
+        if (suites != null && !Boolean.getBoolean("naturality.test.menuPreview")
+                && !activeCheck.equals("menu-world") && !activeCheck.equals("menu-no-save")
+                && !activeCheck.equals("menu-world-entry") && !activeCheck.equals("menu-preview-stability")
+                && !activeCheck.equals("menu-sodium-stability")) return;
         // Fabric's test scheduler must finish its own overlay/thread barrier before a test owns a server.
         if (suites != null && !attempted && client.gui.overlay() != null) return;
         // Check ownership before any cleanup or connection work can act on Minecraft's current server.
@@ -217,8 +241,9 @@ public final class MenuPreview {
                 if (client.level == null && client.getSingleplayerServer() == null) launch(client, request);
             }
         }
-        if (!attempted && client.level == null && client.getSingleplayerServer() == null && client.gui.screen() instanceof TitleScreen menu) {
-            preparedDuringStartup = client.gui.overlay() instanceof net.minecraft.client.gui.screens.LoadingOverlay;
+        if (!attempted && client.level == null && client.getSingleplayerServer() == null
+                && client.gui.overlay() == null && client.isGameLoadFinished()
+                && client.gui.screen() instanceof TitleScreen menu) {
             launch(client, new Request(menu, null, null, "main"));
         }
         if (preparation != null && preparation.isDone()) {
@@ -279,7 +304,7 @@ public final class MenuPreview {
         }
         if (!ready && client.player != null && surfaceRegionReady(client)) {
             starting = false; ready = true; loading = null;
-            Naturality.LOGGER.info("Menu surface region and meshes ready; prepared during startup: {}", preparedDuringStartup);
+            Naturality.LOGGER.info("Menu surface region and meshes ready");
             if (client.gui.screen() == null) client.gui.setScreen(backgroundScreen);
         }
         if (ready && client.gui.overlay() == null && Boolean.getBoolean("naturality.menu.startupCheck")) {
@@ -347,7 +372,13 @@ public final class MenuPreview {
             if (containsChunk(x, z) && !level.getChunkSource().hasChunk(x, z)) return false;
         var visible = client.levelRenderer.visibleSections();
         long fade = net.minecraft.util.Util.toMillis(client.options.chunkSectionFadeInTime().get());
-        return !visible.isEmpty() && visible.stream().allMatch(section ->
+        // Replacement terrain renderers keep their own section list. Sodium implements
+        // these native readiness APIs, including its submitted geometry count, while
+        // deliberately leaving visibleSections empty. An idle queue alone is not ready.
+        if (visible.isEmpty()) return client.levelExtractor.countRenderedSections() > 0
+                && client.levelRenderer.hasRenderedAllSections()
+                && client.levelRenderer.isSectionCompiledAndVisible(spawn, fade);
+        return visible.stream().allMatch(section ->
                 section.getSectionMesh() != net.minecraft.client.renderer.chunk.CompiledSectionMesh.UNCOMPILED
                 && section.getVisibility(net.minecraft.util.Util.getMillis(), fade) >= 1);
     }
@@ -441,7 +472,7 @@ public final class MenuPreview {
         /** Defer global tag/component installation until this request is accepted on the client. */
         private static CompletableFuture<WorldStem> load(WorldLoader.InitConfig config,
                 WorldLoader.WorldDataSupplier<LevelDataAndDimensions.WorldDataAndGenSettings> supplier) {
-            var executor = net.minecraft.util.Util.backgroundExecutor();
+            var executor = MenuPreview.backgroundExecutor();
             var packs = config.packConfig().createResourceManager();
             var resources = packs.getSecond();
             var layers = net.minecraft.server.RegistryLayer.createRegistryAccess();

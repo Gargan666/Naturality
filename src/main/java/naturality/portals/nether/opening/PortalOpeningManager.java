@@ -30,7 +30,7 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 /** Server-owned, short-lived opening transactions. Never persists a locked portal in a save. */
 @org.jspecify.annotations.NullMarked
 public final class PortalOpeningManager {
-    private static final Map<ServerLevel, List<Opening>> ACTIVE = new IdentityHashMap<>();
+    private static final Map<ServerLevel, List<Opening>> ACTIVE = Collections.synchronizedMap(new IdentityHashMap<>());
     public static BiPredicate<Level, BlockPos> clientOpening = (_, _) -> false;
 
     public static void initialize() {
@@ -38,8 +38,12 @@ public final class PortalOpeningManager {
         net.fabricmc.fabric.api.networking.v1.EntityTrackingEvents.START_TRACKING.register(PortalCrossing::syncToObserver);
         PayloadTypeRegistry.clientboundPlay().register(PortalOpeningPayload.TYPE, PortalOpeningPayload.CODEC);
         ServerTickEvents.END_LEVEL_TICK.register(PortalOpeningManager::tick);
-        ServerLifecycleEvents.SERVER_STOPPED.register(_ -> ACTIVE.clear());
+        ServerLifecycleEvents.SERVER_STOPPED.register(PortalOpeningManager::clearServer);
         ServerLifecycleEvents.SERVER_STARTING.register(_ -> NaturalityServerConfig.get());
+    }
+
+    private static void clearServer(net.minecraft.server.MinecraftServer server) {
+        for (var level : server.getAllLevels()) ACTIVE.remove(level);
     }
 
     public static boolean begin(ServerLevel level, PortalShape shape) {

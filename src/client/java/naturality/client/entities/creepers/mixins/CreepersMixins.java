@@ -44,7 +44,8 @@ public final class CreepersMixins {
         @Inject(method = "extractRenderState(Lnet/minecraft/world/entity/monster/Creeper;Lnet/minecraft/client/renderer/entity/state/CreeperRenderState;F)V", at = @At("TAIL"))
         private void naturality$tint(Creeper creeper, CreeperRenderState state, float partial, CallbackInfo ci) {
             var biome = creeper.level().getBiome(creeper.blockPosition()).value();
-            var id = Identifier.tryParse(((CreeperBiome)creeper).naturality$spawnBiome());
+            // A vanilla server has no Naturality biome metadata; use the observed biome.
+            var id = creeper instanceof CreeperBiome source ? Identifier.tryParse(source.naturality$spawnBiome()) : null;
             if (id != null) {
                 var original = creeper.level().registryAccess().lookupOrThrow(Registries.BIOME).getValue(id);
                 if (original != null) biome = original;

@@ -7,6 +7,7 @@ import naturality.api.worlds.PreviewEnvironment;
 import naturality.systems.weather.end.framework.EndWeatherSystem;
 import naturality.api.random.SavedRandom;
 import java.util.Map;
+import java.util.Collections;
 import java.util.UUID;
 import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
@@ -66,11 +67,12 @@ public final class WeatherSystem {
 
     private static final long SEASON_LENGTH = 72000; // Three Minecraft days.
     private static final long SEASON_HOLD = 48000; // Two steady days, then one transition day.
-    private static final Map<ServerLevel, WeatherState> STATES = new WeakHashMap<>();
-    private static final Map<ServerLevel, Long> CLOCKS = new WeakHashMap<>();
-    private static final Map<ServerLevel, WeatherChannel> RAIN_CYCLES = new WeakHashMap<>();
-    private static final Map<ServerLevel, WeatherChannel> WIND_CYCLES = new WeakHashMap<>();
-    private static final Map<net.minecraft.server.MinecraftServer, Long> SERVER_SESSIONS = new WeakHashMap<>();
+    // FastQuit can finish one server while another starts. Only the outer owner maps are shared.
+    private static final Map<ServerLevel, WeatherState> STATES = Collections.synchronizedMap(new WeakHashMap<>());
+    private static final Map<ServerLevel, Long> CLOCKS = Collections.synchronizedMap(new WeakHashMap<>());
+    private static final Map<ServerLevel, WeatherChannel> RAIN_CYCLES = Collections.synchronizedMap(new WeakHashMap<>());
+    private static final Map<ServerLevel, WeatherChannel> WIND_CYCLES = Collections.synchronizedMap(new WeakHashMap<>());
+    private static final Map<net.minecraft.server.MinecraftServer, Long> SERVER_SESSIONS = Collections.synchronizedMap(new WeakHashMap<>());
     private static final Map<Identifier, ClientWeather> CLIENT = new ConcurrentHashMap<>();
     private static final long CLIENT_BLEND_NANOS = 500_000_000L;
     private static @org.jspecify.annotations.Nullable Long CLIENT_SESSION;
@@ -124,7 +126,10 @@ public final class WeatherSystem {
             (from.direction() + angularDistance(from.direction(), to.direction()) * t + 360) % 360, to.regularWindOnly());
     }
     public static Biome.Precipitation precipitation(Level level, Biome biome, BlockPos pos) {
-        var normal = biome.getPrecipitationAt(pos, level.getSeaLevel());
+        return precipitation(level, biome, biome.getPrecipitationAt(pos, level.getSeaLevel()));
+    }
+    /** Apply the temperature offset to the precipitation supplied by the caller's operation chain. */
+    public static Biome.Precipitation precipitation(Level level, Biome biome, Biome.Precipitation normal) {
         var state = state(level);
         if (state == null || normal != Biome.Precipitation.RAIN) return normal;
         // Arid biomes have already returned NONE; naturally cold/elevated biomes retain SNOW.
@@ -148,10 +153,7 @@ public final class WeatherSystem {
                 NaturalityServerConfig.get().save();
             }
         });
-        ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
-            STATES.clear(); CLOCKS.clear(); RAIN_CYCLES.clear(); WIND_CYCLES.clear();
-            SERVER_SESSIONS.remove(server);
-        });
+        ServerLifecycleEvents.SERVER_STOPPED.register(WeatherSystem::clearServer);
         ServerPlayConnectionEvents.JOIN.register((handler, _, server) -> {
             for (var level : server.getAllLevels()) send(handler.player, level);
         });
@@ -164,6 +166,12 @@ public final class WeatherSystem {
                     for (var player : server.getPlayerList().getPlayers()) send(player, level);
             }
         });
+    }
+    private static void clearServer(MinecraftServer server) {
+        for (var level : server.getAllLevels()) {
+            STATES.remove(level); CLOCKS.remove(level); RAIN_CYCLES.remove(level); WIND_CYCLES.remove(level);
+        }
+        SERVER_SESSIONS.remove(server);
     }
     public static void saveProfile(ServerLevel level) {
         var server = level.getServer();
@@ -231,11 +239,13 @@ public final class WeatherSystem {
     private static void snapshot(ServerLevel level) {
         var state=STATES.get(level);if(state==null)return;
         var data=EnvironmentWorldData.get(java.util.Objects.requireNonNull(level.getServer()));
-        data.write(key(level),Map.of("rain",EnvironmentWorldData.bits(state.rain()),"wind",EnvironmentWorldData.bits(state.wind()),
+        String key=key(level);
+        long clock=CLOCKS.getOrDefault(level,0L);
+        data.defer(key,() -> Map.of("rain",EnvironmentWorldData.bits(state.rain()),"wind",EnvironmentWorldData.bits(state.wind()),
             "temperature",EnvironmentWorldData.bits(state.temperature()),"direction",EnvironmentWorldData.bits(state.direction()),
-            "clock",CLOCKS.getOrDefault(level,0L)));
-        var rain=RAIN_CYCLES.get(level);if(rain!=null)data.write(key(level)+"/rain",rain.snapshot());
-        var wind=WIND_CYCLES.get(level);if(wind!=null)data.write(key(level)+"/wind",wind.snapshot());
+            "clock",clock));
+        var rain=RAIN_CYCLES.get(level);if(rain!=null)data.defer(key+"/rain",rain::snapshot);
+        var wind=WIND_CYCLES.get(level);if(wind!=null)data.defer(key+"/wind",wind::snapshot);
     }
     private static float approach(float from, float to, float step) { return from + Math.clamp(to - from, -step, step); }
     public static float angularDistance(float from, float to) { return (to - from + 540) % 360 - 180; }
@@ -613,7 +623,7 @@ public final class WeatherSystem {
     public static final class WeatherShelter {
         private static final int[] DISTANCES = {2, 4, 8};
         private record SurfacePlayers(long tick, boolean present) {}
-        private static final java.util.WeakHashMap<net.minecraft.server.level.ServerLevel, SurfacePlayers> players = new java.util.WeakHashMap<>();
+        private static final Map<ServerLevel, SurfacePlayers> players = Collections.synchronizedMap(new WeakHashMap<>());
         private WeatherShelter() {}
 
         public static boolean hasSurfacePlayer(net.minecraft.server.level.ServerLevel level) {

@@ -57,7 +57,7 @@ public final class CloudsMixins {
         @Inject(method = "prepare(ILnet/minecraft/client/CloudStatus;FILnet/minecraft/world/phys/Vec3;JF)V", at = @At("HEAD"), cancellable = true)
         private void naturality$prepare(int color, CloudStatus status, float height, int range, Vec3 camera, long time, float partial, CallbackInfo ci) {
             var config = NaturalityConfig.get().clouds;
-            naturality$active = config.enabled;
+            naturality$active = config.enabled && !naturality.client.api.rendering.ShaderPacks.active();
             var texture = naturality$coverageTexture;
             if (texture != null && status != CloudStatus.OFF) {
                 if (naturality$active) {

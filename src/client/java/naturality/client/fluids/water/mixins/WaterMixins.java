@@ -151,7 +151,7 @@ public final class WaterMixins {
         private void naturality$transmittedSky(net.minecraft.client.renderer.state.level.CameraRenderState state,
                 DeltaTracker delta, CallbackInfo ci) {
             var camera = (Camera)(Object)this;
-            if (!NaturalityConfig.get().liquids.waterDepth
+            if (naturality.client.api.rendering.ShaderPacks.active() || !NaturalityConfig.get().liquids.waterDepth
                     || camera.getFluidInCamera() != net.minecraft.world.level.material.FogType.WATER) return;
             // Sodium folds fluid occlusion into this mob-effect flag. Water is not
             // opaque with our surface transmission: retain the native effect test
@@ -171,7 +171,8 @@ public final class WaterMixins {
             target = "Lnet/minecraft/client/Camera;getFluidInCamera()Lnet/minecraft/world/level/material/FogType;"))
         private static net.minecraft.world.level.material.FogType naturality$transmittedSky(
                 net.minecraft.world.level.material.FogType fluid) {
-            return fluid == net.minecraft.world.level.material.FogType.WATER && NaturalityConfig.get().liquids.waterDepth
+            return !naturality.client.api.rendering.ShaderPacks.active()
+                && fluid == net.minecraft.world.level.material.FogType.WATER && NaturalityConfig.get().liquids.waterDepth
                 ? net.minecraft.world.level.material.FogType.NONE : fluid;
         }
     }
@@ -250,7 +251,8 @@ public final class WaterMixins {
             target = "Lnet/minecraft/client/Camera;getFluidInCamera()Lnet/minecraft/world/level/material/FogType;"))
         private net.minecraft.world.level.material.FogType naturality$lensAtmosphere(
                 net.minecraft.world.level.material.FogType original) {
-            return original == net.minecraft.world.level.material.FogType.WATER && WaterVisuals.Waterline.active()
+            return !naturality.client.api.rendering.ShaderPacks.active()
+                && original == net.minecraft.world.level.material.FogType.WATER && WaterVisuals.Waterline.active()
                 ? net.minecraft.world.level.material.FogType.NONE : original;
         }
     }
@@ -363,6 +365,7 @@ public final class WaterMixins {
                 .withBindGroupLayout(net.minecraft.client.renderer.BindGroupLayouts.FOG)
                 .withBindGroupLayout(ProceduralFluids.LAYOUT)
                 .withBindGroupLayout(naturality.client.blocks.fire.ProceduralFire.SODIUM_LAYOUT)
+                .withBindGroupLayout(naturality.client.blocks.glass.GlassShine.LAYOUT)
                 .withBindGroupLayout(naturality.client.systems.weather.wind.WindRendering.LAYOUT)
                 .withBindGroupLayout(WaterVisuals.LAYOUT)
                 .withBindGroupLayout(BindGroupLayout.builder()
@@ -404,6 +407,7 @@ public final class WaterMixins {
             com.mojang.blaze3d.systems.RenderSystem.bindDefaultUniforms(pass);
             naturality.client.fluids.shared.ProceduralFluids.bind(pass);
             naturality.client.blocks.fire.ProceduralFire.bindSodium(pass);
+            naturality.client.blocks.glass.GlassShine.bind(pass);
             naturality.client.systems.weather.wind.WindRendering.bind(pass);
             naturality.client.ui.menus.previews.MenuSurface.MenuFog.bind(pass);
             naturality.client.fluids.water.WaterVisuals.bind(pass);
@@ -414,6 +418,25 @@ public final class WaterMixins {
     @Mixin(net.minecraft.client.renderer.feature.QuadParticleFeatureRenderer.class)
     @org.jspecify.annotations.NullMarked
     public static abstract class WaterIntersectionMaskMixin {
+        @org.spongepowered.asm.mixin.injection.ModifyArg(method = "drawLayers", at = @At(value = "INVOKE",
+            target = "Lcom/mojang/blaze3d/systems/RenderSystem;getCompiledPipeline(Lcom/mojang/renderpearl/api/pipeline/RenderPipeline;)Lcom/mojang/renderpearl/api/pipeline/CompiledRenderPipeline;"))
+        private static RenderPipeline naturality$shaderParticlePipeline(RenderPipeline pipeline) {
+            return naturality.client.api.rendering.ShaderPacks.particlePipeline(pipeline);
+        }
+
+        @WrapOperation(method = "drawLayers", at = @At(value = "INVOKE",
+            target = "Lcom/mojang/renderpearl/api/commands/RenderPass;setUniform(Ljava/lang/String;Lcom/mojang/renderpearl/api/textures/GpuTextureView;Lcom/mojang/renderpearl/api/textures/GpuSampler;)V"))
+        private static void naturality$flatParticleSampler(RenderPass pass, String name,
+                @org.jspecify.annotations.Nullable GpuTextureView texture,
+                @org.jspecify.annotations.Nullable GpuSampler sampler, Operation<Void> original,
+                @Local java.util.Map.Entry<SingleQuadParticle.Layer, net.minecraft.client.renderer.StagedVertexBuffer.Draw> entry) {
+            if (naturality.client.api.rendering.ShaderPacks.flatParticles(entry.getKey().pipeline())) {
+                original.call(pass, name, naturality.client.api.rendering.ShaderPacks.particleSampler(),
+                    com.mojang.blaze3d.systems.RenderSystem.getSamplerCache().getClampToEdge(
+                        com.mojang.renderpearl.api.textures.FilterMode.NEAREST));
+            } else original.call(pass, name, texture, sampler);
+        }
+
         @Inject(method = "executeGroup", at = @At("HEAD"))
         private void naturality$bindSurfaceMask(CallbackInfo ci, @Local(argsOnly = true) RenderPass pass) {
             WaterVisuals.bindSurfaceMask(pass);
@@ -572,6 +595,7 @@ public final class WaterMixins {
         @ModifyExpressionValue(method="extractRotatedQuad(Lnet/minecraft/client/renderer/state/level/QuadParticleRenderState;Lorg/joml/Quaternionf;FFFF)V",
             at=@At(value="INVOKE",target="Lnet/minecraft/client/particle/SingleQuadParticle;getLayer()Lnet/minecraft/client/particle/SingleQuadParticle$Layer;"))
         private SingleQuadParticle.Layer naturality$tintLayer(SingleQuadParticle.Layer layer) {
+            if (naturality.client.api.rendering.ShaderPacks.active()) return layer;
             if(!naturality$water || !NaturalityConfig.get().liquids.water || !NaturalityConfig.get().liquids.waterParticleTint)return layer;
             return naturality$rain ? naturality.client.systems.weather.overworld.rain.RainParticleTint.TRANSPARENT
                 : layer.translucent()?WaterParticleTint.TRANSPARENT:WaterParticleTint.SOLID;

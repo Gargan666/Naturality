@@ -26,7 +26,7 @@ Place the built `naturality-1.0.0.jar` and a compatible Fabric API JAR in the Fa
 Open **Mods > Naturality > Configure > Config Presets** from the title screen:
 
 - **Default** restores all shipped settings, including numeric defaults and features that normally start disabled.
-- **Clientside Only** keeps client visuals while disabling added content and server gameplay changes, including modified Nether portal travel, ghast physics, and impact-event broadcasts. Use this before joining a server without Naturality.
+- **Clientside Only** keeps locally derived visuals and disables added content, gameplay changes, custom menus, server networking and changes to vanilla block/entity data. This is a strict startup mode; restart to finish applying the preset.
 - **No Visual Overhaul** keeps content and gameplay with optional visual and audio changes disabled, including heat waves, lens flare, and mob-death effects. It also disables server changes coupled to those visuals, such as portal entry animation, fire/snow wrapping, ghast physics, and impact-event broadcasts.
 
 Presets apply ordinary settings once. Every setting remains independently editable; no persistent mode overrides later choices. The menu is organized into:

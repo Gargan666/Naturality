@@ -45,7 +45,7 @@ public final class WindRendering {
     public static int tag(BlockState state) {
         if (connected(state)) return 100;
         if (state.is(BlockTags.LEAVES)) return 240;
-        if (state.getBlock() instanceof VegetationBlock && !state.is(Blocks.LILY_PAD)) return 241;
+        if (state.getBlock() instanceof VegetationBlock && !(state.getBlock() instanceof net.minecraft.world.level.block.LilyPadBlock)) return 241;
         return 255;
     }
     private static boolean connected(BlockState state) {
@@ -157,13 +157,17 @@ public final class WindRendering {
         // Chunk render views may expose only their thread-safe lighting snapshot.
         return level.getBrightness(LightLayer.SKY, pos) > 0;
     }
-    /** The light engine retains immutable dimension identity even in worker-owned render snapshots. */
+    /** Read only immutable dimension identity from a render snapshot or its native light engine. */
     public interface WindWorldAccess {
         net.minecraft.world.level.LevelHeightAccessor naturality$windLevel();
     }
     private static boolean windEverywhere(BlockAndTintGetter view) {
-        return view.getLightEngine() instanceof WindWorldAccess access
-            && access.naturality$windLevel() instanceof net.minecraft.world.level.Level world
+        // Sodium's LevelSlice deliberately rejects getLightEngine(): its light
+        // samples are copied arrays. Its optional bridge exposes dimension identity
+        // without querying live terrain or bypassing the worker-owned snapshot.
+        WindWorldAccess access = view instanceof WindWorldAccess snapshot ? snapshot
+            : view.getLightEngine() instanceof WindWorldAccess engine ? engine : null;
+        return access != null && access.naturality$windLevel() instanceof net.minecraft.world.level.Level world
             && world.dimension().equals(net.minecraft.world.level.Level.NETHER);
     }
     /** Test exposure at the foliage itself; Nether foliage bypasses all shelter rays. */

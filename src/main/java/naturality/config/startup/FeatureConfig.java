@@ -17,18 +17,23 @@ public final class FeatureConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path FILE = FabricLoader.getInstance().getConfigDir().resolve("naturality-features.json");
     private static final FeatureConfig INSTANCE = load();
+    private static final boolean CLIENT_ONLY = INSTANCE.clientOnly;
     private static final Map<Feature, Boolean> ACTIVE = snapshot(INSTANCE);
+    /** Restart-only protocol boundary; absent in older files means the normal full mod. */
+    public boolean clientOnly;
     public Map<String, Boolean> features = new LinkedHashMap<>();
 
     public FeatureConfig() { for (var feature : Feature.values()) features.put(feature.key(), true); }
     public boolean get(Feature feature) { return !Boolean.FALSE.equals(features.get(feature.key())); }
     public void set(Feature feature, boolean value) { features.put(feature.key(), value); }
     public boolean effective(Feature feature) {
+        if (clientOnly && feature.group != Feature.Group.VISUAL) return false;
         return get(feature) && (feature.parent == null || effective(feature.parent));
     }
     public static FeatureConfig get() { return INSTANCE; }
+    public static boolean clientOnly() { return CLIENT_ONLY; }
     public static boolean active(Feature feature) { return Boolean.TRUE.equals(ACTIVE.get(feature)); }
-    public boolean restartRequired() { return !ACTIVE.equals(snapshot(this)); }
+    public boolean restartRequired() { return CLIENT_ONLY != clientOnly || !ACTIVE.equals(snapshot(this)); }
     private static Map<Feature, Boolean> snapshot(FeatureConfig config) {
         var result = new EnumMap<Feature, Boolean>(Feature.class);
         for (var feature : Feature.values()) result.put(feature, config.effective(feature));
@@ -65,7 +70,7 @@ public final class FeatureConfig {
         }
     }
 
-    /** Startup features. Presets only edit these ordinary options and the existing settings. */
+    /** Startup features; strict client-only mode permits only client visual choices. */
     public enum Feature {
         CONTENT(Group.CONTENT),
         MOUNTAIN_WATERFALLS(Group.CONTENT, CONTENT),
@@ -157,9 +162,18 @@ public final class FeatureConfig {
         private FeatureResources() {}
         public static boolean allowed(boolean data, String namespace, String path) {
             if (data) {
+                if (FeatureConfig.clientOnly()) return false;
+                // Enchanting, curses and sword counters remain active independently of optional content.
+                if (namespace.equals("naturality") && (path.startsWith("enchantment/")
+                        || path.startsWith("enchanting/") || path.equals("damage_type/reflection.json"))) return true;
+                if (namespace.equals("minecraft") && (path.startsWith("tags/enchantment/")
+                        || path.equals("tags/block/enchantment_power_transmitter.json")
+                        || java.util.Set.of("tags/damage_type/bypasses_armor.json", "tags/damage_type/bypasses_cooldown.json",
+                            "tags/damage_type/bypasses_enchantments.json", "tags/damage_type/bypasses_resistance.json").contains(path))) return true;
                 if (!Feature.CONTENT.enabled()) {
-                    // Pure vanilla-entry tags remain useful to independent gameplay/visual features.
-                    return namespace.equals("naturality") && path.startsWith("tags/");
+                    // Independent gameplay/visual tags remain useful; ash's tag requires optional blocks.
+                    return namespace.equals("naturality") && path.startsWith("tags/")
+                        && !path.equals("tags/block/no_ash_overlays.json");
                 }
                 return !namespace.equals("minecraft") || !path.equals("worldgen/noise_settings/end.json")
                     || Feature.END_TERRAIN.enabled();

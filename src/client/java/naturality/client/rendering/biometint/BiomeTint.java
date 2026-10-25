@@ -1,6 +1,7 @@
 package naturality.client.rendering.biometint;
 
 import java.util.Set;
+import net.fabricmc.fabric.api.client.renderer.v1.mesh.MutableQuadView;
 import net.minecraft.client.color.block.BlockColors;
 import net.minecraft.client.color.block.BlockTintSource;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
@@ -14,6 +15,13 @@ import org.jspecify.annotations.Nullable;
 @org.jspecify.annotations.NullMarked
 public final class BiomeTint {
     private BiomeTint() {}
+
+    /** Optional terrain context access, injected into Sodium's declaring superclass. */
+    public interface Context {
+        BlockAndTintGetter naturality$tintLevel();
+        BlockState naturality$tintState();
+        BlockPos naturality$tintPos();
+    }
 
     /** Retain the native item/particle contracts; only terrain vertices use the field. */
     public record Source(BlockTintSource original) implements BlockTintSource {
@@ -68,6 +76,14 @@ public final class BiomeTint {
 
         public int at(double x, double y, double z) {
             return BiomeTint.at(source, level, state, pos, x, y, z, this);
+        }
+
+        public void tint(MutableQuadView quad) {
+            var offset = state.getOffset(pos);
+            for (int i = 0; i < 4; i++) {
+                int tint = at(quad.x(i) + offset.x, quad.y(i) + offset.y, quad.z(i) + offset.z);
+                quad.color(i, ARGB.multiply(quad.color(i), tint));
+            }
         }
     }
 

@@ -26,41 +26,54 @@ public final class GameplaySettings {
     private GameplaySettings() {}
 
     public static GameplaySettingsPayload serverSettings() {
+        if (naturality.config.startup.FeatureConfig.clientOnly())
+            return new GameplaySettingsPayload(false, true, false, false, false, false, false, 200, 30);
         var config = NaturalityServerConfig.get();
         return new GameplaySettingsPayload(config.fireWrapping, config.vanillaPortalEntry, config.snowWrapping, config.snowCompaction, config.weatherThaw, config.weatherSnowAccumulation, config.sleepAcceleration, config.sleepMaxSpeed, config.sleepRampSeconds);
     }
 
-    public static GameplaySettingsPayload displayedSettings() { return clientSettings == null ? serverSettings() : clientSettings; }
+    public static GameplaySettingsPayload displayedSettings() {
+        if (naturality.config.startup.FeatureConfig.clientOnly()) return serverSettings();
+        return clientSettings == null ? serverSettings() : clientSettings;
+    }
     public static void setClientSettings(@org.jspecify.annotations.Nullable GameplaySettingsPayload settings) { clientSettings = settings; }
     public static boolean clientFireWrapping() {
+        if (naturality.config.startup.FeatureConfig.clientOnly()) return false;
         var settings = clientSettings;
         return settings == null ? NaturalityServerConfig.get().fireWrapping : settings.fireWrapping();
     }
     public static boolean clientPhysicalPortalEntry() {
+        if (naturality.config.startup.FeatureConfig.clientOnly()) return false;
         var settings = clientSettings;
         return !(settings == null ? NaturalityServerConfig.get().vanillaPortalEntry : settings.vanillaPortalEntry());
     }
     public static boolean fireWrapping(BlockGetter level) {
+        if (naturality.config.startup.FeatureConfig.clientOnly()) return false;
         if (level instanceof Level world && !world.isClientSide()) return NaturalityServerConfig.get().fireWrapping;
         return clientFireWrapping();
     }
     public static boolean clientSnowWrapping() {
+        if (naturality.config.startup.FeatureConfig.clientOnly()) return false;
         var settings = clientSettings;
         return settings == null ? NaturalityServerConfig.get().snowWrapping : settings.snowWrapping();
     }
     public static boolean clientSnowCompaction() {
+        if (naturality.config.startup.FeatureConfig.clientOnly()) return false;
         var settings = clientSettings;
         return settings == null ? NaturalityServerConfig.get().snowCompaction : settings.snowCompaction();
     }
     public static boolean clientWeatherThaw() {
+        if (naturality.config.startup.FeatureConfig.clientOnly()) return false;
         var settings = clientSettings;
         return settings == null ? NaturalityServerConfig.get().weatherThaw : settings.weatherThaw();
     }
     public static boolean clientWeatherSnowAccumulation() {
+        if (naturality.config.startup.FeatureConfig.clientOnly()) return false;
         var settings = clientSettings;
         return settings == null ? NaturalityServerConfig.get().weatherSnowAccumulation : settings.weatherSnowAccumulation();
     }
     public static boolean snowWrapping(BlockGetter level) {
+        if (naturality.config.startup.FeatureConfig.clientOnly()) return false;
         // Static block-state caches must retain vanilla shapes for live OFF transitions.
         if (level == net.minecraft.world.level.EmptyBlockGetter.INSTANCE) return false;
         if (level instanceof net.minecraft.world.level.WorldGenLevel) return NaturalityServerConfig.get().snowWrapping;
@@ -68,6 +81,7 @@ public final class GameplaySettings {
         return clientSnowWrapping();
     }
     public static boolean physicalPortalEntry(Level level) {
+        if (naturality.config.startup.FeatureConfig.clientOnly()) return false;
         return level.isClientSide() ? clientPhysicalPortalEntry() : !NaturalityServerConfig.get().vanillaPortalEntry;
     }
 

@@ -84,6 +84,7 @@ public final class FogMixins {
         private void naturality$beginFrame(GraphicsResourceAllocator allocator, boolean outline,
                 CameraRenderState camera, GpuBufferSlice fog, Vector4f fogColor,
                 boolean sky, boolean consistentDepth, CallbackInfo ci) {
+            naturality.client.api.rendering.ShaderPacks.prepareFrame();
             EndFogComposite.beginFrame(fogColor);
             naturality.client.systems.weather.wind.WindRendering.beginFrame();
             naturality.client.ui.menus.previews.MenuSurface.MenuFog.prepare();
@@ -110,6 +111,7 @@ public final class FogMixins {
 
         @Inject(method = "executeOit", at = @At("HEAD"))
         private void naturality$waterBeforeOit(ChunkSectionsToRender chunks, FeatureRenderDispatcher.PreparedFrame features, CallbackInfo ci) {
+            if (naturality.client.api.rendering.ShaderPacks.active()) return;
             naturality.client.fluids.water.WaterComposite.render(targets.main.get(), chunks, features, true);
             var target = targets.main.get();
             var color = target.getColorTextureView();
@@ -123,6 +125,10 @@ public final class FogMixins {
         }
 
         @Unique private boolean naturality$needsBackgroundClouds() {
+            if (naturality.client.api.rendering.ShaderPacks.active()) return false;
+            // Menu cutoff covers also occur in translucent terrain. Finish those
+            // before blending clouds, using the menu's cover-aware depth capture.
+            if (naturality.client.ui.menus.previews.MenuPreview.active()) return false;
             var level = net.minecraft.client.Minecraft.getInstance().level;
             return !naturality$backgroundClouds && level != null
                 && level.dimension().equals(Level.OVERWORLD) && optionsRenderState.cloudStatus != CloudStatus.OFF
@@ -139,6 +145,7 @@ public final class FogMixins {
         }
         @Inject(method = "addMainPass", at = @At("HEAD"))
         private void naturality$captureBackground(CallbackInfo ci, @Local(argsOnly = true) FrameGraphBuilder frame) {
+            if (naturality.client.api.rendering.ShaderPacks.active()) return;
             // Also runs when boss fog suppresses the sky pass: the cleared background
             // is then exactly what transparent geometry should reveal.
             var pass = frame.addPass("naturality_end_sky_capture");
@@ -168,6 +175,9 @@ public final class FogMixins {
 
         @Inject(method = "executeOutline", at = @At("HEAD"))
         private void naturality$fogThenClouds(FeatureRenderDispatcher.PreparedFrame features, CallbackInfo ci) {
+            // Iris owns the scene-color targets and their resolve/composite order.
+            // Native full-screen passes cannot sample Minecraft's main target here.
+            if (naturality.client.api.rendering.ShaderPacks.active()) return;
             // The opaque/OIT pass has closed. Replay classic transparency after
             // refraction, then finish the existing atmosphere/cloud ordering.
             var target = targets.main.get();
@@ -210,11 +220,14 @@ public final class FogMixins {
             // Clouds are a separate sorted overlay in either scene-transparency mode.
             // Keeping them out of the scene OIT coefficients prevents water fog from
             // changing cloud coverage or darkening the gradient on the final blend.
+            boolean menu = naturality.client.ui.menus.previews.MenuPreview.active();
+            if (menu) naturality.client.sky.shared.clouds.CloudLayerRenderer.WaterOrder.prepare(target, clouds, cloudStatus);
             try (var pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
                     () -> "Naturality clouds after edge fog", colorView, Optional.empty(),
                     target.getDepthTextureView(), OptionalDouble.empty())) {
                 RenderSystem.bindDefaultUniforms(pass);
-                clouds.render(cloudStatus, pass);
+                if (menu) naturality.client.sky.shared.clouds.CloudLayerRenderer.WaterOrder.render(clouds, cloudStatus, pass, false);
+                else clouds.render(cloudStatus, pass);
             }
             naturality$clouds = null;
             naturality.client.fluids.water.WaterComposite.renderSurface(target);
@@ -222,6 +235,7 @@ public final class FogMixins {
 
         @Inject(method = "close", at = @At("TAIL"))
         private void naturality$close(CallbackInfo ci) {
+            naturality.client.api.rendering.ShaderPacks.close();
             EndFogComposite.close();
             naturality.client.rendering.heatwaves.HeatWaves.close();
             naturality.client.sky.shared.aurora.AuroraRenderer.close();
@@ -256,6 +270,7 @@ public final class FogMixins {
         @ModifyVariable(method = "updateBuffer(Ljava/nio/ByteBuffer;ILorg/joml/Vector4f;FFFFFF)V",
             at = @At("HEAD"), argsOnly = true, ordinal = 0)
         private Vector4f naturality$uploadMode(Vector4f color) {
+            if (naturality.client.api.rendering.ShaderPacks.active()) return color;
             if (color.w == 0.0F) return color; // Preserve the renderer's empty/disabled fog buffer.
             // Magnitudes 2..3 carry world-only fog brightness. Sign still selects
             // the atmosphere composite. Never change FogData's sky/clear RGB.

@@ -25,6 +25,11 @@ import net.minecraft.client.renderer.BiomeColors;
 import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.levelgen.Heightmap;
+import java.util.Comparator;
+import java.util.Spliterator;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 @org.jspecify.annotations.NullMarked
 public final class WeatherClient {
@@ -32,7 +37,8 @@ public final class WeatherClient {
     private static @org.jspecify.annotations.Nullable Object connection;
     private WeatherClient() {}
     public static void initialize() {
-        ClientPlayNetworking.registerGlobalReceiver(EndWeatherPayload.TYPE, (p,_) -> EndWeatherSystem.receive(p));
+        if (!naturality.config.startup.FeatureConfig.clientOnly())
+            ClientPlayNetworking.registerGlobalReceiver(EndWeatherPayload.TYPE, (p,_) -> EndWeatherSystem.receive(p));
         ClientPlayConnectionEvents.INIT.register((_,_) -> EndWeatherSystem.clearClient());
         ClientPlayConnectionEvents.DISCONNECT.register((_,_) -> EndWeatherSystem.clearClient());
         DistantLightningClient.initialize();
@@ -48,7 +54,8 @@ public final class WeatherClient {
             connection = null;
             world = null;
         });
-        ClientPlayNetworking.registerGlobalReceiver(WeatherPayload.TYPE, (payload, _) -> WeatherSystem.receive(payload));
+        if (!naturality.config.startup.FeatureConfig.clientOnly())
+            ClientPlayNetworking.registerGlobalReceiver(WeatherPayload.TYPE, (payload, _) -> WeatherSystem.receive(payload));
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK.register(WeatherClient::tick);
     }
     private static void tick(Minecraft client) {
@@ -63,7 +70,11 @@ public final class WeatherClient {
         }
         if (world != client.level) { WindAudio.stop(client); world = client.level; WeatherSoundEnvironment.reset(); }
         var world = WeatherClient.world;
-        if (world == null || client.isPaused()) return;
+        // Exposure is consumed only by optional weather audio, fog and lightning.
+        // Keep connection cleanup/network state above, without casting shelter
+        // rays every tick when the visual overhaul is disabled at startup.
+        if (world == null || client.isPaused()
+                || !naturality.config.startup.FeatureConfig.Feature.VISUAL_OVERHAUL.enabled()) return;
         WeatherSoundEnvironment.tick(client);
         var state = WeatherSystem.state(world);
         WindAudio.update(client, state);
@@ -136,24 +147,110 @@ public final class WeatherClient {
         }
     }
 
-    /** Client-thread scratch data, valid only during a particle update, spawn or render pass. */
+    /** Thread-confined scratch data, valid only during a particle update, spawn or render pass. */
     public static final class WeatherParticleContext {
         private static final int MAX_ENTRIES = 8192;
-        private static final Long2IntOpenHashMap HEIGHTS = new Long2IntOpenHashMap();
-        private static final Long2IntOpenHashMap TINTS = new Long2IntOpenHashMap();
-        private static final Long2IntOpenHashMap LIGHTS = new Long2IntOpenHashMap();
-        private static final Long2ByteOpenHashMap SKY=new Long2ByteOpenHashMap();
-        private static final Long2ObjectOpenHashMap<Biome.Precipitation> PRECIPITATION = new Long2ObjectOpenHashMap<>();
-        private static @org.jspecify.annotations.Nullable ClientLevel world;
-        private static @org.jspecify.annotations.Nullable State state;
-        private static @org.jspecify.annotations.Nullable Wind wind;
-        static {
-            HEIGHTS.defaultReturnValue(Integer.MAX_VALUE);
-            TINTS.defaultReturnValue(Integer.MIN_VALUE);
-            LIGHTS.defaultReturnValue(Integer.MIN_VALUE);
-        }
+        private static final ThreadLocal<PassStack> PASSES = ThreadLocal.withInitial(PassStack::new);
 
         private WeatherParticleContext() { }
+
+        /** Particle engines and groups expose their own world, including during disconnect. */
+        public interface LevelOwner {
+            @org.jspecify.annotations.Nullable ClientLevel naturality$particleLevel();
+        }
+
+        public static @org.jspecify.annotations.Nullable ClientLevel level(Object owner) {
+            return owner instanceof LevelOwner access ? access.naturality$particleLevel() : null;
+        }
+
+        /** Each parallel-stream leaf establishes its scope on the thread consuming that leaf. */
+        public static <T> Stream<T> scopedStream(ClientLevel level, Stream<T> stream) {
+            boolean parallel = stream.isParallel();
+            return StreamSupport.stream(new ScopedSpliterator<>(level, stream.spliterator()), parallel)
+                .onClose(stream::close);
+        }
+
+        private static final class ScopedSpliterator<T> implements Spliterator<T> {
+            private final ClientLevel level;
+            private final Spliterator<T> delegate;
+
+            private ScopedSpliterator(ClientLevel level, Spliterator<T> delegate) {
+                this.level = level;
+                this.delegate = delegate;
+            }
+
+            @Override public @org.jspecify.annotations.Nullable Spliterator<T> trySplit() {
+                var split = delegate.trySplit();
+                return split == null ? null : new ScopedSpliterator<>(level, split);
+            }
+
+            @Override public void forEachRemaining(@org.jspecify.annotations.Nullable Consumer<? super T> action) {
+                var consumer = java.util.Objects.requireNonNull(action);
+                begin(level);
+                try { delegate.forEachRemaining(consumer); }
+                finally { end(); }
+            }
+
+            @Override public boolean tryAdvance(@org.jspecify.annotations.Nullable Consumer<? super T> action) {
+                // Short-circuiting streams can request single elements. The normal
+                // particle map/toList path uses one forEachRemaining scope per leaf.
+                var consumer = java.util.Objects.requireNonNull(action);
+                begin(level);
+                try { return delegate.tryAdvance(consumer); }
+                finally { end(); }
+            }
+
+            @Override public long estimateSize() { return delegate.estimateSize(); }
+            @Override public int characteristics() { return delegate.characteristics(); }
+            @Override public @org.jspecify.annotations.Nullable Comparator<? super T> getComparator() {
+                return delegate.getComparator();
+            }
+        }
+
+        // Async particle ticks can overlap spawning/extraction and each other.
+        // Reuse the outer scratch maps without sharing them across threads. A nested
+        // pass gets independent data and restores its caller's immutable snapshots.
+        private static final class PassStack {
+            private @org.jspecify.annotations.Nullable Pass reusable;
+            private @org.jspecify.annotations.Nullable Pass current;
+        }
+
+        private static final class Pass {
+            private final @org.jspecify.annotations.Nullable Pass parent;
+            private final Long2IntOpenHashMap heights = new Long2IntOpenHashMap();
+            private final Long2IntOpenHashMap tints = new Long2IntOpenHashMap();
+            private final Long2IntOpenHashMap lights = new Long2IntOpenHashMap();
+            private final Long2ByteOpenHashMap sky = new Long2ByteOpenHashMap();
+            private final Long2ObjectOpenHashMap<Biome.Precipitation> precipitation = new Long2ObjectOpenHashMap<>();
+            private @org.jspecify.annotations.Nullable ClientLevel world;
+            private @org.jspecify.annotations.Nullable State state;
+            private @org.jspecify.annotations.Nullable Wind wind;
+
+            private Pass(@org.jspecify.annotations.Nullable Pass parent) {
+                this.parent = parent;
+                heights.defaultReturnValue(Integer.MAX_VALUE);
+                tints.defaultReturnValue(Integer.MIN_VALUE);
+                lights.defaultReturnValue(Integer.MIN_VALUE);
+            }
+
+            private void clear() {
+                // Worker pools outlive worlds: keep only empty primitive scratch
+                // storage after a pass, never its world, camera or weather snapshot.
+                world = null;
+                state = null;
+                wind = null;
+                heights.clear();
+                tints.clear();
+                lights.clear();
+                sky.clear();
+                precipitation.clear();
+            }
+        }
+
+        private static @org.jspecify.annotations.Nullable Pass current(ClientLevel level) {
+            var pass = PASSES.get().current;
+            return pass != null && pass.world == level ? pass : null;
+        }
 
         public record State(boolean enabled, double rainWindX, double rainWindZ,
                             double snowWindX, double snowWindZ, float snowFallMultiplier, Vec3 eye, int radius,
@@ -167,34 +264,40 @@ public final class WeatherClient {
         }
         public record Wind(boolean enabled,double x,double z,@org.jspecify.annotations.Nullable Entity camera) { }
         public static Wind wind(ClientLevel level) {
-            var cached=wind;
-            if(world==level && cached!=null)return cached;
+            var pass = current(level);
+            var cached = pass == null ? null : pass.wind;
+            if(cached!=null)return cached;
             var weather=ParticleWeather.weatherState(level);
             var result=new Wind(weather!=null && NaturalityConfig.get().effects.particleWind,
                 weather==null?0:weather.windX()*.007,weather==null?0:weather.windZ()*.007,Minecraft.getInstance().getCameraEntity());
-            if(world==level)wind=result;
+            if(pass!=null)pass.wind=result;
             return result;
         }
 
         public static void begin(ClientLevel level) {
-            end();
-            world = level;
+            var stack = PASSES.get();
+            Pass pass;
+            if (stack.current == null) {
+                var reusable = stack.reusable;
+                if (reusable == null) stack.reusable = reusable = new Pass(null);
+                pass = reusable;
+            } else pass = new Pass(stack.current);
+            pass.world = level;
+            stack.current = pass;
         }
 
         public static void end() {
-            world = null;
-            state = null;
-            wind = null;
-            HEIGHTS.clear();
-            TINTS.clear();
-            LIGHTS.clear();
-            SKY.clear();
-            PRECIPITATION.clear();
+            var stack = PASSES.get();
+            var pass = stack.current;
+            if (pass == null) return;
+            stack.current = pass.parent;
+            pass.clear();
         }
 
         public static State state(ClientLevel level) {
-            var cached = state;
-            if (world == level && cached != null) return cached;
+            var pass = current(level);
+            var cached = pass == null ? null : pass.state;
+            if (cached != null) return cached;
             var client = Minecraft.getInstance();
             var weather = ParticleWeather.weatherState(level);
             // Keep the original double multiplication (weather wind components are floats).
@@ -205,29 +308,31 @@ public final class WeatherClient {
                 windX * .34, windZ * .34, windX * .10, windZ * .10,
                 weather == null ? 1 : weather.snowFallMultiplier(),
                 client.gameRenderer.mainCamera().position(), ParticleWeather.radius(client),weather==null?0:weather.heavyRainFog());
-            if (world == level) state = result;
+            if (pass != null) pass.state = result;
             return result;
         }
 
         public static int waterTint(ClientLevel level, BlockPos pos) {
             if (naturality.client.ui.menus.previews.MenuPreview.active()) pos = naturality.client.ui.menus.previews.MenuPreview.spawn();
-            if (world != level) return BiomeColors.getAverageWaterColor(level, pos);
+            var pass = current(level);
+            if (pass == null) return BiomeColors.getAverageWaterColor(level, pos);
             long key = pos.asLong();
-            int cached=TINTS.get(key);
+            int cached=pass.tints.get(key);
             if(cached!=Integer.MIN_VALUE)return cached;
             int color = BiomeColors.getAverageWaterColor(level, pos);
-            if (TINTS.size() < MAX_ENTRIES) TINTS.put(key, color);
+            if (pass.tints.size() < MAX_ENTRIES) pass.tints.put(key, color);
             return color;
         }
 
         public static Biome.Precipitation precipitation(ClientLevel level, BlockPos pos) {
             if (naturality.client.ui.menus.previews.MenuPreview.active()) pos = naturality.client.ui.menus.previews.MenuPreview.spawn();
-            if (world != level) return level.getPrecipitationAt(pos);
+            var pass = current(level);
+            if (pass == null) return level.getPrecipitationAt(pos);
             long key = pos.asLong();
-            var cached = PRECIPITATION.get(key);
+            var cached = pass.precipitation.get(key);
             if (cached != null) return cached;
             var kind = level.getPrecipitationAt(pos);
-            if (PRECIPITATION.size() < MAX_ENTRIES) PRECIPITATION.put(key, kind);
+            if (pass.precipitation.size() < MAX_ENTRIES) pass.precipitation.put(key, kind);
             return kind;
         }
 
@@ -235,35 +340,38 @@ public final class WeatherClient {
         public static int light(ClientLevel level,BlockPos pos) {
             if (naturality.client.ui.menus.previews.MenuPreview.active()) pos = naturality.client.ui.menus.previews.MenuPreview.spawn().above(8);
             long key=pos.asLong();
-            if(world==level) {
-                int cached=LIGHTS.get(key);
+            var pass = current(level);
+            if(pass!=null) {
+                int cached=pass.lights.get(key);
                 if(cached!=Integer.MIN_VALUE)return cached;
             }
             int light=naturality.api.worlds.LoadedChunks.has(level,pos)?LightCoordsUtil.getLightCoords(level,pos):15728640;
-            if(world==level && LIGHTS.size()<MAX_ENTRIES)LIGHTS.put(key,light);
+            if(pass!=null && pass.lights.size()<MAX_ENTRIES)pass.lights.put(key,light);
             return light;
         }
         public static boolean canSeeSky(ClientLevel level,BlockPos pos) {
-            if(world!=level)return level.canSeeSky(pos);
+            var pass = current(level);
+            if(pass==null)return level.canSeeSky(pos);
             long key=pos.asLong();
-            byte cached=SKY.get(key);
+            byte cached=pass.sky.get(key);
             if(cached!=0)return cached==2;
             boolean visible=level.canSeeSky(pos);
-            if(SKY.size()<MAX_ENTRIES)SKY.put(key,(byte)(visible?2:1));
+            if(pass.sky.size()<MAX_ENTRIES)pass.sky.put(key,(byte)(visible?2:1));
             return visible;
         }
 
         /** Integer.MIN_VALUE means absent; getChunkNow never loads a chunk. */
         public static int floor(ClientLevel level, int x, int z) {
             long key = ((long)x << 32) ^ (z & 0xffffffffL);
-            if(world==level) {
-                int cached=HEIGHTS.get(key);
+            var pass = current(level);
+            if(pass!=null) {
+                int cached=pass.heights.get(key);
                 if(cached!=Integer.MAX_VALUE)return cached;
             }
             var chunk = level.getChunkSource().getChunkNow(x >> 4, z >> 4);
             int height = chunk == null ? Integer.MIN_VALUE
                 : chunk.getHeight(Heightmap.Types.MOTION_BLOCKING,x&15,z&15)+1;
-            if (world == level && HEIGHTS.size() < MAX_ENTRIES) HEIGHTS.put(key, height);
+            if (pass != null && pass.heights.size() < MAX_ENTRIES) pass.heights.put(key, height);
             return height;
         }
     }

@@ -22,6 +22,14 @@ public class Naturality implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
+        naturality.config.startup.FeatureConfig.get().save();
+        if (naturality.config.startup.FeatureConfig.clientOnly()) {
+            // Local visual resources retain native registry IDs. No gameplay holders,
+            // payloads or server callbacks may be initialized in the strict client mode.
+            NaturalitySounds.initialize();
+            NaturalityParticles.initialize();
+            return;
+        }
         naturality.effects.stunned.Stunned.initialize();
         naturality.items.swords.SwordCounter.initialize();
         naturality.systems.enchanting.framework.Enchanting.initialize();
@@ -29,9 +37,9 @@ public class Naturality implements ModInitializer {
         naturality.systems.navigation.NavigationInstruments.NavigationTargetPayload.initialize();
         if (naturality.config.startup.FeatureConfig.Feature.NAVIGATION_INSTRUMENTS.enabled()) naturality.systems.navigation.NavigationInstruments.initialize();
         naturality.entities.arrows.ArrowImpactPayload.initialize();
-        naturality.config.startup.FeatureConfig.get().save();
         if (naturality.config.startup.FeatureConfig.Feature.CONTENT.enabled()) {
             NaturalityBlocks.initialize();
+            naturality.blocks.lilypad.LilypadMotion.initialize();
             NaturalityItems.initialize();
             naturality.worldgen.overworld.clover.CloverPatchesFeature.initialize();
             naturality.worldgen.overworld.sand.SandLayersFeature.initialize();
@@ -59,6 +67,9 @@ public class Naturality implements ModInitializer {
 		NaturalitySounds.initialize();
         NaturalityParticles.initialize();
         if (naturality.config.startup.FeatureConfig.Feature.VILLAGER_WORK.enabled()) naturality.systems.fishing.VillagerBobbers.FishingSpots.initialize();
+        if (naturality.config.startup.FeatureConfig.Feature.VILLAGER_WORK.enabled()
+                || naturality.config.startup.FeatureConfig.Feature.VILLAGER_GATES.enabled())
+            naturality.systems.villagerwork.framework.VillagerWork.initialize();
         if (naturality.config.startup.FeatureConfig.Feature.REPUTATION.enabled()) naturality.systems.reputation.Reputation.initialize();
 		naturality.portals.nether.opening.PortalOpeningManager.initialize();
 		// This code runs as soon as Minecraft is in a mod-load-ready state.

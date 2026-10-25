@@ -50,7 +50,15 @@ public final class BookshelfVisuals {
         .withTexture("Sampler0", ItemFeatureRenderer.ENCHANTED_GLINT_ITEM)
         // Custom geometry is routed by blending, regardless of the solid-model flag.
         .setOitPipelines(GLINT_OIT).createRenderSetup());
-    public static final RenderType GLOW = PlacementGlow.create("bookshelf_book_glow", true).geometry("naturality_bookshelf_book_glow", PALETTE);
+    public static final RenderType GLOW;
+    static {
+        var glow = PlacementGlow.create("bookshelf_book_glow", true);
+        // Both confirmed encoded draws need Iris's scene target. Their programs
+        // and native/OIT paths keep the same geometry and authored palette.
+        naturality.client.api.rendering.ShaderPacks.registerScenePipeline(GLINT_PIPELINE);
+        naturality.client.api.rendering.ShaderPacks.registerScenePipeline(glow.pipeline());
+        GLOW = glow.geometry("naturality_bookshelf_book_glow", PALETTE);
+    }
     private static final Map<BlockState, List<Slot>> SLOTS = new HashMap<>();
     private static @org.jspecify.annotations.Nullable Object loadedModels;
     public record Pixel(List<Vec3> corners, int x, int y) {}

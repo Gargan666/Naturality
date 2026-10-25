@@ -1,9 +1,7 @@
 package naturality.client.ui.menus.title;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.components.LogoRenderer;
-import net.minecraft.client.gui.components.SplashRenderer;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.ARGB;
@@ -26,8 +24,7 @@ public final class TitleLogo {
                 ARGB.white(renderer.keepLogoThroughFade() ? 1.0F : alpha));
     }
 
-    public static void splash(SplashRenderer splash, GuiGraphicsExtractor graphics,
-                                       int width, Font font, float alpha) {
+    public static void splash(GuiGraphicsExtractor graphics, int width, Runnable draw) {
         float scale = width / 640.0F;
         float logoBottom = graphics.guiHeight() * 0.09F + width * 0.6F * (43.0F / 271.0F);
         float splashX = width * 0.72F;
@@ -37,7 +34,7 @@ public final class TitleLogo {
             // Offset the native anchor while retaining its angle, pulse and fade.
             graphics.pose().translate(splashX - 123.0F * scale, splashY - 69.0F * scale);
             graphics.pose().scale(scale, scale);
-            splash.extractRenderState(graphics, 0, font, alpha);
+            draw.run();
         } finally {
             graphics.pose().popMatrix();
         }

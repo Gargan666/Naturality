@@ -60,12 +60,10 @@ layout(location = 15) flat in int naturalitySubmerged;
 layout(location = 0) out vec4 fragColor;
 #endif
 
-#ifndef NATURALITY_SODIUM
 layout(location = 16) flat in int naturalityGlassKind;
 layout(location = 17) in vec3 naturalityGlassRelative;
 layout(location = 18) flat in vec3 naturalityGlassForward;
 #include <naturality:glass_shine.glsl>
-#endif
 
 vec4 calculateFinalColor(vec4 color, bool waterSprite, bool submergedTerrain) {
     vec3 waterOffset = naturalityBlockPosition
@@ -237,10 +235,7 @@ void main() {
     }
     // Both images live in the existing atlas; geometry, light and metadata stay
     // unchanged. The blend follows the camera every frame, including while paused.
-    bool glassSprite = false;
-    #ifndef NATURALITY_SODIUM
-    glassSprite = naturalityGlassKind >= 0;
-    #endif
+    bool glassSprite = naturalityGlassKind >= 0;
     float textureFade = naturality_texture_lod_weight(texCoord0, NaturalityLodBounds, sphericalVertexDistance);
     vec2 averageUV = naturality_texture_average_uv(texCoord0, NaturalityLodBounds);
     #ifdef ALPHA_CUTOUT
@@ -274,11 +269,9 @@ void main() {
     if (naturalityFluidKind >= 0)
         surfaceColor = naturality_fluid_color(naturalityFluidKind, naturalityBlockPosition, naturalitySectionOrigin, naturalityFluidUV, naturalityFlow);
     vec4 color = surfaceColor * lighting;
-    #ifndef NATURALITY_SODIUM
     // Shade the original texture before adding the face-shading-independent reflection.
     if (glassSprite) color.rgb = naturality_shadow_saturation(color.rgb, lighting.rgb);
     color = naturality_glass_shine(color, light.rgb, positionDx, positionDy);
-    #endif
     if (naturalityFireKind >= 0)
         color = naturality_fire_color(naturalityFireKind, naturalityFireUV,
             naturality_fire_resolution(naturalityBlockPosition, naturalityFireUV), naturalityFireSeed);

@@ -34,6 +34,7 @@ public final class CloudLayerRenderer implements AutoCloseable {
     /** Private self-occlusion depth; translucent clouds never become solid scene depth. */
     public static final class WaterOrder {
         private static com.mojang.blaze3d.pipeline.@Nullable TextureTarget nearest;
+        private static com.mojang.blaze3d.pipeline.@Nullable TextureTarget menuScene;
         private static boolean prepared;
         private static int phase;
         private WaterOrder() {}
@@ -42,7 +43,8 @@ public final class CloudLayerRenderer implements AutoCloseable {
         public static void prepare(com.mojang.blaze3d.pipeline.RenderTarget scene, CloudRenderer clouds, CloudStatus status) {
             prepared=false;
             if (!naturality.config.live.NaturalityConfig.get().clouds.enabled
-                    || naturality.client.fluids.water.WaterComposite.maskView()==null) return;
+                    || (naturality.client.fluids.water.WaterComposite.maskView()==null
+                        && !naturality.client.ui.menus.previews.MenuPreview.active())) return;
             var target=nearest;
             if(target==null || target.width!=scene.width || target.height!=scene.height) {
                 close();
@@ -51,6 +53,20 @@ public final class CloudLayerRenderer implements AutoCloseable {
                 nearest=target;
             }
             target.copyDepthFrom(scene);
+            if (naturality.client.ui.menus.previews.MenuPreview.active()) {
+                var opaque = menuScene;
+                if (opaque == null || opaque.width != scene.width || opaque.height != scene.height) {
+                    if (opaque != null) opaque.destroyBuffers();
+                    opaque = new com.mojang.blaze3d.pipeline.TextureTarget("Naturality menu cloud scene", scene.width, scene.height,
+                        com.mojang.renderpearl.api.GpuFormat.RGBA8_UNORM, com.mojang.renderpearl.api.GpuFormat.D32_FLOAT);
+                    menuScene = opaque;
+                }
+                opaque.copyDepthFrom(scene);
+                // Covers must still occlude terrain, but not participate in cloud self-occlusion.
+                RenderSystem.getDevice().createCommandEncoder().clearColorAndDepthTextures(
+                    java.util.Objects.requireNonNull(target.getColorTexture()), new Vector4f(0.0F),
+                    java.util.Objects.requireNonNull(target.getDepthTexture()), 0.0);
+            }
             var color=target.getColorTextureView();
             if(color==null) return;
             try(var pass=RenderSystem.getDevice().createCommandEncoder().createRenderPass(
@@ -68,6 +84,7 @@ public final class CloudLayerRenderer implements AutoCloseable {
         }
         public static void close() {
             if(nearest!=null) { nearest.destroyBuffers(); nearest=null; }
+            if(menuScene!=null) { menuScene.destroyBuffers(); menuScene=null; }
             prepared=false; phase=0;
         }
     }
@@ -219,6 +236,8 @@ public final class CloudLayerRenderer implements AutoCloseable {
             RenderPipeline renderPipeline = settings.style != 2 ? CloudPipelines.VOLUME : CloudPipelines.FLAT;
             if(WaterOrder.phase!=0) renderPipeline=WaterOrder.phase==1
                 ? CloudPipelines.BEHIND_WATER : CloudPipelines.IN_FRONT_OF_WATER;
+            if (WaterOrder.phase != 0 && naturality.client.ui.menus.previews.MenuPreview.active())
+                renderPipeline = CloudPipelines.MENU;
             renderPass.pushDebugGroup(() -> "Clouds");
             RenderSystem.bindDefaultUniforms(renderPass);
             this.render(renderPass, renderPipeline);
@@ -248,10 +267,12 @@ public final class CloudLayerRenderer implements AutoCloseable {
         if(WaterOrder.phase!=0) {
             var target=WaterOrder.nearest;
             var water=naturality.client.fluids.water.WaterComposite.maskView();
-            if(target==null || water==null) return;
+            if(target==null || (water==null && !naturality.client.ui.menus.previews.MenuPreview.active())) return;
             var sampler=RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST);
             renderPass.setUniform("CloudNearestDepth",target.getDepthTextureView(),sampler);
-            renderPass.setUniform("CloudWaterMask",water,sampler);
+            var menuScene = WaterOrder.menuScene;
+            renderPass.setUniform("CloudSceneDepth", menuScene == null ? target.getDepthTextureView() : menuScene.getDepthTextureView(), sampler);
+            renderPass.setUniform("CloudWaterMask",water == null ? target.getDepthTextureView() : water,sampler);
         }
         renderPass.setUniform("DynamicTransforms", dynamicTransforms);
         renderPass.setIndexBuffer(indexBuffer, indices.type());

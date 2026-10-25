@@ -21,6 +21,7 @@ public final class SkyEventsClient {
     public static void initialize() {
         ClientPlayConnectionEvents.INIT.register((_, _) -> { VALUES.clear(); APPEARANCES.clear(); });
         ClientPlayConnectionEvents.DISCONNECT.register((_, _) -> { VALUES.clear(); APPEARANCES.clear(); });
+        if (naturality.config.startup.FeatureConfig.clientOnly()) return;
         ClientPlayNetworking.registerGlobalReceiver(SkyEventPayload.TYPE, (p, context) -> context.client().execute(() -> {
             if (Float.isFinite(p.strength())) VALUES.put(new Key(p.dimension(), p.event()), Math.clamp(p.strength(), 0, 20));
             APPEARANCES.put(new Key(p.dimension(), p.event()), p.appearance());

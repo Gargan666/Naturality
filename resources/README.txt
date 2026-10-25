@@ -140,7 +140,7 @@ Other languages can provide the same keys in their corresponding language file.
 Plain text works as before. Put arithmetic formulas inside braces to calculate values.
 The only variable is level: the actual enchantment level, including stacked curses.
   {level}                 Display the level itself.
-  {25 * level}            Multiply the level by 25; x and × also mean multiplication.
+  {25 * level}            Multiply the level by 25; x and Ã— also mean multiplication.
   {10 + 5 * (level - 1)}  Use addition, subtraction and parentheses.
   {level / 2}             Divide; decimal numbers such as 0.5 are also supported.
 Multiplication/division happen before addition/subtraction; parentheses override this.
@@ -261,3 +261,6 @@ Both model pieces receive biome foliage tint. Edit and rebuild/relaunch.
 FOUR LEAF CLOVER
 textures/item/four_leaf_clover.png supplies the guaranteed Four Leaf Clovers drop and Luck brewing ingredient.
 
+
+GIANT LILYPAD
+textures/block/giant_lilypad.png supplies the full 2x2 texture; each vanilla lilypad plane samples its matching quarter, with vanilla world/item tinting. textures/item/giant_lilypad.png is an exact top-left-quarter crop for the inventory sprite; refresh that crop when the source changes.

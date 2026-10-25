@@ -1,6 +1,16 @@
 {
-  "naturality:shockwave": [],
-  "naturality:steady": [],
+  "naturality:shockwave": [
+    "counter",
+    "repel",
+    "stun"
+  ],
+  "naturality:steady": [
+    "stable",
+    "balanced",
+    "calm",
+    "focus",
+    "posture"
+  ],
   "gibberish": [
     "shenanigans",
     "sigma",

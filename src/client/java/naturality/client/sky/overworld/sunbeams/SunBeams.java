@@ -100,7 +100,7 @@ public final class SunBeams implements AutoCloseable {
         float viewOpacity = 0.3F + 0.7F * focus;
         var settings = naturality.config.live.NaturalityConfig.get().effects;
         if (settings.cameraFlare) flare.prepare(transform, pose, focus, rain, color);
-        if (!settings.sunBeams) return;
+        if (!settings.sunBeams || naturality.client.api.rendering.ShaderPacks.active()) return;
         var tint = new Vector4f(ARGB.red(color) / 255F, ARGB.green(color) / 255F,
             ARGB.blue(color) / 255F, opacity(angle) * rain * viewOpacity);
         var indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);

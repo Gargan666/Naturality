@@ -20,6 +20,8 @@ import net.minecraft.world.phys.AABB;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.WeakHashMap;
+import java.util.Collections;
+import net.minecraft.server.MinecraftServer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.server.level.ServerLevel;
@@ -56,6 +58,31 @@ public final class SnowGeometry {
     }
     public static VoxelShape collisionShape(BlockGetter level, BlockPos pos, int layers) {
         return naturality.api.geometry.SurfaceLayers.collisionShape(level, pos, layers, Blocks.SNOW);
+    }
+    /** Add fitted layer geometry inside this collision cell, preserving the preceding provider's result. */
+    public static VoxelShape fitCollision(VoxelShape result, BlockGetter level, BlockPos pos, BlockState state) {
+        if (naturality.blocks.ash.Ash.isLayer(state))
+            return naturality.api.geometry.SurfaceLayers.collisionShape(level,pos,state.getValue(SnowLayerBlock.LAYERS),state.getBlock());
+        if (state.is(Blocks.SNOW) && GameplaySettings.snowWrapping(level))
+            return collisionShape(level,pos,state.getValue(SnowLayerBlock.LAYERS));
+        if (state.isAir()) return result;
+        // Every displaced addition is clipped to the unit cell. A full cube already
+        // contains it; the canonical cube also avoids the full-shape cache lookup.
+        if(result==net.minecraft.world.phys.shapes.Shapes.block() || Block.isShapeFullBlock(result))return result;
+        if(!naturality.api.geometry.SurfaceLayers.mayHaveDisplacedLayers(level,pos))return result;
+        for (int above=1;above<=MAX_DEPTH;above++) {
+            var owner=pos.above(above); var snow=level.getBlockState(owner);
+            if (!naturality.blocks.ash.Ash.isLayer(snow) && !(snow.is(Blocks.SNOW) && GameplaySettings.snowWrapping(level))) {
+                if(above>=2 && !exposesGround(level,owner))break;
+                continue;
+            }
+            if (snow.getValue(SnowLayerBlock.LAYERS)==1) continue;
+            if(naturality.api.geometry.SurfaceLayers.usesVanillaGeometry(level,owner,snow.getBlock()))continue;
+            var displaced=naturality.api.geometry.SurfaceLayers.collisionShape(level,owner,snow.getValue(SnowLayerBlock.LAYERS),snow.getBlock()).move(0,above,0);
+            result=net.minecraft.world.phys.shapes.Shapes.or(result,net.minecraft.world.phys.shapes.Shapes.join(
+                displaced,net.minecraft.world.phys.shapes.Shapes.block(),net.minecraft.world.phys.shapes.BooleanOp.AND));
+        }
+        return result;
     }
     public static boolean emptyOwnerCell(BlockGetter level, BlockPos pos, int layers) {
         return naturality.api.geometry.SurfaceLayers.emptyOwnerCell(level, pos, layers, Blocks.SNOW);
@@ -156,21 +183,26 @@ public final class SnowGeometry {
     public static final class SnowCompaction {
         private record Travel(ServerLevel level, Vec3 position, boolean grounded, double distance) {}
         private record Pressure(int layers, int hits, long time) {}
-        private static final Map<ServerPlayer, Travel> PLAYERS = new WeakHashMap<>();
-        private static final Map<ServerLevel, Map<BlockPos, Pressure>> PRESSURE = new WeakHashMap<>();
+        private static final Map<MinecraftServer, Map<ServerPlayer, Travel>> PLAYERS = Collections.synchronizedMap(new WeakHashMap<>());
+        private static final Map<ServerLevel, Map<BlockPos, Pressure>> PRESSURE = Collections.synchronizedMap(new WeakHashMap<>());
         private SnowCompaction() {}
         public static void initialize() {
-            ServerLifecycleEvents.SERVER_STOPPED.register(_ -> { PLAYERS.clear(); PRESSURE.clear(); });
+            ServerLifecycleEvents.SERVER_STOPPED.register(SnowCompaction::clearServer);
             ServerTickEvents.END_SERVER_TICK.register(server -> {
-                if (!naturality.config.gameplay.GameplaySettings.NaturalityServerConfig.get().snowCompaction) { PLAYERS.clear(); PRESSURE.clear(); return; }
+                if (!naturality.config.gameplay.GameplaySettings.NaturalityServerConfig.get().snowCompaction) { clearServer(server); return; }
                 for (var player : server.getPlayerList().getPlayers()) tick(player);
             });
         }
+        private static void clearServer(MinecraftServer server) {
+            PLAYERS.remove(server);
+            for (var level : server.getAllLevels()) PRESSURE.remove(level);
+        }
         private static void tick(ServerPlayer player) {
             var level = player.level();
+            var players = PLAYERS.computeIfAbsent(level.getServer(), _ -> new WeakHashMap<>());
             var position = player.position();
             boolean grounded = player.onGround() && !player.isSpectator() && !player.getAbilities().flying && !player.isPassenger();
-            var old = PLAYERS.get(player);
+            var old = players.get(player);
             double distance = 0;
             int hits = 0;
             if (old != null && old.level == level && position.distanceToSqr(old.position) < 16) {
@@ -180,7 +212,7 @@ public final class SnowGeometry {
                     if (distance >= .8) { hits=1; distance %= .8; }
                 }
             }
-            PLAYERS.put(player,new Travel(level,position,grounded,distance));
+            players.put(player,new Travel(level,position,grounded,distance));
             if (hits > 0) {
                 var snow = contact(level,player.getBoundingBox());
                 if (snow != null) press(level,snow,hits);
@@ -210,7 +242,12 @@ public final class SnowGeometry {
             return null;
         }
         public static void press(ServerLevel level, BlockPos pos, int hits) {
-            if (!naturality.config.gameplay.GameplaySettings.NaturalityServerConfig.get().snowCompaction) { PLAYERS.clear(); PRESSURE.clear(); return; }
+            if (!naturality.config.gameplay.GameplaySettings.NaturalityServerConfig.get().snowCompaction) {
+                var server = level.getServer();
+                if (server != null) clearServer(server);
+                else PRESSURE.remove(level);
+                return;
+            }
             if (hits<=0 || !naturality.api.worlds.LoadedChunks.has(level, pos)) return;
             var state=level.getBlockState(pos);
             var history=PRESSURE.computeIfAbsent(level, _ -> new HashMap<>());

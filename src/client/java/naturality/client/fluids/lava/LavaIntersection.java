@@ -231,24 +231,30 @@ public final class LavaIntersection extends QuadParticleRenderState {
         private static final int LIFETIME=16, LIMIT=512, RANGE=24;
         private record Ripple(double x,double z,double y,BlockPos origin,boolean cauldron,int born) {}
         private record Appearance(int tint,int light) {}
+        // Async particle tickers may publish impacts while the client extracts a frame.
+        // Keep world queries and geometry outside this small state lock.
+        private static final Object STATE_LOCK=new Object();
         private static final List<Ripple> RIPPLES=new ArrayList<>();
         private static @org.jspecify.annotations.Nullable ClientLevel world;
         private static int tick;
         private static final Random RANDOM=new Random();
         public static int lastPixelCount,rainSmokeSpawnCount;
         private LavaRipples() {}
-        public static int activeCount(){return RIPPLES.size();}
+        public static int activeCount(){synchronized(STATE_LOCK){return RIPPLES.size();}}
+        // Only the client thread switches ownership, with STATE_LOCK held.
         private static void sync(@org.jspecify.annotations.Nullable ClientLevel level) {
             if(world!=level) {RIPPLES.clear();world=level;tick=0;lastPixelCount=rainSmokeSpawnCount=0;}
         }
         public static void tick(Minecraft client) {
-            sync(client.level);
-            var world = LavaRipples.world;
-            if(client.isPaused()) return;
-            if(world==null || !NaturalityConfig.get().liquids.lava) {RIPPLES.clear();return;}
-            tick++;
+            var world = client.level;
             var eye=client.gameRenderer.mainCamera().position();
-            RIPPLES.removeIf(r->!NaturalityConfig.get().liquids.lavaDripRipples || tick-r.born>=LIFETIME || eye.distanceToSqr(new Vec3(r.x,r.y,r.z))>32*32);
+            synchronized(STATE_LOCK) {
+                sync(world);
+                if(client.isPaused()) return;
+                if(world==null || !NaturalityConfig.get().liquids.lava) {RIPPLES.clear();return;}
+                tick++;
+                RIPPLES.removeIf(r->!NaturalityConfig.get().liquids.lavaDripRipples || tick-r.born>=LIFETIME || eye.distanceToSqr(new Vec3(r.x,r.y,r.z))>32*32);
+            }
             float rain=world.getRainLevel(1);
             if(!NaturalityConfig.get().liquids.lavaRainRipples || rain<=0) return;
             var random=RANDOM;
@@ -271,12 +277,21 @@ public final class LavaIntersection extends QuadParticleRenderState {
             }
         }
         private static void spawn(ClientLevel level,LavaSurface surface,double x,double z) {
-            sync(level);
-            if(RIPPLES.size()>=LIMIT) return;
             // Centers and output cells share the water's world-space grid, including negative coordinates.
             x=(Math.floor(x*16)+0.5)/16;z=(Math.floor(z*16)+0.5)/16;
-            RIPPLES.add(new Ripple(x,z,surface.height(x-surface.pos().getX(),z-surface.pos().getZ()),
-                surface.pos(),surface.cauldron(),tick));
+            double y=surface.height(x-surface.pos().getX(),z-surface.pos().getZ());
+            synchronized(STATE_LOCK) {
+                if(world!=level) {
+                    var client=Minecraft.getInstance();
+                    // A retired world's worker cannot replace the current owner or
+                    // resurrect disconnected state. Native first impacts may initialize.
+                    if(!client.isSameThread() || client.level!=level) return;
+                    sync(level);
+                }
+                if(!NaturalityConfig.get().liquids.lava || !NaturalityConfig.get().liquids.lavaDripRipples
+                    || RIPPLES.size()>=LIMIT) return;
+                RIPPLES.add(new Ripple(x,z,y,surface.pos().immutable(),surface.cauldron(),tick));
+            }
         }
         /** Swept downward impact, called after vanilla particle collision movement. */
         public static boolean impact(ClientLevel level,double x0,double y0,double z0,double x,double y,double z) {
@@ -331,12 +346,18 @@ public final class LavaIntersection extends QuadParticleRenderState {
             return result;
         }
         static void addTo(LavaIntersection output,ClientLevel level,Vec3 eye,Frustum frustum,float partial) {
-            sync(level);
+            final Ripple[] frame;
+            final int frameTick;
+            synchronized(STATE_LOCK) {
+                sync(level);
+                frame=RIPPLES.toArray(Ripple[]::new);
+                frameTick=tick;
+            }
             lastPixelCount=0;
             var surfaces=new HashMap<BlockPos,LavaSurface>();
             var appearances=new HashMap<BlockPos,Appearance>();
-            for(var r:RIPPLES) {
-                float age=tick-r.born+partial;
+            for(var r:frame) {
+                float age=frameTick-r.born+partial;
                 if(age>=LIFETIME || !frustum.isVisible(new AABB(r.x-0.5,r.y-0.1,r.z-0.5,r.x+0.5,r.y+0.1,r.z+0.5))) continue;
                 var origin=LavaSurface.at(level,r.origin);
                 if(origin==null || origin.cauldron()!=r.cauldron

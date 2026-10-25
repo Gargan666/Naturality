@@ -3,6 +3,8 @@ package naturality.systems.weather.end.framework;
 import naturality.api.worlds.EnvironmentWorldData;
 import naturality.api.worlds.PreviewEnvironment;
 import java.util.WeakHashMap;
+import java.util.Collections;
+import net.minecraft.server.MinecraftServer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.*;
@@ -20,19 +22,20 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 @org.jspecify.annotations.NullMarked
 public final class EndWeatherSystem {
     private static final String KEY = "weather/minecraft:the_end/gravity_cycle";
-    private static final WeakHashMap<ServerLevel, EndWeatherCycle> cycles = new WeakHashMap<>();
-    private static long session;
+    private static final Map<ServerLevel, EndWeatherCycle> cycles = Collections.synchronizedMap(new WeakHashMap<>());
+    private static final Map<MinecraftServer, Long> SESSIONS = Collections.synchronizedMap(new WeakHashMap<>());
     private record ClientState(long session, EndWeatherState from, EndWeatherState target, long time) {}
     private static volatile ClientState client = new ClientState(0,EndWeatherState.CLEAR,EndWeatherState.CLEAR,0);
     private EndWeatherSystem() {}
     public static EndWeatherCycle cycle(ServerLevel level) {
-        return cycles.computeIfAbsent(level, l -> {
-            var cycle = new EndWeatherCycle(l.getSeed() ^ 0x454e44475241564cL);
-            cycle.restore(EnvironmentWorldData.get(java.util.Objects.requireNonNull(l.getServer())).read(KEY));
-            return cycle;
-        });
+        var existing = cycles.get(level);
+        if (existing != null) return existing;
+        var cycle = new EndWeatherCycle(level.getSeed() ^ 0x454e44475241564cL);
+        cycle.restore(EnvironmentWorldData.get(java.util.Objects.requireNonNull(level.getServer())).read(KEY));
+        cycles.put(level, cycle);
+        return cycle;
     }
-    public static void save(ServerLevel level) { EnvironmentWorldData.get(java.util.Objects.requireNonNull(level.getServer())).write(KEY,cycle(level).snapshot()); }
+    public static void save(ServerLevel level) { EnvironmentWorldData.get(java.util.Objects.requireNonNull(level.getServer())).defer(KEY,cycle(level)::snapshot); }
     public static EndWeatherState state(Level level) {
         if (!naturality.config.startup.FeatureConfig.Feature.END_WEATHER.enabled()) return EndWeatherState.CLEAR;
         if (!level.dimension().equals(Level.END)) return EndWeatherState.CLEAR;
@@ -54,14 +57,17 @@ public final class EndWeatherSystem {
         client = new ClientState(p.session(),from,p.state(),System.nanoTime());
     }
     private static void send(net.minecraft.server.level.ServerPlayer player, ServerLevel level) {
-        if (ServerPlayNetworking.canSend(player,EndWeatherPayload.TYPE))
+        if (ServerPlayNetworking.canSend(player,EndWeatherPayload.TYPE)) {
+            long session = SESSIONS.computeIfAbsent(java.util.Objects.requireNonNull(level.getServer()),
+                _ -> java.util.UUID.randomUUID().getLeastSignificantBits());
             ServerPlayNetworking.send(player,new EndWeatherPayload(session,cycle(level).state()));
+        }
     }
     public static void initialize() {
         PayloadTypeRegistry.clientboundPlay().register(EndWeatherPayload.TYPE,EndWeatherPayload.CODEC);
         if (!naturality.config.startup.FeatureConfig.Feature.END_WEATHER.enabled()) return;
-        ServerLifecycleEvents.SERVER_STARTED.register(_ -> { session = java.util.UUID.randomUUID().getLeastSignificantBits(); });
-        ServerLifecycleEvents.SERVER_STOPPED.register(_ -> cycles.clear());
+        ServerLifecycleEvents.SERVER_STARTED.register(server -> SESSIONS.put(server, java.util.UUID.randomUUID().getLeastSignificantBits()));
+        ServerLifecycleEvents.SERVER_STOPPED.register(EndWeatherSystem::clearServer);
         ServerPlayConnectionEvents.JOIN.register((handler,_,s) -> { var end=s.getLevel(Level.END); if(end!=null)send(handler.player,end); });
         ServerTickEvents.END_SERVER_TICK.register(s -> {
             var end = s.getLevel(Level.END); if (end == null) return;
@@ -71,6 +77,10 @@ public final class EndWeatherSystem {
             save(end);
             if (s.getTickCount()%2 == 0) for (var p:s.getPlayerList().getPlayers()) send(p,end);
         });
+    }
+    private static void clearServer(MinecraftServer server) {
+        for (var level : server.getAllLevels()) cycles.remove(level);
+        SESSIONS.remove(server);
     }
 
     /** Saved End weather clocks. Legacy distortion fields are intentionally ignored. */

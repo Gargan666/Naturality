@@ -1,11 +1,15 @@
 package naturality.systems.navigation;
 
 import java.util.Locale;
+import java.util.Collections;
+import java.util.Map;
 import java.util.WeakHashMap;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import naturality.Naturality;
@@ -15,6 +19,9 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 
 public final class NavigationInstruments {
+    // FastQuit can tick a retiring server while its replacement begins. Only the
+    // outer ownership map is shared; each player's sent targets stay on its server thread.
+    private static final Map<MinecraftServer, Map<ServerPlayer, GlobalPos>> SENT = Collections.synchronizedMap(new WeakHashMap<>());
     private NavigationInstruments() {}
     public static GlobalPos target(ServerPlayer player) {
         var respawn = player.getRespawnConfig();
@@ -32,19 +39,22 @@ public final class NavigationInstruments {
             minutes % 60, hour < 12 ? "AM" : "PM", hour, minutes % 60);
     }
     public static void initialize() {
-        var sent = new WeakHashMap<ServerPlayer, GlobalPos>();
-        ServerTickEvents.END_SERVER_TICK.register(server -> {
-            for (var player : server.getPlayerList().getPlayers()) {
-                if (!ServerPlayNetworking.canSend(player, NavigationTargetPayload.TYPE)) continue;
-                var target = target(player);
-                if (!target.equals(sent.get(player))) {
-                    ServerPlayNetworking.send(player, new NavigationTargetPayload(target));
-                    sent.put(player, target);
-                }
-            }
-        });
-        ServerTickEvents.END_SERVER_TICK.register(_ -> sent.keySet().removeIf(player -> player.hasDisconnected()));
+        ServerTickEvents.END_SERVER_TICK.register(NavigationInstruments::tick);
+        ServerLifecycleEvents.SERVER_STOPPED.register(NavigationInstruments::clearServer);
     }
+    private static void tick(MinecraftServer server) {
+        var sent = SENT.computeIfAbsent(server, _ -> new WeakHashMap<>());
+        for (var player : server.getPlayerList().getPlayers()) {
+            if (!ServerPlayNetworking.canSend(player, NavigationTargetPayload.TYPE)) continue;
+            var target = target(player);
+            if (!target.equals(sent.get(player))) {
+                ServerPlayNetworking.send(player, new NavigationTargetPayload(target));
+                sent.put(player, target);
+            }
+        }
+        sent.keySet().removeIf(ServerPlayer::hasDisconnected);
+    }
+    private static void clearServer(MinecraftServer server) { SENT.remove(server); }
 
     public record NavigationTargetPayload(GlobalPos target) implements CustomPacketPayload {
         public static final Type<NavigationTargetPayload> TYPE = new Type<>(Naturality.id("navigation_target"));

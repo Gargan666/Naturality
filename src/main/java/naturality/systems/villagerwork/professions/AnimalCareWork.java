@@ -24,7 +24,13 @@ import net.minecraft.world.phys.AABB;
 /** Sheep shearing and shared smith repair assignments, using real mob actions and drops. */
 public final class AnimalCareWork extends Behavior<Villager> {
     private record Claim(WeakReference<Villager> worker, long expires) { }
-    private static final Map<UUID, Claim> REPAIRS = new HashMap<>();
+    private static final Map<ServerLevel, Map<UUID, Claim>> REPAIRS = Collections.synchronizedMap(new WeakHashMap<>());
+    private static Map<UUID, Claim> repairs(ServerLevel level) {
+        return REPAIRS.computeIfAbsent(level, _ -> new HashMap<>());
+    }
+    public static void clearServer(net.minecraft.server.MinecraftServer server) {
+        for (var level : server.getAllLevels()) REPAIRS.remove(level);
+    }
     private final boolean shepherd;
     private LivingEntity target;
     private ItemStack oldHand = ItemStack.EMPTY, displayed = ItemStack.EMPTY;
@@ -61,9 +67,10 @@ public final class AnimalCareWork extends Behavior<Villager> {
         body.setItemSlot(EquipmentSlot.MAINHAND, displayed);
     }
     private void release(Villager body) {
-        if (target instanceof IronGolem) {
-            var claim = REPAIRS.get(target.getUUID());
-            if (claim != null && claim.worker().get() == body) REPAIRS.remove(target.getUUID());
+        if (target instanceof IronGolem && target.level() instanceof ServerLevel level) {
+            var repairs = REPAIRS.get(level);
+            var claim = repairs == null ? null : repairs.get(target.getUUID());
+            if (repairs != null && claim != null && claim.worker().get() == body) repairs.remove(target.getUUID());
         }
         target = null;
         if (body.getMainHandItem() == displayed) body.setItemSlot(EquipmentSlot.MAINHAND, oldHand);
@@ -122,23 +129,24 @@ public final class AnimalCareWork extends Behavior<Villager> {
                 var sheepTarget = sheep.stream().filter(animal -> reachable(body, animal)).findFirst();
                 target = sheepTarget.isPresent() ? sheepTarget.orElseThrow() : null;
             } else {
-                REPAIRS.entrySet().removeIf(entry -> {
+                var repairs = repairs(level);
+                repairs.entrySet().removeIf(entry -> {
                     var worker = entry.getValue().worker().get();
                     return worker == null || !worker.isAlive() || entry.getValue().expires() < time
                         || worker.level() == level && (!available(level, worker) || !smith(worker));
                 });
                 var golems = level.getEntitiesOfClass(IronGolem.class, area,
-                    golem -> golem.isAlive() && golem.getHealth() < golem.getMaxHealth() && !REPAIRS.containsKey(golem.getUUID()));
+                    golem -> golem.isAlive() && golem.getHealth() < golem.getMaxHealth() && !repairs.containsKey(golem.getUUID()));
                 golems.sort(Comparator.comparingDouble(body::distanceToSqr));
                 for (var golem : golems) {
                     var workers = level.getEntitiesOfClass(Villager.class, golem.getBoundingBox().inflate(24),
                         worker -> available(level, worker) && smith(worker));
-                    workers.removeIf(worker -> REPAIRS.values().stream().anyMatch(claim -> claim.worker().get() == worker));
+                    workers.removeIf(worker -> repairs.values().stream().anyMatch(claim -> claim.worker().get() == worker));
                     workers.sort(Comparator.<Villager>comparingDouble(golem::distanceToSqr).thenComparingInt(Villager::getId));
                     var chosen = workers.stream().filter(worker -> reachable(worker, golem)).findFirst();
                     if (chosen.isEmpty() || chosen.orElseThrow() != body) continue;
                     target = golem;
-                    REPAIRS.put(golem.getUUID(), new Claim(new WeakReference<>(body), time + 100));
+                    repairs.put(golem.getUUID(), new Claim(new WeakReference<>(body), time + 100));
                     break;
                 }
             }
@@ -148,7 +156,7 @@ public final class AnimalCareWork extends Behavior<Villager> {
             if (!shepherd) nextAction = time + 20;
         }
         if (target instanceof IronGolem)
-            REPAIRS.put(target.getUUID(), new Claim(new WeakReference<>(body), time + 100));
+            repairs(level).put(target.getUUID(), new Claim(new WeakReference<>(body), time + 100));
         if (!approach(body, target, time, 2.5) || time < nextAction) return;
         body.swing(InteractionHand.MAIN_HAND, net.minecraft.world.item.component.SwingAnimation.DEFAULT);
         if (target instanceof Sheep sheep) {

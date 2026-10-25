@@ -444,13 +444,14 @@ public final class NaturalityConfig {
         }
     }
 
-    /** One-shot edits, never a persisted mode that overrides later individual choices. */
+    /** Presets reset ordinary choices and explicitly select the restart-only protocol boundary. */
     public enum ConfigPreset {
         DEFAULT, CLIENTSIDE_ONLY, NO_VISUAL_OVERHAUL;
 
         public void apply(NaturalityConfig client, NaturalityServerConfig server, FeatureConfig features) {
             client.reset();
             server.reset();
+            features.clientOnly = this == CLIENTSIDE_ONLY;
             for (var feature : Feature.values()) features.set(feature,
                 this == DEFAULT || (this == CLIENTSIDE_ONLY ? feature.group == Feature.Group.VISUAL
                     : feature.group != Feature.Group.VISUAL));

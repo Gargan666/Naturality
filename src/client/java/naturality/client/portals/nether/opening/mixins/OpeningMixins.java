@@ -1,10 +1,6 @@
 package naturality.client.portals.nether.opening.mixins;
 
 import naturality.client.portals.nether.opening.PortalOpeningClient;
-import net.minecraft.client.Camera;
-import net.minecraft.client.particle.ParticleEngine;
-import net.minecraft.client.renderer.culling.Frustum;
-import net.minecraft.client.renderer.state.level.ParticlesRenderState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -27,24 +23,6 @@ import net.minecraft.world.level.block.state.BlockState;
 /** Feature integration hooks; each nested type retains its independent Mixin target and gate. */
 public final class OpeningMixins {
     private OpeningMixins() {}
-
-    @Mixin(ParticleEngine.class)
-    @org.jspecify.annotations.NullMarked
-    public static abstract class PortalOpeningRenderMixin {
-        @Inject(method = "extract", at = @At("HEAD"))
-        private void naturality$prepareGlowMasks(ParticlesRenderState state, Frustum frustum, Camera camera, float partialTick, CallbackInfo ci) {
-            naturality.client.portals.nether.travel.PortalCrossingClient.beginGlowFrame(camera, partialTick);
-        }
-        @Inject(method = "extract", at = @At("TAIL"))
-        private void naturality$renderOpening(ParticlesRenderState state, Frustum frustum, Camera camera, float partialTick, CallbackInfo ci) {
-            PortalOpeningClient.extract(state, frustum, camera, partialTick);
-            naturality.client.fluids.water.WaterIntersection.extract(state, frustum, camera, partialTick);
-            naturality.client.fluids.lava.LavaIntersection.extract(state, frustum, camera, partialTick);
-            naturality.client.portals.end.EndPortalBorderState.EndEyeGlow.extract(state, frustum, camera, partialTick);
-            naturality.client.portals.nether.travel.PortalCrossingClient.extract(state, frustum, camera, partialTick);
-            naturality.client.effects.ambienthorror.AmbientHorror.extract(state, frustum, camera, partialTick);
-        }
-    }
 
     @Mixin(SoundEngine.class)
     @org.jspecify.annotations.NullMarked
@@ -72,6 +50,18 @@ public final class OpeningMixins {
         private RenderShape naturality$animatedModel(BlockState state, Operation<RenderShape> original,
                 @Local(name = "pos") BlockPos pos) {
             return PortalOpeningClient.hidesTerrain(pos, state) ? RenderShape.INVISIBLE : original.call(state);
+        }
+    }
+
+    @Mixin(targets = "net.caffeinemc.mods.sodium.client.render.chunk.compile.pipeline.BlockRenderer", remap = false)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class SodiumOpeningTerrainMixin {
+        // Sodium owns chunk meshing and never enters SectionCompiler. Suppress
+        // only the static model replaced by the same animated opening geometry.
+        @Inject(method = "renderModel", at = @At("HEAD"), cancellable = true)
+        private void naturality$animatedModel(net.minecraft.client.renderer.block.dispatch.BlockStateModel model,
+                BlockState state, BlockPos pos, BlockPos origin, CallbackInfo ci) {
+            if (PortalOpeningClient.hidesTerrain(pos, state)) ci.cancel();
         }
     }
 }

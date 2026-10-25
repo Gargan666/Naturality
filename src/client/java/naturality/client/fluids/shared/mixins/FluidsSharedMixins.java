@@ -21,7 +21,6 @@ import net.minecraft.client.renderer.block.FluidRenderer;
 import net.minecraft.client.renderer.block.FluidStateModelSet;
 import net.minecraft.core.Direction;
 import net.minecraft.core.BlockPos;
-import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.material.Fluids;
@@ -31,10 +30,81 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.ModifyArgs;
 import org.spongepowered.asm.mixin.injection.invoke.arg.Args;
 import naturality.client.rendering.biometint.BiomeTint;
+import naturality.client.fluids.shared.FluidGeometry.SodiumFluids;
+import naturality.client.fluids.shared.FluidGeometry.SodiumFluidVertex;
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import com.llamalad7.mixinextras.sugar.Local;
+import org.spongepowered.asm.mixin.Pseudo;
+import org.spongepowered.asm.mixin.injection.Coerce;
+import net.fabricmc.fabric.api.client.render.fluid.v1.FluidRenderHandler;
+import net.fabricmc.fabric.api.client.render.fluid.v1.FluidRendering;
 
 /** Feature integration hooks; each nested type retains its independent Mixin target and gate. */
 public final class FluidsSharedMixins {
     private FluidsSharedMixins() {}
+
+    /** Sodium supplies a replacement default renderer, bypassing vanilla tesselate entirely. */
+    @Pseudo
+    @Mixin(targets = "net.caffeinemc.mods.sodium.fabric.render.FluidRendererImpl", remap = false)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class SodiumFluidRendererMixin {
+        @WrapOperation(method = "render", at = @At(value = "INVOKE", target =
+            "Lnet/fabricmc/fabric/api/client/render/fluid/v1/FluidRendering;render(Lnet/minecraft/client/renderer/block/FluidRenderer;Lnet/fabricmc/fabric/api/client/render/fluid/v1/FluidRenderHandler;Lnet/minecraft/client/renderer/block/BlockAndTintGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/client/renderer/block/FluidRenderer$Output;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/material/FluidState;Lnet/fabricmc/fabric/api/client/render/fluid/v1/FluidRendering$DefaultRenderer;)V"))
+        private void naturality$nativeFluidGeometry(FluidRenderer renderer, FluidRenderHandler handler,
+                BlockAndTintGetter level, BlockPos pos, FluidRenderer.Output output, BlockState block,
+                FluidState fluid, FluidRendering.DefaultRenderer defaultRenderer, Operation<Void> original,
+                @Coerce Object slice, BlockState sourceBlock, FluidState sourceFluid, BlockPos sourcePos, BlockPos offset,
+                @Coerce @org.jspecify.annotations.Nullable Object collector, @Coerce Object buffers) {
+            if (SodiumFluids.handles(fluid)) {
+                output = SodiumFluids.output(buffers, collector);
+                defaultRenderer = SodiumFluids.DEFAULT;
+            }
+            original.call(renderer, handler, level, pos, output, block, fluid, defaultRenderer);
+        }
+    }
+
+    @Pseudo
+    @Mixin(targets = "net.caffeinemc.mods.sodium.client.render.chunk.vertex.format.ChunkVertexEncoder$Vertex", remap = false)
+    public static abstract class SodiumFluidVertexMixin implements SodiumFluidVertex {
+        @Shadow public int light;
+        @Override public int naturality$fluidLight() { return light; }
+    }
+
+    /** Keep the tail marker out of light coordinates, which Sodium compresses to eight bits each. */
+    @Pseudo
+    @Mixin(targets = "net.caffeinemc.mods.sodium.client.render.chunk.vertex.format.impl.CompactChunkVertex", remap = false)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class SodiumFluidEncodingMixin {
+        @ModifyExpressionValue(method = "lambda$getEncoder$0", at = @At(value = "INVOKE", target =
+            "Lnet/caffeinemc/mods/sodium/client/render/chunk/vertex/format/impl/CompactChunkVertex;packPositionHi(III)I"))
+        private static int naturality$tailPositionBit(int packed, long pointer, int material,
+                @Coerce Object[] vertices, int section, @Local(index = 7) int index) {
+            return SodiumFluids.packedPosition(packed, vertices, index);
+        }
+    }
+
+    /** SAFE sorting copies and later rewrites split vertices outside the render call. */
+    @Pseudo
+    @Mixin(targets = "net.caffeinemc.mods.sodium.client.render.chunk.translucent_sorting.bsp_tree.InnerPartitionBSPNode", remap = false)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class SodiumFluidSplitMixin {
+        @WrapOperation(method = "interpolateAttributes(FLorg/joml/Vector3fc;Lnet/caffeinemc/mods/sodium/client/render/chunk/vertex/format/ChunkVertexEncoder$Vertex;Lnet/caffeinemc/mods/sodium/client/render/chunk/vertex/format/ChunkVertexEncoder$Vertex;Lnet/caffeinemc/mods/sodium/client/render/chunk/vertex/format/ChunkVertexEncoder$Vertex;Lnet/caffeinemc/mods/sodium/client/render/chunk/vertex/format/ChunkVertexEncoder$Vertex;Lnet/caffeinemc/mods/sodium/client/render/chunk/vertex/format/ChunkVertexEncoder$Vertex;)V",
+            at = @At(value = "INVOKE", target = "Lnet/caffeinemc/mods/sodium/api/util/ColorMixer;mix(IIF)I"))
+        private static int naturality$interpolateFlow(int first, int second, float weight, Operation<Integer> original,
+                float distance, org.joml.Vector3fc plane, @Coerce Object inside, @Coerce Object outside,
+                @Coerce Object targetA, @Coerce Object targetB, @Coerce @org.jspecify.annotations.Nullable Object targetC) {
+            return SodiumFluids.splitColor(original.call(first, second, weight), first, second, weight, inside, outside);
+        }
+
+        @WrapOperation(method = "interpolateAttributes(FLorg/joml/Vector3fc;Lnet/caffeinemc/mods/sodium/client/render/chunk/vertex/format/ChunkVertexEncoder$Vertex;Lnet/caffeinemc/mods/sodium/client/render/chunk/vertex/format/ChunkVertexEncoder$Vertex;Lnet/caffeinemc/mods/sodium/client/render/chunk/vertex/format/ChunkVertexEncoder$Vertex;Lnet/caffeinemc/mods/sodium/client/render/chunk/vertex/format/ChunkVertexEncoder$Vertex;Lnet/caffeinemc/mods/sodium/client/render/chunk/vertex/format/ChunkVertexEncoder$Vertex;)V",
+            at = @At(value = "INVOKE", target = "Lnet/caffeinemc/mods/sodium/client/render/chunk/vertex/format/ChunkVertexEncoder$Vertex;writeVertex(Lnet/caffeinemc/mods/sodium/client/render/chunk/vertex/format/ChunkVertexEncoder$Vertex;FFFIFFFI)V"))
+        private static void naturality$preserveSplitTags(@Coerce Object vertex, float x, float y, float z,
+                int color, float ao, float u, float v, int light, Operation<Void> original,
+                float distance, org.joml.Vector3fc plane, @Coerce Object inside, @Coerce Object outside,
+                @Coerce Object targetA, @Coerce Object targetB, @Coerce @org.jspecify.annotations.Nullable Object targetC) {
+            original.call(vertex, x, y, z, color, ao, u, v, SodiumFluids.splitLight(light, inside, outside));
+        }
+    }
 
     @Mixin(ParticleEngine.class)
     @org.jspecify.annotations.NullMarked
@@ -104,9 +174,13 @@ public final class FluidsSharedMixins {
                 BlockState block, FluidState state, Operation<Void> original) {
             var previous = naturality$corners.get();
             try {
-                if (state.getType().isSame(Fluids.WATER) || state.getType().isSame(Fluids.LAVA))
-                    naturality$corners.set(new FlowCorners(level, pos, block, state, fluidModels.get(state).tintSource()));
-                else naturality$corners.remove();
+                if (state.getType().isSame(Fluids.WATER) || state.getType().isSame(Fluids.LAVA)) {
+                    var source = fluidModels.get(state).tintSource();
+                    // Fabric's ordinary native entry dispatches a handler and then re-enters
+                    // for default geometry. Its matching body and outer tail are one pass.
+                    naturality$corners.set(previous != null && previous.matches(level, pos, block, state, source)
+                        ? previous : new FlowCorners(level, pos, block, state, source));
+                } else naturality$corners.remove();
                 original.call(level, pos, output, block, state);
                 // Fabric's fluid handler re-enters this method for the same block.
                 // Only the outer call emits the visual continuation.
@@ -153,45 +227,31 @@ public final class FluidsSharedMixins {
         @Unique private static final class FlowCorners {
             final BlockAndTintGetter level;
             final BlockPos pos;
+            final BlockState block;
             final FluidState fluid;
+            final net.minecraft.client.color.block.@org.jspecify.annotations.Nullable BlockTintSource source;
             final BiomeTint.@org.jspecify.annotations.Nullable Samples tintSamples;
             final int baseTint;
             final naturality.client.fluids.shared.FluidGeometry.BoundaryCache boundaries;
             final int[] angles = {-1, -1, -1, -1};
-            final java.util.Map<BlockPos, Integer> lights = new java.util.HashMap<>();
+            naturality.client.fluids.shared.FluidGeometry.@org.jspecify.annotations.Nullable LightSamples lights;
             FlowCorners(BlockAndTintGetter level, BlockPos pos, BlockState block, FluidState fluid,
                     net.minecraft.client.color.block.@org.jspecify.annotations.Nullable BlockTintSource source) {
-                this.level = level; this.pos = pos.immutable(); this.fluid = fluid;
+                this.level = level; this.pos = pos.immutable(); this.block = block; this.fluid = fluid; this.source = source;
                 this.boundaries = new naturality.client.fluids.shared.FluidGeometry.BoundaryCache(level, this.pos);
                 this.tintSamples = source instanceof BiomeTint.Source biome
                     ? new BiomeTint.Samples(biome, level, block, this.pos) : null;
                 this.baseTint = source == null ? -1 : source.colorInWorld(block, level, pos);
             }
+            boolean matches(BlockAndTintGetter level, BlockPos pos, BlockState block, FluidState fluid,
+                    net.minecraft.client.color.block.@org.jspecify.annotations.Nullable BlockTintSource source) {
+                return this.level == level && this.pos.equals(pos) && this.block == block
+                    && this.fluid == fluid && this.source == source;
+            }
             int light(float x, float y, float z, int fallback) {
-                // Interpolate a world-anchored, cell-centered field. Inset side faces
-                // sample their actual positions; section-local arithmetic keeps the
-                // same precision at negative coordinates and the world border.
-                double px = x - (pos.getX() & 15) - 0.5;
-                double py = y - (pos.getY() & 15) - 0.5;
-                double pz = z - (pos.getZ() & 15) - 0.5;
-                int bx = (int) Math.floor(px), by = (int) Math.floor(py), bz = (int) Math.floor(pz);
-                double fx = px - bx, fy = py - by, fz = pz - bz;
-                double block = 0, sky = 0, total = 0;
-                for (int dz = 0; dz < 2; dz++) for (int dy = 0; dy < 2; dy++) for (int dx = 0; dx < 2; dx++) {
-                    BlockPos sample = pos.offset(bx + dx, by + dy, bz + dz);
-                    int packed = lights.computeIfAbsent(sample, p -> level.getBlockState(p).isSolidRender()
-                        ? -1 : LightCoordsUtil.getLightCoords(level, p));
-                    if (packed < 0) continue;
-                    double weight = (dx == 0 ? 1 - fx : fx) * (dy == 0 ? 1 - fy : fy) * (dz == 0 ? 1 - fz : fz);
-                    block += LightCoordsUtil.smoothBlock(packed) * weight;
-                    sky += LightCoordsUtil.smoothSky(packed) * weight;
-                    total += weight;
-                }
-                if (total < 1e-6) return fallback;
-                int blockLight = (int) Math.round(block / total);
-                // Lava's own emission must not be diluted by its air neighbors.
-                if (fluid.getType().isSame(Fluids.LAVA) && naturality.config.live.NaturalityConfig.get().liquids.lava && naturality.config.live.NaturalityConfig.get().liquids.emissiveLava) return LightCoordsUtil.FULL_BRIGHT;
-                return LightCoordsUtil.smoothPack(blockLight, (int) Math.round(sky / total));
+                var samples = lights;
+                if (samples == null) lights = samples = new naturality.client.fluids.shared.FluidGeometry.LightSamples(level, pos, fluid);
+                return samples.at(x, y, z, fallback);
             }
             int angle(int x, int z) {
                 int index = z * 2 + x;

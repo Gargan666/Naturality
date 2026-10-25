@@ -24,12 +24,12 @@ import net.minecraft.client.renderer.feature.FeatureFrameContext;
 import net.minecraft.client.renderer.feature.QuadParticleFeatureRenderer;
 import naturality.client.blocks.fire.SurfaceFireModel.SoulFirePlayerState;
 import net.minecraft.client.renderer.ScreenEffectRenderer;
-import net.minecraft.client.renderer.SubmitNodeCollector;
-import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.state.level.PlayerRenderState;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.sprite.SpriteGetter;
-import org.spongepowered.asm.mixin.injection.Redirect;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.llamalad7.mixinextras.sugar.Local;
 import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
@@ -45,7 +45,8 @@ public final class FireMixins {
         @Inject(method = "executeGroup", at = @At("HEAD"))
         private void naturality$bind(FeatureFrameContext context, OitStage stage, RenderPass pass, int index,
                 List<?> submits, boolean ordered, CallbackInfo ci) {
-            if ((Object) this instanceof FlameFeatureRenderer) ProceduralFire.bind(pass);
+            if ((Object) this instanceof FlameFeatureRenderer && !naturality.client.api.rendering.ShaderPacks.active())
+                ProceduralFire.bind(pass);
         }
     }
 
@@ -68,6 +69,9 @@ public final class FireMixins {
     public static abstract class EntityFireRenderMixin extends RenderTypeFeatureRenderer<FlameFeatureRenderer.Submit> {
         @Inject(method = "buildGroup", at = @At("HEAD"), cancellable = true)
         private void naturality$boxFire(FeatureFrameContext context, List<FlameFeatureRenderer.Submit> submits, CallbackInfo ci) {
+            // The procedural layer encodes seed and pixel dimensions in color/light.
+            // Iris owns entity shading; its native flame path needs ordinary attributes.
+            if (naturality.client.api.rendering.ShaderPacks.active()) return;
             var buffer = getVertexBuilder(EntityFireRenderer.LAYER);
             for (var submit : submits) {
                 var state = (naturality.client.blocks.fire.SurfaceFireModel.EntityFireState) submit.entityRenderState();
@@ -77,6 +81,20 @@ public final class FireMixins {
                 EntityFireRenderer.emit(submit, buffer, sprite);
             }
             ci.cancel();
+        }
+
+        @WrapOperation(method = "buildGroup", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/renderer/feature/FlameFeatureRenderer;prepare(Lnet/minecraft/client/renderer/feature/FlameFeatureRenderer$Submit;Lcom/mojang/blaze3d/vertex/VertexConsumer;Lnet/minecraft/client/renderer/texture/TextureAtlasSprite;Lnet/minecraft/client/renderer/texture/TextureAtlasSprite;)V"))
+        private void naturality$packSoulFire(FlameFeatureRenderer renderer, FlameFeatureRenderer.Submit submit,
+                com.mojang.blaze3d.vertex.VertexConsumer buffer, TextureAtlasSprite first, TextureAtlasSprite second,
+                Operation<Void> original, @Local(argsOnly = true) FeatureFrameContext context) {
+            if (((EntityFireState) submit.entityRenderState()).naturality$soulFire()) {
+                first = context.atlasManager().get(new SpriteId(naturality.client.api.rendering.AtlasLocations.BLOCKS,
+                    Identifier.withDefaultNamespace("block/soul_fire_0")));
+                second = context.atlasManager().get(new SpriteId(naturality.client.api.rendering.AtlasLocations.BLOCKS,
+                    Identifier.withDefaultNamespace("block/soul_fire_1")));
+            }
+            original.call(renderer, submit, buffer, first, second);
         }
     }
 
@@ -109,13 +127,13 @@ public final class FireMixins {
     @Mixin(ScreenEffectRenderer.class)
     @org.jspecify.annotations.NullMarked
     public static abstract class SoulFireOverlayMixin {
-        @Redirect(method = "submit", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/resources/model/sprite/SpriteGetter;get(Lnet/minecraft/client/resources/model/sprite/SpriteId;)Lnet/minecraft/client/renderer/texture/TextureAtlasSprite;"))
-        private TextureAtlasSprite naturality$soulFireOverlay(SpriteGetter sprites, SpriteId id, float partialTicks,
-                SubmitNodeCollector collector, PlayerRenderState playerState, CameraRenderState cameraState, boolean hideGui) {
+        @WrapOperation(method = "submit", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/resources/model/sprite/SpriteGetter;get(Lnet/minecraft/client/resources/model/sprite/SpriteId;)Lnet/minecraft/client/renderer/texture/TextureAtlasSprite;"))
+        private TextureAtlasSprite naturality$soulFireOverlay(SpriteGetter sprites, SpriteId id,
+                Operation<TextureAtlasSprite> original, @Local(argsOnly = true) PlayerRenderState playerState) {
             if (id == ModelBakery.FIRE_1 && ((SoulFirePlayerState) playerState).naturality$soulFireOverlay()) {
                 id = new SpriteId(naturality.client.api.rendering.AtlasLocations.BLOCKS, Identifier.withDefaultNamespace("block/soul_fire_1"));
             }
-            return sprites.get(id);
+            return original.call(sprites, id);
         }
     }
 

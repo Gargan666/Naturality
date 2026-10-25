@@ -7,13 +7,13 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SnowLayerBlock;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.shapes.*;
 import net.minecraft.world.phys.AABB;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
@@ -67,32 +67,20 @@ public final class SnowMixins {
             if (naturality.blocks.ash.Ash.isLayer(state) || state.is(Blocks.SNOW) && naturality.config.gameplay.GameplaySettings.snowWrapping(level) && !SnowGeometry.usesVanillaGeometry(level, pos))
                 cir.setReturnValue(false);
         }
-        @Inject(method = "getCollisionShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/phys/shapes/VoxelShape;", at = @At("RETURN"), cancellable = true)
-        private void naturality$cachedSnowCollision(BlockGetter level, BlockPos pos, CallbackInfoReturnable<VoxelShape> cir) {
-            naturality$snowCollision(level,pos,CollisionContext.empty(),cir);
+        @ModifyReturnValue(method = "getCollisionShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/phys/shapes/VoxelShape;", at = @At("RETURN"))
+        private VoxelShape naturality$cachedSnowCollision(VoxelShape original, BlockGetter level, BlockPos pos) {
+            return naturality$fitCollision(original,level,pos);
         }
-        @Inject(method = "getCollisionShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/shapes/CollisionContext;)Lnet/minecraft/world/phys/shapes/VoxelShape;", at = @At("RETURN"), cancellable = true)
-        private void naturality$snowCollision(BlockGetter level, BlockPos pos, CollisionContext context, CallbackInfoReturnable<VoxelShape> cir) {
-
+        @ModifyReturnValue(method = "getCollisionShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/shapes/CollisionContext;)Lnet/minecraft/world/phys/shapes/VoxelShape;", at = @At("RETURN"))
+        private VoxelShape naturality$snowCollision(VoxelShape original, BlockGetter level, BlockPos pos, CollisionContext context) {
+            return naturality$fitCollision(original,level,pos);
+        }
+        private VoxelShape naturality$fitCollision(VoxelShape result, BlockGetter level, BlockPos pos) {
             var state=(BlockState)(Object)this;
-            if (naturality.blocks.ash.Ash.isLayer(state)) { cir.setReturnValue(naturality.api.geometry.SurfaceLayers.collisionShape(level,pos,state.getValue(SnowLayerBlock.LAYERS),state.getBlock())); return; }
-            if (state.is(Blocks.SNOW) && naturality.config.gameplay.GameplaySettings.snowWrapping(level)) { cir.setReturnValue(SnowGeometry.collisionShape(level,pos,state.getValue(SnowLayerBlock.LAYERS))); return; }
-            if (state.isAir()) return;
-            var result=cir.getReturnValue();
-            // Added snow is intersected with the unit cell below. A full collision
-            // cube already contains every possible addition, so no search is needed.
-            if(net.minecraft.world.level.block.Block.isShapeFullBlock(result))return;
-            if(!naturality.api.geometry.SurfaceLayers.mayHaveDisplacedLayers(level,pos))return;
-            for (int above=1;above<=SnowGeometry.MAX_DEPTH;above++) {
-                var owner=pos.above(above); var snow=level.getBlockState(owner);
-                if (!naturality.blocks.ash.Ash.isLayer(snow) && !(snow.is(Blocks.SNOW) && naturality.config.gameplay.GameplaySettings.snowWrapping(level))) { if(above>=2 && !SnowGeometry.exposesGround(level,owner)) break; continue; }
-                if (snow.getValue(SnowLayerBlock.LAYERS)==1) continue;
-                if(naturality.api.geometry.SurfaceLayers.usesVanillaGeometry(level,owner,snow.getBlock()))continue;
-                var displaced=naturality.api.geometry.SurfaceLayers.collisionShape(level,owner,snow.getValue(SnowLayerBlock.LAYERS),snow.getBlock()).move(0,above,0);
-                // Include only the part that belongs in this traversed collision cell.
-                result=Shapes.or(result,Shapes.join(displaced,Shapes.block(),BooleanOp.AND));
-            }
-            cir.setReturnValue(result);
+            // Keep the ordinary solid-block path small enough to inline through
+            // cooperative wrappers; the actual fitting belongs to the feature.
+            if(result==Shapes.block() && !state.is(Blocks.SNOW) && !naturality.blocks.ash.Ash.isLayer(state))return result;
+            return SnowGeometry.fitCollision(result,level,pos,state);
         }
     }
 
@@ -215,7 +203,9 @@ public final class SnowMixins {
             var best=cir.getReturnValue(); double distance=best==null?Double.POSITIVE_INFINITY:best.getLocation().distanceToSqr(from);
             for(int offset=1;offset<=SnowGeometry.MAX_DEPTH;offset++) {
                 var owner=pos.above(offset);var snow=level.getBlockState(owner);if(!naturality.blocks.ash.Ash.isLayer(snow) && !(snow.is(Blocks.SNOW) && naturality.config.gameplay.GameplaySettings.snowWrapping(level))) { if(offset>=2 && !SnowGeometry.exposesGround(level,owner)) break; continue; }
-                var hit=context.getBlockShape(snow,level,owner).clip(from,to,owner);
+                var candidateShape=context.getBlockShape(snow,level,owner);
+                if(!naturality.api.geometry.RaycastShapePresence.mayIntersect(candidateShape,from,to,owner))continue;
+                var hit=candidateShape.clip(from,to,owner);
                 if(hit!=null && new AABB(pos).inflate(1e-6).contains(hit.getLocation()) && hit.getLocation().distanceToSqr(from)<distance) {
                     best=hit;distance=hit.getLocation().distanceToSqr(from);
                 }

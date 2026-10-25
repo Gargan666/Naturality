@@ -2,6 +2,7 @@ package naturality.systems.sleep;
 
 import java.util.Map;
 import java.util.WeakHashMap;
+import java.util.Collections;
 import naturality.config.gameplay.GameplaySettings.NaturalityServerConfig;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -18,8 +19,8 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 
 /** Advance celestial time without multiplying world simulation work. */
 public final class SleepAcceleration {
-    private static final Map<MinecraftServer, State> STATES = new WeakHashMap<>();
-    private static final Map<ServerPlayer, Rest> REST = new WeakHashMap<>();
+    private static final Map<MinecraftServer, State> STATES = Collections.synchronizedMap(new WeakHashMap<>());
+    private static final Map<MinecraftServer, Map<ServerPlayer, Rest>> REST = Collections.synchronizedMap(new WeakHashMap<>());
     private static final class State { double seconds, speed = 1, clockTicks = 1; }
     private static final class Rest { double ticks; }
     private SleepAcceleration() {}
@@ -32,14 +33,17 @@ public final class SleepAcceleration {
         var state = STATES.get(server);
         return state == null ? 1 : state.clockTicks;
     }
-    public static boolean enabled() { return NaturalityServerConfig.get().sleepAcceleration; }
+    public static boolean enabled() {
+        return !naturality.config.startup.FeatureConfig.clientOnly() && NaturalityServerConfig.get().sleepAcceleration;
+    }
     public static void started(ServerPlayer player) {
         if (!enabled()) return;
-        REST.put(player, new Rest());
+        REST.computeIfAbsent(player.level().getServer(), _ -> new WeakHashMap<>()).put(player, new Rest());
     }
     public static void stopped(ServerPlayer player) {
-        REST.remove(player);
         var server = player.level().getServer();
+        var rests = REST.get(server);
+        if (rests != null) rests.remove(player);
         // Stop in the wake operation itself, before another world clock update.
         if (!enoughSleeping(server)) restore(server);
     }
@@ -82,7 +86,10 @@ public final class SleepAcceleration {
         });
         ServerTickEvents.START_SERVER_TICK.register(SleepAcceleration::tick);
         ServerTickEvents.END_SERVER_TICK.register(SleepServerSnapshots::synchronize);
-        ServerLifecycleEvents.SERVER_STOPPED.register(server -> { STATES.remove(server); REST.clear(); SleepServerSnapshots.clear(server); });
+        ServerLifecycleEvents.SERVER_STOPPED.register(SleepAcceleration::clearServer);
+    }
+    private static void clearServer(MinecraftServer server) {
+        STATES.remove(server); REST.remove(server); SleepServerSnapshots.clear(server);
     }
     public static void tick(MinecraftServer server) {
         var manager = server.tickRateManager();
@@ -95,8 +102,9 @@ public final class SleepAcceleration {
                 for (var player : level.players()) {
                     if (player.isSpectator()) continue;
                     total++;
-                    if (!player.isSleeping()) { REST.remove(player); continue; }
-                    if (!REST.containsKey(player)) started(player);
+                    var rests = REST.get(server);
+                    if (!player.isSleeping()) { if (rests != null) rests.remove(player); continue; }
+                    if (rests == null || !rests.containsKey(player)) started(player);
                     sleeping++;
                 }
                 int percentage = level.getGameRules().get(GameRules.PLAYERS_SLEEPING_PERCENTAGE);
@@ -105,7 +113,7 @@ public final class SleepAcceleration {
         }
         if (!eligible) {
             restore(server);
-            if (!enabled()) REST.clear();
+            if (!enabled()) REST.remove(server);
             else if (!manager.isFrozen() && !manager.isSprinting()) rest(server, 1);
             return;
         }
@@ -121,7 +129,9 @@ public final class SleepAcceleration {
         rest(server, state.clockTicks);
     }
     private static void rest(MinecraftServer server, double ticks) {
-        for (var entry : REST.entrySet()) {
+        var rests = REST.get(server);
+        if (rests == null) return;
+        for (var entry : rests.entrySet()) {
             var player = entry.getKey();
             if (player.level().getServer() != server || !player.isSleeping()) continue;
             var rest = entry.getValue();
@@ -138,7 +148,7 @@ public final class SleepAcceleration {
 
     /** Constant work per world clock, with at most ten snapshot broadcasts per second. */
     public static final class SleepServerSnapshots {
-        private static final Map<MinecraftServer, Session> SESSIONS = new WeakHashMap<>();
+        private static final Map<MinecraftServer, Session> SESSIONS = Collections.synchronizedMap(new WeakHashMap<>());
         private static final class Session {
             final ServerClockManager.ServerClockInstance[] clocks;
             long packetNanos;
@@ -148,11 +158,18 @@ public final class SleepAcceleration {
             }
         }
         private SleepServerSnapshots() {}
-        @SuppressWarnings("deprecation")
+        private static Session session(MinecraftServer server) {
+            var existing = SESSIONS.get(server);
+            if (existing != null) return existing;
+            // Clock queries belong to this server thread, outside the shared owner-map lock.
+            var created = new Session(server);
+            SESSIONS.put(server, created);
+            return created;
+        }
         public static void tickClocks(MinecraftServer server) {
             if (!SleepAcceleration.active(server)) { server.clockManager().tick(); return; }
-            if (!server.getGlobalGameRules().get(GameRules.ADVANCE_TIME)) return;
-            var session = SESSIONS.computeIfAbsent(server, Session::new);
+            if (!server.overworld().getGameRules().get(GameRules.ADVANCE_TIME)) return;
+            var session = session(server);
             double ticks = SleepAcceleration.clockTicks(server);
             for (var clock : session.clocks) {
                 if (clock.isPaused()) continue;
@@ -166,7 +183,7 @@ public final class SleepAcceleration {
         }
         public static void synchronize(MinecraftServer server) {
             if (!SleepAcceleration.active(server)) return;
-            var session = SESSIONS.computeIfAbsent(server, Session::new);
+            var session = session(server);
             long now = System.nanoTime();
             if (now - session.packetNanos < 100_000_000L) return;
             session.packetNanos = now;

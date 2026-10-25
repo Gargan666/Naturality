@@ -7,6 +7,7 @@ import com.mojang.blaze3d.vertex.QuadInstance;
 import naturality.client.rendering.biometint.BiomeTint;
 import net.fabricmc.fabric.api.client.renderer.v1.mesh.MutableQuadView;
 import net.fabricmc.fabric.api.client.renderer.v1.mesh.QuadEmitter;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.color.block.BlockColors;
 import net.minecraft.client.color.block.BlockTintSource;
 import net.minecraft.client.color.block.BlockTintSources;
@@ -20,10 +21,12 @@ import net.minecraft.util.ARGB;
 import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.jspecify.annotations.Nullable;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Coerce;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
@@ -109,12 +112,57 @@ public final class BiomeTintMixins {
             var samples = naturality$tintSamples;
             if (samples == null || !samples.matches(source, level, blockState, pos))
                 naturality$tintSamples = samples = new BiomeTint.Samples(source, level, blockState, pos);
-            var offset = blockState.getOffset(pos);
-            for (int i = 0; i < 4; i++) {
-                int tint = samples.at(
-                    quad.x(i) + offset.x, quad.y(i) + offset.y, quad.z(i) + offset.z);
-                quad.color(i, ARGB.multiply(quad.color(i), tint));
+            samples.tint(quad);
+            ci.cancel();
+        }
+    }
+
+    /** The context fields are declared here, not in Sodium's terrain renderer subclass. */
+    @Pseudo
+    @Mixin(targets = "net.caffeinemc.mods.sodium.client.render.model.AbstractBlockRenderContext", remap = false)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class SodiumBiomeTintContextMixin implements BiomeTint.Context {
+        @SuppressWarnings("null") @Shadow protected BlockAndTintGetter level;
+        @SuppressWarnings("null") @Shadow protected BlockPos pos;
+        @SuppressWarnings("null") @Shadow protected BlockState state;
+        @Override public BlockAndTintGetter naturality$tintLevel() { return level; }
+        @Override public BlockState naturality$tintState() { return state; }
+        @Override public BlockPos naturality$tintPos() { return pos; }
+    }
+
+    /** Sodium replaces both vanilla and Indigo terrain tint application. */
+    @Pseudo
+    @Mixin(targets = "net.caffeinemc.mods.sodium.client.render.chunk.compile.pipeline.BlockRenderer", remap = false)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class SodiumBiomeTintMixin {
+        @Unique private BiomeTint.@Nullable Samples naturality$tintSamples;
+
+        @WrapMethod(method = "renderModel")
+        private void naturality$scopeTintSamples(BlockStateModel model, BlockState state,
+                BlockPos pos, BlockPos sectionPos, Operation<Void> original) {
+            var previous = naturality$tintSamples;
+            naturality$tintSamples = null;
+            try {
+                original.call(model, state, pos, sectionPos);
+            } finally {
+                naturality$tintSamples = previous;
             }
+        }
+
+        @Inject(method = "tintQuad", at = @At("HEAD"), cancellable = true)
+        private void naturality$worldTint(@Coerce Object sodiumQuad, CallbackInfo ci) {
+            var context=(BiomeTint.Context)this;
+            var level=context.naturality$tintLevel();
+            var state=context.naturality$tintState();
+            var pos=context.naturality$tintPos();
+            var quad = naturality.client.api.rendering.RendererQuads.sodium(sodiumQuad);
+            var source = BiomeTint.source(Minecraft.getInstance().getBlockColors(), state, quad.tintIndex());
+            if (source == null) return;
+            var samples = naturality$tintSamples;
+            if (samples == null || !samples.matches(source, level, state, pos))
+                naturality$tintSamples = samples = new BiomeTint.Samples(source, level, state, pos);
+            // Sodium adds the state offset only when buffering, after tint and light.
+            samples.tint(quad);
             ci.cancel();
         }
     }

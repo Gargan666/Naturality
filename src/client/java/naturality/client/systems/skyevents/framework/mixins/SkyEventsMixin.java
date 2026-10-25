@@ -31,6 +31,7 @@ public abstract class SkyEventsMixin {
 
     @Inject(method = "renderEndSky", at = @At("HEAD"), cancellable = true)
     private void naturality$endSkyPlane(RenderPass pass, CallbackInfo ci) {
+        if (naturality.client.api.rendering.ShaderPacks.active()) return;
         if (!naturality.config.startup.FeatureConfig.Feature.END_SKY.enabled()) return;
         naturality.client.sky.end.atmosphere.EndSkyRenderer.render(pass, endSkyBuffer, endSkyTexture);
         naturality.client.sky.end.atmosphere.EndSkyRenderer.renderStars(pass, starBuffer, starIndexCount);
@@ -101,7 +102,9 @@ public abstract class SkyEventsMixin {
         var effect = naturality$meteors;
         if (effect == null) { effect = new MeteorShower(); naturality$meteors = effect; }
         effect.render(pass, rainBrightness);
-        if (naturality$rainbow != null) naturality$rainbow.render(pass, sunAngle, naturality$rainbowSkyBlend);
+        var rainbow = naturality$rainbow;
+        if (rainbow != null && !naturality.client.api.rendering.ShaderPacks.active())
+            rainbow.render(pass, sunAngle, naturality$rainbowSkyBlend);
     }
     @Inject(method = "close", at = @At("HEAD"))
     private void naturality$close(CallbackInfo ci) {

@@ -17,6 +17,201 @@ import net.minecraft.world.phys.Vec3;
 public final class FluidGeometry {
     private FluidGeometry() {}
 
+    /**
+     * Fabric's default-renderer boundary keeps the registered fluid handler in charge.
+     * Only ordinary vanilla fluids use our authoritative native tessellation; shader
+     * packs and handler overrides keep Sodium's renderer and its attribute contract.
+     */
+    public static final class SodiumFluids {
+        public static final int TAIL_POSITION_FLAG = 1 << 30;
+        public static final int NATIVE_POSITION_FLAG = 1 << 31;
+        private static final int NATIVE_LIGHT_FLAG = 0x2000;
+        public static final net.fabricmc.fabric.api.client.render.fluid.v1.FluidRendering.DefaultRenderer DEFAULT =
+            // The API default establishes Fabric's recursion guard before entering tesselate.
+            new net.fabricmc.fabric.api.client.render.fluid.v1.FluidRendering.DefaultRenderer() {};
+
+        private SodiumFluids() {}
+
+        public static boolean handles(net.minecraft.world.level.material.FluidState state) {
+            var fluid = state.getType();
+            return (fluid == net.minecraft.world.level.material.Fluids.WATER
+                    || fluid == net.minecraft.world.level.material.Fluids.FLOWING_WATER
+                    || fluid == net.minecraft.world.level.material.Fluids.LAVA
+                    || fluid == net.minecraft.world.level.material.Fluids.FLOWING_LAVA)
+                && net.fabricmc.fabric.api.client.render.fluid.v1.FluidRenderingRegistry.getOverride(fluid) == null
+                && !naturality.client.api.rendering.ShaderPacks.terrainActive();
+        }
+
+        public static net.minecraft.client.renderer.block.FluidRenderer.Output output(Object buffers,
+                @org.jspecify.annotations.Nullable Object collector) {
+            // Resolve the builder as well as the material for each requested layer.
+            // In particular, a lava continuation must enter the translucent buffers.
+            return layer -> new MarkedConsumer(Bindings.consumer(buffers, collector, layer));
+        }
+
+        /** CompactChunkVertex uses only bits 0..29 of each packed position word. */
+        public static int packedPosition(int packed, Object[] vertices, int index) {
+            int light = ((SodiumFluidVertex) vertices[index]).naturality$fluidLight();
+            if ((light & NATIVE_LIGHT_FLAG) == 0) return packed;
+            // Mark ownership as well: custom handlers may use alpha as actual opacity.
+            packed |= NATIVE_POSITION_FLAG;
+            return (light & FallingFluidTail.LIGHT_FLAG) != 0 ? packed | TAIL_POSITION_FLAG : packed;
+        }
+
+        /** Sorting can rewrite copied vertices after tessellation has returned. */
+        public static int splitLight(int light, Object inside, Object outside) {
+            int common = ((SodiumFluidVertex) inside).naturality$fluidLight()
+                & ((SodiumFluidVertex) outside).naturality$fluidLight();
+            return (common & NATIVE_LIGHT_FLAG) == 0 ? light
+                : light | (common & (NATIVE_LIGHT_FLAG | FallingFluidTail.LIGHT_FLAG));
+        }
+
+        public static int splitColor(int mixed, int first, int second, float weight, Object inside, Object outside) {
+            if ((splitLight(0, inside, outside) & NATIVE_LIGHT_FLAG) == 0) return mixed;
+            int a = first >>> 24, b = second >>> 24;
+            if (a == 255 || b == 255) return mixed;
+            // Alpha stores an angle, so averaging bytes would send 253/0 through
+            // the opposite direction. Interpolate the decoded vectors instead.
+            // Sodium passes outsideAmount here. Follow its geometric interpolation,
+            // not ColorMixer's reversed RGB weighting; leave that RGB result intact.
+            double scale = 2 * Math.PI / 254;
+            double angleA = (a + .5) * scale - Math.PI, angleB = (b + .5) * scale - Math.PI;
+            double x = (a == 254 ? 0 : Math.cos(angleA)) * (1 - weight)
+                + (b == 254 ? 0 : Math.cos(angleB)) * weight;
+            double z = (a == 254 ? 0 : Math.sin(angleA)) * (1 - weight)
+                + (b == 254 ? 0 : Math.sin(angleB)) * weight;
+            int code = x * x + z * z < 1e-10 ? 254
+                : (int) Math.floor((Math.atan2(z, x) + Math.PI) / scale) % 254;
+            return (mixed & 0xFFFFFF) | code << 24;
+        }
+
+        /** Metadata travels in unused light bits until the compact encoder packs it. */
+        private record MarkedConsumer(com.mojang.blaze3d.vertex.VertexConsumer original)
+                implements com.mojang.blaze3d.vertex.VertexConsumer {
+            @Override public void addVertex(float x, float y, float z, int color, float u, float v,
+                    int overlay, int light, float nx, float ny, float nz) {
+                original.addVertex(x, y, z, color, u, v, overlay, light | NATIVE_LIGHT_FLAG, nx, ny, nz);
+            }
+            @Override public com.mojang.blaze3d.vertex.VertexConsumer addVertex(float x,float y,float z) { original.addVertex(x,y,z); return this; }
+            @Override public com.mojang.blaze3d.vertex.VertexConsumer setColor(int r,int g,int b,int a) { original.setColor(r,g,b,a); return this; }
+            @Override public com.mojang.blaze3d.vertex.VertexConsumer setColor(int color) { original.setColor(color); return this; }
+            @Override public com.mojang.blaze3d.vertex.VertexConsumer setUv(float u,float v) { original.setUv(u,v); return this; }
+            @Override public com.mojang.blaze3d.vertex.VertexConsumer setUv1(int u,int v) { original.setUv1(u,v); return this; }
+            @Override public com.mojang.blaze3d.vertex.VertexConsumer setUv2(int u,int v) { original.setUv2(u | NATIVE_LIGHT_FLAG,v); return this; }
+            @Override public com.mojang.blaze3d.vertex.VertexConsumer setUv3(float u,float v) { original.setUv3(u,v); return this; }
+            @Override public com.mojang.blaze3d.vertex.VertexConsumer setNormal(float x,float y,float z) { original.setNormal(x,y,z); return this; }
+            @Override public com.mojang.blaze3d.vertex.VertexConsumer setLineWidth(float width) { original.setLineWidth(width); return this; }
+        }
+
+        /** Optional linkage is initialized only after the Sodium-only hook has selected this path. */
+        private static final class Bindings {
+            private static final Object[] MATERIALS;
+            private static final java.lang.invoke.MethodHandle BUILDER, CONSUMER;
+            static {
+                try {
+                    var lookup = java.lang.invoke.MethodHandles.publicLookup();
+                    var material = Class.forName("net.caffeinemc.mods.sodium.client.render.chunk.terrain.material.Material");
+                    var materials = Class.forName("net.caffeinemc.mods.sodium.client.render.chunk.terrain.material.DefaultMaterials");
+                    var buffers = Class.forName("net.caffeinemc.mods.sodium.client.render.chunk.compile.ChunkBuildBuffers");
+                    var builder = Class.forName("net.caffeinemc.mods.sodium.client.render.chunk.compile.buffers.ChunkModelBuilder");
+                    var collector = Class.forName("net.caffeinemc.mods.sodium.client.render.chunk.translucent_sorting.TranslucentGeometryCollector");
+                    var layer = net.minecraft.client.renderer.chunk.ChunkSectionLayer.class;
+                    var resolve = materials.getMethod("forChunkLayer", layer);
+                    var layers = net.minecraft.client.renderer.chunk.ChunkSectionLayer.values();
+                    MATERIALS = new Object[layers.length];
+                    for (var value : layers) MATERIALS[value.ordinal()] = Objects.requireNonNull(resolve.invoke(null, value));
+                    BUILDER = lookup.unreflect(buffers.getMethod("get", material)).asType(
+                        java.lang.invoke.MethodType.methodType(Object.class, Object.class, Object.class));
+                    CONSUMER = lookup.unreflect(builder.getMethod("asFallbackVertexConsumer", material, collector)).asType(
+                        java.lang.invoke.MethodType.methodType(com.mojang.blaze3d.vertex.VertexConsumer.class,
+                            Object.class, Object.class, Object.class));
+                } catch (ReflectiveOperationException failure) {
+                    throw new IllegalStateException("Unsupported Sodium fluid mesh buffers", failure);
+                }
+            }
+
+            static com.mojang.blaze3d.vertex.VertexConsumer consumer(Object buffers,
+                    @org.jspecify.annotations.Nullable Object collector,
+                    net.minecraft.client.renderer.chunk.ChunkSectionLayer layer) {
+                try {
+                    Object material = MATERIALS[layer.ordinal()];
+                    Object builder = BUILDER.invokeExact(buffers, material);
+                    return (com.mojang.blaze3d.vertex.VertexConsumer) CONSUMER.invokeExact(builder, material, collector);
+                } catch (RuntimeException | Error failure) { throw failure; }
+                catch (Throwable failure) { throw new IllegalStateException("Cannot write Sodium fluid geometry", failure); }
+            }
+        }
+    }
+
+    /** Injected into Sodium's vertex without linking optional classes from common rendering code. */
+    public interface SodiumFluidVertex {
+        int naturality$fluidLight();
+    }
+
+    /** One fluid tessellation's cell-centered light field, including its one-block tail. */
+    public static final class LightSamples {
+        private final BlockAndTintGetter level;
+        private final BlockPos pos;
+        private final net.minecraft.world.level.material.FluidState fluid;
+        // Ordinary body/tail vertices visit x,z=-1..1 and y=-2..1: exactly 36 cells.
+        private final int[] samples = new int[36];
+        private final BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        private long valid;
+        private @org.jspecify.annotations.Nullable Map<BlockPos, Integer> overflow;
+
+        public LightSamples(BlockAndTintGetter level, BlockPos pos, net.minecraft.world.level.material.FluidState fluid) {
+            this.level = level; this.pos = pos.immutable(); this.fluid = fluid;
+        }
+
+        private int sample(int x, int y, int z) {
+            if (x < -1 || x > 1 || y < -2 || y > 1 || z < -1 || z > 1) {
+                // Preserve caching for peer-mod vertices outside the native fluid envelope.
+                var cache = overflow;
+                if (cache == null) overflow = cache = new HashMap<>();
+                return cache.computeIfAbsent(pos.offset(x, y, z), this::read);
+            }
+            int index = x + 1 + (z + 1) * 3 + (y + 2) * 9;
+            long bit = 1L << index;
+            if ((valid & bit) == 0) {
+                cursor.setWithOffset(pos, x, y, z);
+                samples[index] = read(cursor);
+                valid |= bit;
+            }
+            return samples[index];
+        }
+
+        private int read(BlockPos sample) {
+            return level.getBlockState(sample).isSolidRender() ? -1
+                : net.minecraft.util.LightCoordsUtil.getLightCoords(level, sample);
+        }
+
+        public int at(float x, float y, float z, int fallback) {
+            // Keep the original query order and blending arithmetic, including zero-weight cells.
+            double px = x - (pos.getX() & 15) - 0.5;
+            double py = y - (pos.getY() & 15) - 0.5;
+            double pz = z - (pos.getZ() & 15) - 0.5;
+            int bx = (int) Math.floor(px), by = (int) Math.floor(py), bz = (int) Math.floor(pz);
+            double fx = px - bx, fy = py - by, fz = pz - bz;
+            double block = 0, sky = 0, total = 0;
+            for (int dz = 0; dz < 2; dz++) for (int dy = 0; dy < 2; dy++) for (int dx = 0; dx < 2; dx++) {
+                int packed = sample(bx + dx, by + dy, bz + dz);
+                if (packed < 0) continue;
+                double weight = (dx == 0 ? 1 - fx : fx) * (dy == 0 ? 1 - fy : fy) * (dz == 0 ? 1 - fz : fz);
+                block += net.minecraft.util.LightCoordsUtil.smoothBlock(packed) * weight;
+                sky += net.minecraft.util.LightCoordsUtil.smoothSky(packed) * weight;
+                total += weight;
+            }
+            if (total < 1e-6) return fallback;
+            int blockLight = (int) Math.round(block / total);
+            // Retain the live emissive setting and the original fallback-before-emission order.
+            if (fluid.getType().isSame(net.minecraft.world.level.material.Fluids.LAVA)
+                    && naturality.config.live.NaturalityConfig.get().liquids.lava
+                    && naturality.config.live.NaturalityConfig.get().liquids.emissiveLava)
+                return net.minecraft.util.LightCoordsUtil.FULL_BRIGHT;
+            return net.minecraft.util.LightCoordsUtil.smoothPack(blockLight, (int) Math.round(sky / total));
+        }
+    }
+
     public static float connectedHeight(BlockAndTintGetter level, BlockPos pos, float height) {
         return connectedHeight(level, pos, height, null);
     }
@@ -112,11 +307,11 @@ public final class FluidGeometry {
             if(lava) {
                 var surface=LavaSurface.at(level,pos);
                 if(surface==null || !surface.contains(u,v))return null;
-                return sample(pos,u,v,surface::height);
+                return sample(surface.pos(),u,v,surface::height);
             }
             var surface=WaterSurface.at(level,pos);
             if(surface==null || !surface.contains(u,v))return null;
-            return sample(pos,u,v,surface::height);
+            return sample(surface.pos(),u,v,surface::height);
         }
         private static Sample sample(BlockPos pos,double u,double v,DoubleBinaryOperator height) {
             double gx=height.applyAsDouble(Math.min(.99,u+.04),v)-height.applyAsDouble(Math.max(.01,u-.04),v);
@@ -124,15 +319,16 @@ public final class FluidGeometry {
             return new Sample(pos,pos.getX()+u,pos.getZ()+v,height.applyAsDouble(u,v),-gx,-gz);
         }
         public static @org.jspecify.annotations.Nullable Sample near(ClientLevel level,double x,double y,double z,boolean lava,boolean edge) {
-            var origin=BlockPos.containing(x,y,z);
+            int originX=net.minecraft.util.Mth.floor(x),originY=net.minecraft.util.Mth.floor(y),originZ=net.minecraft.util.Mth.floor(z);
+            var cursor=new BlockPos.MutableBlockPos();
             Sample best=null;
             double score=Double.POSITIVE_INFINITY;
             int radius=edge?1:0;
             for(int dz=-radius;dz<=radius;dz++)for(int dx=-radius;dx<=radius;dx++) {
-                int bx=origin.getX()+dx,bz=origin.getZ()+dz;
+                int bx=originX+dx,bz=originZ+dz;
                 if(x<bx-.08 || x>bx+1.08 || z<bz-.08 || z>bz+1.08)continue;
                 for(int dy=1;dy>=-3;dy--) {
-                    var candidate=at(level,new BlockPos(bx,origin.getY()+dy,bz),x,z,lava);
+                    var candidate=at(level,cursor.set(bx,originY+dy,bz),x,z,lava);
                     if(candidate==null)continue;
                     double distance=Math.abs(candidate.height-y)+4*Math.hypot(candidate.x-x,candidate.z-z);
                     if(distance<score){score=distance;best=candidate;}
@@ -147,15 +343,8 @@ public final class FluidGeometry {
         private WaterIntersectionGeometry() {}
         public static List<PlanarGeometry.Rect> section(List<Vec3[]> mesh, double height, double dx, double dz,
                                                              double left, double bottom, double right, double top) {
-            var section = new ModelSection(true, height);
-            for (var quad : mesh) {
-                var transformed = new Vec3[4];
-                for (int i=0;i<4;i++) {
-                    var p=quad[i];
-                    transformed[i]=new Vec3(p.x,p.z,p.y-dx*p.x-dz*p.z);
-                }
-                section.quad(transformed);
-            }
+            var section = ModelSection.horizontal(height,dx,dz);
+            for (var quad : mesh) section.quad(quad);
             return section.rectangles(left,bottom,right,top);
         }
         public static float alpha(List<PlanarGeometry.Rect> sections, double x, double z) {

@@ -173,6 +173,16 @@ public final class ContentRegistration {
                 .setId(ResourceKey.create(Registries.ITEM, Naturality.id("moss")))
                 .useBlockDescriptionPrefix()));
 
+        public static final Block GIANT_LILYPAD = Blocks.register(
+            ResourceKey.create(Registries.BLOCK, Naturality.id("giant_lilypad")),
+            naturality.blocks.lilypad.GiantLilypadBlock::new,
+            BlockBehaviour.Properties.ofFullCopy(Blocks.LILY_PAD));
+        public static final BlockItem GIANT_LILYPAD_ITEM = Registry.register(BuiltInRegistries.ITEM,
+            ResourceKey.create(Registries.ITEM, Naturality.id("giant_lilypad")),
+            new net.minecraft.world.item.PlaceOnWaterBlockItem(GIANT_LILYPAD, new Item.Properties()
+                .setId(ResourceKey.create(Registries.ITEM, Naturality.id("giant_lilypad")))
+                .useBlockDescriptionPrefix()));
+
         public static final Block CLOVERS = Blocks.register(
             ResourceKey.create(Registries.BLOCK, Naturality.id("clovers")),
             properties -> new net.minecraft.world.level.block.FlowerBedBlock(properties, 3),
@@ -212,6 +222,9 @@ public final class ContentRegistration {
             SEDIMENT_ITEM.registerBlocks(Item.BY_BLOCK, SEDIMENT_ITEM);
             CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.NATURAL_BLOCKS)
                 .register(output -> output.insertBefore(Blocks.SAND, SEDIMENT));
+            GIANT_LILYPAD_ITEM.registerBlocks(Item.BY_BLOCK, GIANT_LILYPAD_ITEM);
+            CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.NATURAL_BLOCKS)
+                .register(output -> output.insertAfter(Blocks.LILY_PAD, GIANT_LILYPAD));
             CLOVERS_ITEM.registerBlocks(Item.BY_BLOCK, CLOVERS_ITEM);
             FOUR_LEAF_CLOVERS_ITEM.registerBlocks(Item.BY_BLOCK, FOUR_LEAF_CLOVERS_ITEM);
             CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.NATURAL_BLOCKS)

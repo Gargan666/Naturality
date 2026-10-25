@@ -3,6 +3,8 @@ package naturality.sky.shared.aurora;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.WeakHashMap;
+import java.util.Collections;
+import net.minecraft.server.MinecraftServer;
 import naturality.systems.weather.framework.WeatherSystem;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -21,10 +23,19 @@ public final class AuroraEvents {
         long lastSeen;
         float chance;
         Cell(long seed) { cycle = new AuroraCycle(seed); }
+        Map<String, Long> snapshot(Region region) {
+            var saved = new HashMap<>(cycle.snapshot());
+            saved.put("x", (long)region.x); saved.put("z", (long)region.z);
+            saved.put("lastSeen", lastSeen);
+            saved.put("chance", naturality.api.worlds.EnvironmentWorldData.bits(chance));
+            return saved;
+        }
     }
-    private static final Map<ServerLevel, Map<Region, Cell>> STATES = new WeakHashMap<>();
+    private static final Map<ServerLevel, Map<Region, Cell>> STATES = Collections.synchronizedMap(new WeakHashMap<>());
     private AuroraEvents() {}
-    public static void clear() { STATES.clear(); }
+    public static void clearServer(MinecraftServer server) {
+        for (var level : server.getAllLevels()) STATES.remove(level);
+    }
     private static String prefix(ServerLevel level) { return "aurora/"+level.dimension().identifier()+"/"; }
     public static void restore(ServerLevel level) {
         var cells=STATES.computeIfAbsent(level,_ -> new HashMap<>());
@@ -71,10 +82,8 @@ public final class AuroraEvents {
             cell.lastSeen = time;
             cell.chance = chance;
             cell.cycle.tick(advance, (float)naturality.api.worlds.PreviewEnvironment.chance(chance, naturality.api.worlds.PreviewEnvironment.rate(java.util.Objects.requireNonNull(level.getServer()))));
-            var saved=new HashMap<>(cell.cycle.snapshot());
-            saved.put("x",(long)region.x);saved.put("z",(long)region.z);
-            saved.put("lastSeen",cell.lastSeen);saved.put("chance",naturality.api.worlds.EnvironmentWorldData.bits(chance));
-            naturality.api.worlds.EnvironmentWorldData.get(java.util.Objects.requireNonNull(level.getServer())).write(prefix(level)+region.x+","+region.z,saved);
+            naturality.api.worlds.EnvironmentWorldData.get(java.util.Objects.requireNonNull(level.getServer()))
+                .defer(prefix(level)+region.x+","+region.z, () -> cell.snapshot(region));
         });
         // Vacated regions do not accumulate events. Forget them after one minute.
         cells.entrySet().removeIf(entry -> {

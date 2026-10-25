@@ -9,12 +9,14 @@ import net.minecraft.world.phys.Vec3;
 import naturality.systems.weather.framework.WeatherSystem.WeatherState;
 import naturality.systems.weather.framework.WeatherSystem;
 import java.util.function.Supplier;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import net.minecraft.core.Direction;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.*;
 import net.minecraft.world.level.block.*;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.shapes.VoxelShape;
+import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.level.block.VegetationBlock;
 
 /** Resolve intrusion before vanilla movement, which cannot resolve existing overlaps. */
@@ -80,9 +82,22 @@ public final class WindPush {
     /** Rigid gameplay displacement: broad sway only, settling to a steady severe-wind pose. */
     public static final class WindShapes {
         public static final ThreadLocal<ClipContext> PICK=new ThreadLocal<>();
-        // Keep the tiny counter in place: remove/set used to allocate a ThreadLocal
-        // entry again for almost every block-shape query, including ordinary terrain.
-        private static final ThreadLocal<int[]> RAW=ThreadLocal.withInitial(() -> new int[1]);
+        // Reuse the counter and operation arguments, including ordinary terrain queries.
+        // Each nested call owns a frame; every borrowed reference is cleared in finally.
+        private static final ThreadLocal<RawState> RAW=ThreadLocal.withInitial(RawState::new);
+        private static final class RawState {
+            int depth;
+            final @org.jspecify.annotations.Nullable ShapeArguments[] frames=new ShapeArguments[8];
+            ShapeArguments arguments() {
+                if(depth>=frames.length)return new ShapeArguments();
+                var frame=frames[depth];
+                if(frame==null) {frame=new ShapeArguments();frames[depth]=frame;}
+                return frame;
+            }
+        }
+        private static final class ShapeArguments {
+            final @org.jspecify.annotations.Nullable Object[] cached=new Object[2],contextual=new Object[3];
+        }
         private static final java.util.Map<Level,Cache> CACHE=new java.util.WeakHashMap<>();
         private static final class Cache {
             WeatherState weather=WeatherState.CLEAR;
@@ -94,16 +109,24 @@ public final class WindPush {
             long tick;
             // A small identity cache retains context-specific collision/outline variants.
             // Shapes are immutable; each pose is revalidated against the tick, weather and state.
+            private @org.jspecify.annotations.Nullable VoxelShape firstShape,firstMoved;
             java.util.@org.jspecify.annotations.Nullable IdentityHashMap<VoxelShape,VoxelShape> moved;
             Entry(BlockState state,Vec3 offset,long tick) {this.state=state;this.offset=offset;this.tick=tick;}
             VoxelShape move(VoxelShape shape) {
                 if(offset.equals(Vec3.ZERO))return shape;
+                var first=firstMoved;
+                if(shape==firstShape && first!=null)return first;
                 var cache = moved;
-                if(cache==null) { cache=new java.util.IdentityHashMap<>(4); moved=cache; }
-                var result=cache.get(shape);
-                if(result==null) {
-                    result=shape.move(offset.x,0,offset.z);
-                    if(cache.size()>=4)cache.clear();
+                var result=cache==null?null:cache.get(shape);
+                if(result!=null)return result;
+                result=shape.move(offset.x,0,offset.z);
+                // Most poses use one shape. The fifth distinct miss still evicts
+                // all four identities, while retaining any allocated fallback table.
+                if(firstShape==null || cache!=null && cache.size()>=3) {
+                    if(cache!=null)cache.clear();
+                    firstShape=shape;firstMoved=result;
+                } else {
+                    if(cache==null) {cache=new java.util.IdentityHashMap<>(4);moved=cache;}
                     cache.put(shape,result);
                 }
                 return result;
@@ -111,8 +134,38 @@ public final class WindPush {
         }
         private WindShapes() {}
         public static <T> T raw(Supplier<T> work) {
-            var depth=RAW.get();depth[0]++;
-            try {return work.get();} finally {depth[0]--;}
+            var state=RAW.get();state.depth++;
+            try {return work.get();} finally {state.depth--;}
+        }
+        /** Operation.call is varargs: passing the borrowed array avoids a fresh array and captured supplier per block. */
+        public static VoxelShape rawShape(Operation<VoxelShape> operation,BlockGetter level,BlockPos pos,CollisionContext context) {
+            var args=beginShapeCall(level,pos,context);
+            try {return operation.call(args);} finally {endShapeCall(args);}
+        }
+        public static VoxelShape rawShape(Operation<VoxelShape> operation,BlockGetter level,BlockPos pos) {
+            var args=beginShapeCall(level,pos);
+            try {return operation.call(args);} finally {endShapeCall(args);}
+        }
+        /**
+         * Each wrapper calls its own Operation directly so the JVM can inline its
+         * generated receiver capture. A shared polymorphic dispatch makes that
+         * capture escape even when the argument arrays themselves are reused.
+         * Every begin must be paired with endShapeCall in a finally block.
+         */
+        public static @org.jspecify.annotations.Nullable Object[] beginShapeCall(BlockGetter level,BlockPos pos,CollisionContext context) {
+            var state=RAW.get();var args=state.arguments().contextual;
+            args[0]=level;args[1]=pos;args[2]=context;
+            state.depth++;
+            return args;
+        }
+        public static @org.jspecify.annotations.Nullable Object[] beginShapeCall(BlockGetter level,BlockPos pos) {
+            var state=RAW.get();var args=state.arguments().cached;
+            args[0]=level;args[1]=pos;
+            state.depth++;
+            return args;
+        }
+        public static void endShapeCall(@org.jspecify.annotations.Nullable Object[] args) {
+            java.util.Arrays.fill(args,null);RAW.get().depth--;
         }
         public static boolean eligible(BlockState state) {
             return state.is(BlockTags.LEAVES) || state.getBlock() instanceof VineBlock || state.is(Blocks.SNOW);
@@ -123,7 +176,7 @@ public final class WindPush {
             return weather!=null && weather.wind()>0;
         }
         public static VoxelShape move(BlockGetter view,BlockPos pos,BlockState state,VoxelShape shape) {
-            if(!(view instanceof Level level) || shape.isEmpty() || !eligible(state) || RAW.get()[0]!=0 || naturality.api.geometry.ShapeRecursionGuard.active())return shape;
+            if(!(view instanceof Level level) || shape.isEmpty() || !eligible(state) || RAW.get().depth!=0 || naturality.api.geometry.ShapeRecursionGuard.active())return shape;
             var weather=WeatherSystem.state(level);
             if(weather==null || weather.wind()==0)return shape;
             synchronized(CACHE) {return entry(level,pos,state,weather).move(shape);}
@@ -145,7 +198,9 @@ public final class WindPush {
             long key=pos.asLong(), tick=level.getGameTime();
             var previous=cache.values.get(key);
             if(previous!=null && previous.state==state && previous.tick==tick)return previous;
-            Vec3 offset=raw(() -> compute(level,pos,state,weather));
+            var raw=RAW.get();raw.depth++;
+            Vec3 offset;
+            try {offset=compute(level,pos,state,weather);} finally {raw.depth--;}
             // Recheck shelter every tick, but retain translated shapes when the pose is unchanged.
             // Severe wind deliberately holds a steady pose, so rebuilding those shapes is wasted work.
             if(previous!=null && previous.state==state && previous.offset.equals(offset)) {

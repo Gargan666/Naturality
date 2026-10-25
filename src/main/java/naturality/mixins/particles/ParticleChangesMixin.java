@@ -8,7 +8,7 @@ import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.ModifyArg;
 import net.minecraft.world.entity.boss.enderdragon.phases.DragonDeathPhase;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
@@ -44,15 +44,14 @@ public final class ParticleChangesMixin {
     @Mixin(EnderDragon.class)
     @org.jspecify.annotations.NullMarked
     public static abstract class DragonDeathExplosionMixin {
-        @Redirect(method = {"aiStep", "tickDeath"}, at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/world/level/Level;addParticle(Lnet/minecraft/core/particles/ParticleOptions;DDDDDD)V"))
-        private void naturality$endDeathBurst(Level level, ParticleOptions particle,
-                double x, double y, double z, double vx, double vy, double vz) {
+        @ModifyArg(method = {"aiStep", "tickDeath"}, at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/world/level/Level;addParticle(Lnet/minecraft/core/particles/ParticleOptions;DDDDDD)V"), index = 0)
+        private ParticleOptions naturality$endDeathBurst(ParticleOptions particle) {
             if (Feature.EXPLOSION_PARTICLES.enabled()
                     && (particle.getType() == ParticleTypes.EXPLOSION || particle.getType() == ParticleTypes.EXPLOSION_EMITTER)) {
                 particle = NaturalityParticles.END_EXPLOSION;
             }
-            level.addParticle(particle, x, y, z, vx, vy, vz);
+            return particle;
         }
     }
 
@@ -60,15 +59,14 @@ public final class ParticleChangesMixin {
     @Mixin(DragonDeathPhase.class)
     @org.jspecify.annotations.NullMarked
     public static abstract class DragonDeathFlightExplosionMixin {
-        @Redirect(method = "doClientTick", at = @At(value = "INVOKE",
-            target = "Lnet/minecraft/world/level/Level;addParticle(Lnet/minecraft/core/particles/ParticleOptions;DDDDDD)V"))
-        private void naturality$endFlightBurst(Level level, ParticleOptions particle,
-                double x, double y, double z, double vx, double vy, double vz) {
+        @ModifyArg(method = "doClientTick", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/world/level/Level;addParticle(Lnet/minecraft/core/particles/ParticleOptions;DDDDDD)V"), index = 0)
+        private ParticleOptions naturality$endFlightBurst(ParticleOptions particle) {
             if (Feature.EXPLOSION_PARTICLES.enabled()
                     && (particle.getType() == ParticleTypes.EXPLOSION || particle.getType() == ParticleTypes.EXPLOSION_EMITTER)) {
                 particle = NaturalityParticles.END_EXPLOSION;
             }
-            level.addParticle(particle, x, y, z, vx, vy, vz);
+            return particle;
         }
     }
 

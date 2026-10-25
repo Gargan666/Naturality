@@ -7,6 +7,7 @@ import naturality.bootstrap.ContentRegistration.NaturalityBlocks;
 import net.fabricmc.fabric.api.biome.v1.BiomeModifications;
 import net.fabricmc.fabric.api.biome.v1.BiomeSelectors;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -87,8 +88,20 @@ public record SandLayersFeature() implements Feature {
             var previous = level.getBlockState(pos);
             if (eighths < 0 ? !previous.is(Blocks.SAND) : !previous.isAir() && !water) continue;
             int layers = eighths < 0 ? 8 + eighths : eighths;
+            // Cutting a shoreline block can expose a source beside the new layer
+            // even when the block above it is dry. Check at the final layer height.
+            boolean waterlogged = water;
+            if (!waterlogged) for (var direction : Direction.Plane.HORIZONTAL) {
+                var neighbor = level.getBlockState(pos.relative(direction));
+                // Only existing water blocks seed this, so newly waterlogged layers
+                // cannot spread water inland depending on column/chunk write order.
+                if (neighbor.is(Blocks.WATER) && neighbor.getFluidState().isSource()) {
+                    waterlogged = true;
+                    break;
+                }
+            }
             var state = NaturalityBlocks.SAND_LAYER.defaultBlockState()
-                .setValue(SandLayerBlock.LAYERS, layers).setValue(SandLayerBlock.WATERLOGGED, water);
+                .setValue(SandLayerBlock.LAYERS, layers).setValue(SandLayerBlock.WATERLOGGED, waterlogged);
             if (state.canSurvive(level, pos)) {
                 level.setBlock(pos, state, 2);
                 placed = true;

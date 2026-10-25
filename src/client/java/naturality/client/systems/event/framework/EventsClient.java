@@ -17,6 +17,7 @@ public final class EventsClient {
     public static void initialize() {
         ClientPlayConnectionEvents.INIT.register((_, _) -> VALUES.clear());
         ClientPlayConnectionEvents.DISCONNECT.register((_, _) -> VALUES.clear());
+        if (naturality.config.startup.FeatureConfig.clientOnly()) return;
         ClientPlayNetworking.registerGlobalReceiver(EventPayload.TYPE, (payload, context) -> context.client().execute(() -> {
             if (Float.isFinite(payload.strength()))
                 VALUES.put(new Key(payload.dimension(), payload.event()), Math.clamp(payload.strength(), 0, 1));

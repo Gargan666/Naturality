@@ -21,8 +21,6 @@ import net.minecraft.world.phys.Vec3;
 import naturality.client.fluids.lava.LavaEffects.LavaSurface;
 import naturality.client.fluids.water.WaterShaders.WaterSurface;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.HashSet;
-import java.util.Set;
 import naturality.bootstrap.ContentRegistration.NaturalityParticles;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.particles.ParticleTypes;
@@ -121,7 +119,7 @@ public final class FallingFluidTail {
         public FallSurfacePath(boolean lava){this.lava=lava;}
         public @org.jspecify.annotations.Nullable Vec3 step(ClientLevel level,double x,double y,double z,double vx,double vy,double vz) {
             double speed=lava?.045:.18;
-            var current=LiquidSurfaceGeometry.near(level,x,y,z,lava,true);
+            var current=following?LiquidSurfaceGeometry.near(level,x,y,z,lava,true):null;
             if(!following) {
                 var landing=LiquidSurfaceGeometry.near(level,x+vx,y+vy,z+vz,lava,true);
                 if(landing==null || vy>0 || y<landing.height()-.3 || y+vy>landing.height()+.035)return null;
@@ -151,10 +149,21 @@ public final class FallingFluidTail {
 
     /** Ballistic droplets and animated spray along exposed vertical falls and their feet. */
     public static final class FallImpactDroplets {
-        private record Face(BlockPos pos,Direction side) {}
-        private static final Set<Face> WATER_ACTIVE=new HashSet<>(), LAVA_ACTIVE=new HashSet<>();
+        private static final Direction[] HORIZONTAL=Direction.Plane.HORIZONTAL.stream().toArray(Direction[]::new);
+        private static final ActiveFaces WATER_ACTIVE=new ActiveFaces(), LAVA_ACTIVE=new ActiveFaces();
+
+        /** Membership only: four exposed sides share one packed position, with reusable tick buffers. */
+        static final class ActiveFaces {
+            private Long2ByteOpenHashMap previous=new Long2ByteOpenHashMap(), next=new Long2ByteOpenHashMap();
+            void begin(){next.clear();}
+            boolean contains(long position,int side){return (previous.get(position)&(1<<side))!=0;}
+            void add(long position,int side){next.put(position,(byte)(next.get(position)|(1<<side)));}
+            void end(){var swap=previous;previous=next;next=swap;}
+            void reset(){previous.clear();next.clear();}
+        }
+
         private FallImpactDroplets() {}
-        public static void reset(boolean lava) {(lava?LAVA_ACTIVE:WATER_ACTIVE).clear();}
+        public static void reset(boolean lava) {(lava?LAVA_ACTIVE:WATER_ACTIVE).reset();}
         public static boolean vertical(ClientLevel level,BlockPos foot,boolean lava) {
             var above=level.getFluidState(foot.above());
             return above.is(lava?FluidTags.LAVA:FluidTags.WATER)
@@ -174,21 +183,24 @@ public final class FallingFluidTail {
             int budget=128;
             int warmBudget=32;
             var previous=lava?LAVA_ACTIVE:WATER_ACTIVE;
-            var activeNow=new HashSet<Face>();
+            previous.begin();
+            var neighbor=new BlockPos.MutableBlockPos();
             for(var positions:columns)for(var pos:positions) {
                 if(naturality.client.fluids.shared.FallingFluidTail.FallParticleBudget.exhausted(level))break;
                 double distance=net.minecraft.world.phys.Vec3.atCenterOf(pos).distanceTo(eye);
                 double density=FallParticleDensity.multiplier(distance);
                 if(density<=0 || !naturality.api.worlds.LoadedChunks.has(level, pos) || !falling(level,pos,lava))continue;
                 boolean emit=random.nextDouble()<rate*density;
+                long position=pos.asLong();
                 // Keep animated spray tucked against exposed sides and carry it down with the stream.
-                for(var side:Direction.Plane.HORIZONTAL) {
-                    var neighbor=pos.relative(side);
+                for(int sideIndex=0;sideIndex<HORIZONTAL.length;sideIndex++) {
+                    var side=HORIZONTAL[sideIndex];
+                    neighbor.setWithOffset(pos,side);
                     if(!naturality.api.worlds.LoadedChunks.has(level, neighbor) || !level.getBlockState(neighbor).isAir())continue;
-                    var face=new Face(pos,side);
-                    if(density>=0.12 && (previous.contains(face) || warmBudget>0)) {
-                        activeNow.add(face);
-                        if(!previous.contains(face) && warmBudget>0
+                    boolean wasActive=previous.contains(position,sideIndex);
+                    if(density>=0.12 && (wasActive || warmBudget>0)) {
+                        previous.add(position,sideIndex);
+                        if(!wasActive && warmBudget>0
                             && random.nextDouble()<Math.min(1,rate*density*(lava?48:24))) {
                             spawnAlong(client,lava,pos,side,1+random.nextInt(lava?47:23));
                             warmBudget--;
@@ -199,7 +211,7 @@ public final class FallingFluidTail {
                     budget--;
                 }
             }
-            previous.clear();previous.addAll(activeNow);
+            previous.end();
         }
         private static void spawnAlong(Minecraft client,boolean lava,BlockPos pos,Direction side,int elapsedTicks) {
             var level = client.level;

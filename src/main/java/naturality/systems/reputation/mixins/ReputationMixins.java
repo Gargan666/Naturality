@@ -1,6 +1,8 @@
 package naturality.systems.reputation.mixins;
 
 import naturality.systems.reputation.Reputation;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.npc.villager.Villager;
@@ -235,13 +237,14 @@ public final class ReputationMixins {
         private void naturality$load(ValueInput input, CallbackInfo ci) {
             if ((Object)this instanceof Villager || (Object)this instanceof ZombieVillager) naturality$rep.load(input);
         }
-        @Redirect(method = "convertTo(Lnet/minecraft/world/entity/EntityType;Lnet/minecraft/world/entity/ConversionParams;Lnet/minecraft/world/entity/EntitySpawnReason;Lnet/minecraft/world/entity/ConversionParams$AfterConversion;)Lnet/minecraft/world/entity/Mob;",
+        @WrapOperation(method = "convertTo(Lnet/minecraft/world/entity/EntityType;Lnet/minecraft/world/entity/ConversionParams;Lnet/minecraft/world/entity/EntitySpawnReason;Lnet/minecraft/world/entity/ConversionParams$AfterConversion;)Lnet/minecraft/world/entity/Mob;",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/ConversionParams$AfterConversion;finalizeConversion(Lnet/minecraft/world/entity/Mob;)V"))
-        private void naturality$lineage(ConversionParams.AfterConversion<Mob> callback, Mob converted) {
+        private void naturality$lineage(ConversionParams.AfterConversion<Mob> callback, Mob converted,
+                Operation<Void> original) {
             if (((Object)this instanceof Villager || (Object)this instanceof ZombieVillager)
                     && (converted instanceof Villager || converted instanceof ZombieVillager))
                 Reputation.state(converted).copyFrom(naturality$rep);
-            callback.finalizeConversion(converted);
+            original.call(callback, converted);
         }
         @Inject(method = "canAttack(Lnet/minecraft/world/entity/LivingEntity;)Z", at = @At("HEAD"), cancellable = true)
         private void naturality$allies(LivingEntity target, CallbackInfoReturnable<Boolean> cir) {

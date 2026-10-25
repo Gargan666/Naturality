@@ -42,10 +42,14 @@ public final class SurfaceFireModel extends WrapperBlockStateModel {
     @Override public @org.jspecify.annotations.Nullable Object createGeometryKey(BlockAndTintGetter level, BlockPos pos, BlockState state, RandomSource random) { return null; }
     @Override public void emitQuads(QuadEmitter emitter, BlockAndTintGetter level, BlockPos pos,
             BlockState state, RandomSource random, Predicate<@org.jspecify.annotations.Nullable Direction> cullTest) {
+        // Native GLSL decodes RGB as procedural seeds. Iris replaces that shader
+        // and treats RGB as ordinary tint, so keep its existing fire sprite white.
+        boolean packTerrain = naturality.client.api.rendering.ShaderPacks.terrainActive();
+        int color = packTerrain ? -1 : ProceduralFire.seedColor(pos);
         if (!naturality.config.gameplay.GameplaySettings.clientFireWrapping()) {
-            // Keep vanilla geometry while supplying valid seeds to the independent fire-texture shader.
+            // Keep vanilla geometry with the selected shader's color convention.
             emitter.pushTransform(quad -> {
-                for (int i = 0; i < 4; i++) quad.color(i, ProceduralFire.seedColor(pos));
+                for (int i = 0; i < 4; i++) quad.color(i, color);
                 return true;
             });
             try { wrapped.emitQuads(emitter, level, pos, state, random, cullTest); }
@@ -55,10 +59,9 @@ public final class SurfaceFireModel extends WrapperBlockStateModel {
         var floors = FireGeometry.floors(level, pos, state);
         if (floors.size() == 1 && vanillaFloor(floors.getFirst())) {
             float shift = floors.getFirst().y();
-            int seed = ProceduralFire.seedColor(pos);
             emitter.pushTransform(quad -> {
                 quad.translate(0, shift, 0);
-                for (int i = 0; i < 4; i++) quad.color(i, seed);
+                for (int i = 0; i < 4; i++) quad.color(i, color);
                 return true;
             });
             try { wrapped.emitQuads(emitter, level, pos, state, random, cullTest); }
@@ -66,7 +69,6 @@ public final class SurfaceFireModel extends WrapperBlockStateModel {
             return;
         }
         var material = wrapped.particleMaterial(level, pos, state);
-        int color = ProceduralFire.seedColor(pos);
         for (var p : floors) {
             // Adjacent fires otherwise emit coincident, differently textured faces.
             float lo = 1F / 1024, hi = 1 - lo;
@@ -83,7 +85,7 @@ public final class SurfaceFireModel extends WrapperBlockStateModel {
             sheet(emitter, material, color, b, d, height);
         }
         for (var side : FireGeometry.sides(level, pos, state))
-            sheet(emitter, material, ConnectedFire.color(level, pos, state, side),
+            sheet(emitter, material, packTerrain ? -1 : ConnectedFire.color(level, pos, state, side),
                 side.bottomLeft(), side.bottomRight(), side.height());
         if (state.hasProperty(FireBlock.UP) && state.getValue(FireBlock.UP)) {
             for (var b : FireGeometry.supportBoxes(level, pos.above())) {
@@ -197,8 +199,13 @@ public final class SurfaceFireModel extends WrapperBlockStateModel {
         private SoulFireTracker() { }
 
         public static boolean isSoulBurning(Entity entity) {
+            // Lava always replaces the remembered source, regardless of nearby fire.
+            if (entity.isInLava()) {
+                SOUL_BURNING.remove(entity);
+                return false;
+            }
             int fireContact = fireContact(entity);
-            if (entity.isInLava() || fireContact == 1) SOUL_BURNING.remove(entity);
+            if (fireContact == 1) SOUL_BURNING.remove(entity);
             else if (fireContact == 2) SOUL_BURNING.put(entity, true);
             else if (!entity.isOnFire()) SOUL_BURNING.remove(entity);
             return SOUL_BURNING.containsKey(entity);
@@ -209,6 +216,7 @@ public final class SurfaceFireModel extends WrapperBlockStateModel {
             var box = entity.getBoundingBox().inflate(1.0E-4);
             // Fitted flames can extend into the cell below or beside their owner.
             var search = box.inflate(1);
+            if (!mayContainFire(entity.level(), search)) return 0;
             boolean wrapping = GameplaySettings.fireWrapping(entity.level());
             boolean soulFire = false;
             for (var pos : BlockPos.betweenClosed(BlockPos.containing(search.minX, search.minY, search.minZ),
@@ -230,6 +238,26 @@ public final class SurfaceFireModel extends WrapperBlockStateModel {
                 else return 1;
             }
             return soulFire ? 2 : 0;
+        }
+
+        private static boolean mayContainFire(net.minecraft.world.level.Level level, AABB search) {
+            int firstY = Math.max(net.minecraft.util.Mth.floor(search.minY) >> 4, level.getMinSectionY());
+            int lastY = Math.min(net.minecraft.util.Mth.floor(search.maxY) >> 4, level.getMaxSectionY());
+            for (int x = net.minecraft.util.Mth.floor(search.minX) >> 4; x <= net.minecraft.util.Mth.floor(search.maxX) >> 4; x++) {
+                for (int z = net.minecraft.util.Mth.floor(search.minZ) >> 4; z <= net.minecraft.util.Mth.floor(search.maxZ) >> 4; z++) {
+                    // Like LoadedChunks.has, this only reads an already loaded chunk.
+                    // Unknown views retain the original per-block availability checks.
+                    var chunk = level.getChunkSource().getChunkNow(x, z);
+                    if (chunk == null) return true;
+                    for (int y = firstY; y <= lastY; y++) {
+                        var section = chunk.getSection(level.getSectionIndexFromSectionY(y));
+                        if (!section.hasOnlyAir() && section.maybeHas(state -> state.getBlock() instanceof BaseFireBlock)) return true;
+                    }
+                }
+            }
+            // Inspect live palettes every time: contact before ignition and same-tick
+            // block changes must still update the remembered source immediately.
+            return false;
         }
     }
 

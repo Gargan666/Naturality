@@ -64,18 +64,38 @@ if (localTestsEnabled) {
 
     // Explicit suite selection prevents a small visual change from running every test.
     tasks.named('runClientGameTest') {
+        // Bound the child client from Gradle, including hangs that prevent test-thread deadlines.
+        timeout = java.time.Duration.ofMinutes(providers.gradleProperty('clientTestTimeoutMinutes').getOrElse('10').toLong())
         systemProperty 'naturality.test.suites', providers.gradleProperty('clientTests').getOrElse('')
         systemProperty 'naturality.test.vanillaSnapshot', layout.buildDirectory.file('vanilla-registry-snapshot.json').get().asFile.absolutePath
         if (providers.gradleProperty('clientTests').getOrElse('').split(',').any { it.trim() in ['feature-startup', 'all'] }) {
             dependsOn 'writeVanillaRegistrySnapshot'
         }
         systemProperty 'naturality.test.muteAudio', 'true'
+        def resultFile = layout.buildDirectory.file('client-test-results.json').get().asFile
+        systemProperty 'naturality.test.result', resultFile.absolutePath
         doFirst {
+            java.nio.file.Files.deleteIfExists(resultFile.toPath())
             def selection = systemProperties['naturality.test.suites'].toString().split(',', -1).collect { it.trim() }
             def valid = clientTestNames
             if (selection.any { !valid.contains(it) }) {
                 throw new GradleException('Choose focused checks with -PclientTests=<id>; run listClientTests for available checks and groups.')
             }
+        }
+        doLast {
+            // Some optional client mods catch failures and exit with status zero.
+            // Require evidence from the selector, not just a successful process exit.
+            if (!resultFile.isFile()) throw new GradleException('The client did not finish its selected checks; inspect the client log.')
+            def result = new groovy.json.JsonSlurper().parse(resultFile)
+            def expected = new LinkedHashSet()
+            systemProperties['naturality.test.suites'].toString().split(',').each { value ->
+                def id = value.trim()
+                if (id == 'all') expected.addAll(clientTestCatalog.checks.collect { it.id })
+                else if (clientTestCatalog.groups.containsKey(id)) expected.addAll(clientTestCatalog.groups[id])
+                else expected.add(id)
+            }
+            if (result.completed != true || result.checks.toSet() != expected)
+                throw new GradleException('The client result does not cover every selected check.')
         }
     }
 } else {
@@ -102,6 +122,17 @@ dependencies {
 	// Optional local compatibility test dependency; never bundled in the mod.
 	if (providers.gradleProperty('sodiumTestJar').isPresent()) {
 		clientRuntimeOnly files(providers.gradleProperty('sodiumTestJar').get())
+	}
+	// One local jar path per line; keep compatibility fixtures out of published dependencies.
+	if (providers.gradleProperty('compatibilityModsFile').isPresent()) {
+		def manifest = file(providers.gradleProperty('compatibilityModsFile').get())
+		def jars = manifest.readLines('UTF-8').collect { it.replace('\uFEFF', '').trim() }
+			.findAll { !it.isEmpty() && !it.startsWith('#') }.collect { file(it) }
+		jars.each { jar ->
+			if (!jar.isFile() || !jar.name.endsWith('.jar'))
+				throw new GradleException("Compatibility fixture is not a jar: $jar")
+		}
+		clientRuntimeOnly files(jars)
 	}
 }
 

@@ -538,30 +538,37 @@ public final class ProfessionWork extends Behavior<Villager> {
     /** Short-lived farmer work interruption owned by a nearby butcher. */
     public static final class FarmerSupplies {
         private record Offer(Villager butcher, ItemStack display, long expires) { }
-        private static final Map<Villager, Offer> OFFERS = new WeakHashMap<>();
+        private static final Map<net.minecraft.server.MinecraftServer, Map<Villager, Offer>> OFFERS =
+            java.util.Collections.synchronizedMap(new WeakHashMap<>());
+        private static Map<Villager, Offer> offers(Villager farmer) {
+            return OFFERS.computeIfAbsent(java.util.Objects.requireNonNull(farmer.level().getServer()), _ -> new WeakHashMap<>());
+        }
+        public static void clearServer(net.minecraft.server.MinecraftServer server) { OFFERS.remove(server); }
         public static boolean available(Villager farmer, Villager butcher) {
-            Offer offer = OFFERS.get(farmer);
+            Offer offer = offers(farmer).get(farmer);
             return offer == null || offer.butcher == butcher || offer.expires < farmer.level().getGameTime();
         }
         public static void offer(Villager farmer, Villager butcher, ItemStack display, long time) {
-            OFFERS.put(farmer, new Offer(butcher, display, time + 40));
+            offers(farmer).put(farmer, new Offer(butcher, display, time + 40));
         }
         public static ItemStack display(Villager farmer) {
-            Offer offer = OFFERS.get(farmer);
+            var offers = offers(farmer);
+            Offer offer = offers.get(farmer);
             if (offer == null) return ItemStack.EMPTY;
             if (!offer.butcher.isAlive() || offer.butcher.isTrading()
                     || farmer.level().getGameTime() > offer.expires) {
-                OFFERS.remove(farmer);
+                offers.remove(farmer);
                 return ItemStack.EMPTY;
             }
             return offer.display;
         }
         public static void finish(Villager farmer, Villager butcher) {
-            Offer offer = OFFERS.get(farmer);
-            if (offer != null && offer.butcher == butcher) OFFERS.remove(farmer);
+            var offers = offers(farmer);
+            Offer offer = offers.get(farmer);
+            if (offer != null && offer.butcher == butcher) offers.remove(farmer);
         }
         public static void lookAtRecipient(Villager farmer) {
-            Offer offer = OFFERS.get(farmer);
+            Offer offer = offers(farmer).get(farmer);
             if (offer == null) return;
             farmer.getBrain().setMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.LOOK_TARGET,
                 new net.minecraft.world.entity.ai.behavior.EntityTracker(offer.butcher, true));

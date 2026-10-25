@@ -8,7 +8,8 @@ import net.minecraft.world.entity.ItemOwner;
 import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Redirect;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.gui.Hud;
@@ -24,9 +25,11 @@ public final class NavigationMixins {
     @Mixin(CompassAngleState.class)
     @org.jspecify.annotations.NullMarked
     public static abstract class NavigationCompassMixin {
-        @Redirect(method = "calculate", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/item/properties/numeric/CompassAngleState$CompassTarget;get(Lnet/minecraft/client/multiplayer/ClientLevel;Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/entity/ItemOwner;)Lnet/minecraft/core/GlobalPos;"))
-        private @org.jspecify.annotations.Nullable GlobalPos naturality$target(CompassAngleState.CompassTarget kind, ClientLevel level, ItemStack stack, ItemOwner owner) {
-            return kind == CompassAngleState.CompassTarget.SPAWN ? NavigationClient.target(level) : kind.get(level, stack, owner);
+        @WrapOperation(method = "calculate", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/item/properties/numeric/CompassAngleState$CompassTarget;get(Lnet/minecraft/client/multiplayer/ClientLevel;Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/entity/ItemOwner;)Lnet/minecraft/core/GlobalPos;"))
+        private @org.jspecify.annotations.Nullable GlobalPos naturality$target(CompassAngleState.CompassTarget kind,
+                ClientLevel level, ItemStack stack, ItemOwner owner, Operation<@org.jspecify.annotations.Nullable GlobalPos> original) {
+            var target = original.call(kind, level, stack, owner);
+            return kind == CompassAngleState.CompassTarget.SPAWN ? NavigationClient.target(level) : target;
         }
     }
 

@@ -32,7 +32,7 @@ import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;
 /** Concurrent gameplay events. Each registered item owns its eligibility and behavior; visuals are optional. */
 @org.jspecify.annotations.NullMarked
 public final class Events {
-    private static final Map<ServerLevel, Map<EventType, Cycle>> STATES = new WeakHashMap<>();
+    private static final Map<ServerLevel, Map<EventType, Cycle>> STATES = Collections.synchronizedMap(new WeakHashMap<>());
     private Events() {}
 
     public interface Cycle {
@@ -51,13 +51,16 @@ public final class Events {
             this.id = id; this.label = label; this.dimension = dimension; this.factory = factory;
         }
         public int maxStrength() { return 1; }
+        public boolean appliesTo(@org.jspecify.annotations.Nullable String dimension) {
+            return this.dimension.equals(dimension);
+        }
         public static List<EventType> pool(String dimension) {
             return Arrays.stream(values()).filter(type -> type.dimension.equals(dimension)).toList();
         }
     }
 
     public static float strength(ServerLevel level, EventType type) {
-        if (!Feature.EVENT_CYCLES.enabled() || !EventType.pool(id(level)).contains(type)) return 0;
+        if (!Feature.EVENT_CYCLES.enabled() || !type.appliesTo(id(level))) return 0;
         var settings = EventWorldData.get(Objects.requireNonNull(level.getServer())).settings(level, type);
         if (settings.override) return settings.strength;
         var cycles = STATES.get(level);
@@ -72,7 +75,7 @@ public final class Events {
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             for (var level : server.getAllLevels()) cycles(level);
         });
-        ServerLifecycleEvents.SERVER_STOPPED.register(_ -> STATES.clear());
+        ServerLifecycleEvents.SERVER_STOPPED.register(Events::clearServer);
         ServerPlayConnectionEvents.JOIN.register((handler, _, server) -> {
             for (var level : server.getAllLevels()) send(handler.player, level);
         });
@@ -81,7 +84,7 @@ public final class Events {
                 if (!PreviewEnvironment.frozen(server)) {
                     cycles(level).forEach((type, cycle) -> {
                         cycle.tick(level, PreviewEnvironment.rate(server));
-                        EnvironmentWorldData.get(server).write(key(level, type), cycle.snapshot());
+                        EnvironmentWorldData.get(server).defer(key(level, type), cycle::snapshot);
                     });
                 }
                 if (server.getTickCount() % 10 == 0)
@@ -90,25 +93,31 @@ public final class Events {
         });
     }
 
+    private static void clearServer(MinecraftServer server) {
+        for (var level : server.getAllLevels()) STATES.remove(level);
+    }
+
     private static Map<EventType, Cycle> cycles(ServerLevel level) {
-        return STATES.computeIfAbsent(level, world -> {
-            var cycles = new EnumMap<EventType, Cycle>(EventType.class);
-            var server = Objects.requireNonNull(world.getServer());
-            var data = EnvironmentWorldData.get(server);
-            for (var type : EventType.pool(id(world))) {
-                var cycle = type.factory.apply(world.getSeed() ^ type.id.hashCode());
-                var saved = data.read(key(world, type));
-                // Blood Moon previously belonged to sky events; consume that snapshot only once.
-                String legacyKey = "sky/" + id(world) + "/" + type.id;
-                if (saved.isEmpty()) saved = data.read(legacyKey);
-                cycle.restore(saved);
-                data.write(key(world, type), cycle.snapshot());
-                data.remove(legacyKey);
-                EventWorldData.get(server).settings(world, type);
-                cycles.put(type, cycle);
-            }
-            return cycles;
-        });
+        var existing = STATES.get(level);
+        if (existing != null) return existing;
+        // Only this level's server creates its cycles; SavedData access must not hold the shared map lock.
+        var cycles = new EnumMap<EventType, Cycle>(EventType.class);
+        var server = Objects.requireNonNull(level.getServer());
+        var data = EnvironmentWorldData.get(server);
+        for (var type : EventType.pool(id(level))) {
+            var cycle = type.factory.apply(level.getSeed() ^ type.id.hashCode());
+            var saved = data.read(key(level, type));
+            // Blood Moon previously belonged to sky events; consume that snapshot only once.
+            String legacyKey = "sky/" + id(level) + "/" + type.id;
+            if (saved.isEmpty()) saved = data.read(legacyKey);
+            cycle.restore(saved);
+            data.write(key(level, type), cycle.snapshot());
+            data.remove(legacyKey);
+            EventWorldData.get(server).settings(level, type);
+            cycles.put(type, cycle);
+        }
+        STATES.put(level, cycles);
+        return cycles;
     }
     private static String id(ServerLevel level) { return level.dimension().identifier().toString(); }
     private static String key(ServerLevel level, EventType type) { return "event/" + id(level) + "/" + type.id; }

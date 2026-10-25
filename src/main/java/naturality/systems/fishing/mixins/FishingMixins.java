@@ -11,7 +11,8 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Redirect;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import naturality.systems.fishing.VillagerBobbers.FishingSpots;
 import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -31,14 +32,15 @@ public final class FishingMixins {
     @Mixin(FishingHook.class)
     @org.jspecify.annotations.NullMarked
     public static abstract class FishingHookReturnMixin {
-        @Redirect(method = "retrieve", at = @At(value = "INVOKE",
+        @WrapOperation(method = "retrieve", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/world/level/Level;addFreshEntity(Lnet/minecraft/world/entity/Entity;)Z"))
-        private boolean naturality$returnCatchOnHook(Level level, Entity entity) {
+        private boolean naturality$returnCatchOnHook(Level level, Entity entity, Operation<Boolean> original) {
             FishingHook hook = (FishingHook)(Object)this;
-            if (entity instanceof ItemEntity item && level instanceof ServerLevel server && hook.getPlayerOwner() != null) {
-                return level.addFreshEntity(new PlayerFishingReturn(server, hook.getPlayerOwner(), hook.position(), item.getItem()));
+            var player = hook.getPlayerOwner();
+            if (entity instanceof ItemEntity item && level instanceof ServerLevel server && player != null) {
+                entity = new PlayerFishingReturn(server, player, hook.position(), item.getItem());
             }
-            return level.addFreshEntity(entity);
+            return original.call(level, entity);
         }
     }
 

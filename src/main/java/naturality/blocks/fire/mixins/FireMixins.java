@@ -88,7 +88,9 @@ public final class FireMixins {
                 if (!(fire.getBlock() instanceof BaseFireBlock)) continue;
                 // Collision/visibility rays must still pass through non-solid fire.
                 if (context.getBlockShape(fire, level, candidate).isEmpty()) continue;
-                var hit = FireGeometry.shape(level, candidate, fire).clip(from, to, candidate.immutable());
+                var candidateShape = FireGeometry.shape(level, candidate, fire);
+                if (!naturality.api.geometry.RaycastShapePresence.mayIntersect(candidateShape, from, to, candidate)) continue;
+                var hit = candidateShape.clip(from, to, candidate.immutable());
                 // Only return intersections in the cell currently traversed. Returning
                 // a farther neighbor hit here could otherwise skip a wall on the ray.
                 if (hit != null && new net.minecraft.world.phys.AABB(pos).inflate(1e-6).contains(hit.getLocation())

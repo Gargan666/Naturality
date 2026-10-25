@@ -1,8 +1,7 @@
 package naturality.systems.villagerwork.shelter;
 
-import java.util.ArrayList;
-import java.util.Comparator;
 import naturality.api.worlds.LoadedChunks;
+import naturality.systems.villagerwork.framework.VillagerWork.NearestBlocks;
 import naturality.systems.weather.framework.WeatherSystem;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -14,6 +13,7 @@ import net.minecraft.world.level.biome.Biome;
 
 /** Off-duty shelter preference; never replaces work, emergencies or sleep. */
 public final class VillagerSnowShelter {
+    private static final NearestBlocks SHELTER_SEARCH = new NearestBlocks(16, 4);
     private BlockPos destination;
     private long nextSearch;
 
@@ -69,14 +69,9 @@ public final class VillagerSnowShelter {
                 }
             }
             if (destination == null) {
-                var candidates = new ArrayList<BlockPos>();
                 var origin = body.blockPosition();
-                for (var pos : BlockPos.betweenClosed(origin.offset(-16, -4, -16), origin.offset(16, 4, 16)))
-                    if (covered(level, pos)) candidates.add(pos.immutable());
-                candidates.sort(Comparator.comparingDouble(pos -> pos.distSqr(origin)));
-                for (var pos : candidates.stream().limit(32).toList()) {
-                    if (reachable(level, body, pos)) { destination = pos; break; }
-                }
+                destination = SHELTER_SEARCH.find(origin, pos -> covered(level, pos), 32,
+                    pos -> reachable(level, body, pos));
             }
         }
         if (destination != null) brain.setMemory(MemoryModuleType.WALK_TARGET, new WalkTarget(destination, .5F, 0));

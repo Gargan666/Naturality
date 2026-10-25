@@ -99,7 +99,12 @@ public final class RenderDetail {
         return remember(cursor, key, existing.tier);
     }
     private static void tick(Minecraft client) {
-        view(client.level, client.gameRenderer.mainCamera().position());
+        // An orthographic miniature does not shrink with camera distance. Its
+        // external orbit must not continually switch terrain detail tiers.
+        var preview = naturality.client.ui.menus.previews.MenuPreview.active();
+        view(client.level, preview
+            ? Vec3.atCenterOf(naturality.client.ui.menus.previews.MenuPreview.spawn())
+            : client.gameRenderer.mainCamera().position());
         var level = world;
         if (level == null || ++tick % 4 != 0) return;
         var effects = NaturalityConfig.get().effects;

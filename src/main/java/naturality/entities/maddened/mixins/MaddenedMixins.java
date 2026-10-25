@@ -19,7 +19,8 @@ import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.NaturalSpawner;
-import org.spongepowered.asm.mixin.injection.Redirect;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 
 /** Feature integration hooks; each nested type retains its independent Mixin target and gate. */
 public final class MaddenedMixins {
@@ -65,10 +66,11 @@ public final class MaddenedMixins {
     @org.jspecify.annotations.NullMarked
     public static abstract class MaddenedSpawnMixin {
         // Vanilla first validates the selected biome entry; substitute only its entity factory.
-        @Redirect(method = "getMobForSpawn", at = @At(value = "INVOKE",
+        @WrapOperation(method = "getMobForSpawn", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/world/entity/EntityType;create(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/EntitySpawnReason;)Lnet/minecraft/world/entity/Entity;"))
-        private static @org.jspecify.annotations.Nullable Entity naturality$maddened(EntityType<?> original, Level level, EntitySpawnReason reason) {
-            return MaddenedVariants.forSpawn((ServerLevel)level, original).create(level, reason);
+        private static @org.jspecify.annotations.Nullable Entity naturality$maddened(EntityType<?> type, Level level,
+                EntitySpawnReason reason, Operation<@org.jspecify.annotations.Nullable Entity> original) {
+            return original.call(MaddenedVariants.forSpawn((ServerLevel)level, type), level, reason);
         }
     }
 }

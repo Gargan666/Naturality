@@ -2,6 +2,9 @@ package naturality.items.swords;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Collections;
+import java.util.WeakHashMap;
+import net.minecraft.server.MinecraftServer;
 import naturality.Naturality;
 import naturality.systems.enchanting.framework.Enchanting;
 import net.minecraft.core.component.DataComponents;
@@ -43,9 +46,16 @@ public final class SwordCounter {
     private static final Identifier COOLDOWN_GROUP = Naturality.id("sword_counter");
     private static final float REFLECTED_FRACTION = 0.1F;
     private static final double KNOCKBACK = 0.6;
-    private static final Map<ServerPlayer, Attempt> ATTEMPTS = new HashMap<>();
+    private static final Map<MinecraftServer, CounterState> SERVERS = Collections.synchronizedMap(new WeakHashMap<>());
 
-    private static final Map<LivingEntity, ServerLevel> AIRBORNE_STUNS = new HashMap<>();
+    private static final class CounterState {
+        private final Map<ServerPlayer, Attempt> attempts = new HashMap<>();
+        private final Map<LivingEntity, ServerLevel> airborneStuns = new HashMap<>();
+    }
+
+    private static CounterState state(ServerLevel level) {
+        return SERVERS.computeIfAbsent(level.getServer(), _ -> new CounterState());
+    }
 
     private SwordCounter() {}
 
@@ -77,22 +87,27 @@ public final class SwordCounter {
 
     public static void initialize() {
         ServerLivingEntityEvents.ALLOW_DAMAGE.register(SwordCounter::allowDamage);
-        ServerTickEvents.END_SERVER_TICK.register(_ -> ATTEMPTS.entrySet().removeIf(entry -> {
+        ServerTickEvents.END_SERVER_TICK.register(SwordCounter::tick);
+        ServerLifecycleEvents.SERVER_STOPPED.register(SwordCounter::clearServer);
+    }
+
+    private static void clearServer(MinecraftServer server) { SERVERS.remove(server); }
+
+    private static void tick(MinecraftServer server) {
+        var state = SERVERS.get(server);
+        if (state == null) return;
+        state.attempts.entrySet().removeIf(entry -> {
             ServerPlayer player = entry.getKey();
             Attempt attempt = entry.getValue();
             return player.isRemoved() || player.tickCount >= attempt.endsAt || !attempt.holdsSword(player);
-        }));
-        ServerTickEvents.END_SERVER_TICK.register(_ -> AIRBORNE_STUNS.entrySet().removeIf(entry -> {
+        });
+        state.airborneStuns.entrySet().removeIf(entry -> {
             LivingEntity entity = entry.getKey();
             if (!entity.isAlive() || entity.isRemoved() || entity.level() != entry.getValue()
                     || !entity.hasEffect(Stunned.EFFECT)) return true;
             // Refresh while airborne; the last refresh leaves a full second after landing.
             entity.addEffect(new MobEffectInstance(Stunned.EFFECT, 20, 0, false, false, true));
             return entity.onGround();
-        }));
-        ServerLifecycleEvents.SERVER_STOPPED.register(_ -> {
-            ATTEMPTS.clear();
-            AIRBORNE_STUNS.clear();
         });
     }
 
@@ -100,7 +115,7 @@ public final class SwordCounter {
         ItemStack sword = player.getItemInHand(hand);
         if (!canAttempt(player, hand)) return InteractionResult.PASS;
         if (player instanceof ServerPlayer serverPlayer) {
-            ATTEMPTS.put(serverPlayer, new Attempt(serverPlayer, hand, sword));
+            state(serverPlayer.level()).attempts.put(serverPlayer, new Attempt(serverPlayer, hand, sword));
         }
         player.startUsingItem(hand);
         // Predict immediately on the client; ServerItemCooldowns synchronizes the authoritative timer.
@@ -109,7 +124,7 @@ public final class SwordCounter {
             // Use Lunge's standard durability path: enchantment modifiers and creative exemptions apply.
             sword.hurtAndBreak(DURABILITY_PER_ATTEMPT, serverPlayer, hand);
             if (!isSword(sword)) {
-                ATTEMPTS.remove(serverPlayer);
+                state(serverPlayer.level()).attempts.remove(serverPlayer);
                 player.stopUsingItem();
             }
         }
@@ -170,7 +185,7 @@ public final class SwordCounter {
         var facing = player.getViewVector(1.0F);
 
         // Consume the window before retaliation can trigger any further damage callbacks.
-        ATTEMPTS.remove(player);
+        state(player.level()).attempts.remove(player);
         player.stopUsingItem();
 
         DamageSource reflected = player.damageSources().thorns(player);
@@ -182,7 +197,7 @@ public final class SwordCounter {
             if (direction.lengthSqr() < 1.0E-8) direction = facing;
             attacker.setDeltaMovement(direction.normalize().scale(0.75));
             if (direction.y > 0) attacker.setOnGround(false);
-            AIRBORNE_STUNS.put(attacker, player.level());
+            state(player.level()).airborneStuns.put(attacker, player.level());
         } else {
             attacker.knockback(KNOCKBACK, player.getX() - attacker.getX(), player.getZ() - attacker.getZ(),
                 reflected, reflectedDamage);
@@ -200,7 +215,7 @@ public final class SwordCounter {
         if (incoming.lengthSqr() < 1.0E-8) incoming = projectile.getDeltaMovement().scale(-1);
         if (matchingAttempt(player, incoming) == null) return false;
 
-        ATTEMPTS.remove(player);
+        state(player.level()).attempts.remove(player);
         player.stopUsingItem();
         double speed = Math.max(0.1, projectile.getDeltaMovement().length());
         Vec3 direction = attacker.getBoundingBox().getCenter().subtract(hit.getLocation());
@@ -219,7 +234,8 @@ public final class SwordCounter {
     }
 
     private static @Nullable Attempt matchingAttempt(ServerPlayer player, Vec3 incoming) {
-        Attempt attempt = ATTEMPTS.get(player);
+        var state = SERVERS.get(player.level().getServer());
+        Attempt attempt = state == null ? null : state.attempts.get(player);
         if (attempt == null || player.tickCount >= attempt.endsAt || !attempt.holdsSword(player)) return null;
         var facing = player.getViewVector(1.0F);
         // A horizontal half-plane keeps looking up/down from changing the front-facing arc.

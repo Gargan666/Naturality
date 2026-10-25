@@ -107,6 +107,7 @@ public final class PortalCrossingClient {
     private static final Map<EntityRenderState,Side> SIDES=Collections.synchronizedMap(new WeakHashMap<>());
     public static void initialize(){
         PortalEntityGlowState.initialize();
+        if (naturality.config.startup.FeatureConfig.clientOnly()) return;
         ClientPlayNetworking.registerGlobalReceiver(PortalCrossingPayload.TYPE,(p,context)->{
             var level=context.client().level;
             if(level==null || !level.dimension().identifier().toString().equals(p.dimension())) return;

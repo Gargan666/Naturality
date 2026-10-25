@@ -8,6 +8,8 @@ import net.minecraft.client.gui.screens.TitleScreen;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 
 @Mixin(TitleScreen.class)
 @org.jspecify.annotations.NullMarked
@@ -18,10 +20,11 @@ public abstract class TitleLogoMixin {
         naturality.client.ui.menus.title.TitleLogo.logo(renderer, graphics, width, alpha);
     }
 
-    @Redirect(method = "extractRenderState", at = @At(value = "INVOKE",
+    @WrapOperation(method = "extractRenderState", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/gui/components/SplashRenderer;extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;ILnet/minecraft/client/gui/Font;F)V"))
     private void naturality$titleSplash(SplashRenderer splash, GuiGraphicsExtractor graphics,
-                                       int width, Font font, float alpha) {
-        naturality.client.ui.menus.title.TitleLogo.splash(splash, graphics, width, font, alpha);
+                                       int width, Font font, float alpha, Operation<Void> original) {
+        naturality.client.ui.menus.title.TitleLogo.splash(graphics, width,
+            () -> original.call(splash, graphics, 0, font, alpha));
     }
 }

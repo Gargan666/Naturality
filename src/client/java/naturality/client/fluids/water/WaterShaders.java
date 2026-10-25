@@ -53,6 +53,10 @@ public final class WaterShaders {
             .withTransmittanceModifier(b->b.withDepthStencilState(SPLASH_DEPTH))
             .withAccumulateModifier(b->b.withDepthStencilState(SPLASH_DEPTH)).build());
         public static final SingleQuadParticle.Layer SPLASH_LAYER=new SingleQuadParticle.Layer(true,naturality.client.api.rendering.AtlasLocations.BLOCKS,SPLASH_PIPELINE,SPLASH_OIT);
+        static {
+            naturality.client.api.rendering.ShaderPacks.registerFlatParticles(PIPELINE, OIT);
+            naturality.client.api.rendering.ShaderPacks.registerFlatParticles(SPLASH_PIPELINE, SPLASH_OIT);
+        }
     }
     public static final class Composite {
         public static final RenderPipeline SHAFTS = RenderPipelines.register(

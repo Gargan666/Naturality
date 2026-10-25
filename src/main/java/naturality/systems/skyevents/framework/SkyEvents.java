@@ -38,9 +38,9 @@ import net.minecraft.network.chat.Component;
 
 @org.jspecify.annotations.NullMarked
 public final class SkyEvents {
-    private static final Map<ServerLevel, Map<SkyEventType, SkyEventCycle>> STATES = new WeakHashMap<>();
-    private static final Map<ServerLevel, RainbowCycle> RAINBOWS = new WeakHashMap<>();
-    private static final Map<ServerLevel, ProximityCycle> PROXIMITIES = new WeakHashMap<>();
+    private static final Map<ServerLevel, Map<SkyEventType, SkyEventCycle>> STATES = Collections.synchronizedMap(new WeakHashMap<>());
+    private static final Map<ServerLevel, RainbowCycle> RAINBOWS = Collections.synchronizedMap(new WeakHashMap<>());
+    private static final Map<ServerLevel, ProximityCycle> PROXIMITIES = Collections.synchronizedMap(new WeakHashMap<>());
     public static ProximityCycle proximityCycle(ServerLevel level) { return PROXIMITIES.get(level); }
     private SkyEvents() {}
     public static Map<String, Map<String, Settings>> defaults() {
@@ -57,7 +57,7 @@ public final class SkyEvents {
     }
     public static float strength(ServerLevel level, SkyEventType type) {
         String id = level.dimension().identifier().toString();
-        if (!SkyEventType.pool(id).contains(type)) return 0;
+        if (!type.appliesTo(id)) return 0;
         if (type == SkyEventType.RAINBOW && (isNight(level) || !RainbowCycle.validRain(rainfall(level)))) return 0;
         var settings = SkyEventWorldData.get(java.util.Objects.requireNonNull(level.getServer())).settings(level, type);
         if (settings.override) return Math.clamp(settings.strength, 0, type.maxStrength());
@@ -106,7 +106,7 @@ public final class SkyEvents {
                 AuroraEvents.restore(level);
             }
         });
-        ServerLifecycleEvents.SERVER_STOPPED.register(_ -> { STATES.clear(); RAINBOWS.clear(); PROXIMITIES.clear(); AuroraEvents.clear(); });
+        ServerLifecycleEvents.SERVER_STOPPED.register(SkyEvents::clearServer);
         ServerPlayConnectionEvents.JOIN.register((handler, _, server) -> {
             for (var level : server.getAllLevels()) send(handler.player, level);
         });
@@ -121,14 +121,17 @@ public final class SkyEvents {
                 var pool = SkyEventType.pool(level.dimension().identifier().toString());
                 if (pool.isEmpty()) continue;
                 if (pool.contains(SkyEventType.PROXIMITY)) {
-                    var cycle = PROXIMITIES.computeIfAbsent(level, _ -> new ProximityCycle(level.getSeed()));
+                    long seed = level.getSeed();
+                    var cycle = PROXIMITIES.computeIfAbsent(level, _ -> new ProximityCycle(seed));
                     cycle.tick(level.getGameRules().get(GameRules.ADVANCE_WEATHER), isNight(level), startMultiplier);
-                    naturality.api.worlds.EnvironmentWorldData.get(server).write(key(level, SkyEventType.PROXIMITY), cycle.snapshot());
+                    naturality.api.worlds.EnvironmentWorldData.get(server).defer(key(level, SkyEventType.PROXIMITY), cycle::snapshot);
                 }
                 if (pool.contains(SkyEventType.AURORA_BOREALIS) || pool.contains(SkyEventType.END_AURORA)) AuroraEvents.tick(level);
-                if (pool.contains(SkyEventType.RAINBOW)) RAINBOWS.computeIfAbsent(level, _ -> new RainbowCycle(
-                    level.getSeed() ^ level.getGameTime() ^ SkyEventType.RAINBOW.id.hashCode()))
-                    .tick(level.getGameRules().get(GameRules.ADVANCE_WEATHER), !isNight(level), rainfall(level), startMultiplier);
+                if (pool.contains(SkyEventType.RAINBOW)) {
+                    long seed = level.getSeed() ^ level.getGameTime() ^ SkyEventType.RAINBOW.id.hashCode();
+                    RAINBOWS.computeIfAbsent(level, _ -> new RainbowCycle(seed))
+                        .tick(level.getGameRules().get(GameRules.ADVANCE_WEATHER), !isNight(level), rainfall(level), startMultiplier);
+                }
                 var cycles = STATES.computeIfAbsent(level, _ -> new EnumMap<>(SkyEventType.class));
                 for (var type : pool) if (type == SkyEventType.METEOR_SHOWER || type == SkyEventType.END_FLASHES) {
                     long seed = level.getSeed() ^ level.getGameTime() ^ type.id.hashCode();
@@ -140,11 +143,17 @@ public final class SkyEvents {
                 if (server.getTickCount() % 10 == 0)
                     for (var player : server.getPlayerList().getPlayers()) send(player, level);
                 var data=naturality.api.worlds.EnvironmentWorldData.get(server);
-                cycles.forEach((type,cycle) -> data.write(key(level,type),cycle.snapshot()));
+                cycles.forEach((type,cycle) -> data.defer(key(level,type),cycle::snapshot));
                 var rainbow=RAINBOWS.get(level);
-                if(rainbow!=null)data.write(key(level,SkyEventType.RAINBOW),rainbow.snapshot());
+                if(rainbow!=null)data.defer(key(level,SkyEventType.RAINBOW),rainbow::snapshot);
             }
         });
+    }
+    private static void clearServer(MinecraftServer server) {
+        for (var level : server.getAllLevels()) {
+            STATES.remove(level); RAINBOWS.remove(level); PROXIMITIES.remove(level);
+        }
+        AuroraEvents.clearServer(server);
     }
     private static String key(ServerLevel level,SkyEventType type) { return "sky/"+level.dimension().identifier()+"/"+type.id; }
     public static boolean isNight(net.minecraft.world.level.Level level) {
@@ -176,6 +185,12 @@ public final class SkyEvents {
         public final String label;
         public int maxStrength() { return this == PROXIMITY ? 7 : 20; }
         SkyEventType(String id, String label) { this.id = id; this.label = label; }
+        public boolean appliesTo(String dimension) {
+            return switch (this) {
+                case METEOR_SHOWER, PROXIMITY, AURORA_BOREALIS, RAINBOW -> dimension.equals("minecraft:overworld");
+                case END_FLASHES, END_AURORA -> dimension.equals("minecraft:the_end");
+            };
+        }
         public static List<SkyEventType> pool(String dimension) {
             if (dimension.equals("minecraft:overworld")) return List.of(METEOR_SHOWER, AURORA_BOREALIS, RAINBOW, PROXIMITY);
             if (dimension.equals("minecraft:the_end")) return List.of(END_FLASHES, END_AURORA);

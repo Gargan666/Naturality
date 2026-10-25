@@ -93,7 +93,12 @@ public final class WindMixins {
     @Pseudo
     @Mixin(targets="net.caffeinemc.mods.sodium.client.world.LevelSlice", remap=false)
     @org.jspecify.annotations.NullMarked
-    public static abstract class SodiumWindSnapshotMixin {
+    public static abstract class SodiumWindSnapshotMixin implements naturality.client.systems.weather.wind.WindRendering.WindWorldAccess {
+        @SuppressWarnings("null") // Sodium's constructor assigns the immutable owning level.
+        @Shadow @org.spongepowered.asm.mixin.Final private ClientLevel level;
+
+        @Override public net.minecraft.world.level.LevelHeightAccessor naturality$windLevel() { return level; }
+
         @ModifyArgs(method="prepare", at=@At(value="INVOKE",
             target="Lnet/minecraft/world/level/levelgen/structure/BoundingBox;<init>(IIIIII)V"))
         private static void naturality$exposureBorder(Args args) {

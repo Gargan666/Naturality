@@ -8,10 +8,10 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.players.SleepStatus;
 import net.minecraft.server.level.ServerPlayer;
-import java.util.List;
-import org.spongepowered.asm.mixin.injection.Redirect;
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.minecraft.stats.Stat;
 import net.minecraft.stats.Stats;
 import net.minecraft.core.BlockPos;
@@ -38,9 +38,9 @@ public final class SleepMixins {
     @Mixin(ServerLevel.class)
     @org.jspecify.annotations.NullMarked
     public static class SleepLevelMixin {
-        @Redirect(method = "tick", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/players/SleepStatus;areEnoughDeepSleeping(ILjava/util/List;)Z"))
-        private boolean naturality$noSkip(SleepStatus status, int percentage, List<ServerPlayer> players) {
-            return !SleepAcceleration.enabled() && status.areEnoughDeepSleeping(percentage, players);
+        @ModifyExpressionValue(method = "tick", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/players/SleepStatus;areEnoughDeepSleeping(ILjava/util/List;)Z"))
+        private boolean naturality$noSkip(boolean original) {
+            return original && !SleepAcceleration.enabled();
         }
     }
 
@@ -48,11 +48,11 @@ public final class SleepMixins {
     @org.jspecify.annotations.NullMarked
     public static class SleepPlayerMixin {
         @Unique private @org.jspecify.annotations.Nullable BlockPos naturality$straw;
-        @Redirect(method = "startSleepInBed", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerPlayer;isCreative()Z"))
-        private boolean naturality$ignoreMonsters(ServerPlayer player) { return SleepAcceleration.enabled() || player.isCreative(); }
-        @Redirect(method = "startSleeping", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerPlayer;resetStat(Lnet/minecraft/stats/Stat;)V"))
-        private void naturality$deferRest(ServerPlayer player, Stat<?> stat) {
-            if (!SleepAcceleration.enabled() || !stat.equals(Stats.CUSTOM.get(Stats.TIME_SINCE_REST))) player.resetStat(stat);
+        @ModifyExpressionValue(method = "startSleepInBed", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerPlayer;isCreative()Z"))
+        private boolean naturality$ignoreMonsters(boolean original) { return original || SleepAcceleration.enabled(); }
+        @WrapOperation(method = "startSleeping", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerPlayer;resetStat(Lnet/minecraft/stats/Stat;)V"))
+        private void naturality$deferRest(ServerPlayer player, Stat<?> stat, Operation<Void> original) {
+            if (!SleepAcceleration.enabled() || !stat.equals(Stats.CUSTOM.get(Stats.TIME_SINCE_REST))) original.call(player, stat);
         }
         @Inject(method = "startSleeping", at = @At("RETURN"))
         private void naturality$start(BlockPos pos, CallbackInfoReturnable<Boolean> cir) {
@@ -78,13 +78,15 @@ public final class SleepMixins {
     @Mixin(MinecraftServer.class)
     @org.jspecify.annotations.NullMarked
     public static class SleepServerSnapshotsMixin {
-        @Redirect(method = "tickChildren", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/clock/ServerClockManager;tick()V"))
-        private void naturality$batchClock(ServerClockManager manager) {
-            SleepServerSnapshots.tickClocks((MinecraftServer)(Object)this);
+        @WrapOperation(method = "tickChildren", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/clock/ServerClockManager;tick()V"))
+        private void naturality$batchClock(ServerClockManager manager, Operation<Void> original) {
+            var server = (MinecraftServer)(Object)this;
+            if (SleepAcceleration.active(server)) SleepServerSnapshots.tickClocks(server);
+            else original.call(manager);
         }
-        @Redirect(method = "tickChildren", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/MinecraftServer;forceGameTimeSynchronization()V"))
-        private void naturality$limitSnapshots(MinecraftServer server) {
-            if (!SleepAcceleration.active(server)) server.forceGameTimeSynchronization();
+        @WrapOperation(method = "tickChildren", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/MinecraftServer;forceGameTimeSynchronization()V"))
+        private void naturality$limitSnapshots(MinecraftServer server, Operation<Void> original) {
+            if (!SleepAcceleration.active(server)) original.call(server);
         }
     }
 }

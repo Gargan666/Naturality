@@ -239,6 +239,9 @@ public final class WaterVisuals {
         private static volatile net.minecraft.world.level.lighting.@org.jspecify.annotations.Nullable LevelLightEngine engine;
         private static volatile net.minecraft.world.level.lighting.@org.jspecify.annotations.Nullable LayerLightEventListener original;
         private static final java.util.Map<Long, OpticalChunk> chunks = new java.util.concurrent.ConcurrentHashMap<>();
+        // Published only when membership changes. Readers never mutate this set;
+        // frequent light samples avoid boxed keys and colliding Long hash trees.
+        private static volatile it.unimi.dsi.fastutil.longs.LongSet litColumns = it.unimi.dsi.fastutil.longs.LongSets.EMPTY_SET;
         private static final ThreadLocal<boolean[]> rawLight = ThreadLocal.withInitial(() -> new boolean[1]);
         private static final java.util.Set<BlockPos> changed = new java.util.HashSet<>();
         private static final it.unimi.dsi.fastutil.longs.LongOpenHashSet dirtySections = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
@@ -313,14 +316,17 @@ public final class WaterVisuals {
             environmentRevision++;
         }
         public static int light(Object source, BlockPos pos, int vanilla) {
+            // Optical skylight only raises a native 0..15 sample. Open-sky
+            // particles already at 15 need neither a chunk key nor another lookup.
+            if (vanilla >= 15) return vanilla;
             var current = engine;
-            return source == original && current != null && chunks.containsKey(net.minecraft.world.level.ChunkPos.pack(pos.getX() >> 4, pos.getZ() >> 4))
+            return source == original && current != null && litColumns.contains(net.minecraft.world.level.ChunkPos.pack(pos.getX() >> 4, pos.getZ() >> 4))
                 ? Math.max(vanilla, current.getLayerListener(net.minecraft.world.level.LightLayer.SKY).getLightValue(pos)) : vanilla;
         }
         public static net.minecraft.world.level.chunk.@org.jspecify.annotations.Nullable DataLayer data(Object source, net.minecraft.core.SectionPos pos,
                 net.minecraft.world.level.chunk.@org.jspecify.annotations.Nullable DataLayer vanilla) {
             var current = engine;
-            if (rawLight.get()[0] || source != original || current == null || !chunks.containsKey(net.minecraft.world.level.ChunkPos.pack(pos.x(), pos.z()))) return vanilla;
+            if (rawLight.get()[0] || source != original || current == null || !litColumns.contains(net.minecraft.world.level.ChunkPos.pack(pos.x(), pos.z()))) return vanilla;
             var extra = current.getLayerListener(net.minecraft.world.level.LightLayer.SKY).getDataLayerData(pos);
             if (extra == null) return vanilla;
             if (vanilla == null) return extra;
@@ -335,6 +341,7 @@ public final class WaterVisuals {
                 original = null;
                 engine = null;
                 chunks.clear();
+                litColumns = it.unimi.dsi.fastutil.longs.LongSets.EMPTY_SET;
                 changed.clear();
                 level = next;
                 if (next != null) publishDirtySections(next);
@@ -404,6 +411,8 @@ public final class WaterVisuals {
             }
             changed.clear();
             current.runLightUpdates();
+            if (!removed.isEmpty() || added != 0)
+                litColumns = new it.unimi.dsi.fastutil.longs.LongOpenHashSet(chunks.keySet());
             // Only schedule meshes after every source and neighboring column in
             // this batch has published its final light storage.
             publishDirtySections(next);
@@ -461,6 +470,7 @@ public final class WaterVisuals {
     }
 
     public static boolean ready() {
+        if (naturality.client.api.rendering.ShaderPacks.active()) return false;
         var client = Minecraft.getInstance();
         var level = client.level;
         return initialized && world == level && (wetColumns > 0 || besideSubmergedWater

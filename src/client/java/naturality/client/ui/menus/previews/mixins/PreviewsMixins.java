@@ -26,6 +26,7 @@ import org.joml.Matrix4fc;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import org.spongepowered.asm.mixin.gen.Invoker;
 import net.minecraft.client.renderer.extract.LevelExtractor;
+import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -255,6 +256,11 @@ public final class PreviewsMixins {
     @Mixin(ServerLevel.class)
     @org.jspecify.annotations.NullMarked
     public static abstract class MenuPreviewMobMixin {
+        @ModifyVariable(method = "<init>", at = @At("HEAD"), argsOnly = true)
+        private static java.util.concurrent.Executor naturality$previewWorldWorkers(java.util.concurrent.Executor original,
+                @com.llamalad7.mixinextras.sugar.Local(argsOnly = true) MinecraftServer server) {
+            return PreviewEnvironment.preview(server) ? MenuPreview.backgroundExecutor() : original;
+        }
         @Inject(method = "addFreshEntity", at = @At("HEAD"), cancellable = true)
         private void naturality$noMobs(Entity entity, CallbackInfoReturnable<Boolean> cir) {
             if (entity instanceof net.minecraft.world.entity.Mob && ((ServerLevel)(Object)this).getServer() instanceof net.minecraft.client.server.IntegratedServer server && MenuPreview.owns(server))
@@ -268,6 +274,67 @@ public final class PreviewsMixins {
         @Inject(method = "getEffectiveRenderDistance", at = @At("HEAD"), cancellable = true)
         private void naturality$orbitView(CallbackInfoReturnable<Integer> ci) {
             if (MenuPreview.active()) ci.setReturnValue(16);
+        }
+    }
+
+    /** A private preview level must retain the native menu's rendering budget. */
+    @Mixin(com.mojang.blaze3d.platform.FramerateLimitTracker.class)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class MenuPreviewFrameLimitMixin {
+        @com.llamalad7.mixinextras.injector.ModifyReturnValue(method = "getFramerateLimit", at = @At("RETURN"))
+        private int naturality$menuBudget(int limit) {
+            // Native OUT_OF_LEVEL_MENU throttling disappears as soon as the preview
+            // attaches its ClientLevel. Preserve lower user/AFK/minimized limits,
+            // without writing options or carrying this cap into a real world.
+            return MenuPreview.active() ? Math.min(limit, 60) : limit;
+        }
+    }
+
+    @Mixin(SectionRenderDispatcher.class)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class MenuPreviewMeshBudgetMixin {
+        @WrapOperation(method = {"schedule", "runTask"}, at = @At(value = "INVOKE",
+                target = "Lnet/minecraft/TracingExecutor;execute(Ljava/lang/Runnable;)V"))
+        private void naturality$backgroundBudget(net.minecraft.TracingExecutor executor, Runnable task, Operation<Void> original) {
+            if (MenuPreview.active()) MenuPreview.backgroundExecutor().execute(task);
+            else original.call(executor, task);
+        }
+    }
+
+    @Mixin(net.minecraft.world.level.StructureManager.class)
+    @org.jspecify.annotations.NullMarked
+    public interface MenuPreviewStructureAccess {
+        @Accessor("level") net.minecraft.world.level.LevelAccessor naturality$level();
+    }
+
+    @Mixin(net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator.class)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class MenuPreviewGenerationBudgetMixin {
+        @com.llamalad7.mixinextras.injector.ModifyExpressionValue(method = "buildTerrain", at = @At(value = "INVOKE",
+                target = "Lnet/minecraft/util/Util;backgroundExecutor()Lnet/minecraft/TracingExecutor;"))
+        private net.minecraft.TracingExecutor naturality$previewGeneration(net.minecraft.TracingExecutor original,
+                net.minecraft.world.level.chunk.ChunkAccess chunk,
+                net.minecraft.world.level.levelgen.blending.Blender blender,
+                net.minecraft.world.level.levelgen.RandomState randomState,
+                net.minecraft.world.level.StructureManager structures) {
+            // Resolve the job's owning world, not the current menu: a cancelled
+            // preview may still be draining while a real world starts loading.
+            var level = ((MenuPreviewStructureAccess)structures).naturality$level();
+            return PreviewEnvironment.preview(level.getServer()) ? MenuPreview.backgroundExecutor() : original;
+        }
+    }
+
+    @Mixin(net.minecraft.world.level.chunk.ChunkGenerator.class)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class MenuPreviewBiomeBudgetMixin {
+        @com.llamalad7.mixinextras.injector.ModifyExpressionValue(method = "createBiomes", at = @At(value = "INVOKE",
+                target = "Lnet/minecraft/util/Util;backgroundExecutor()Lnet/minecraft/TracingExecutor;"))
+        private net.minecraft.TracingExecutor naturality$previewBiomes(net.minecraft.TracingExecutor original,
+                net.minecraft.world.level.levelgen.RandomState randomState,
+                net.minecraft.world.level.levelgen.blending.Blender blender,
+                net.minecraft.world.level.StructureManager structures) {
+            var level = ((MenuPreviewStructureAccess)structures).naturality$level();
+            return PreviewEnvironment.preview(level.getServer()) ? MenuPreview.backgroundExecutor() : original;
         }
     }
 
@@ -363,6 +430,37 @@ public final class PreviewsMixins {
                 }
             }
             ci.cancel();
+        }
+    }
+
+    /** Rotate the view around stable terrain; moving its storage discards reusable section meshes. */
+    @Mixin(LevelRenderer.class)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class MenuPreviewTerrainStorageMixin {
+        @org.spongepowered.asm.mixin.injection.ModifyArg(method = {"repositionCamera", "invalidateCompiledGeometry"},
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/ViewArea;repositionCamera(Lnet/minecraft/core/SectionPos;)Z"), index = 0)
+        private net.minecraft.core.SectionPos naturality$stableTerrainCenter(net.minecraft.core.SectionPos position) {
+            return MenuPreview.active() ? net.minecraft.core.SectionPos.of(MenuPreview.spawn()) : position;
+        }
+        @org.spongepowered.asm.mixin.injection.ModifyArg(method = "invalidateCompiledGeometry",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/ViewArea;<init>(Lnet/minecraft/client/renderer/chunk/SectionRenderDispatcher;IIIIILnet/minecraft/client/renderer/SectionOcclusionGraph;)V"), index = 5)
+        private int naturality$boundedTerrainStorage(int distance) {
+            return MenuPreview.active() ? MenuPreview.terrainStorageRadius() : distance;
+        }
+    }
+
+    @Mixin(LevelExtractor.class)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class MenuPreviewTerrainUpdatesMixin {
+        @org.spongepowered.asm.mixin.injection.ModifyArg(method = {"extract", "allChanged"},
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/SectionUpdateTracker;repositionCamera(Lnet/minecraft/core/SectionPos;)V"), index = 0)
+        private net.minecraft.core.SectionPos naturality$stableUpdateCenter(net.minecraft.core.SectionPos position) {
+            return MenuPreview.active() ? net.minecraft.core.SectionPos.of(MenuPreview.spawn()) : position;
+        }
+        @org.spongepowered.asm.mixin.injection.ModifyArg(method = "allChanged",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/SectionUpdateTracker;<init>(Lnet/minecraft/world/level/LevelHeightAccessor;I)V"), index = 1)
+        private int naturality$boundedUpdateStorage(int distance) {
+            return MenuPreview.active() ? MenuPreview.terrainStorageRadius() : distance;
         }
     }
 
@@ -468,7 +566,9 @@ public final class PreviewsMixins {
         @WrapOperation(method = "disconnect(Lnet/minecraft/client/gui/screens/Screen;ZZ)V", at = @At(value = "INVOKE",
                 target = "Lnet/minecraft/client/server/IntegratedServer;isShutdown()Z"))
         private boolean naturality$doNotWaitForPreview(IntegratedServer server, Operation<Boolean> original) {
-            return MenuPreview.privateServer(server) || original.call(server);
+            // Menu navigation may retire a preview asynchronously. Client shutdown
+            // must wait before Minecraft shuts down the workers it still needs.
+            return MenuPreview.privateServer(server) && !MenuPreview.stopped() || original.call(server);
         }
         @WrapOperation(method = "disconnect(Lnet/minecraft/client/gui/screens/Screen;ZZ)V", at = @At(value = "INVOKE",
                 target = "Lnet/minecraft/client/gui/Gui;setScreen(Lnet/minecraft/client/gui/screens/Screen;)V"))

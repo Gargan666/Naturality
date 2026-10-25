@@ -4,6 +4,7 @@ import naturality.systems.villagerwork.professions.ProfessionWork.FarmerSupplies
 import com.google.common.collect.ImmutableMap;
 import java.util.*;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.EntityTypes;
@@ -26,7 +27,12 @@ public final class ButcherWork extends Behavior<Villager> {
         return animal.getType() == EntityTypes.COW || animal.getType() == EntityTypes.SHEEP
             || animal.getType() == EntityTypes.PIG || animal.getType() == EntityTypes.CHICKEN;
     }
-    private static final Map<UUID, ButcherWork> CLAIMS = new HashMap<>();
+    private static final Map<MinecraftServer, Map<UUID, ButcherWork>> CLAIMS = Collections.synchronizedMap(new WeakHashMap<>());
+    private @org.jspecify.annotations.Nullable Map<UUID, ButcherWork> activeClaims;
+    private static Map<UUID, ButcherWork> claims(ServerLevel level) {
+        return CLAIMS.computeIfAbsent(level.getServer(), _ -> new HashMap<>());
+    }
+    public static void clearServer(MinecraftServer server) { CLAIMS.remove(server); }
     private Phase phase = Phase.SEARCH;
     private Animal first, second;
     private Item food;
@@ -76,14 +82,21 @@ public final class ButcherWork extends Behavior<Villager> {
     }
     private void phase(Phase value, long time) { phase = value; since = time; nextAction = time; }
     private void release() {
-        if (first != null) CLAIMS.remove(first.getUUID(), this);
-        if (second != null) CLAIMS.remove(second.getUUID(), this);
+        var claims = activeClaims;
+        if (claims != null) {
+            if (first != null) claims.remove(first.getUUID(), this);
+            if (second != null) claims.remove(second.getUUID(), this);
+        }
+        activeClaims = null;
         first = second = null;
         birthTime = -1;
     }
     public static void born(Animal parent, Animal partner, long time) {
-        ButcherWork work = CLAIMS.get(parent.getUUID());
-        if (work != null && CLAIMS.get(partner.getUUID()) == work
+        if (!(parent.level() instanceof ServerLevel level)) return;
+        var claims = CLAIMS.get(level.getServer());
+        if (claims == null) return;
+        ButcherWork work = claims.get(parent.getUUID());
+        if (work != null && claims.get(partner.getUUID()) == work
                 && (work.first == parent && work.second == partner || work.first == partner && work.second == parent))
             work.birthTime = time;
     }
@@ -110,11 +123,12 @@ public final class ButcherWork extends Behavior<Villager> {
             case SEARCH -> {
                 if (time < nextAction || !body.onGround()) return;
                 nextAction = time + 60;
+                var claims = claims(level);
                 var job = body.getBrain().getMemory(MemoryModuleType.JOB_SITE).orElseThrow().pos();
                 List<Animal> animals = level.getEntitiesOfClass(Animal.class,
                     new net.minecraft.world.phys.AABB(job).inflate(24),
                     a -> isLivestock(a) && a.isAlive() && !a.isBaby() && a.getAge() == 0 && a.canFallInLove()
-                        && !a.isInLove() && !CLAIMS.containsKey(a.getUUID()));
+                        && !a.isInLove() && !claims.containsKey(a.getUUID()));
                 animals.sort(Comparator.comparingDouble(body::distanceToSqr));
                 // Animals are distance-sorted; food never decides species priority.
                 for (Animal a : animals) {
@@ -127,7 +141,8 @@ public final class ButcherWork extends Behavior<Villager> {
                         var partnerPath = body.getNavigation().createPath(b, 2);
                         if (path == null || !path.canReach() || partnerPath == null || !partnerPath.canReach()) continue;
                         first = a; second = b; food = candidate; fed = 0;
-                        CLAIMS.put(a.getUUID(), this); CLAIMS.put(b.getUUID(), this);
+                        activeClaims = claims;
+                        claims.put(a.getUUID(), this); claims.put(b.getUUID(), this);
                         if (body.getInventory().countItem(food) < 2) { deliveries = 0; phase(Phase.SUPPLIES, time); return; }
                         phase(Phase.FEED, time);
                         equip(body, new ItemStack(food));

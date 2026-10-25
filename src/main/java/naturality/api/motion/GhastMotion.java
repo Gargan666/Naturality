@@ -1,6 +1,7 @@
 package naturality.api.motion;
 
-import java.util.WeakHashMap;
+import com.google.common.collect.MapMaker;
+import java.util.Map;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.monster.Ghast;
 import net.minecraft.world.entity.animal.happyghast.HappyGhast;
@@ -11,7 +12,10 @@ import org.joml.Vector3f;
 
 /** Shared authoritative/client easing for model lean and rider attachment points. */
 public final class GhastMotion {
-    private static final WeakHashMap<LivingEntity, Motion> MOTIONS = new WeakHashMap<>();
+    // Entity equality uses its network ID, shared by client/server counterparts and reused
+    // across worlds. Weak identity keys keep each body's history separate without retaining it.
+    // MapMaker's concurrent map protects bookkeeping; each Motion stays on its entity's thread.
+    private static final Map<LivingEntity, Motion> MOTIONS = new MapMaker().weakKeys().makeMap();
     private GhastMotion() { }
     public static boolean supported(Object entity) { return entity instanceof Ghast || entity instanceof HappyGhast; }
     public static class Motion {
