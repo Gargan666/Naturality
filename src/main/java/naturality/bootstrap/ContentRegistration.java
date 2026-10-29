@@ -307,6 +307,8 @@ public final class ContentRegistration {
             Naturality.id("end_explosion"),FabricParticleTypes.simple(true));
         public static final SimpleParticleType POTION_CLOUD=Registry.register(BuiltInRegistries.PARTICLE_TYPE,
             Naturality.id("potion_cloud"),FabricParticleTypes.simple());
+        public static final SimpleParticleType DRIP_WALL=Registry.register(BuiltInRegistries.PARTICLE_TYPE,
+            Naturality.id("drip_wall"),FabricParticleTypes.simple());
         public static final SimpleParticleType RAIN_CLUSTER=Registry.register(BuiltInRegistries.PARTICLE_TYPE,
             Naturality.id("rain_cluster"),FabricParticleTypes.simple());
         public static final SimpleParticleType SNOW_CLUSTER=Registry.register(BuiltInRegistries.PARTICLE_TYPE,

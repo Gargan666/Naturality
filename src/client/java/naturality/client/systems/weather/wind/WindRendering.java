@@ -356,7 +356,7 @@ public final class WindRendering {
         return samePlant(state, neighbor) && neighbor.getCollisionShape(level, pos).isEmpty();
     }
 
-    /** Every entity uses the same hitbox contact and nearest-contact force limit. */
+    /** Contact bodies use the same hitbox and nearest-contact force limit. */
     private static int applyBrushContacts(net.minecraft.client.multiplayer.ClientLevel level,
             net.minecraft.world.entity.Entity entity, int budget) {
         int queries = 0;
@@ -424,7 +424,9 @@ public final class WindRendering {
         if (!player.isSpectator() && !player.isRemoved())
             budget -= applyBrushContacts(level, player, Math.min(512, budget));
         var entities = level.getEntities(player, player.getBoundingBox().inflate(ENTITY_CONTACT_RANGE),
-            entity -> !entity.isRemoved() && !entity.isSpectator() && entity.getBbWidth() > 0 && entity.getBbHeight() > 0);
+            // Harvest drops spawn inside the plant; they must not create a new brush impulse.
+            entity -> !(entity instanceof net.minecraft.world.entity.item.ItemEntity)
+                && !entity.isRemoved() && !entity.isSpectator() && entity.getBbWidth() > 0 && entity.getBbHeight() > 0);
         entities.sort(java.util.Comparator.comparingDouble(entity -> entity.distanceToSqr(player)));
         int considered = 0;
         for (var entity : entities) {

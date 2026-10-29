@@ -10,7 +10,6 @@ import net.minecraft.client.renderer.oit.OitPipelineSet;
 public final class PortalOpeningRenderLayer {
     public static final SingleQuadParticle.Layer PORTAL = layer("portal_opening");
     public static final SingleQuadParticle.Layer SOLID_PORTAL = solidPortal();
-    public static final SingleQuadParticle.Layer FIRE = layer("fire_fade");
     private static SingleQuadParticle.Layer solidPortal() {
         var pipeline = RenderPipelines.register(RenderPipeline.builder(RenderPipelines.PARTICLE_SNIPPET)
             .withLocation(Naturality.id("pipeline/portal_ready"))
@@ -23,9 +22,8 @@ public final class PortalOpeningRenderLayer {
         return new SingleQuadParticle.Layer(false, naturality.client.api.rendering.AtlasLocations.BLOCKS, pipeline, null);
     }
     private static SingleQuadParticle.Layer layer(String name) {
-        var effectBuilder = RenderPipeline.builder().withVertexShader(Naturality.id("core/" + (name.equals("fire_fade") ? name : "portal_opening")))
+        var effectBuilder = RenderPipeline.builder().withVertexShader(Naturality.id("core/portal_opening"))
             .withFragmentShader(Naturality.id("core/" + name));
-        if (name.equals("fire_fade")) effectBuilder.withBindGroupLayout(naturality.client.blocks.fire.ProceduralFire.LAYOUT);
         var effect = effectBuilder.buildSnippet();
         var pipeline = RenderPipelines.register(RenderPipeline.builder(RenderPipelines.PARTICLE_SNIPPET, effect)
             .withLocation(Naturality.id("pipeline/" + name))

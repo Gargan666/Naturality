@@ -281,7 +281,7 @@ public final class WaterIntersection extends QuadParticleRenderState {
     }
     @Override public void submit(SubmitNodeCollector collector,CameraRenderState camera){if(!isEmpty())collector.submitQuadParticleGroup(this);}
 
-    /** Small client-only impact rings; rain uses loaded sky-exposed columns, drips use actual movement. */
+    /** Small client-only impact rings; rain checks its upwind path, drips use actual movement. */
     public static final class WaterRipples {
         private static final int LIFETIME=8, LIMIT=512, RANGE=24;
         private record Ripple(double x,double z,double y,BlockPos origin,boolean cauldron,boolean rain,int born) {}
@@ -332,6 +332,7 @@ public final class WaterIntersection extends QuadParticleRenderState {
             // Centers and output cells share the water's world-space grid, including negative coordinates.
             x=(Math.floor(x*16)+0.5)/16;z=(Math.floor(z*16)+0.5)/16;
             double y=surface.height(x-surface.pos().getX(),z-surface.pos().getZ());
+            if(rain && !rainReachesSurface(level,x,y,z)) return;
             synchronized(STATE_LOCK) {
                 if(world!=level) {
                     var client=Minecraft.getInstance();
@@ -343,6 +344,25 @@ public final class WaterIntersection extends QuadParticleRenderState {
                 if(RIPPLES.size()>=LIMIT) return;
                 RIPPLES.add(new Ripple(x,z,y,surface.pos().immutable(),surface.cauldron(),rain,tick));
             }
+        }
+        /** Reverse the visible rain velocity: vertical sky access alone misses shelter behind walls. */
+        private static boolean rainReachesSurface(ClientLevel level,double x,double y,double z) {
+            var weather=naturality.client.systems.weather.framework.WeatherClient.WeatherParticleContext.state(level);
+            double fallSpeed=naturality.client.systems.weather.overworld.precipitation.ParticleWeather.RAIN_FALL_SPEED;
+            // Vanilla precipitation remains vertical when the custom weather cards are disabled.
+            double windX=weather.enabled()?weather.rainWindX():0;
+            double windZ=weather.enabled()?weather.rainWindZ():0;
+            var from=new Vec3(x,y+0.02,z);
+            double rise=Math.max(0,level.getMaxY()+1-from.y);
+            var to=from.add(-windX*rise/fallSpeed,rise,-windZ*rise/fallSpeed);
+            return net.minecraft.world.level.BlockGetter.traverseBlocks(from,to,level,(_,pos)-> {
+                // Never load terrain along a long upwind path. Unknown shelter is not an impact.
+                if(!naturality.api.worlds.LoadedChunks.has(level,pos)) return Boolean.FALSE;
+                // Most of the ray lies above terrain; avoid block/shape queries in those cells.
+                if(pos.getY()>=level.getHeight(Heightmap.Types.WORLD_SURFACE,pos.getX(),pos.getZ())) return null;
+                var shape=level.getBlockState(pos).getCollisionShape(level,pos);
+                return shape.clip(from,to,pos)==null?null:Boolean.FALSE;
+            },_ -> Boolean.TRUE);
         }
         /** Add a ring when a falling leaf settles onto a water surface. */
         public static boolean leafImpact(@org.jspecify.annotations.Nullable ClientLevel level,double x,double y,double z) {

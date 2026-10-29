@@ -1,0 +1,13 @@
+{
+  "variants": {
+    "type=bottom": {
+      "model": "naturality:block/charred_slab"
+    },
+    "type=double": {
+      "model": "naturality:block/charred_planks"
+    },
+    "type=top": {
+      "model": "naturality:block/charred_slab_top"
+    }
+  }
+}

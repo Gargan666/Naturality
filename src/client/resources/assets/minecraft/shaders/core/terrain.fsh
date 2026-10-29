@@ -54,6 +54,7 @@ layout(location = 11) in vec2 naturalityLightLevels;
 layout(location = 12) flat in int naturalityFireKind;
 layout(location = 13) in vec2 naturalityFireUV;
 layout(location = 14) flat in vec3 naturalityFireSeed;
+layout(location = 19) in vec2 naturalityFireShape;
 layout(location = 15) flat in int naturalitySubmerged;
 
 #ifndef OIT_ALPHA_ONLY
@@ -272,9 +273,13 @@ void main() {
     // Shade the original texture before adding the face-shading-independent reflection.
     if (glassSprite) color.rgb = naturality_shadow_saturation(color.rgb, lighting.rgb);
     color = naturality_glass_shine(color, light.rgb, positionDx, positionDy);
-    if (naturalityFireKind >= 0)
-        color = naturality_fire_color(naturalityFireKind, naturalityFireUV,
-            naturality_fire_resolution(naturalityBlockPosition, naturalityFireUV), naturalityFireSeed);
+    if (naturalityFireKind >= 0) {
+        vec2 fireResolution = naturality_fire_resolution(naturalityBlockPosition, naturalityFireUV);
+        if ((int(round(naturalityFireSeed.r * 255.0)) & 8) != 0)
+            color = naturality_grouped_fire(naturalityFireKind, naturalityFireUV, fireResolution,
+                naturalityBlockPosition, naturalityFireShape, naturalityFireSeed);
+        else color = naturality_fire_color(naturalityFireKind, naturalityFireUV, fireResolution, naturalityFireSeed);
+    }
     if (waterSprite && WaterMap.w != 0 && WaterSwitches.x != 0) {
         // Restore topside coverage: bright texture pixels are highlights,
         // not holes revealing the terrain below.

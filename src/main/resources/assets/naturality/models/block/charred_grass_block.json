@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/cube_bottom_top",
+  "textures": {
+    "top": "naturality:block/charred_grass_block_top",
+    "bottom": "minecraft:block/dirt",
+    "side": "naturality:block/charred_grass_block"
+  }
+}

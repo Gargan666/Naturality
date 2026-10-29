@@ -41,6 +41,7 @@ layout(location = 11) out vec2 naturalityLightLevels;
 layout(location = 12) flat out int naturalityFireKind;
 layout(location = 13) out vec2 naturalityFireUV;
 layout(location = 14) flat out vec3 naturalityFireSeed;
+layout(location = 19) out vec2 naturalityFireShape;
 layout(location = 15) flat out int naturalitySubmerged;
 #include <naturality:foliage_wind.glsl>
 
@@ -99,6 +100,7 @@ void main() {
     naturalityFireKind = -1;
     naturalityFireUV = vec2(0.0);
     naturalityFireSeed = Color.rgb;
+    naturalityFireShape = Color.gb * (255.0 / 16.0) - 4.0;
     for (int i = 0; i < 4; i++) {
         vec4 b = NaturalityFireBounds[i];
         if (b.x >= 0.0 && all(greaterThanEqual(UV0, b.xy)) && all(lessThanEqual(UV0, b.zw))) {

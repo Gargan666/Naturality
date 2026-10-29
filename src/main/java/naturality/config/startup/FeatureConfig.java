@@ -102,6 +102,7 @@ public final class FeatureConfig {
         FISHING_RETURN(Group.GAMEPLAY, CONTENT),
         SAND_PLACEMENT_EVENTS(Group.GAMEPLAY),
         FIREBALL_FIRE_SUPPRESSION(Group.GAMEPLAY),
+        FIRE_PROPAGATION(Group.GAMEPLAY),
         GHAST_PHYSICS(Group.GAMEPLAY),
         FISH_MOVEMENT(Group.GAMEPLAY),
         NAVIGATION_INSTRUMENTS(Group.GAMEPLAY),
@@ -175,6 +176,12 @@ public final class FeatureConfig {
                     return namespace.equals("naturality") && path.startsWith("tags/")
                         && !path.equals("tags/block/no_ash_overlays.json");
                 }
+                if (namespace.equals("minecraft") && java.util.Set.of(
+                        "dimension_type/the_nether.json", "worldgen/noise_settings/nether.json",
+                        "worldgen/density_function/nether/base_3d_noise.json", "worldgen/carver/nether_cave.json",
+                        "worldgen/placed_feature/ore_magma.json", "worldgen/placed_feature/ore_gravel_nether.json",
+                        "worldgen/placed_feature/ore_ancient_debris_large.json", "worldgen/structure/bastion_remnant.json"
+                    ).contains(path)) return Feature.NETHER_LAVA_LAKES.enabled();
                 return !namespace.equals("minecraft") || !path.equals("worldgen/noise_settings/end.json")
                     || Feature.END_TERRAIN.enabled();
             }

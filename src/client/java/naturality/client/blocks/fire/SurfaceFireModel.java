@@ -33,14 +33,41 @@ import net.minecraft.world.level.block.Blocks;
 /** Physical surface dimensions and UV domain stay independent of texture resolution. */
 @org.jspecify.annotations.NullMarked
 public final class SurfaceFireModel extends WrapperBlockStateModel {
+    public static final int DATA_TAG = 0x46495245;
     private SurfaceFireModel(BlockStateModel wrapped) { super(wrapped); }
     public static void initialize() {
         ModelLoadingPlugin.register(context -> context.modifyBlockModelAfterBake().register(
             ModelModifier.WRAP_LAST_PHASE, (model, bake) -> bake.state().getBlock() instanceof BaseFireBlock
                 ? new SurfaceFireModel(model) : model));
     }
+    /** Invalidate fire below changed ceilings, including across chunk-section boundaries. */
+    public static void changed(net.minecraft.world.level.chunk.LevelChunk chunk, BlockPos pos,
+            @org.jspecify.annotations.Nullable BlockState previous) {
+        if (!(chunk.getLevel() instanceof net.minecraft.client.multiplayer.ClientLevel level) || previous == null) return;
+        var next = chunk.getBlockState(pos);
+        if (previous.getBlock() == next.getBlock()) return;
+        if (!(previous.getBlock() instanceof BaseFireBlock) && !(next.getBlock() instanceof BaseFireBlock)
+                && GroupedFlames.blocksFlame(level, pos, previous) == GroupedFlames.blocksFlame(level, pos, next)) return;
+        for (int dy = 1; dy <= 5; dy++) {
+            var below = pos.below(dy);
+            if (LoadedChunks.has(level, below) && level.getBlockState(below).getBlock() instanceof BaseFireBlock)
+                level.setSectionDirtyWithNeighbors(below.getX() >> 4, below.getY() >> 4, below.getZ() >> 4);
+        }
+    }
+
     @Override public @org.jspecify.annotations.Nullable Object createGeometryKey(BlockAndTintGetter level, BlockPos pos, BlockState state, RandomSource random) { return null; }
     @Override public void emitQuads(QuadEmitter emitter, BlockAndTintGetter level, BlockPos pos,
+            BlockState state, RandomSource random, Predicate<@org.jspecify.annotations.Nullable Direction> cullTest) {
+        boolean encoded = !naturality.client.api.rendering.ShaderPacks.terrainActive();
+        emitter.pushTransform(quad -> {
+            if (encoded) quad.tag(DATA_TAG).emissive(true).ambientOcclusion(TriState.FALSE).shadeDirectionOverride(Direction.UP).tintIndex(-1);
+            return true;
+        });
+        try { emitFireQuads(emitter, level, pos, state, random, cullTest); }
+        finally { emitter.popTransform(); }
+    }
+
+    private void emitFireQuads(QuadEmitter emitter, BlockAndTintGetter level, BlockPos pos,
             BlockState state, RandomSource random, Predicate<@org.jspecify.annotations.Nullable Direction> cullTest) {
         // Native GLSL decodes RGB as procedural seeds. Iris replaces that shader
         // and treats RGB as ordinary tint, so keep its existing fire sprite white.
@@ -58,7 +85,15 @@ public final class SurfaceFireModel extends WrapperBlockStateModel {
         }
         var floors = FireGeometry.floors(level, pos, state);
         if (floors.size() == 1 && vanillaFloor(floors.getFirst())) {
+            var group = GroupedFlames.sample(level, pos, state);
             float shift = floors.getFirst().y();
+            if (group.active() || state.getBlock() instanceof BaseFireBlock && !packTerrain
+                    && naturality.config.live.NaturalityConfig.get().effects.connectedFire
+                    && naturality.config.live.NaturalityConfig.get().effects.fireAnimation) {
+                var material = wrapped.particleMaterial(level, pos, state);
+                group.floor(emitter, material, level, pos, shift, packTerrain);
+                return;
+            }
             emitter.pushTransform(quad -> {
                 quad.translate(0, shift, 0);
                 for (int i = 0; i < 4; i++) quad.color(i, color);
@@ -77,16 +112,20 @@ public final class SurfaceFireModel extends WrapperBlockStateModel {
             Vec3 c = new Vec3(p.mapX(hi, hi), p.y(), p.mapZ(hi, hi));
             Vec3 d = new Vec3(p.mapX(lo, hi), p.y(), p.mapZ(lo, hi));
             double height = FireGeometry.floorHeight(p);
-            sheet(emitter, material, color, a, b, height);
-            sheet(emitter, material, color, b, c, height);
-            sheet(emitter, material, color, c, d, height);
-            sheet(emitter, material, color, d, a, height);
-            sheet(emitter, material, color, a, c, height);
-            sheet(emitter, material, color, b, d, height);
+            fittedSheet(emitter, material, color, a, b, height);
+            fittedSheet(emitter, material, color, b, c, height);
+            fittedSheet(emitter, material, color, c, d, height);
+            fittedSheet(emitter, material, color, d, a, height);
+            fittedSheet(emitter, material, color, a, c, height);
+            fittedSheet(emitter, material, color, b, d, height);
         }
+        // Attached faces belong to this support patch only. Extending every wall
+        // tile upward made stacked owners draw the same coplanar area repeatedly.
+        // Their compatible edges share heat, while floor sheets own rising flames.
         for (var side : FireGeometry.sides(level, pos, state))
-            sheet(emitter, material, packTerrain ? -1 : ConnectedFire.color(level, pos, state, side),
-                side.bottomLeft(), side.bottomRight(), side.height());
+            quad(emitter, material, packTerrain ? -1 : ConnectedFire.color(level, pos, state, side),
+                side.bottomLeft().add(0, side.height(), 0), side.bottomLeft(),
+                side.bottomRight(), side.bottomRight().add(0, side.height(), 0));
         if (state.hasProperty(FireBlock.UP) && state.getValue(FireBlock.UP)) {
             for (var b : FireGeometry.supportBoxes(level, pos.above())) {
                 double y = b.minY + 1 - FireGeometry.INSET;
@@ -100,21 +139,204 @@ public final class SurfaceFireModel extends WrapperBlockStateModel {
             && Math.abs(p.ux() - 1) < 1e-5 && Math.abs(p.uz()) < 1e-5
             && Math.abs(p.vx()) < 1e-5 && Math.abs(p.vz() - 1) < 1e-5;
     }
-    private static void sheet(QuadEmitter e, Material.Baked material, int color, Vec3 a, Vec3 b, double height) {
+    private static void fittedSheet(QuadEmitter e, Material.Baked material, int color, Vec3 a, Vec3 b, double height) {
+        // Voxel proximity does not make differently angled posts/boards coplanar.
         quad(e, material, color, a.add(0, height, 0), a, b, b.add(0, height, 0));
     }
     private static void quad(QuadEmitter e, Material.Baked material, int color, Vec3 a, Vec3 b, Vec3 c, Vec3 d) {
+        quad(e, material, color, a, b, c, d, 0, 1);
+    }
+    private static void quad(QuadEmitter e, Material.Baked material, int color, Vec3 a, Vec3 b, Vec3 c, Vec3 d,
+            float u0, float u1) {
         Vec3[] points = {a, b, c, d};
         for (boolean reverse : new boolean[]{false, true}) {
             for (int i = 0; i < 4; i++) {
                 int index = reverse ? 3 - i : i;
                 Vec3 p = points[index];
                 e.pos(i, (float) p.x, (float) p.y, (float) p.z);
-                e.uv(i, index < 2 ? 0 : 1, index == 0 || index == 3 ? 0 : 1);
+                e.uv(i, index < 2 ? u0 : u1, index == 0 || index == 3 ? 0 : 1);
                 e.color(i, color);
             }
             e.materialBake(material, MutableQuadView.BAKE_NORMALIZED);
             e.cullFace(null).shadeDirectionOverride(Direction.UP).emissive(true).ambientOcclusion(TriState.FALSE).emit();
+        }
+    }
+
+    /** Local mesh-only density field: at most 27 snapshot reads, no world cache or flood fill. */
+    public record GroupedFlames(float northWest, float northEast, float southWest, float southEast) {
+        public static final float MAX_EXTRA_HEIGHT = 4;
+        private static final GroupedFlames NONE = new GroupedFlames(0, 0, 0, 0);
+
+        public static GroupedFlames sample(BlockGetter level, BlockPos pos, BlockState state) {
+            var effects = naturality.config.live.NaturalityConfig.get().effects;
+            if (!(state.getBlock() instanceof BaseFireBlock) || !effects.connectedFire || !effects.fireAnimation) return NONE;
+            int columns = 0;
+            int lower = 0, middle = 0, upper = 0, walls = 0;
+            var cursor = new BlockPos.MutableBlockPos();
+            for (int z = -1; z <= 1; z++) for (int x = -1; x <= 1; x++) {
+                // Adjacent heights contribute heat from ground and foliage. Reading
+                // only the mesher's supplied halo also keeps workers off the live world.
+                for (int y = -1; y <= 1; y++) {
+                    cursor.setWithOffset(pos, x, y, z);
+                    var neighbour = level.getBlockState(cursor);
+                    if (neighbour.getBlock() == state.getBlock()) {
+                        columns |= 1 << ((z + 1) * 3 + x + 1);
+                        if (y < 0) lower |= 1 << ((z + 1) * 3 + x + 1);
+                        if (y == 0) middle |= 1 << ((z + 1) * 3 + x + 1);
+                        if (y > 0) upper |= 1 << ((z + 1) * 3 + x + 1);
+                        if (!FireGeometry.FireSurface.isFloorFire(neighbour)) walls |= 1 << ((z + 1) * 3 + x + 1);
+                    }
+                }
+            }
+            // One column (including a vertical stack) is not a broad fire group.
+            if (Integer.bitCount(columns) < 2) return NONE;
+            return new GroupedFlames(corner(columns, walls, lower, middle, upper, 0),
+                corner(columns, walls, lower, middle, upper, 1), corner(columns, walls, lower, middle, upper, 3),
+                corner(columns, walls, lower, middle, upper, 4));
+        }
+
+        private static float base(int columns, int lower, int middle, int first) {
+            int mask = 0b11011 << first;
+            if ((lower & mask) != 0) return -1;
+            return (columns & mask) != 0 && (middle & mask) == 0 ? 1 : 0;
+        }
+
+        private static float corner(int columns, int walls, int lower, int middle, int upper, int first) {
+            int count = Integer.bitCount((columns >> first) & 0b11011);
+            // Shared corners depend on the same four columns on either side of
+            // a block boundary. Dense interiors reach the cap; edges taper down.
+            // A pair already sustains a tall ribbon. Its exposed end still
+            // tapers through the one-column corners; wider groups reach the cap.
+            float boost = switch (count) { case 2 -> 2.25F; case 3 -> 3.125F; case 4 -> MAX_EXTRA_HEIGHT; default -> 0; };
+            int mask = 0b11011 << first;
+            float highest = (upper & mask) != 0 ? 1 : (middle & mask) != 0 ? 0 : -1;
+            float lowest = base(columns, lower, middle, first);
+            // Attached patches contribute a shorter heat envelope than floor
+            // flames, while geometry ownership is decided separately below.
+            return Math.min(highest + boost, lowest + MAX_EXTRA_HEIGHT) - ((walls & mask) != 0 ? 0.4F : 0);
+        }
+
+        public boolean active() { return northWest > 0 || northEast > 0 || southWest > 0 || southEast > 0; }
+
+        public float extraHeight(double x, double z) {
+            return interpolate(x, z, northWest, northEast, southWest, southEast);
+        }
+
+        private static float interpolate(double x, double z, float nw, float ne, float sw, float se) {
+            float u = (float) Math.clamp(x, 0, 1), v = (float) Math.clamp(z, 0, 1);
+            return (nw * (1 - u) + ne * u) * (1 - v) + (sw * (1 - u) + se * u) * v;
+        }
+
+        void floor(QuadEmitter e, Material.Baked material, BlockGetter level, BlockPos pos, float y, boolean pack) {
+            // template_fire_floor: planes at 7.2/16 and 8.8/16, rotated
+            // +/-22.5 degrees about (8,8,8), with rescale=true. Continue the
+            // actual sheets, stretched vertically inside their original footprint.
+            // A common stretch keeps matching ribbon planes coplanar even where
+            // the heat profile tapers; continuing the raw slope would splay tall
+            // flames two blocks sideways into unrelated surfaces.
+            double slope = Math.tan(Math.PI / 8);
+            double stretch = (1.4 + MAX_EXTRA_HEIGHT) / 1.4;
+            boolean covered = covered(level, pos);
+            double clearance = clearance(level, pos);
+            for (boolean alongX : new boolean[]{true, false}) {
+                Direction direction = alongX ? Direction.EAST : Direction.SOUTH;
+                int joins = 0;
+                for (int side = 0; side < 2; side++) {
+                    BlockPos other = pos.relative(side == 0 ? direction.getOpposite() : direction);
+                    if (matchingFloor(level, other, y, covered)) joins |= 1 << side;
+                }
+                for (int side = 0; side < 2; side++) {
+                    double tilt = side == 0 ? slope : -slope;
+                    double authoredPlane = alongX ? (side == 0 ? .45 : .55) : (side == 0 ? .55 : .45);
+                    double offset = authoredPlane - .5 * tilt + tilt * (alongX ? -.05 : .05) * slope;
+                    Vec3 a = new Vec3(alongX ? 0 : offset, y, alongX ? offset : 0);
+                    Vec3 b = new Vec3(alongX ? 1 : offset, y, alongX ? offset : 1);
+                    double topA = Math.min(clearance, y + 1.4 + extraHeight(a.x, a.z));
+                    double topB = Math.min(clearance, y + 1.4 + extraHeight(b.x, b.z));
+                    int plane = (alongX ? 0 : 2) + side;
+                    int region = Math.floorMod((alongX ? pos.getZ() : pos.getX()) * 13 + pos.getY() * 7, 4);
+                    curtain(e, material, a, b, y, y, topA, topB, pack,
+                        alongX ? new Vec3(0, 0, tilt / stretch) : new Vec3(tilt / stretch, 0, 0),
+                        8 | plane | joins << 4 | region << 6, clearance);
+                }
+            }
+            // Vanilla's multipart floor also has four upright outer sheets.
+            // Keep that low fringe only at exposed boundaries; the two owners
+            // of an interior edge must not submit almost-coincident outer faces.
+            for (Direction direction : Direction.Plane.HORIZONTAL) {
+                if (!level.getBlockState(pos.relative(direction)).isAir()) continue;
+                boolean alongX = direction.getAxis() == Direction.Axis.Z;
+                double offset = direction == Direction.NORTH || direction == Direction.WEST ? .01 / 16 : 1 - .01 / 16;
+                Vec3 a = new Vec3(alongX ? 0 : offset, y, alongX ? offset : 0);
+                Vec3 b = new Vec3(alongX ? 1 : offset, y, alongX ? offset : 1);
+                Direction tangent = alongX ? Direction.EAST : Direction.SOUTH;
+                int joins = 0;
+                for (int side = 0; side < 2; side++) {
+                    BlockPos other = pos.relative(side == 0 ? tangent.getOpposite() : tangent);
+                    // Continue a coplanar perimeter tile, or turn into this
+                    // block's perpendicular exposed perimeter face at a corner.
+                    if (level.getBlockState(other).isAir() || matchingFloor(level, other, y, covered)
+                            && level.getBlockState(other.relative(direction)).isAir()) joins |= 1 << side;
+                }
+                curtain(e, material, a, b, y, y, y + (covered ? 1 : 1.4), y + (covered ? 1 : 1.4), pack,
+                    Vec3.ZERO, 12 | (alongX ? 0 : 2) | joins << 4 | Math.floorMod(pos.getY() * 7, 4) << 6, Math.min(clearance, y + (covered ? 1 : 1.4)));
+            }
+        }
+
+        private static boolean matchingFloor(BlockGetter level, BlockPos pos, float height, boolean covered) {
+            var state = level.getBlockState(pos);
+            if (!(state.getBlock() instanceof BaseFireBlock) || !FireGeometry.FireSurface.isFloorFire(state)
+                    || covered(level, pos) != covered) return false;
+            var patches = FireGeometry.floors(level, pos, state);
+            return patches.size() == 1 && vanillaFloor(patches.getFirst()) && Math.abs(patches.getFirst().y() - height) < 1e-5;
+        }
+
+        private static boolean covered(BlockGetter level, BlockPos pos) {
+            BlockPos abovePos = pos.above();
+            var above = level.getBlockState(abovePos);
+            return above.getBlock() instanceof BaseFireBlock || blocksFlame(level, abovePos, above);
+        }
+
+        public static boolean blocksFlame(BlockGetter level, BlockPos pos, BlockState state) {
+            return naturality.blocks.fire.FirePropagation.solidFuel(level, pos, state);
+        }
+
+        public static float clearance(BlockGetter level, BlockPos pos) {
+            for (int dy = 1; dy <= 5; dy++) {
+                BlockPos above = pos.above(dy);
+                var state = level.getBlockState(above);
+                if (blocksFlame(level, above, state) || state.getBlock() instanceof BaseFireBlock) return dy;
+            }
+            return 5.4F;
+        }
+
+        private static void curtain(QuadEmitter e, Material.Baked material, Vec3 a, Vec3 b,
+                double baseA, double baseB, double topA, double topB, boolean pack, Vec3 tilt, int flags, double envelope) {
+            // A rectangular envelope and affine physical UVs keep both triangles
+            // on one square lattice. The shader samples the taper once per cell.
+            baseA = Math.floor(baseA * 16 + 1e-5) / 16; baseB = Math.floor(baseB * 16 + 1e-5) / 16;
+            topA = Math.floor(topA * 16 + 1e-5) / 16; topB = Math.floor(topB * 16 + 1e-5) / 16;
+            double bottom = Math.min(Math.min(a.y, b.y), Math.min(baseA, baseB));
+            // Keep mature short fires cheap: no full-height transparent curtain.
+            double top = Math.min(Math.max(topA, topB), Math.floor(envelope * 16 + 1e-5) / 16);
+            Vec3[] points = {a.add(tilt.scale(top - a.y)).add(0, top - a.y, 0),
+                a.add(tilt.scale(bottom - a.y)).add(0, bottom - a.y, 0),
+                b.add(tilt.scale(bottom - b.y)).add(0, bottom - b.y, 0),
+                b.add(tilt.scale(top - b.y)).add(0, top - b.y, 0)};
+            for (boolean reverse : new boolean[]{false, true}) {
+                for (int i = 0; i < 4; i++) {
+                    int index = reverse ? 3 - i : i;
+                    Vec3 p = points[index];
+                    boolean left = index < 2;
+                    int base = (int) Math.round(((left ? baseA : baseB) + 4) * 16);
+                    int peak = (int) Math.round(((left ? topA : topB) + 4) * 16);
+                    e.pos(i, (float) p.x, (float) p.y, (float) p.z);
+                    e.uv(i, left ? 0 : 1, pack ? (p.y == top ? 0 : 1) : (float) ((12 - p.y) / 16));
+                    e.color(i, pack ? -1 : 0xFF000000 | flags << 16 | Math.clamp(base, 0, 255) << 8 | Math.clamp(peak, 0, 255));
+                }
+                e.materialBake(material, MutableQuadView.BAKE_NORMALIZED);
+                e.cullFace(null).shadeDirectionOverride(Direction.UP).emissive(true).ambientOcclusion(TriState.FALSE).emit();
+            }
         }
     }
 

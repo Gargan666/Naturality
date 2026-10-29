@@ -20,11 +20,13 @@ vec3 naturality_brush_offset(vec3 Position, ivec3 ChunkPosition, int tag) {
             || (tag >= 224 && tag <= 231) || tag >= 245 || tag == 242) return vec3(0.0);
     vec3 relative = Position + vec3(ChunkPosition - NaturalityBrushCount.yzw);
     vec2 owner = floor(relative.xz + 0.002);
+    float ownerY = floor(relative.y + 0.002);
     bool anchored = tag >= 64 && tag <= 99;
     bool crop = tag >= 120 && tag <= 127;
     if (anchored) {
         int encoded = tag - 64;
         owner -= vec2(encoded % 3 - 1, (encoded / 3) % 3 - 1);
+        ownerY -= float(encoded / 9 - 1);
     } else if (crop) {
         int encoded = tag - 120;
         owner -= vec2(encoded & 1, (encoded >> 1) & 1);
@@ -38,7 +40,12 @@ vec3 naturality_brush_offset(vec3 Position, ivec3 ChunkPosition, int tag) {
             if (any(notEqual(owner, brush.lower.xz))) continue;
         } else if (any(lessThan(relative.xz, brush.lower.xz - 0.0001))
                 || any(greaterThan(relative.xz, brush.upper.xz + 0.0001))) continue;
-        if (relative.y < brush.lower.y - 0.0626 || relative.y > brush.upper.y + 0.0001) continue;
+        if (anchored) {
+            // Authored plant planes can extend above their owning cell (the
+            // large berry bush reaches 18 pixels). Match the encoded root,
+            // then clamp those vertices to the strand's tip displacement.
+            if (ownerY < brush.lower.y - 0.0001 || ownerY >= brush.upper.y - 0.0001) continue;
+        } else if (relative.y < brush.lower.y - 0.0626 || relative.y > brush.upper.y + 0.0001) continue;
         float height = clamp(relative.y - brush.lower.y, 0.0, brush.upper.w - 1.0);
         int first = int(brush.lower.w);
         int node = int(floor(height));

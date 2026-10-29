@@ -41,6 +41,16 @@ public final class FireGeometry {
         return HEIGHT * (width + length) / 2;
     }
 
+    /** Same support contract as supportBoxes, without constructing rendering geometry for a boolean query. */
+    public static boolean hasSupport(BlockGetter level, BlockPos pos) {
+        var state = level.getBlockState(pos);
+        if (state.isAir() || state.is(Blocks.SNOW) || state.is(Blocks.SNOW_BLOCK)
+                || state.getBlock() instanceof BaseFireBlock) return false;
+        return state.getBlock() instanceof FenceBlock || state.getBlock() instanceof FenceGateBlock
+                || state.getBlock() instanceof WallSignBlock || state.getBlock() instanceof StandingSignBlock
+                || !state.getShape(level, pos).isEmpty();
+    }
+
     public static List<AABB> supportBoxes(BlockGetter level, BlockPos pos) {
         var state = level.getBlockState(pos);
         if (state.isAir() || state.is(Blocks.SNOW) || state.is(Blocks.SNOW_BLOCK)

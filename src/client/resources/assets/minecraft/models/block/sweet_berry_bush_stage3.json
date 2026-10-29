@@ -1,0 +1,7 @@
+{
+  "parent": "minecraft:block/sweet_berry_bush_stage2",
+  "textures": {
+    "1": "minecraft:block/sweet_berry_bush_stage3",
+    "particle": "#1"
+  }
+}

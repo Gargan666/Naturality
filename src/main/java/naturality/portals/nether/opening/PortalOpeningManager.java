@@ -64,6 +64,8 @@ public final class PortalOpeningManager {
         Opening opening = new Opening(min, max, access.naturality$axis(), List.copyOf(fires), level.getGameTime());
         openings.add(opening);
         opening.notifyNewViewers(level);
+        // Replace ignition immediately; only the portal's reveal animation remains.
+        shape.createPortalBlocks(level);
         return true;
     }
 
@@ -71,12 +73,6 @@ public final class PortalOpeningManager {
         if (level.isClientSide()) return clientOpening.test(level, pos);
         return ACTIVE.getOrDefault(level, List.of()).stream()
             .anyMatch(o -> o.contains(pos) && !PortalOpeningTiming.ready(level.getGameTime() - o.start));
-    }
-
-    public static boolean fadingFire(Level level, BlockPos pos) {
-        if (level.isClientSide()) return false;
-        return ACTIVE.getOrDefault(level, List.of()).stream()
-            .anyMatch(o -> !o.placed && o.fires.contains(pos));
     }
 
     private static void tick(ServerLevel level) {
@@ -92,12 +88,6 @@ public final class PortalOpeningManager {
                 continue;
             }
             o.notifyNewViewers(level);
-            if (!o.placed && age >= PortalOpeningTiming.FIRE_TICKS) {
-                // Revalidate before replacing air/fire; never overwrite a player's newly placed block.
-                var state = Blocks.NETHER_PORTAL.defaultBlockState().setValue(NetherPortalBlock.AXIS, o.axis);
-                o.placed = true;
-                BlockPos.betweenClosed(o.min, o.max).forEach(pos -> level.setBlock(pos, state, 18));
-            }
             if (!o.playedOpeningSound && age >= PortalOpeningTiming.READY_TICK) {
                 o.playedOpeningSound = true;
                 // A normal positional sound, once per opening, at the same transition as the visual pulse.
@@ -117,7 +107,6 @@ public final class PortalOpeningManager {
         final List<BlockPos> fires;
         final long start;
         final Set<UUID> notified = new HashSet<>();
-        boolean placed;
         boolean playedOpeningSound;
         Opening(BlockPos min, BlockPos max, Direction.Axis axis, List<BlockPos> fires, long start) {
             this.min = min; this.max = max; this.axis = axis; this.fires = fires; this.start = start;
@@ -130,10 +119,8 @@ public final class PortalOpeningManager {
             for (BlockPos p : BlockPos.betweenClosed(min, max)) {
                 if (!naturality.api.worlds.LoadedChunks.has(level, p)) return false;
                 var state = level.getBlockState(p);
-                if (placed ? !state.is(Blocks.NETHER_PORTAL) || state.getValue(NetherPortalBlock.AXIS) != axis
-                    : !state.isAir() && !state.is(BlockTags.FIRE)) return false;
+                if (!state.is(Blocks.NETHER_PORTAL) || state.getValue(NetherPortalBlock.AXIS) != axis) return false;
             }
-            if (!placed && fires.stream().noneMatch(p -> level.getBlockState(p).is(BlockTags.FIRE))) return false;
             PortalShape shape = PortalShape.findAnyShape(level, min, axis);
             PortalShapeAccessor access = (PortalShapeAccessor) shape;
             int width = axis == Direction.Axis.X ? max.getX() - min.getX() + 1 : max.getZ() - min.getZ() + 1;
@@ -160,10 +147,9 @@ public final class PortalOpeningManager {
 
     /** Durations in game ticks; shared by the server lock and client animation. */
     public static final class PortalOpeningTiming {
-        public static final int FIRE_TICKS = 10;
         public static final int REVEAL_TICKS = 20;
         public static final int FLASH_TICKS = 40;
-        public static final int READY_TICK = FIRE_TICKS + REVEAL_TICKS;
+        public static final int READY_TICK = REVEAL_TICKS;
         public static final int END_TICK = READY_TICK + FLASH_TICKS;
 
         private PortalOpeningTiming() { }
@@ -176,8 +162,7 @@ public final class PortalOpeningManager {
             t = clamp(t);
             return t == 1 ? 1 : 1 - (float) Math.pow(2, -10 * t);
         }
-        public static float reveal(float age) { return clamp((age - FIRE_TICKS) / REVEAL_TICKS); }
-        public static float fireAlpha(float age) { return 1 - clamp(age / FIRE_TICKS); }
+        public static float reveal(float age) { return clamp(age / REVEAL_TICKS); }
         public static boolean ready(float age) { return age >= READY_TICK; }
         public static float pulse(float age) {
             return !ready(age) ? 0 : 1 - expoOut((age - READY_TICK) / FLASH_TICKS);

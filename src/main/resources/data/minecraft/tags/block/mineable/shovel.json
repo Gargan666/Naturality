@@ -4,6 +4,10 @@
     "naturality:sediment",
     "naturality:sand_layer",
     "naturality:ash",
-    "naturality:ash_block"
+    "naturality:ash_block",
+    {
+      "id": "naturality:charred_grass_block",
+      "required": false
+    }
   ]
 }

@@ -9,6 +9,7 @@ import naturality.Naturality;
 import naturality.bootstrap.ContentRegistration.NaturalityBlocks;
 import net.fabricmc.fabric.api.biome.v1.BiomeModifications;
 import net.fabricmc.fabric.api.biome.v1.BiomeSelectors;
+import net.fabricmc.fabric.api.tag.convention.v2.ConventionalBiomeTags;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Registry;
@@ -87,7 +88,11 @@ public record CloverPatchesFeature() implements Feature {
     private static BlockPos surface(WorldGenLevel level, int x, int z) {
         int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
         BlockPos pos = new BlockPos(x, y, z);
-        return level.ensureCanWrite(pos) && level.isEmptyBlock(pos)
+        if (!level.ensureCanWrite(pos)) return null;
+        var biome = level.getBiome(pos);
+        // Check every candidate, including satellites and growth across biome borders.
+        if (biome.is(ConventionalBiomeTags.IS_HOT) || biome.is(ConventionalBiomeTags.IS_MUSHROOM)) return null;
+        return level.isEmptyBlock(pos)
             && NaturalityBlocks.CLOVERS.defaultBlockState().canSurvive(level, pos) ? pos : null;
     }
 

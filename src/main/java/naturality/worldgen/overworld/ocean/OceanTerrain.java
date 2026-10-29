@@ -27,6 +27,50 @@ import net.minecraft.world.level.levelgen.synth.SimplexNoise;
 /** Seeded ocean relief, evaluated before surface rules, structures and decoration. */
 @org.jspecify.annotations.NullMarked
 public record OceanTerrain(DensityFunction input, DensityFunction continents) implements DensityFunction {
+    /** Keep displaced pieces within the source chunk's structure-reference neighborhood. */
+    public static java.util.Optional<Structure.GenerationStub> findMonumentSite(Structure.GenerationContext context) {
+        int originX = context.chunkPos().getMinBlockX();
+        int originZ = context.chunkPos().getMinBlockZ();
+        // Do not consume the layout RNG while searching: reload regenerates rooms from the
+        // original start chunk's seed, while retaining the saved horizontal bounding box.
+        for (int radius = 0; radius <= 64; radius += 32) {
+            for (int dz = -radius; dz <= radius; dz += 32) {
+                for (int dx = -radius; dx <= radius; dx += 32) {
+                    if (radius != 0 && Math.max(Math.abs(dx), Math.abs(dz)) != radius) continue;
+                    int x = originX + dx, z = originZ + dz;
+                    int base = monumentBase(context, x - 29, z - 29, 23);
+                    if (!monumentSiteFits(context, x, z, base)) continue;
+                    var position = new BlockPos(x + 8, base, z + 8);
+                    var stub = new Structure.GenerationStub(position, builder -> {
+                        var direction = net.minecraft.core.Direction.Plane.HORIZONTAL.getRandomDirection(context.random());
+                        var piece = new net.minecraft.world.level.levelgen.structure.structures.OceanMonumentPieces.MonumentBuilding(
+                            context.random(), x - 29, z - 29, direction);
+                        moveMonument(piece, base);
+                        builder.addPiece(piece);
+                    });
+                    if (context.isValidBiome(stub)) return java.util.Optional.of(stub);
+                }
+            }
+        }
+        return java.util.Optional.empty();
+    }
+
+    private static boolean monumentSiteFits(Structure.GenerationContext context, int x, int z, int base) {
+        int sea = context.chunkGenerator().getSeaLevel();
+        // Check the clearing apron as well as the building, not just its center biome.
+        for (var biome : context.biomeResolver().getBiomesWithin(x, sea, z, 48)) {
+            if (!biome.is(BiomeTags.REQUIRED_OCEAN_MONUMENT_SURROUNDING)) return false;
+        }
+        for (int dz = -36; dz <= 36; dz += 4) for (int dx = -36; dx <= 36; dx += 4) {
+            int floor = context.chunkGenerator().getBaseHeight(x + dx, z + dz,
+                net.minecraft.world.level.levelgen.Heightmap.Types.OCEAN_FLOOR_WG,
+                context.heightAccessor(), context.randomState());
+            // Permit a shallow foundation cut, never a coastal wall or a buried roof.
+            if (floor > base + 3 || floor > sea - 28) return false;
+        }
+        return true;
+    }
+
     /** The monument's rooms are nested pieces, not entries in the structure start. */
     public interface MonumentParts {
         java.util.List<? extends @org.jspecify.annotations.NonNull StructurePiece> naturality$rooms();
@@ -37,18 +81,22 @@ public record OceanTerrain(DensityFunction input, DensityFunction continents) im
         if (!(context.chunkGenerator() instanceof net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator generator)
                 || !generator.stable(net.minecraft.world.level.levelgen.NoiseGeneratorSettings.OVERWORLD)) return;
         var box = piece.getBoundingBox();
+        moveMonument(piece, monumentBase(context, box.minX(), box.minZ(), box.getYSpan()));
+    }
+
+    private static int monumentBase(Structure.GenerationContext context, int west, int north, int height) {
+        var generator = context.chunkGenerator();
         int[] heights = new int[25];
         int index = 0;
         for (int z = 0; z < 5; z++) for (int x = 0; x < 5; x++) {
-            heights[index++] = generator.getBaseHeight(box.minX() + 5 + x * 12,
-                box.minZ() + 5 + z * 12, net.minecraft.world.level.levelgen.Heightmap.Types.OCEAN_FLOOR_WG,
+            heights[index++] = generator.getBaseHeight(west + 5 + x * 12,
+                north + 5 + z * 12, net.minecraft.world.level.levelgen.Heightmap.Types.OCEAN_FLOOR_WG,
                 context.heightAccessor(), context.randomState());
         }
         java.util.Arrays.sort(heights);
         // Median follows the general floor rather than an isolated spire or ravine.
         // Keep the roof submerged and a small foundation clearance over that floor.
-        int target = Math.min(heights[12] + 1, generator.getSeaLevel() - box.getYSpan() - 1);
-        moveMonument(piece, target);
+        return Math.min(heights[12] + 1, generator.getSeaLevel() - height - 1);
     }
 
     public static void moveMonument(StructurePiece piece, int baseY) {

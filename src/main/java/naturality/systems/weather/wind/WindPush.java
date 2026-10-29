@@ -27,6 +27,12 @@ public final class WindPush {
             0x57494E44L, 1 - Math.pow(.65, 1.0 / 6000), 8000, 24000, 4200,
             profile -> profile.minWind, profile -> profile.maxWind);
 
+    /** Short Nether gusts followed by a guaranteed calm interval before the next random roll. */
+    public static final naturality.systems.weather.framework.WeatherSystem.ChannelDefinition NETHER_CYCLE =
+        new naturality.systems.weather.framework.WeatherSystem.ChannelDefinition(
+            CYCLE.seedSalt(), CYCLE.startChance(), 2400, 6000, CYCLE.noisePeriod(),
+            profile -> profile.minWind, profile -> profile.maxWind, 2400, 6000);
+
     /** Nether uses the full slider range while retaining ordinary wind motion and audio. */
     public static WeatherState netherState(WeatherState state) {
         return new WeatherState(0, state.wind(), 50, state.direction(), true);
@@ -168,7 +174,7 @@ public final class WindPush {
             java.util.Arrays.fill(args,null);RAW.get().depth--;
         }
         public static boolean eligible(BlockState state) {
-            return state.is(BlockTags.LEAVES) || state.getBlock() instanceof VineBlock || state.is(Blocks.SNOW);
+            return state.getBlock() instanceof VineBlock || state.is(Blocks.SNOW);
         }
         public static boolean active(BlockGetter view) {
             if(!(view instanceof Level level))return false;
@@ -213,6 +219,9 @@ public final class WindPush {
             return result;
         }
         private static Vec3 compute(Level level,BlockPos pos,BlockState state,WeatherState weather) {
+            // Leaves sway only in the renderer. Snow and attached vines also
+            // consult this helper for their physical support's anchor.
+            if(state.is(BlockTags.LEAVES))return Vec3.ZERO;
             if(state.is(Blocks.SNOW)) {
                 for(int depth=1;depth<=7;depth++) {
                     var support=pos.below(depth); var below=level.getBlockState(support);
@@ -223,9 +232,7 @@ public final class WindPush {
             }
             if(!state.getFluidState().isEmpty() || !level.dimension().equals(Level.NETHER)
                     && !WindShelter.hasOpenSkyPath(level,pos,p -> level.getBrightness(LightLayer.SKY,p)))return Vec3.ZERO;
-            boolean leaf=state.is(BlockTags.LEAVES);
-            Vec3 shift=broad(weather,level.getGameTime(),pos,leaf);
-            if(leaf)return shift;
+            Vec3 shift=broad(weather,level.getGameTime(),pos,false);
             // Represent the vine's bending top segment by the mean of its free
             // displacement and its anchored upper edge, keeping the shape rigid.
             if(!level.getBlockState(pos.above()).is(state.getBlock())) {

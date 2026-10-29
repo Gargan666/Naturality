@@ -119,6 +119,7 @@ public class NaturalityClient implements ClientModInitializer {
         naturality.client.systems.sleep.SleepVisuals.register(naturality.client.fluids.water.WaterIntersection.WaterfallSplash::tick);
         naturality.client.systems.sleep.SleepVisuals.register(naturality.client.fluids.water.WaterIntersection.WaterEntrySplash::tick);
         naturality.client.particles.smoke.SmokeParticle.initialize();
+        naturality.client.blocks.fire.FireAsh.initialize();
         naturality.client.particles.potionclouds.FlatPotionSmokeParticle.initialize();
         if (DEATH_SMOKE.enabled()) naturality.client.particles.deathsmoke.DeathSmoke.DeathSmokeParticle.initialize();
         naturality.client.particles.flame.AnimatedFlameParticle.initialize();

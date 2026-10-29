@@ -79,6 +79,13 @@ public final class SurfaceLayerModel extends WrapperBlockStateModel {
     private static final class LayerLightingModel extends WrapperBlockStateModel {
         private LayerLightingModel(BlockStateModel wrapped) { super(wrapped); }
 
+        @Override public @org.jspecify.annotations.Nullable Object createGeometryKey(BlockAndTintGetter level,
+                BlockPos pos, BlockState state, RandomSource random) {
+            // Granular layer visibility depends on neighboring shapes, not just state.
+            return state.getBlock() instanceof naturality.api.blocks.FallingLayerBlock
+                ? null : wrapped.createGeometryKey(level, pos, state, random);
+        }
+
         @Override
         public void emitQuads(QuadEmitter emitter, BlockAndTintGetter level, BlockPos pos, BlockState state,
                 RandomSource random, Predicate<@org.jspecify.annotations.Nullable Direction> cull) {
@@ -91,7 +98,15 @@ public final class SurfaceLayerModel extends WrapperBlockStateModel {
                         : net.fabricmc.fabric.api.client.renderer.v1.mesh.ShadeMode.ENHANCED);
                 return true;
             });
-            try { wrapped.emitQuads(emitter,level,pos,state,random,cull); }
+            Predicate<@org.jspecify.annotations.Nullable Direction> visibility = cull;
+            if (state.getBlock() instanceof naturality.api.blocks.FallingLayerBlock
+                    && level.getBlockState(pos).equals(state)
+                    && (!naturality.blocks.ash.Ash.isLayer(state) || plainGeometry(level, pos))) {
+                var bounds = new AABB(0, 0, 0, 1, state.getValue(SnowLayerBlock.LAYERS) / 8.0, 1);
+                var faces = new SnowFaceVisibility(level, pos, Shapes.empty());
+                visibility = face -> cull.test(face) || face != null && !faces.visible(bounds, face);
+            }
+            try { wrapped.emitQuads(emitter,level,pos,state,random,visibility); }
             finally { emitter.popTransform(); }
         }
     }
@@ -906,7 +921,13 @@ public final class SurfaceLayerModel extends WrapperBlockStateModel {
                     if (support.is(BlockTags.LEAVES)) return Shapes.empty();
                     if (!support.is(state.getBlock())) break;
                 }
-                shape = layerShape(level,cell,state.getValue(SnowLayerBlock.LAYERS));
+                shape = plainGeometry(level, cell)
+                    ? Block.column(16, 0, state.getValue(SnowLayerBlock.LAYERS) * 2)
+                    : layerShape(level,cell,state.getValue(SnowLayerBlock.LAYERS));
+            } else if (state.getBlock() instanceof naturality.api.blocks.FallingLayerBlock) {
+                // Sand intentionally keeps non-occluding light behavior, but its
+                // opaque layer volume still hides neighboring layer faces.
+                shape = state.getShape(level, cell);
             } else {
                 // Cutout/translucent blocks must never act as solid face occluders.
                 if (!state.canOcclude()) return Shapes.empty();

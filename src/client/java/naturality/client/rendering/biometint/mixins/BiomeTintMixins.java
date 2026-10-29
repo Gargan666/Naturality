@@ -38,9 +38,14 @@ public final class BiomeTintMixins {
     @Mixin(BlockTintSources.class)
     @org.jspecify.annotations.NullMarked
     public static abstract class BiomeTintSourceMixin {
-        @Inject(method = {"grass", "grassBlock", "doubleTallGrass", "sugarCane", "foliage", "dryFoliage", "water"},
+        @Inject(method = {"grass", "grassBlock", "doubleTallGrass", "sugarCane", "foliage", "dryFoliage"},
             at = @At("RETURN"), cancellable = true)
         private static void naturality$identifyBiomeSource(CallbackInfoReturnable<BlockTintSource> cir) {
+            cir.setReturnValue(new BiomeTint.Source(cir.getReturnValue(), true));
+        }
+
+        @Inject(method = "water", at = @At("RETURN"), cancellable = true)
+        private static void naturality$identifyWaterSource(CallbackInfoReturnable<BlockTintSource> cir) {
             cir.setReturnValue(new BiomeTint.Source(cir.getReturnValue()));
         }
     }

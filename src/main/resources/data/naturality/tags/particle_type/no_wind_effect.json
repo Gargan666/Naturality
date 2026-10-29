@@ -1,6 +1,7 @@
 {
   "replace": false,
   "values": [
+    "naturality:drip_wall",
     "naturality:star_trail",
     "minecraft:firefly",
     "minecraft:egg_crack",

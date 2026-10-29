@@ -28,6 +28,7 @@ import org.joml.Quaternionf;
 @org.jspecify.annotations.NullMarked
 public final class ParticleWeather {
     public static final int MAX_CLUSTERS = 1536;
+    public static final double RAIN_FALL_SPEED = 0.7;
     private static final double MAX_CARD_EXTENT = 3.4;
     private static final ArrayList<WeatherClusterParticle> ACTIVE = new ArrayList<>();
     private static final RandomSource RANDOM = RandomSource.create();
@@ -35,6 +36,7 @@ public final class ParticleWeather {
     private ParticleWeather() {}
     public static void initialize() {
         WeatherClusterParticle.initialize();
+        naturality.client.systems.weather.overworld.rain.RainWallDrips.initialize();
         naturality.client.systems.sleep.SleepVisuals.register(ParticleWeather::tick);
     }
     public static boolean enabled(ClientLevel level) { return naturality.config.live.NaturalityConfig.get().effects.weatherParticles && level.canHaveWeather() && weatherState(level) != null; }
@@ -208,7 +210,7 @@ public final class ParticleWeather {
             double phase=random.nextDouble()*Math.PI*2;
             sway=snow?new WeatherSway(phase):null;
 
-            fallSpeed = snow ? .055 + random.nextDouble() * .035 : .6 + random.nextDouble() * .2;
+            fallSpeed = snow ? .055 + random.nextDouble() * .035 : RAIN_FALL_SPEED - .1 + random.nextDouble() * .2;
             quadSize = 1.8F + random.nextFloat() * .5F;
             if (menuPreview) quadSize *= 2;
             lifetime = snow ? 240 : 70;
@@ -286,6 +288,15 @@ public final class ParticleWeather {
             }
             // The weather card may visually overlap the ground while its center is
             // still falling. Remove it only once the center reaches the surface.
+            if (!snow) {
+                // Sample individual rain paths across the card without simulating every painted drop.
+                double offsetX = (random.nextDouble() * 2 - 1) * quadSize;
+                double offsetY = (random.nextDouble() * 2 - 1) * quadSize;
+                double offsetZ = (random.nextDouble() * 2 - 1) * quadSize;
+                naturality.client.systems.weather.overworld.rain.RainWallDrips.impact(level,
+                    new Vec3(x + offsetX, y + offsetY, z + offsetZ),
+                    new Vec3(nx + offsetX, ny + offsetY, nz + offsetZ));
+            }
             double clearance = ParticleWeather.clearance(level,nx,ny,nz,0);
             if (clearance <= 0) { remove(); return; }
             var eye = weather.eye();

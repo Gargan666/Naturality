@@ -2,6 +2,7 @@ package naturality.blocks.fire.mixins;
 
 import it.unimi.dsi.fastutil.longs.LongSet;
 import naturality.blocks.fire.FireGeometry;
+import naturality.blocks.fire.FirePropagation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.InsideBlockEffectApplier;
 import net.minecraft.world.level.BlockGetter;
@@ -29,6 +30,66 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 /** Feature integration hooks; each nested type retains its independent Mixin target and gate. */
 public final class FireMixins {
     private FireMixins() {}
+
+    @Mixin(FireBlock.class)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class FirePropagationMixin {
+        @com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod(method = "tick")
+        private void naturality$propagation(BlockState state, net.minecraft.server.level.ServerLevel level,
+                BlockPos pos, net.minecraft.util.RandomSource random, Operation<Void> original) {
+            FirePropagation.tick(level, pos, random, () -> original.call(state, level, pos, random));
+        }
+
+        @WrapOperation(method = "tick", at = @At(value = "INVOKE",
+                target = "Lnet/minecraft/server/level/ServerLevel;setBlockAndUpdate(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)Z"))
+        private boolean naturality$spreadAncestry(net.minecraft.server.level.ServerLevel level, BlockPos pos,
+                BlockState state, Operation<Boolean> original) {
+            return FirePropagation.spread(level, pos, () -> original.call(level, pos, state));
+        }
+
+        @WrapOperation(method = "tick", at = {
+                @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerLevel;removeBlock(Lnet/minecraft/core/BlockPos;Z)Z", ordinal = 2),
+                @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ServerLevel;removeBlock(Lnet/minecraft/core/BlockPos;Z)Z", ordinal = 3)})
+        private boolean naturality$afterburn(net.minecraft.server.level.ServerLevel level, BlockPos pos,
+                boolean moved, Operation<Boolean> original) {
+            return !FirePropagation.retain(level, pos) && original.call(level, pos, moved);
+        }
+
+        @WrapOperation(method = "checkBurnOut", at = @At(value = "INVOKE",
+                target = "Lnet/minecraft/world/level/Level;setBlockAndUpdate(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)Z"))
+        private boolean naturality$consumedIntoFire(net.minecraft.world.level.Level level, BlockPos pos,
+                BlockState state, Operation<Boolean> original) {
+            return level instanceof net.minecraft.server.level.ServerLevel server
+                    ? FirePropagation.beginConsumption(server, pos, () -> original.call(level, pos, state))
+                    : original.call(level, pos, state);
+        }
+
+        @WrapOperation(method = "checkBurnOut", at = @At(value = "INVOKE",
+                target = "Lnet/minecraft/world/level/Level;removeBlock(Lnet/minecraft/core/BlockPos;Z)Z"))
+        private boolean naturality$consumedIntoAir(net.minecraft.world.level.Level level, BlockPos pos,
+                boolean moved, Operation<Boolean> original) {
+            return level instanceof net.minecraft.server.level.ServerLevel server
+                    ? FirePropagation.beginConsumption(server, pos, () -> original.call(level, pos, moved))
+                    : original.call(level, pos, moved);
+        }
+    }
+
+    @Mixin(FireBlock.class)
+    @org.jspecify.annotations.NullMarked
+    public interface FireFuelAccessor {
+        @org.spongepowered.asm.mixin.gen.Invoker("getBurnOdds")
+        int naturality$burnOdds(BlockState state);
+    }
+
+    @Mixin(net.minecraft.world.level.chunk.LevelChunk.class)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class FireTrackingMixin {
+        @Inject(method = "setBlockState", at = @At("RETURN"))
+        private void naturality$track(BlockPos pos, BlockState state, int flags,
+                CallbackInfoReturnable<@org.jspecify.annotations.Nullable BlockState> cir) {
+            FirePropagation.changed((net.minecraft.world.level.chunk.LevelChunk) (Object) this, pos, cir.getReturnValue());
+        }
+    }
 
     @Mixin(Entity.class)
     @org.jspecify.annotations.NullMarked
@@ -107,7 +168,7 @@ public final class FireMixins {
     @org.jspecify.annotations.NullMarked
     public static abstract class FirePlacementMixin {
         private static boolean naturality$support(BlockGetter level, BlockPos pos) {
-            return !FireGeometry.supportBoxes(level, pos).isEmpty();
+            return FireGeometry.hasSupport(level, pos);
         }
         private static boolean naturality$attached(BlockGetter level, BlockPos pos) {
             for (Direction direction : Direction.values())

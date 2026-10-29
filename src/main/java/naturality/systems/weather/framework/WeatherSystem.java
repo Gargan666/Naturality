@@ -55,13 +55,19 @@ public final class WeatherSystem {
     // Built-in channel registrations; the items own their cycle parameters.
     private static final ChannelDefinition RAIN = naturality.systems.weather.overworld.rain.RainWeather.CYCLE;
     private static final ChannelDefinition WIND = naturality.systems.weather.wind.WindPush.CYCLE;
+    private static final ChannelDefinition NETHER_WIND = naturality.systems.weather.wind.WindPush.NETHER_CYCLE;
 
     public record ChannelDefinition(long seedSalt, double startChance, int minimumDuration,
             int maximumDuration, int noisePeriod, java.util.function.ToIntFunction<WeatherProfile> minimum,
-            java.util.function.ToIntFunction<WeatherProfile> maximum) {
+            java.util.function.ToIntFunction<WeatherProfile> maximum, int minimumCalm, int maximumCalm) {
+        public ChannelDefinition(long seedSalt, double startChance, int minimumDuration, int maximumDuration,
+                int noisePeriod, java.util.function.ToIntFunction<WeatherProfile> minimum,
+                java.util.function.ToIntFunction<WeatherProfile> maximum) {
+            this(seedSalt, startChance, minimumDuration, maximumDuration, noisePeriod, minimum, maximum, 0, 0);
+        }
         private float tick(WeatherChannel channel, boolean advance, long time, WeatherProfile profile, int rate) {
             return channel.tick(advance, time, minimum.applyAsInt(profile), maximum.applyAsInt(profile),
-                startChance, minimumDuration, maximumDuration, noisePeriod, rate);
+                startChance, minimumDuration, maximumDuration, noisePeriod, rate, minimumCalm, maximumCalm);
         }
     }
 
@@ -201,7 +207,8 @@ public final class WeatherSystem {
         var rainCycle = RAIN_CYCLES.computeIfAbsent(level, _ -> new WeatherChannel(seed ^ RAIN.seedSalt()));
         var windCycle = WIND_CYCLES.computeIfAbsent(level, _ -> new WeatherChannel(seed ^ WIND.seedSalt()));
         float rain = RAIN.tick(rainCycle, cycle, time, p, rate);
-        float wind = WIND.tick(windCycle, cycle, time, p, rate);
+        var windDefinition = level.dimension().equals(Level.NETHER) ? NETHER_WIND : WIND;
+        float wind = windDefinition.tick(windCycle, cycle, time, p, rate);
 
         float temp = old == null ? 50 : automaticTemperature(p, seed, time);
         float direction = automaticDirection(seed, time);
@@ -300,27 +307,37 @@ public final class WeatherSystem {
         private boolean active;
         private int remaining;
         private int age;
+        private int calmRemaining;
         private float value;
         private float initialBoost;
 
         private WeatherChannel(long seed) { this.seed = seed; random = new SavedRandom(seed); }
         private Map<String,Long> snapshot() {
             return Map.of("random",random.state(),"active",active?1L:0L,"remaining",(long)remaining,"age",(long)age,
-                "value",EnvironmentWorldData.bits(value),"boost",EnvironmentWorldData.bits(initialBoost));
+                "value",EnvironmentWorldData.bits(value),"boost",EnvironmentWorldData.bits(initialBoost),"calm",(long)calmRemaining);
         }
         private void restore(Map<String,Long> data) {
             if(data.isEmpty())return;
             random.restore(data.getOrDefault("random",random.state()));active=data.getOrDefault("active",0L)!=0;
             remaining=data.getOrDefault("remaining",0L).intValue();age=data.getOrDefault("age",0L).intValue();
             value=EnvironmentWorldData.number(data,"value");initialBoost=EnvironmentWorldData.number(data,"boost");
+            calmRemaining=Math.max(0,data.getOrDefault("calm",0L).intValue());
         }
 
         private float tick(boolean advance, long time, int minimum, int maximum, double startChance,
-                int minimumDuration, int maximumDuration, int noisePeriod, int rate) {
+                int minimumDuration, int maximumDuration, int noisePeriod, int rate, int minimumCalm, int maximumCalm) {
             if (!advance) return value;
             if (active) {
+                // Bound older saved events to the current item duration and honor accelerated clocks.
+                remaining = Math.min(remaining, maximumDuration - age) - rate;
                 age += rate;
-                if (--remaining <= 0) active = false;
+                if (remaining <= 0) {
+                    active = false;
+                    if (maximumCalm > 0) calmRemaining = minimumCalm + random.nextInt(maximumCalm - minimumCalm + 1);
+                }
+            } else if (value <= .01F && calmRemaining > 0) {
+                // Calm time begins after the wind has completely faded, not while it is dying down.
+                calmRemaining = Math.max(0, calmRemaining - rate);
             } else if (value <= .01F && random.nextDouble() < PreviewEnvironment.chance(startChance, rate)) {
                 active = true;
                 age = 0;

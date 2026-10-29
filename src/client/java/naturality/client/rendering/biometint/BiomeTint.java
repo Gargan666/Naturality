@@ -24,10 +24,12 @@ public final class BiomeTint {
     }
 
     /** Retain the native item/particle contracts; only terrain vertices use the field. */
-    public record Source(BlockTintSource original) implements BlockTintSource {
+    public record Source(BlockTintSource original, boolean foliage) implements BlockTintSource {
+        public Source(BlockTintSource original) { this(original, false); }
         @Override public int color(BlockState state) { return original.color(state); }
         @Override public int colorInWorld(BlockState state, BlockAndTintGetter level, BlockPos pos) {
-            return original.colorInWorld(state, level, pos);
+            int color = original.colorInWorld(state, level, pos);
+            return foliage ? naturality.client.blocks.fire.FireFoliageTint.tint(color, pos) : color;
         }
         @Override public int colorAsTerrainParticle(BlockState state, BlockAndTintGetter level, BlockPos pos) {
             return original.colorAsTerrainParticle(state, level, pos);

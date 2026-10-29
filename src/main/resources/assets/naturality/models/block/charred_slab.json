@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/slab",
+  "textures": {
+    "bottom": "naturality:block/charred_planks",
+    "side": "naturality:block/charred_planks",
+    "top": "naturality:block/charred_planks"
+  }
+}

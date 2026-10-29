@@ -1,1 +1,38 @@
-{ "replace": false, "values": ["naturality:echo_coral"] }
+{
+  "replace": false,
+  "values": [
+    "naturality:echo_coral",
+    {
+      "id": "naturality:charred_log",
+      "required": false
+    },
+    {
+      "id": "naturality:charred_planks",
+      "required": false
+    },
+    {
+      "id": "naturality:charred_stairs",
+      "required": false
+    },
+    {
+      "id": "naturality:charred_slab",
+      "required": false
+    },
+    {
+      "id": "naturality:charred_fence",
+      "required": false
+    },
+    {
+      "id": "naturality:charred_fence_gate",
+      "required": false
+    },
+    {
+      "id": "naturality:charred_button",
+      "required": false
+    },
+    {
+      "id": "naturality:charred_pressure_plate",
+      "required": false
+    }
+  ]
+}

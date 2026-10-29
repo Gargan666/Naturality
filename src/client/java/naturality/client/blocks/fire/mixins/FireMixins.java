@@ -39,6 +39,53 @@ import net.minecraft.client.renderer.extract.LevelExtractor;
 public final class FireMixins {
     private FireMixins() {}
 
+    /** RGB carries exact shape bytes, not a color that may receive Nether's 0.9 shade. */
+    @Mixin(targets="net.fabricmc.fabric.impl.client.indigo.renderer.aocalc.FlatLighter", remap=false)
+    public static abstract class FireDataLightingMixin {
+        @Inject(method="applyDirectionalBrightness", at=@At("HEAD"), cancellable=true)
+        private void naturality$unshadedData(net.minecraft.world.level.CardinalLighting lighting,
+                @org.spongepowered.asm.mixin.injection.Coerce Object quad, boolean vanillaShade, CallbackInfo ci) {
+            if (((net.fabricmc.fabric.api.client.renderer.v1.mesh.QuadView) quad).tag()
+                    == naturality.client.blocks.fire.SurfaceFireModel.DATA_TAG) ci.cancel();
+        }
+    }
+
+    @org.spongepowered.asm.mixin.Pseudo
+    @Mixin(targets="net.caffeinemc.mods.sodium.client.model.light.data.QuadLightData", remap=false)
+    public interface SodiumFireLightAccess {
+        @org.spongepowered.asm.mixin.gen.Accessor("br") float[] naturality$brightness();
+    }
+
+    @org.spongepowered.asm.mixin.Pseudo
+    @Mixin(targets="net.caffeinemc.mods.sodium.client.render.model.AbstractBlockRenderContext", remap=false)
+    public static abstract class SodiumFireDataLightingMixin {
+        @WrapOperation(method="shadeQuad", at=@At(value="INVOKE", target="Lnet/caffeinemc/mods/sodium/client/model/light/LightPipeline;calculate(Lnet/caffeinemc/mods/sodium/client/model/quad/ModelQuadView;Lnet/minecraft/core/BlockPos;Lnet/caffeinemc/mods/sodium/client/model/light/data/QuadLightData;Lnet/minecraft/core/Direction;Lnet/minecraft/core/Direction;Lnet/minecraft/core/Direction;Z)V"))
+        private void naturality$unshadedData(@org.spongepowered.asm.mixin.injection.Coerce Object pipeline,
+                @org.spongepowered.asm.mixin.injection.Coerce Object quad, net.minecraft.core.BlockPos pos,
+                @org.spongepowered.asm.mixin.injection.Coerce Object light, net.minecraft.core.Direction cull,
+                net.minecraft.core.Direction face, net.minecraft.core.Direction shade, boolean enhanced, Operation<Void> original) {
+            original.call(pipeline, quad, pos, light, cull, face, shade, enhanced);
+            if (naturality.client.api.rendering.RendererQuads.sodium(quad).tag() == naturality.client.blocks.fire.SurfaceFireModel.DATA_TAG)
+                java.util.Arrays.fill(((SodiumFireLightAccess) light).naturality$brightness(), 1);
+        }
+    }
+
+    @Mixin(net.minecraft.world.level.chunk.LevelChunk.class)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class FireCeilingTrackingMixin {
+        @Inject(method = "setBlockState", at = @At("RETURN"))
+        private void naturality$ceiling(net.minecraft.core.BlockPos pos, net.minecraft.world.level.block.state.BlockState state, int flags,
+                org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<net.minecraft.world.level.block.state.@org.jspecify.annotations.Nullable BlockState> cir) {
+            naturality.client.blocks.fire.SurfaceFireModel.changed((net.minecraft.world.level.chunk.LevelChunk) (Object) this, pos, cir.getReturnValue());
+        }
+    }
+
+    @Mixin(net.minecraft.client.renderer.GameRenderer.class)
+    public static abstract class FireAnimationFrameMixin {
+        @Inject(method = "render", at = @At("HEAD"))
+        private void naturality$fireFrame(CallbackInfo ci) { ProceduralFire.beginFrame(); }
+    }
+
     @Mixin(RenderTypeFeatureRenderer.class)
     @org.jspecify.annotations.NullMarked
     public static abstract class EntityFireBindingsMixin {

@@ -264,3 +264,11 @@ textures/item/four_leaf_clover.png supplies the guaranteed Four Leaf Clovers dro
 
 GIANT LILYPAD
 textures/block/giant_lilypad.png supplies the full 2x2 texture; each vanilla lilypad plane samples its matching quarter, with vanilla world/item tinting. textures/item/giant_lilypad.png is an exact top-left-quarter crop for the inventory sprite; refresh that crop when the source changes.
+
+SWEET BERRY BUSH MODELS
+The supplied bush stage1/2/3 exports are integrated as vanilla age 0/1/2 overrides
+in src/client/resources/assets/minecraft/models/block/sweet_berry_bush_stage0/1/2.json.
+Age 3 inherits age 2 geometry and switches only the shared stage texture.
+All cube and crossed-plane UVs are preserved; every face and the particle sprite
+use the same stage texture. These intentional vanilla overrides are packaged
+directly; no berry-bush model generator or safekeeping-folder dependency is used.

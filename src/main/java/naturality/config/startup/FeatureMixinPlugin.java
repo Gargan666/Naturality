@@ -82,6 +82,7 @@ public final class FeatureMixinPlugin implements IMixinConfigPlugin {
         if (name.startsWith("GhastCrash")) return GHAST_PHYSICS.enabled();
         if (name.equals("ArrowImpactMixin")) return ARROW_IMPACT_EVENTS.enabled();
         if (name.equals("FireballImpactMixin")) return FIREBALL_IMPACT_EVENTS.enabled();
+        if (name.equals("FirePropagationMixin") || name.equals("FireTrackingMixin") || name.equals("FireFuelAccessor")) return FIRE_PROPAGATION.enabled();
         if (name.startsWith("MobDeath")) return MOB_DEATH_PIXELS.enabled();
         if (name.startsWith("DeathSmoke")) return DEATH_SMOKE.enabled();
         if (name.equals("ExplosionParticleSizeMixin")) return EXPLOSION_PARTICLES.enabled();
@@ -103,7 +104,7 @@ public final class FeatureMixinPlugin implements IMixinConfigPlugin {
         if (name.equals("EndTerrainDensityMixin")) return END_TERRAIN.enabled();
         if (name.equals("OceanTerrainMixin")) return OCEAN_TERRAIN.enabled();
         if (name.equals("NetherLavaLakesMixin") || name.equals("NetherLavaSurfaceMixin")
-                || name.equals("NetherLavaUpdatesMixin")) return NETHER_LAVA_LAKES.enabled();
+                || name.equals("NetherLavaUpdatesMixin") || name.equals("NetherLavaFortressMixin")) return NETHER_LAVA_LAKES.enabled();
         if (name.equals("BasaltDeltaPoolMixin")) return CONTENT.enabled();
         if (name.startsWith("OceanMonument")) return OCEAN_TERRAIN.enabled();
         if (name.equals("EndStoneTerrainMixin") || name.equals("SmallEndIslandLayersMixin")) return END_MATERIALS.enabled();

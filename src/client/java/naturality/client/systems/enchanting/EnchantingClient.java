@@ -411,7 +411,10 @@ public final class EnchantingClient {
             super.init();
             // Include the bookmark, clue tab (and its failure shake), and inventory.
             int leftExtension = libraryOpen ? LIBRARY_WIDTH : 46;
-            int fullWidth = imageWidth + leftExtension;
+            // With the library closed, balance the clue-tab clearance on both sides so the
+            // book stays centered while the tab and its shake still fit in small windows.
+            int rightExtension = libraryOpen ? 0 : leftExtension;
+            int fullWidth = imageWidth + leftExtension + rightExtension;
             int fullHeight = imageHeight + 20;
             layoutScale = Math.min(1f, Math.min(Math.max(1, width - 8) / (float)fullWidth,
                 Math.max(1, height - 8) / (float)fullHeight));

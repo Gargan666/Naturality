@@ -27,6 +27,10 @@ import net.minecraft.world.level.levelgen.VerticalAnchor;
 import net.minecraft.world.level.levelgen.WorldGenerationContext;
 import net.minecraft.world.level.levelgen.material.MaterialRuleContext;
 import net.minecraft.world.level.levelgen.material.rule.MaterialRule;
+import net.minecraft.world.level.levelgen.structure.Structure;
+import net.minecraft.world.level.levelgen.structure.pieces.StructurePiecesBuilder;
+import net.minecraft.world.level.levelgen.structure.structures.NetherFortressStructure;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.levelgen.densityfunction.DensityFunction;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
@@ -40,6 +44,18 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /** Standard Nether only; lake beds and fluids run before surfaces and decoration. */
 public final class NetherLavaLakesMixins {
     private NetherLavaLakesMixins() {}
+
+    @Mixin(NetherFortressStructure.class)
+    public static abstract class NetherLavaFortressMixin {
+        @WrapOperation(method = "generatePieces", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/world/level/levelgen/structure/pieces/StructurePiecesBuilder;moveInsideHeights(Lnet/minecraft/util/RandomSource;II)V"))
+        private static void naturality$raiseFortresses(StructurePiecesBuilder builder, RandomSource random,
+                int min, int max, Operation<Void> original, @Local(argsOnly = true) Structure.GenerationContext context) {
+            boolean expanded = context.chunkGenerator() instanceof NoiseBasedChunkGenerator generator
+                && generator.stable(NoiseGeneratorSettings.NETHER);
+            original.call(builder, random, expanded ? min * 2 : min, expanded ? max * 2 : max);
+        }
+    }
 
     @Mixin(NoiseBasedChunkGenerator.class)
     @NullMarked

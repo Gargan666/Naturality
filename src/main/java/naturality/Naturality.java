@@ -31,6 +31,7 @@ public class Naturality implements ModInitializer {
             return;
         }
         naturality.effects.stunned.Stunned.initialize();
+        naturality.blocks.fire.FirePropagation.initialize();
         naturality.items.swords.SwordCounter.initialize();
         naturality.systems.enchanting.framework.Enchanting.initialize();
         naturality.systems.rotation.PlayerRotation.initialize();
@@ -39,6 +40,7 @@ public class Naturality implements ModInitializer {
         naturality.entities.arrows.ArrowImpactPayload.initialize();
         if (naturality.config.startup.FeatureConfig.Feature.CONTENT.enabled()) {
             NaturalityBlocks.initialize();
+            naturality.blocks.charred.CharredBlocks.initialize();
             naturality.blocks.lilypad.LilypadMotion.initialize();
             NaturalityItems.initialize();
             naturality.worldgen.overworld.clover.CloverPatchesFeature.initialize();

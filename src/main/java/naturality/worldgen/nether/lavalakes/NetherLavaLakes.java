@@ -104,7 +104,7 @@ public record NetherLavaLakes(DensityFunction input) implements DensityFunction 
 
             @Override public @Nullable BlockState computeSubstance(int x, int y, int z, double density) {
                 update = false;
-                if (density > 0 || y < 5 || y >= 123) {
+                if (density > 0 || y < 5 || y >= 251) {
                     BlockState state = original.computeSubstance(x, y, z, density);
                     update = original.shouldScheduleFluidUpdate();
                     return state;
@@ -280,7 +280,7 @@ public record NetherLavaLakes(DensityFunction input) implements DensityFunction 
                 outer = Math.max(outer, b.radius - distance);
                 if (b.core > 0) inner = Math.max(inner, b.core - distance);
             }
-            int level = inner >= 0 ? 35 : outer >= 0 ? 32 : 29;
+            int level = inner >= 0 ? 76 : outer >= 0 ? 64 : 52;
             double shore = inner >= 0 ? inner : outer >= 0 ? Math.min(outer, -inner) : -outer;
             Lake made = new Lake(level, shore);
             if (cache.size() >= 8192) cache.removeLast();
@@ -312,7 +312,7 @@ public record NetherLavaLakes(DensityFunction input) implements DensityFunction 
             double rough = detail.get(x / 12.0, z / 12.0);
             double broad = erosion.get(x / 29.0, z / 29.0);
             double interior = ease(lake.shoreDistance / 20);
-            double bed = lava - 2 - interior * (7 + broad + rough * .4);
+            double bed = lava - 2 - interior * (14 + broad * 2 + rough * .8);
             if (lake.shoreDistance < 2.5 && erosion.get(x / 16.0, z / 16.0) > .42) bed = lava - 1;
             Column made = new Column(lava, fallTop, bed);
             if (cache.size() >= 2048) cache.removeLast();

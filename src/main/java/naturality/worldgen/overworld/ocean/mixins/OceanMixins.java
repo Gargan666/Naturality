@@ -47,6 +47,15 @@ public final class OceanMixins {
     @Mixin(OceanMonumentStructure.class)
     @org.jspecify.annotations.NullMarked
     public static abstract class OceanMonumentHeightMixin {
+        @Inject(method = "findGenerationPoint", at = @At("HEAD"), cancellable = true)
+        private void naturality$rejectCoastalSites(Structure.GenerationContext context,
+                org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable<java.util.Optional<Structure.GenerationStub>> cir) {
+            if (context.chunkGenerator() instanceof NoiseBasedChunkGenerator generator
+                    && generator.stable(NoiseGeneratorSettings.OVERWORLD)) {
+                cir.setReturnValue(OceanTerrain.findMonumentSite(context));
+            }
+        }
+
         @WrapOperation(method = "generatePieces", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/world/level/levelgen/structure/structures/OceanMonumentStructure;createTopPiece(Lnet/minecraft/world/level/ChunkPos;Lnet/minecraft/world/level/levelgen/WorldgenRandom;)Lnet/minecraft/world/level/levelgen/structure/StructurePiece;"))
         private static StructurePiece naturality$seabedHeight(

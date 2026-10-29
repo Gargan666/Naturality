@@ -26,9 +26,21 @@ public final class GlassShine {
     private GlassShine() {}
 
     public static boolean isGlass(Identifier id) {
+        if (!id.getNamespace().equals("minecraft")) return false;
         String path = id.getPath();
-        return id.getNamespace().equals("minecraft") && (path.equals("block/glass")
-            || path.equals("block/glass_pane_top") || path.matches("block/[a-z_]+_stained_glass(?:_pane_top)?"));
+        if (path.equals("block/glass") || path.equals("block/glass_pane_top")) return true;
+        if (!path.startsWith("block/")) return false;
+        int end;
+        if (path.endsWith("_stained_glass_pane_top")) end = path.length() - "_stained_glass_pane_top".length();
+        else if (path.endsWith("_stained_glass")) end = path.length() - "_stained_glass".length();
+        else return false;
+        if (end <= "block/".length()) return false;
+        // This predicate runs for every terrain quad. Preserve [a-z_]+ without a Pattern/Matcher per face.
+        for (int i = "block/".length(); i < end; i++) {
+            char c = path.charAt(i);
+            if (c != '_' && (c < 'a' || c > 'z')) return false;
+        }
+        return true;
     }
 
     public static void loaded(Map<Identifier, TextureAtlasSprite> sprites) {

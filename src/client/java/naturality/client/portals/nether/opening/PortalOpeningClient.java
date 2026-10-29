@@ -127,20 +127,12 @@ public final class PortalOpeningClient {
             BlockState block = currentLevel.getBlockState(pos);
             Opening opening = entry.getValue();
             float age = currentLevel.getGameTime() - opening.start + partialTick;
-            boolean fire = block.is(BlockTags.FIRE) && opening.data.fires().contains(pos);
-            if (!fire && !block.is(Blocks.NETHER_PORTAL)) continue;
-            float progress = fire ? PortalOpeningTiming.fireAlpha(age) : PortalOpeningTiming.reveal(age);
+            if (!block.is(Blocks.NETHER_PORTAL)) continue;
+            float progress = PortalOpeningTiming.reveal(age);
             if (progress <= 0) continue;
-            int color = fire ? ARGB.colorFromFloat(progress, 1, 1, 1)
-                : ARGB.colorFromFloat(1, progress, PortalOpeningTiming.pulse(age), 1);
-            var layer = fire ? PortalOpeningRenderLayer.FIRE : progress >= 1
-                ? PortalOpeningRenderLayer.SOLID_PORTAL : PortalOpeningRenderLayer.PORTAL;
+            int color = ARGB.colorFromFloat(1, progress, PortalOpeningTiming.pulse(age), 1);
+            var layer = progress >= 1 ? PortalOpeningRenderLayer.SOLID_PORTAL : PortalOpeningRenderLayer.PORTAL;
             var model = client.getModelManager().getBlockStateModelSet().get(block);
-            if (fire) {
-                state.addFire(model, currentLevel, pos, block,
-                    Vec3.atLowerCornerOf(pos).subtract(camera.position()), progress);
-                continue;
-            }
             random.setSeed(block.getSeed(pos));
             parts.clear();
             model.collectParts(random, parts);
@@ -156,47 +148,23 @@ public final class PortalOpeningClient {
         if (!state.isEmpty()) output.add(state);
     }
 
-    /** Reuses actual baked fire/portal geometry and animated atlas UVs, rather than approximating a flame sprite. */
+    /** Reuses the actual baked portal geometry and animated atlas UVs. */
     public static final class PortalOpeningRenderState extends QuadParticleRenderState {
         private record Draw(BakedQuad quad, Vec3 offset, int color) { }
         private final Map<SingleQuadParticle.Layer, List<Draw>> draws = new HashMap<>();
-        private record FireDraw(float[] positions, float[] uv, int color) { }
-        private final List<FireDraw> fires = new ArrayList<>();
-        public void addFire(net.minecraft.client.renderer.block.dispatch.BlockStateModel model,
-                net.minecraft.client.renderer.block.BlockAndTintGetter level, net.minecraft.core.BlockPos pos,
-                net.minecraft.world.level.block.state.BlockState block, Vec3 offset, float alpha) {
-            var emitter = net.fabricmc.fabric.api.client.renderer.v1.Renderer.get().quadEmitter(q -> {
-                float[] positions = new float[12], uv = new float[8];
-                for (int i = 0; i < 4; i++) {
-                    positions[i * 3] = (float) (q.x(i) + offset.x);
-                    positions[i * 3 + 1] = (float) (q.y(i) + offset.y);
-                    positions[i * 3 + 2] = (float) (q.z(i) + offset.z);
-                    uv[i * 2] = q.u(i); uv[i * 2 + 1] = q.v(i);
-                }
-                fires.add(new FireDraw(positions, uv, (Math.round(alpha * 255) << 24)
-                    | (naturality.client.blocks.fire.ProceduralFire.seedColor(pos) & 0xFFFFFF)));
-            });
-            model.emitQuads(emitter, level, pos, block, net.minecraft.util.RandomSource.create(block.getSeed(pos)), _ -> false);
-        }
         private final int brightnessRange = PortalTextureBrightness.packedRange(net.minecraft.client.Minecraft.getInstance());
         public void addModelQuad(SingleQuadParticle.Layer layer, BakedQuad quad, Vec3 offset, int color) {
             draws.computeIfAbsent(layer, _ -> new ArrayList<>()).add(new Draw(quad, offset, color));
         }
         @Override public Set<SingleQuadParticle.Layer> layers() {
-            var layers = new HashSet<>(draws.keySet());
-            if (!fires.isEmpty()) layers.add(PortalOpeningRenderLayer.FIRE);
-            return layers;
+            return draws.keySet();
         }
-        @Override public boolean isEmpty() { return draws.isEmpty() && fires.isEmpty(); }
-        @Override public void clear() { draws.clear(); fires.clear(); }
+        @Override public boolean isEmpty() { return draws.isEmpty(); }
+        @Override public void clear() { draws.clear(); }
         @Override public void submit(SubmitNodeCollector collector, CameraRenderState camera) {
             if (!isEmpty()) collector.submitQuadParticleGroup(this);
         }
         @Override public void buildLayer(SingleQuadParticle.Layer layer, VertexConsumer buffer) {
-            if (layer == PortalOpeningRenderLayer.FIRE) for (var fire : fires) for (int i = 0; i < 4; i++) {
-                buffer.addVertex(fire.positions[i * 3], fire.positions[i * 3 + 1], fire.positions[i * 3 + 2])
-                    .setUv(fire.uv[i * 2], fire.uv[i * 2 + 1]).setColor(fire.color).setLight(0xF000F0);
-            }
             for (Draw draw : draws.getOrDefault(layer, List.of())) {
                 for (int i = 0; i < 4; i++) {
                     var p = draw.quad.position(i);
