@@ -22,7 +22,14 @@ void main() {
     vec2 cell = floor(texCoord0 * size - gridPhase) + 0.5 + gridPhase;
     vec4 color = texture(Sampler0, clamp(cell / size, 0.0, 1.0));
     color *= vertexColor * ColorModulator;
-    #ifdef OIT_ALPHA_ONLY
+    if (color.a <= 0.0) discard;
+    #ifdef OIT_DEPTH_BOUNDS
+    // Vanilla's alpha-only helper drops alpha below .01 from depth bounds, while
+    // the other OIT passes retain it. Faint shadow edges then resolve with a zero
+    // depth and expose background fog through the floor. Keep every contributing
+    // shadow sample in the bounds without increasing its actual opacity.
+    calculateDepthBounds(gl_FragCoord.z, color.a);
+    #elif defined(OIT_ALPHA_ONLY)
     executeAlphaOnlyPhase(gl_FragCoord.z, color.a);
     #else
         #ifdef OIT_ACCUMULATE

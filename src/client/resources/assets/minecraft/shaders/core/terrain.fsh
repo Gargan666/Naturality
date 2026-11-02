@@ -25,6 +25,7 @@
 #include <naturality:texture_lod.glsl>
 #include <naturality:procedural_fluids.glsl>
 #include <naturality:feature_settings.glsl>
+#include <naturality:lava_fog.glsl>
 #include <naturality:procedural_fire.glsl>
 #include <naturality:water.glsl>
 #include <naturality:water_ripples.glsl>
@@ -56,6 +57,7 @@ layout(location = 13) in vec2 naturalityFireUV;
 layout(location = 14) flat in vec3 naturalityFireSeed;
 layout(location = 19) in vec2 naturalityFireShape;
 layout(location = 15) flat in int naturalitySubmerged;
+layout(location = 20) flat in int naturalityLava;
 
 #ifndef OIT_ALPHA_ONLY
 layout(location = 0) out vec4 fragColor;
@@ -104,6 +106,19 @@ vec4 calculateFinalColor(vec4 color, bool waterSprite, bool submergedTerrain) {
     float distanceStart = submergedTerrain ? 1.0e6 : FogRenderDistanceStart;
     float distanceEnd = submergedTerrain ? 1.0e6 : FogRenderDistanceEnd;
     vec4 result = apply_fog(color, sphericalVertexDistance, cylindricalVertexDistance, FogEnvironmentalStart, FogEnvironmentalEnd, distanceStart, distanceEnd, fogColor);
+    if (naturalityLava != 0 && FogColor.a >= 6.0 && NATURALITY_FOG_ENABLED) {
+        float environmentalFog = linear_fog_value(sphericalVertexDistance, FogEnvironmentalStart, FogEnvironmentalEnd);
+        float distanceFog = linear_fog_value(cylindricalVertexDistance, distanceStart, distanceEnd);
+        float brightness = naturality_world_fog_brightness(FogColor.a);
+        vec3 atmosphere = fogColor.rgb * mix(brightness, 1.0, distanceFog);
+        #ifdef OIT_ACCUMULATE
+        float alphaScale = color.a;
+        #else
+        float alphaScale = 1.0;
+        #endif
+        result.rgb = naturality_lava_surface_fog(color.rgb, atmosphere, max(environmentalFog, distanceFog), alphaScale);
+        return result;
+    }
     if (!submergedTerrain && WaterEnvironment.x != 0 && NATURALITY_FOG_ENABLED) {
         // Replace only distance fog's flat RGB with the sky behind this fragment.
         // Keep environmental/cave coverage and premultiplied OIT alpha intact.

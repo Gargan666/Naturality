@@ -1,0 +1,18 @@
+{
+  "parent": "minecraft:block/block",
+  "ambientocclusion": false,
+  "textures": {
+    "particle": "naturality:block/iron_lattice",
+    "lattice": "naturality:block/iron_lattice"
+  },
+  "elements": [
+    {
+      "from": [0, 0, 0],
+      "to": [16, 16, 0],
+      "faces": {
+        "north": {"uv": [16, 0, 0, 16], "texture": "#lattice"},
+        "south": {"uv": [0, 0, 16, 16], "texture": "#lattice"}
+      }
+    }
+  ]
+}

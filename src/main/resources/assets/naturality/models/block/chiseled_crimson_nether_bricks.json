@@ -1,0 +1,6 @@
+{
+    "textures":  {
+                     "all":  "naturality:block/chiseled_crimson_nether_bricks"
+                 },
+    "parent":  "minecraft:block/cube_all"
+}

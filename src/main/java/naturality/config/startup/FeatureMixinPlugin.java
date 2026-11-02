@@ -32,6 +32,7 @@ public final class FeatureMixinPlugin implements IMixinConfigPlugin {
             // Common hooks are opt-in here: even an otherwise visual feature must
             // not change server simulation, block states or synchronized entity data.
             if (!client) return mixin.startsWith("naturality.api.worlds.mixins.DisposableWorldMixin$")
+                || name.equals("ItemDamageRegistryMixin")
                 || name.equals("FeatureResourcesMixin") || name.equals("RaycastShapePresenceMixin")
                 || name.equals("FireShapeAccessor");
             // These render/input hooks assume the corresponding gameplay state,
@@ -104,8 +105,10 @@ public final class FeatureMixinPlugin implements IMixinConfigPlugin {
         if (name.equals("EndTerrainDensityMixin")) return END_TERRAIN.enabled();
         if (name.equals("OceanTerrainMixin")) return OCEAN_TERRAIN.enabled();
         if (name.equals("NetherLavaLakesMixin") || name.equals("NetherLavaSurfaceMixin")
-                || name.equals("NetherLavaUpdatesMixin") || name.equals("NetherLavaFortressMixin")) return NETHER_LAVA_LAKES.enabled();
+                || name.equals("NetherLavaUpdatesMixin") || name.equals("NetherLavaFortressMixin")
+                || name.equals("NetherLavaBastionMixin")) return NETHER_LAVA_LAKES.enabled();
         if (name.equals("BasaltDeltaPoolMixin")) return CONTENT.enabled();
+        if (mixin.startsWith("naturality.worldgen.nether.fortress.mixins.")) return CONTENT.enabled();
         if (name.startsWith("OceanMonument")) return OCEAN_TERRAIN.enabled();
         if (name.equals("EndStoneTerrainMixin") || name.equals("SmallEndIslandLayersMixin")) return END_MATERIALS.enabled();
         if (name.equals("ElytraMomentumMixin")) return ELYTRA_MOMENTUM.enabled();

@@ -1,0 +1,8 @@
+{
+    "replace":  false,
+    "values":  [
+                   "naturality:warped_nether_bricks",
+                   "naturality:chiseled_warped_nether_bricks",
+                   "naturality:cracked_warped_nether_bricks"
+               ]
+}

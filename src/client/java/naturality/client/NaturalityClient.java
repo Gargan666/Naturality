@@ -93,6 +93,7 @@ public class NaturalityClient implements ClientModInitializer {
         naturality.client.sky.shared.aurora.AuroraRenderer.initialize();
         naturality.client.systems.event.overworld.bloodmoon.BloodMoonClient.initialize();
         naturality.client.systems.weather.overworld.precipitation.ParticleWeather.initialize();
+        naturality.client.systems.weather.nether.ash.AshWeather.initialize();
         if (RISE_PARTICLES.enabled()) naturality.client.systems.weather.end.rise.RiseWeather.initialize();
         net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents.CLIENT_STOPPING.register(_ -> naturality.client.systems.weather.wind.WindRendering.close());
         naturality.client.blocks.fire.SurfaceFireModel.initialize();
@@ -130,6 +131,7 @@ public class NaturalityClient implements ClientModInitializer {
         naturality.client.portals.end.EndPortalBorderLayers.EndEyeGlowLayer.initialize();
         naturality.client.systems.sleep.SleepVisuals.register(naturality.client.portals.end.EndPortalBorderState.EndEyeGlow::tick);
 		naturality.client.rendering.fog.EndFogComposite.initialize();
+        naturality.client.rendering.fog.NetherLavaFog.initialize();
 		naturality.client.portals.nether.travel.PortalCrossingClient.PortalOverlay.initialize();
 		naturality.client.systems.sleep.SleepVisuals.register(naturality.client.portals.nether.opening.PortalOpeningClient::tick);
 		PortalGlowRenderLayer.initialize();

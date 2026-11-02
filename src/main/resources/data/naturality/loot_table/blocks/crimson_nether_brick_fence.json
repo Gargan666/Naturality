@@ -1,0 +1,18 @@
+{
+  "pools": [
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "naturality:crimson_nether_brick_fence"
+        }
+      ],
+      "condition": {
+        "type": "minecraft:survives_explosion"
+      }
+    }
+  ],
+  "type": "minecraft:block",
+  "random_sequence": "naturality:blocks/crimson_nether_brick_fence"
+}

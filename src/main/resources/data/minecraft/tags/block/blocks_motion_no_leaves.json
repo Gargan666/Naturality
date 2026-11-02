@@ -1,7 +1,15 @@
 {
-  "replace": false,
-  "values": [
-    "naturality:smooth_endstone", "naturality:lyren_heath",
-    "naturality:lirestone", "naturality:smooth_lirestone"
-  ]
+    "replace":  false,
+    "values":  [
+    "naturality:iron_grate", "naturality:iron_lattice",
+                   "naturality:smooth_endstone",
+                   "naturality:lyren_heath",
+                   "naturality:lirestone",
+                   "naturality:smooth_lirestone",
+                   "naturality:chiseled_crimson_nether_bricks",
+                   "naturality:cracked_crimson_nether_bricks",
+                   "naturality:warped_nether_bricks",
+                   "naturality:chiseled_warped_nether_bricks",
+                   "naturality:cracked_warped_nether_bricks"
+               ]
 }

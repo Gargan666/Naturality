@@ -14,6 +14,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.data.worldgen.placement.NetherPlacements;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.WorldGenRegion;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.Level;
@@ -27,6 +28,7 @@ import net.minecraft.world.level.levelgen.GenerationStep;
 import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.minecraft.world.level.levelgen.synth.SimplexNoise;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 
 /** Decorations for all exposed floors, including the Nether's stacked cavern shelves. */
 @org.jspecify.annotations.NullMarked
@@ -140,7 +142,15 @@ public record BasaltDeltasFeature() implements Feature {
         var ground = new BlockPos.MutableBlockPos();
         var target = new BlockPos.MutableBlockPos();
         var neighbor = new BlockPos.MutableBlockPos();
+        var buildings = new ArrayList<BoundingBox>();
+        if (level instanceof WorldGenRegion region) {
+            var structures = level.getLevel().structureManager().forWorldGenRegion(region);
+            for (var start : structures.startsForStructure(startX >> 4, startZ >> 4, _ -> true))
+                for (var piece : start.getPieces()) buildings.addAll(
+                    naturality.worldgen.nether.fortress.FortressBridges.coveredInteriorBounds(piece));
+        }
         for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
+            var sheltered = shelteredHeights(level, startX + x, startZ + z, buildings);
             int moundHeight = 0;
             for (int i = 0; i < count; i++) {
                 int dx = x - centersX[i], dz = z - centersZ[i];
@@ -153,7 +163,12 @@ public record BasaltDeltasFeature() implements Feature {
                 target.set(startX + x, y + 1, startZ + z);
                 if (!level.ensureCanWrite(target) || !level.getBlockState(target).isAir()) continue;
                 var support = level.getBlockState(ground);
-                if (support.is(Blocks.BEDROCK) || !support.isFaceSturdy(level, ground, Direction.UP)
+                // Fitted ash follows partial surfaces even without a full top face.
+                boolean fittedSupport = support.is(Blocks.NETHER_BRICK_WALL)
+                    || support.is(Blocks.NETHER_BRICK_FENCE)
+                    || support.getBlock() instanceof net.minecraft.world.level.block.SlabBlock
+                    || support.getBlock() instanceof net.minecraft.world.level.block.StairBlock;
+                if (support.is(Blocks.BEDROCK) || (!fittedSupport && !support.isFaceSturdy(level, ground, Direction.UP))
                         || !support.getFluidState().isEmpty()
                         || !level.getBiome(ground).is(Biomes.BASALT_DELTAS)) continue;
                 boolean ashPatch = ashPatches.get(ground.getX() / 18.0, y / 32.0, ground.getZ() / 18.0)
@@ -167,7 +182,8 @@ public record BasaltDeltasFeature() implements Feature {
                         placed = true;
                         target.move(Direction.UP);
                     }
-                } else if (moundHeight > 0 && (support.is(Blocks.BASALT) || support.is(Blocks.BLACKSTONE)
+                } else if (moundHeight > 0 && !sheltered.get(target.getY() - level.getMinY())
+                        && (support.is(Blocks.BASALT) || support.is(Blocks.BLACKSTONE)
                         || support.is(Blocks.NETHERRACK))) {
                     for (int h = 0; h < moundHeight; h++) {
                         if (!level.ensureCanWrite(target) || !level.getBlockState(target).isAir()
@@ -179,6 +195,7 @@ public record BasaltDeltasFeature() implements Feature {
                 }
                 // The target is above the finished wall cap, ash mound or original floor.
                 if (ashPatch && level.ensureCanWrite(target)
+                        && !sheltered.get(target.getY() - level.getMinY())
                         && level.getBlockState(target).isAir()
                         && level.getBiome(target).is(Biomes.BASALT_DELTAS)
                         && NaturalityBlocks.ASH.defaultBlockState().canSurvive(level, target)) {
@@ -187,6 +204,33 @@ public record BasaltDeltasFeature() implements Feature {
             }
         }
         return placed;
+    }
+
+    /** Only roofs inside structure pieces shelter interiors; the Nether ceiling is not a roof. */
+    private static java.util.BitSet shelteredHeights(net.minecraft.world.level.BlockGetter level, int x, int z,
+            java.util.List<BoundingBox> buildings) {
+        var sheltered = new java.util.BitSet();
+        var pos = new BlockPos.MutableBlockPos();
+        for (var box : buildings) {
+            if (x < box.minX() || x > box.maxX() || z < box.minZ() || z > box.maxZ()) continue;
+            boolean roof = false;
+            for (int y = Math.min(box.maxY(), level.getMaxY()); y >= Math.max(box.minY(), level.getMinY()); y--) {
+                if (roof) sheltered.set(y - level.getMinY());
+                pos.set(x, y, z);
+                var state = level.getBlockState(pos);
+                if (roof || state.isAir() || !state.getFluidState().isEmpty()) continue;
+                // Full horizontal coverage also recognizes slab/stair roofs, without
+                // treating an open fence or wall railing as a solid ceiling.
+                for (var shape : state.getCollisionShape(level, pos).toAabbs()) {
+                    if (shape.minX <= 0 && shape.maxX >= 1 && shape.minZ <= 0 && shape.maxZ >= 1
+                            && shape.maxY > shape.minY) {
+                        roof = true;
+                        break;
+                    }
+                }
+            }
+        }
+        return sheltered;
     }
 
     private static boolean isTerrainEdge(WorldGenLevel level, BlockPos ground, BlockPos.MutableBlockPos neighbor) {

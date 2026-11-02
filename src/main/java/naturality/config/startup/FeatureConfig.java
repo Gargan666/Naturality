@@ -176,6 +176,10 @@ public final class FeatureConfig {
                     return namespace.equals("naturality") && path.startsWith("tags/")
                         && !path.equals("tags/block/no_ash_overlays.json");
                 }
+                if (namespace.equals("naturality") && java.util.Set.of(
+                        "worldgen/noise/nether/terrain_style.json",
+                        "worldgen/density_function/nether/terrain_style.json"
+                    ).contains(path)) return Feature.NETHER_LAVA_LAKES.enabled();
                 if (namespace.equals("minecraft") && java.util.Set.of(
                         "dimension_type/the_nether.json", "worldgen/noise_settings/nether.json",
                         "worldgen/density_function/nether/base_3d_noise.json", "worldgen/carver/nether_cave.json",

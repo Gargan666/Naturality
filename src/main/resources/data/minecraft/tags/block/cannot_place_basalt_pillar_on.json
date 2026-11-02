@@ -1,0 +1,9 @@
+{
+    "replace":  false,
+    "values":  [
+                   "naturality:crimson_nether_brick_fence",
+                   "naturality:warped_nether_bricks",
+                   "naturality:warped_nether_brick_stairs",
+                   "naturality:warped_nether_brick_fence"
+               ]
+}

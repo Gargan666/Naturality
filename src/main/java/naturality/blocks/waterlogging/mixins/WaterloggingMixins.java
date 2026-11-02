@@ -2,7 +2,9 @@ package naturality.blocks.waterlogging.mixins;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import naturality.blocks.waterlogging.BlockWaterlogging;
+import naturality.blocks.lavalogging.BlockLavalogging;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.util.RandomSource;
@@ -70,11 +72,10 @@ public final class WaterloggingMixins {
     @Mixin(AnvilBlock.class)
     @org.jspecify.annotations.NullMarked
     public static abstract class WaterloggingAnvilDamageMixin {
-        @Inject(method = "damage", at = @At("RETURN"), cancellable = true)
-        private static void naturality$preserveAnvilWater(BlockState previous, CallbackInfoReturnable<@Nullable BlockState> cir) {
-            BlockState damaged = cir.getReturnValue();
-            if (damaged != null) cir.setReturnValue(damaged.setValue(BlockStateProperties.WATERLOGGED,
-                previous.getValue(BlockStateProperties.WATERLOGGED)));
+        @ModifyReturnValue(method = "damage", at = @At("RETURN"))
+        private static @Nullable BlockState naturality$preserveAnvilWater(@Nullable BlockState damaged, BlockState previous) {
+            return damaged == null ? null : damaged.setValue(BlockStateProperties.WATERLOGGED,
+                previous.getValue(BlockStateProperties.WATERLOGGED));
         }
     }
 
@@ -85,7 +86,7 @@ public final class WaterloggingMixins {
     public static abstract class WaterloggingContainersMixin implements SimpleWaterloggedBlock {
         @Override
         public boolean canPlaceLiquid(@Nullable LivingEntity user, BlockGetter level, BlockPos pos, BlockState state, Fluid fluid) {
-
+            if (fluid == Fluids.LAVA || BlockLavalogging.lavalogged(state)) return BlockLavalogging.canFill(state, fluid);
             return fluid == Fluids.WATER
                 && !state.getValue(BlockStateProperties.WATERLOGGED);
         }
@@ -106,20 +107,19 @@ public final class WaterloggingMixins {
     public static abstract class WaterloggingUpdatesMixin {
         @Shadow protected abstract BlockState asState();
 
-        @Inject(method = "updateShape", at = @At("RETURN"), cancellable = true)
-        private void naturality$fluidUpdates(LevelReader level, ScheduledTickAccess ticks, BlockPos pos, Direction direction,
-                BlockPos neighborPos, BlockState neighbor, RandomSource random, CallbackInfoReturnable<BlockState> cir) {
-            cir.setReturnValue(BlockWaterlogging.neighborUpdate(asState(), cir.getReturnValue(), level, ticks, pos));
+        @ModifyReturnValue(method = "updateShape", at = @At("RETURN"))
+        private BlockState naturality$fluidUpdates(BlockState result, LevelReader level, ScheduledTickAccess ticks, BlockPos pos, Direction direction,
+                BlockPos neighborPos, BlockState neighbor, RandomSource random) {
+            return BlockWaterlogging.neighborUpdate(asState(), result, level, ticks, pos);
         }
     }
 
     @Mixin(BlockItem.class)
     @org.jspecify.annotations.NullMarked
     public static abstract class WaterloggingPlacementMixin {
-        @Inject(method = "getPlacementState", at = @At("RETURN"), cancellable = true)
-        private void naturality$underwaterPlacement(BlockPlaceContext context, CallbackInfoReturnable<@Nullable BlockState> cir) {
-            BlockState state = cir.getReturnValue();
-            if (state != null) cir.setReturnValue(BlockWaterlogging.placement(state, context.getLevel(), context.getClickedPos()));
+        @ModifyReturnValue(method = "getPlacementState", at = @At("RETURN"))
+        private @Nullable BlockState naturality$underwaterPlacement(@Nullable BlockState state, BlockPlaceContext context) {
+            return state == null ? null : BlockWaterlogging.placement(state, context.getLevel(), context.getClickedPos());
         }
     }
 

@@ -10,6 +10,24 @@ import java.util.Optional;
 @org.jspecify.annotations.NullMarked
 public final class FogPipeline {
     private FogPipeline() { }
+    public static final class NetherLava {
+        public static final BindGroupLayout LAYOUT = BindGroupLayout.builder()
+            .withUniform("LavaFog", UniformType.UNIFORM_BUFFER)
+            .withUniform("LavaColumns", UniformType.COMBINED_IMAGE_SAMPLER).build();
+        public static final RenderPipeline PIPELINE = RenderPipelines.register(
+            RenderPipeline.builder(RenderPipelines.POST_PROCESSING_SNIPPET)
+                .withLocation(Naturality.id("pipeline/nether_lava_fog"))
+                .withVertexShader(Naturality.id("core/nether_lava_fog"))
+                .withFragmentShader(Naturality.id("core/nether_lava_fog"))
+                .withBindGroupLayout(BindGroupLayouts.PROJECTION)
+                .withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
+                .withBindGroupLayout(BindGroupLayouts.FOG)
+                .withBindGroupLayout(BindGroupLayouts.SAMPLER0)
+                .withBindGroupLayout(LAYOUT)
+                .withDepthStencilState(Optional.empty())
+                .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
+                .build());
+    }
     public static final class Composite {
         public static final RenderPipeline PIPELINE = RenderPipelines.register(
             RenderPipeline.builder(RenderPipelines.POST_PROCESSING_SNIPPET)

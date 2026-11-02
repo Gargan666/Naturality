@@ -47,6 +47,7 @@ public class Naturality implements ModInitializer {
             naturality.worldgen.overworld.sand.SandLayersFeature.initialize();
             naturality.worldgen.nether.basaltdeltas.BasaltDeltasFeature.initialize();
             naturality.worldgen.nether.plains.NetherPlains.initialize();
+            naturality.worldgen.nether.fortress.FortressBridges.initialize();
             naturality.worldgen.overworld.moss.TreeMossFeature.initialize();
             naturality.worldgen.overworld.waterfalls.MountainWaterfallFeature.initialize();
             naturality.entities.maddened.MaddenedCreepers.initialize();
@@ -58,6 +59,7 @@ public class Naturality implements ModInitializer {
             naturality.systems.weather.end.starfall.StarfallWeather.StarfallEntities.initialize();
             naturality.systems.fishing.VillagerBobbers.initialize();
         }
+        naturality.blocks.lavalogging.BlockLavalogging.initialize();
         naturality.config.gameplay.GameplaySettings.initialize();
         naturality.systems.sleep.SleepAcceleration.initialize();
         naturality.entities.fireballs.FireballImpactPayload.initialize();

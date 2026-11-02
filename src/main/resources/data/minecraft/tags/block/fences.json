@@ -1,9 +1,11 @@
 {
-  "replace": false,
-  "values": [
-    {
-      "id": "naturality:charred_fence",
-      "required": false
-    }
-  ]
+    "replace":  false,
+    "values":  [
+                   {
+                       "id":  "naturality:charred_fence",
+                       "required":  false
+                   },
+                   "naturality:crimson_nether_brick_fence",
+                   "naturality:warped_nether_brick_fence"
+               ]
 }

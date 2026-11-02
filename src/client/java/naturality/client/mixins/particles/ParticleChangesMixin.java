@@ -44,6 +44,51 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public final class ParticleChangesMixin {
     private ParticleChangesMixin() {}
 
+    @Mixin(ClientLevel.class)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class CrimsonAmbientDensityMixin {
+        @com.llamalad7.mixinextras.injector.v2.WrapWithCondition(method = "doAnimateTick",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/ClientLevel;addParticle(Lnet/minecraft/core/particles/ParticleOptions;DDDDDD)V"))
+        private boolean naturality$halfCrimson(ClientLevel level, ParticleOptions particle,
+                double x, double y, double z, double dx, double dy, double dz) {
+            return particle.getType() != ParticleTypes.CRIMSON_SPORE
+                || !level.getBiome(net.minecraft.core.BlockPos.containing(x,y,z)).is(net.minecraft.world.level.biome.Biomes.CRIMSON_FOREST)
+                || level.getRandom().nextBoolean();
+        }
+    }
+
+    @Mixin({net.minecraft.client.particle.SuspendedParticle.CrimsonSporeProvider.class,
+        net.minecraft.client.particle.SuspendedParticle.WarpedSporeProvider.class})
+    @org.jspecify.annotations.NullMarked
+    public static abstract class ForestSporeProviderMixin {
+        @Inject(method = "createParticle(Lnet/minecraft/core/particles/SimpleParticleType;Lnet/minecraft/client/multiplayer/ClientLevel;DDDDDDLnet/minecraft/util/RandomSource;)Lnet/minecraft/client/particle/Particle;",
+            at = @At("RETURN"))
+        private void naturality$markSpore(CallbackInfoReturnable<Particle> cir) {
+            if (cir.getReturnValue() instanceof naturality.client.particles.forestspores.ForestSpores.Access spore)
+                spore.naturality$fadeForestSpore();
+        }
+    }
+
+    @Mixin(net.minecraft.client.particle.SuspendedParticle.class)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class ForestSporeFadeMixin extends SingleQuadParticle
+            implements naturality.client.particles.forestspores.ForestSpores.Access {
+        @Unique private boolean naturality$forestSpore;
+        protected ForestSporeFadeMixin(ClientLevel level, double x, double y, double z, TextureAtlasSprite sprite) {
+            super(level, x, y, z, sprite);
+        }
+        @Override public void naturality$fadeForestSpore() { naturality$forestSpore = true; }
+        @com.llamalad7.mixinextras.injector.ModifyReturnValue(method = "getLayer", at = @At("RETURN"))
+        private Layer naturality$translucentSpore(Layer original) {
+            return naturality$forestSpore ? Layer.TRANSLUCENT : original;
+        }
+        @Override public void extract(QuadParticleRenderState output, Camera camera, float partial) {
+            if (naturality$forestSpore)
+                alpha = naturality.client.particles.forestspores.ForestSpores.opacity(age, lifetime, partial);
+            super.extract(output, camera, partial);
+        }
+    }
+
     @Mixin(LivingEntity.class)
     @org.jspecify.annotations.NullMarked
     public static abstract class DeathSmokeSpawnMixin {

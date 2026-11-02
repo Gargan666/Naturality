@@ -1,9 +1,10 @@
 {
-  "replace": false,
-  "values": [
-    {
-      "id": "naturality:charred_slab",
-      "required": false
-    }
-  ]
+    "replace":  false,
+    "values":  [
+                   {
+                       "id":  "naturality:charred_slab",
+                       "required":  false
+                   },
+                   "naturality:warped_nether_brick_slab"
+               ]
 }

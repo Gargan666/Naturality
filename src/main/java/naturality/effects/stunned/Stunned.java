@@ -11,9 +11,6 @@ import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.NeutralMob;
-import net.minecraft.world.entity.ai.goal.GoalSelector;
-import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Input;
 import net.minecraft.world.entity.player.Player;
@@ -67,27 +64,11 @@ public final class Stunned extends MobEffect {
         entity.zza = 0;
         if (entity instanceof Player player && player.isFallFlying()) player.stopFallFlying();
         if (entity instanceof ServerPlayer player) player.setLastClientInput(Input.EMPTY);
-        if (entity instanceof Mob mob && !entity.level().isClientSide()) clearAggro(mob);
     }
 
-    public static void clearAggro(Mob mob) {
-        mob.setTarget(null);
-        mob.setLastHurtByMob(null);
-        mob.setAggressive(false);
-        mob.getNavigation().stop();
-        if (mob instanceof NeutralMob neutral) neutral.stopBeingAngry();
-        var brain = mob.getBrain();
-        brain.eraseMemory(MemoryModuleType.ATTACK_TARGET);
-        brain.eraseMemory(MemoryModuleType.ANGRY_AT);
-        brain.eraseMemory(MemoryModuleType.HURT_BY);
-        brain.eraseMemory(MemoryModuleType.HURT_BY_ENTITY);
-        brain.eraseMemory(MemoryModuleType.WALK_TARGET);
-        brain.eraseMemory(MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE);
-    }
-
-    public static void stopAi(Mob mob, GoalSelector goals, GoalSelector targets) {
-        goals.getAvailableGoals().forEach(goal -> { if (goal.isRunning()) goal.stop(); });
-        targets.getAvailableGoals().forEach(goal -> { if (goal.isRunning()) goal.stop(); });
+    public static void pauseAi(Mob mob) {
+        // Preserve goals and memories: stopping target goals can clear their target.
+        // The serverAiStep hook skips their ticks, navigation and movement controls.
         suppressActions(mob);
         mob.getLookControl().tick();
     }

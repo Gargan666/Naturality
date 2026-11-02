@@ -43,6 +43,7 @@ layout(location = 13) out vec2 naturalityFireUV;
 layout(location = 14) flat out vec3 naturalityFireSeed;
 layout(location = 19) out vec2 naturalityFireShape;
 layout(location = 15) flat out int naturalitySubmerged;
+layout(location = 20) flat out int naturalityLava;
 #include <naturality:foliage_wind.glsl>
 
 layout(location = 16) flat out int naturalityGlassKind;
@@ -94,6 +95,7 @@ void main() {
     if (naturalitySubmerged != 0) naturalityShade.a = 1.0;
     naturalitySectionOrigin = ChunkPosition;
     naturalityFluidKind = -1;
+    naturalityLava = 0;
     bool terrainFluidSprite = false;
     naturalityFluidUV = vec2(0.0);
     naturalityFlow = vec3(0.0);
@@ -116,6 +118,8 @@ void main() {
         vec4 b = NaturalityFluidBounds[i];
         if (b.x >= 0.0 && all(greaterThanEqual(UV0, b.xy)) && all(lessThanEqual(UV0, b.zw))) {
             naturalityFluidKind = (NaturalityFluidInfo.w & (1 << i)) != 0 ? i : -1;
+            // Material identity remains available when procedural animation is off.
+            naturalityLava = i >= 2 ? 1 : 0;
             terrainFluidSprite = true;
             windFoliage = false;
             snowSurface = false;

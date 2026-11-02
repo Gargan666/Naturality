@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "facing=north": {"model": "naturality:block/iron_lattice"},
+    "facing=east": {"model": "naturality:block/iron_lattice", "y": 90},
+    "facing=south": {"model": "naturality:block/iron_lattice", "y": 180},
+    "facing=west": {"model": "naturality:block/iron_lattice", "y": 270},
+    "facing=up": {"model": "naturality:block/iron_lattice", "x": 270},
+    "facing=down": {"model": "naturality:block/iron_lattice", "x": 90}
+  }
+}

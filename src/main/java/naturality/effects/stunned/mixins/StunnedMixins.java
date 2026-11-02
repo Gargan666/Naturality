@@ -17,10 +17,8 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.ai.goal.GoalSelector;
 import net.minecraft.world.entity.player.Player;
 import org.jspecify.annotations.NullMarked;
-import org.jspecify.annotations.Nullable;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -94,21 +92,10 @@ public final class StunnedMixins {
 
     @Mixin(Mob.class)
     public static abstract class Mobs {
-        @Shadow @Final private GoalSelector goalSelector;
-        @Shadow @Final private GoalSelector targetSelector;
-
-        @SuppressWarnings("null") // The Mob constructor initializes both non-null shadow selectors.
-        private Mobs() {}
-
         @Inject(method = "serverAiStep", at = @At("HEAD"), cancellable = true)
         private void naturality$pauseAi(CallbackInfo ci) {
             var mob = (Mob)(Object)this;
-            if (Stunned.active(mob)) { Stunned.stopAi(mob, goalSelector, targetSelector); ci.cancel(); }
-        }
-
-        @Inject(method = "setTarget", at = @At("HEAD"), cancellable = true)
-        private void naturality$noRetarget(@Nullable LivingEntity target, CallbackInfo ci) {
-            if (target != null && Stunned.active((Mob)(Object)this)) ci.cancel();
+            if (Stunned.active(mob)) { Stunned.pauseAi(mob); ci.cancel(); }
         }
 
         @Inject(method = "doHurtTarget", at = @At("HEAD"), cancellable = true)

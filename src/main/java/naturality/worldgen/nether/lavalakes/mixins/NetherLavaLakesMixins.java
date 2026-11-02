@@ -1,22 +1,24 @@
 package naturality.worldgen.nether.lavalakes.mixins;
 
-import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
-import naturality.worldgen.nether.lavalakes.NetherLavaLakes;
-import net.minecraft.core.Holder;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import naturality.worldgen.nether.lavalakes.NetherLavaLakes;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.WorldGenLevel;
+import net.minecraft.core.Holder;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.StructureManager;
+import net.minecraft.world.level.WorldGenLevel;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.BiomeManager;
-import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.chunk.CarvingMask;
 import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.Aquifer;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import net.minecraft.world.level.levelgen.NoiseChunk;
@@ -25,25 +27,40 @@ import net.minecraft.world.level.levelgen.NoiseRouter;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.VerticalAnchor;
 import net.minecraft.world.level.levelgen.WorldGenerationContext;
+import net.minecraft.world.level.levelgen.densityfunction.DensityFunction;
 import net.minecraft.world.level.levelgen.material.MaterialRuleContext;
 import net.minecraft.world.level.levelgen.material.rule.MaterialRule;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.pieces.StructurePiecesBuilder;
+import net.minecraft.world.level.levelgen.structure.structures.JigsawStructure;
 import net.minecraft.world.level.levelgen.structure.structures.NetherFortressStructure;
-import net.minecraft.util.RandomSource;
-import net.minecraft.world.level.levelgen.densityfunction.DensityFunction;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /** Standard Nether only; lake beds and fluids run before surfaces and decoration. */
 public final class NetherLavaLakesMixins {
     private NetherLavaLakesMixins() {}
+
+    @Mixin(JigsawStructure.class)
+    public static abstract class NetherLavaBastionMixin {
+        @ModifyReturnValue(method = "findGenerationPoint", at = @At("RETURN"))
+        private Optional<Structure.GenerationStub> naturality$anchorBastion(
+                Optional<Structure.GenerationStub> original, Structure.GenerationContext context) {
+            var structure = (JigsawStructure)(Object)this;
+            boolean bastion = structure.getStartPool().unwrapKey()
+                .map(key -> key.identifier().toString().equals("minecraft:bastion/starts")).orElse(false);
+            if (!bastion || original.isEmpty()
+                    || !(context.chunkGenerator() instanceof NoiseBasedChunkGenerator generator)
+                    || !generator.stable(NoiseGeneratorSettings.NETHER)) return original;
+            return NetherLavaLakes.anchorBastion(context, original.get());
+        }
+    }
 
     @Mixin(NetherFortressStructure.class)
     public static abstract class NetherLavaFortressMixin {

@@ -28,6 +28,22 @@ public final class ContentRegistration {
     private ContentRegistration() {}
 
     public static final class NaturalityBlocks {
+        public static final Block IRON_GRATE = Blocks.register(
+            ResourceKey.create(Registries.BLOCK, Naturality.id("iron_grate")),
+            net.minecraft.world.level.block.WaterloggedTransparentBlock::new,
+            BlockBehaviour.Properties.ofFullCopy(Blocks.COPPER_GRATE.waxed().unaffected())
+                .mapColor(net.minecraft.world.level.material.MapColor.METAL));
+        public static final BlockItem IRON_GRATE_ITEM = Registry.register(BuiltInRegistries.ITEM,
+            ResourceKey.create(Registries.ITEM, Naturality.id("iron_grate")),
+            new BlockItem(IRON_GRATE, new Item.Properties().setId(ResourceKey.create(Registries.ITEM, Naturality.id("iron_grate")))
+                .useBlockDescriptionPrefix()));
+        public static final Block IRON_LATTICE = Blocks.register(
+            ResourceKey.create(Registries.BLOCK, Naturality.id("iron_lattice")),
+            naturality.blocks.lattice.IronLatticeBlock::new, BlockBehaviour.Properties.ofFullCopy(IRON_GRATE));
+        public static final BlockItem IRON_LATTICE_ITEM = Registry.register(BuiltInRegistries.ITEM,
+            ResourceKey.create(Registries.ITEM, Naturality.id("iron_lattice")),
+            new BlockItem(IRON_LATTICE, new Item.Properties().setId(ResourceKey.create(Registries.ITEM, Naturality.id("iron_lattice")))
+                .useBlockDescriptionPrefix()));
         public static final Block ASH = Blocks.register(
             ResourceKey.create(Registries.BLOCK, Naturality.id("ash")), naturality.blocks.ash.Ash.Layer::new,
             BlockBehaviour.Properties.ofFullCopy(Blocks.SAND).noOcclusion().dynamicShape());
@@ -42,6 +58,86 @@ public final class ContentRegistration {
         public static final BlockItem ASH_BLOCK_ITEM = Registry.register(BuiltInRegistries.ITEM,
             ResourceKey.create(Registries.ITEM, Naturality.id("ash_block")),
             new BlockItem(ASH_BLOCK, new Item.Properties().setId(ResourceKey.create(Registries.ITEM, Naturality.id("ash_block")))
+                .useBlockDescriptionPrefix()));
+
+        public static final Block CRIMSON_NETHER_BRICK_FENCE = Blocks.register(
+            ResourceKey.create(Registries.BLOCK, Naturality.id("crimson_nether_brick_fence")),
+            net.minecraft.world.level.block.FenceBlock::new, BlockBehaviour.Properties.ofFullCopy(Blocks.NETHER_BRICK_FENCE));
+        public static final BlockItem CRIMSON_NETHER_BRICK_FENCE_ITEM = Registry.register(BuiltInRegistries.ITEM,
+            ResourceKey.create(Registries.ITEM, Naturality.id("crimson_nether_brick_fence")),
+            new BlockItem(CRIMSON_NETHER_BRICK_FENCE, new Item.Properties().setId(ResourceKey.create(Registries.ITEM, Naturality.id("crimson_nether_brick_fence")))
+                .useBlockDescriptionPrefix()));
+
+        public static final Block CHISELED_CRIMSON_NETHER_BRICKS = Blocks.register(
+            ResourceKey.create(Registries.BLOCK, Naturality.id("chiseled_crimson_nether_bricks")),
+            Block::new, BlockBehaviour.Properties.ofFullCopy(Blocks.RED_NETHER_BRICKS));
+        public static final BlockItem CHISELED_CRIMSON_NETHER_BRICKS_ITEM = Registry.register(BuiltInRegistries.ITEM,
+            ResourceKey.create(Registries.ITEM, Naturality.id("chiseled_crimson_nether_bricks")),
+            new BlockItem(CHISELED_CRIMSON_NETHER_BRICKS, new Item.Properties().setId(ResourceKey.create(Registries.ITEM, Naturality.id("chiseled_crimson_nether_bricks")))
+                .useBlockDescriptionPrefix()));
+
+        public static final Block CRACKED_CRIMSON_NETHER_BRICKS = Blocks.register(
+            ResourceKey.create(Registries.BLOCK, Naturality.id("cracked_crimson_nether_bricks")),
+            Block::new, BlockBehaviour.Properties.ofFullCopy(Blocks.RED_NETHER_BRICKS));
+        public static final BlockItem CRACKED_CRIMSON_NETHER_BRICKS_ITEM = Registry.register(BuiltInRegistries.ITEM,
+            ResourceKey.create(Registries.ITEM, Naturality.id("cracked_crimson_nether_bricks")),
+            new BlockItem(CRACKED_CRIMSON_NETHER_BRICKS, new Item.Properties().setId(ResourceKey.create(Registries.ITEM, Naturality.id("cracked_crimson_nether_bricks")))
+                .useBlockDescriptionPrefix()));
+
+        public static final Block WARPED_NETHER_BRICKS = Blocks.register(
+            ResourceKey.create(Registries.BLOCK, Naturality.id("warped_nether_bricks")),
+            Block::new, BlockBehaviour.Properties.ofFullCopy(Blocks.NETHER_BRICKS));
+        public static final BlockItem WARPED_NETHER_BRICKS_ITEM = Registry.register(BuiltInRegistries.ITEM,
+            ResourceKey.create(Registries.ITEM, Naturality.id("warped_nether_bricks")),
+            new BlockItem(WARPED_NETHER_BRICKS, new Item.Properties().setId(ResourceKey.create(Registries.ITEM, Naturality.id("warped_nether_bricks")))
+                .useBlockDescriptionPrefix()));
+
+        public static final Block WARPED_NETHER_BRICK_STAIRS = Blocks.register(
+            ResourceKey.create(Registries.BLOCK, Naturality.id("warped_nether_brick_stairs")),
+            properties -> new net.minecraft.world.level.block.StairBlock(WARPED_NETHER_BRICKS.defaultBlockState(), properties), BlockBehaviour.Properties.ofFullCopy(Blocks.NETHER_BRICK_STAIRS));
+        public static final BlockItem WARPED_NETHER_BRICK_STAIRS_ITEM = Registry.register(BuiltInRegistries.ITEM,
+            ResourceKey.create(Registries.ITEM, Naturality.id("warped_nether_brick_stairs")),
+            new BlockItem(WARPED_NETHER_BRICK_STAIRS, new Item.Properties().setId(ResourceKey.create(Registries.ITEM, Naturality.id("warped_nether_brick_stairs")))
+                .useBlockDescriptionPrefix()));
+
+        public static final Block WARPED_NETHER_BRICK_SLAB = Blocks.register(
+            ResourceKey.create(Registries.BLOCK, Naturality.id("warped_nether_brick_slab")),
+            net.minecraft.world.level.block.SlabBlock::new, BlockBehaviour.Properties.ofFullCopy(Blocks.NETHER_BRICK_SLAB));
+        public static final BlockItem WARPED_NETHER_BRICK_SLAB_ITEM = Registry.register(BuiltInRegistries.ITEM,
+            ResourceKey.create(Registries.ITEM, Naturality.id("warped_nether_brick_slab")),
+            new BlockItem(WARPED_NETHER_BRICK_SLAB, new Item.Properties().setId(ResourceKey.create(Registries.ITEM, Naturality.id("warped_nether_brick_slab")))
+                .useBlockDescriptionPrefix()));
+
+        public static final Block WARPED_NETHER_BRICK_WALL = Blocks.register(
+            ResourceKey.create(Registries.BLOCK, Naturality.id("warped_nether_brick_wall")),
+            net.minecraft.world.level.block.WallBlock::new, BlockBehaviour.Properties.ofFullCopy(Blocks.NETHER_BRICK_WALL));
+        public static final BlockItem WARPED_NETHER_BRICK_WALL_ITEM = Registry.register(BuiltInRegistries.ITEM,
+            ResourceKey.create(Registries.ITEM, Naturality.id("warped_nether_brick_wall")),
+            new BlockItem(WARPED_NETHER_BRICK_WALL, new Item.Properties().setId(ResourceKey.create(Registries.ITEM, Naturality.id("warped_nether_brick_wall")))
+                .useBlockDescriptionPrefix()));
+
+        public static final Block WARPED_NETHER_BRICK_FENCE = Blocks.register(
+            ResourceKey.create(Registries.BLOCK, Naturality.id("warped_nether_brick_fence")),
+            net.minecraft.world.level.block.FenceBlock::new, BlockBehaviour.Properties.ofFullCopy(Blocks.NETHER_BRICK_FENCE));
+        public static final BlockItem WARPED_NETHER_BRICK_FENCE_ITEM = Registry.register(BuiltInRegistries.ITEM,
+            ResourceKey.create(Registries.ITEM, Naturality.id("warped_nether_brick_fence")),
+            new BlockItem(WARPED_NETHER_BRICK_FENCE, new Item.Properties().setId(ResourceKey.create(Registries.ITEM, Naturality.id("warped_nether_brick_fence")))
+                .useBlockDescriptionPrefix()));
+
+        public static final Block CHISELED_WARPED_NETHER_BRICKS = Blocks.register(
+            ResourceKey.create(Registries.BLOCK, Naturality.id("chiseled_warped_nether_bricks")),
+            Block::new, BlockBehaviour.Properties.ofFullCopy(Blocks.CHISELED_NETHER_BRICKS));
+        public static final BlockItem CHISELED_WARPED_NETHER_BRICKS_ITEM = Registry.register(BuiltInRegistries.ITEM,
+            ResourceKey.create(Registries.ITEM, Naturality.id("chiseled_warped_nether_bricks")),
+            new BlockItem(CHISELED_WARPED_NETHER_BRICKS, new Item.Properties().setId(ResourceKey.create(Registries.ITEM, Naturality.id("chiseled_warped_nether_bricks")))
+                .useBlockDescriptionPrefix()));
+
+        public static final Block CRACKED_WARPED_NETHER_BRICKS = Blocks.register(
+            ResourceKey.create(Registries.BLOCK, Naturality.id("cracked_warped_nether_bricks")),
+            Block::new, BlockBehaviour.Properties.ofFullCopy(Blocks.CRACKED_NETHER_BRICKS));
+        public static final BlockItem CRACKED_WARPED_NETHER_BRICKS_ITEM = Registry.register(BuiltInRegistries.ITEM,
+            ResourceKey.create(Registries.ITEM, Naturality.id("cracked_warped_nether_bricks")),
+            new BlockItem(CRACKED_WARPED_NETHER_BRICKS, new Item.Properties().setId(ResourceKey.create(Registries.ITEM, Naturality.id("cracked_warped_nether_bricks")))
                 .useBlockDescriptionPrefix()));
 
         public static final Block BASALT_WALL = Blocks.register(
@@ -205,10 +301,31 @@ public final class ContentRegistration {
 
         public static void initialize() {
             naturality.api.blocks.FallingLayerBlock.initialize();
+            IRON_GRATE_ITEM.registerBlocks(Item.BY_BLOCK, IRON_GRATE_ITEM);
+            IRON_LATTICE_ITEM.registerBlocks(Item.BY_BLOCK, IRON_LATTICE_ITEM);
+            CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.BUILDING_BLOCKS)
+                .register(output -> output.insertAfter(Blocks.IRON_BLOCK, IRON_GRATE, IRON_LATTICE));
             ASH_ITEM.registerBlocks(Item.BY_BLOCK, ASH_ITEM);
             ASH_BLOCK_ITEM.registerBlocks(Item.BY_BLOCK, ASH_BLOCK_ITEM);
             CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.NATURAL_BLOCKS)
                 .register(output -> output.insertAfter(Blocks.SAND, ASH_BLOCK, ASH));
+            CRIMSON_NETHER_BRICK_FENCE_ITEM.registerBlocks(Item.BY_BLOCK, CRIMSON_NETHER_BRICK_FENCE_ITEM);
+            CHISELED_CRIMSON_NETHER_BRICKS_ITEM.registerBlocks(Item.BY_BLOCK, CHISELED_CRIMSON_NETHER_BRICKS_ITEM);
+            CRACKED_CRIMSON_NETHER_BRICKS_ITEM.registerBlocks(Item.BY_BLOCK, CRACKED_CRIMSON_NETHER_BRICKS_ITEM);
+            CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.BUILDING_BLOCKS)
+                .register(output -> output.insertAfter(Blocks.RED_NETHER_BRICKS, CRACKED_CRIMSON_NETHER_BRICKS,
+                    CHISELED_CRIMSON_NETHER_BRICKS, CRIMSON_NETHER_BRICK_FENCE));
+            WARPED_NETHER_BRICKS_ITEM.registerBlocks(Item.BY_BLOCK, WARPED_NETHER_BRICKS_ITEM);
+            WARPED_NETHER_BRICK_STAIRS_ITEM.registerBlocks(Item.BY_BLOCK, WARPED_NETHER_BRICK_STAIRS_ITEM);
+            WARPED_NETHER_BRICK_SLAB_ITEM.registerBlocks(Item.BY_BLOCK, WARPED_NETHER_BRICK_SLAB_ITEM);
+            WARPED_NETHER_BRICK_WALL_ITEM.registerBlocks(Item.BY_BLOCK, WARPED_NETHER_BRICK_WALL_ITEM);
+            WARPED_NETHER_BRICK_FENCE_ITEM.registerBlocks(Item.BY_BLOCK, WARPED_NETHER_BRICK_FENCE_ITEM);
+            CHISELED_WARPED_NETHER_BRICKS_ITEM.registerBlocks(Item.BY_BLOCK, CHISELED_WARPED_NETHER_BRICKS_ITEM);
+            CRACKED_WARPED_NETHER_BRICKS_ITEM.registerBlocks(Item.BY_BLOCK, CRACKED_WARPED_NETHER_BRICKS_ITEM);
+            CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.BUILDING_BLOCKS)
+                .register(output -> output.insertAfter(CRIMSON_NETHER_BRICK_FENCE, WARPED_NETHER_BRICKS,
+                    CRACKED_WARPED_NETHER_BRICKS, CHISELED_WARPED_NETHER_BRICKS, WARPED_NETHER_BRICK_STAIRS,
+                    WARPED_NETHER_BRICK_SLAB, WARPED_NETHER_BRICK_WALL, WARPED_NETHER_BRICK_FENCE));
             BASALT_WALL_ITEM.registerBlocks(Item.BY_BLOCK, BASALT_WALL_ITEM);
             POLISHED_BASALT_WALL_ITEM.registerBlocks(Item.BY_BLOCK, POLISHED_BASALT_WALL_ITEM);
             CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.BUILDING_BLOCKS)
@@ -313,6 +430,8 @@ public final class ContentRegistration {
             Naturality.id("rain_cluster"),FabricParticleTypes.simple());
         public static final SimpleParticleType SNOW_CLUSTER=Registry.register(BuiltInRegistries.PARTICLE_TYPE,
             Naturality.id("snow_cluster"),FabricParticleTypes.simple());
+        public static final SimpleParticleType ASH_CLUSTER=Registry.register(BuiltInRegistries.PARTICLE_TYPE,
+            Naturality.id("ash_cluster"),FabricParticleTypes.simple());
         public static final SimpleParticleType WATERFALL=Registry.register(BuiltInRegistries.PARTICLE_TYPE,
             Naturality.id("waterfall"),FabricParticleTypes.simple());
         public static final SimpleParticleType WATERFALL_BIG=Registry.register(BuiltInRegistries.PARTICLE_TYPE,

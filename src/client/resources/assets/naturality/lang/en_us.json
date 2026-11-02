@@ -1,4 +1,18 @@
 {
+  "block.naturality.iron_grate": "Iron Grate",
+  "block.naturality.iron_lattice": "Iron Lattice",
+  "block.naturality.warped_nether_bricks": "Warped Nether Bricks",
+  "block.naturality.warped_nether_brick_stairs": "Warped Nether Brick Stairs",
+  "block.naturality.warped_nether_brick_slab": "Warped Nether Brick Slab",
+  "block.naturality.warped_nether_brick_wall": "Warped Nether Brick Wall",
+  "block.naturality.warped_nether_brick_fence": "Warped Nether Brick Fence",
+  "block.naturality.chiseled_warped_nether_bricks": "Chiseled Warped Nether Bricks",
+  "block.naturality.cracked_warped_nether_bricks": "Cracked Warped Nether Bricks",
+
+  "block.naturality.crimson_nether_brick_fence": "Crimson Nether Brick Fence",
+  "block.naturality.chiseled_crimson_nether_bricks": "Chiseled Crimson Nether Bricks",
+  "block.naturality.cracked_crimson_nether_bricks": "Cracked Crimson Nether Bricks",
+
   "biome.naturality.crimson_plains": "Crimson Plains",
   "biome.naturality.warped_plains": "Warped Plains",
   "item.naturality.barometer": "Barometer",
@@ -363,7 +377,7 @@
   "naturality.config.feature.content.tooltip": "Register Naturality blocks, items, status effects and custom entities, with their recipes and world data. Enable before opening worlds that contain this content.",
   "naturality.config.feature.end_terrain": "End terrain shapes",
   "naturality.config.feature.nether_terrain": "Expanded Nether terrain and lava lakes",
-  "naturality.config.feature.nether_terrain.tooltip": "Stretch new Nether terrain to 256 blocks tall, with raised lava lakes at levels 52, 64 and 76, sealed basin beds and connected lavafalls. Requires restart. Existing chunks are unchanged.",
+  "naturality.config.feature.nether_terrain.tooltip": "Fill new Nether terrain to 256 blocks tall, smoothly blending stretched caverns with regions of original-scale terrain, with raised lava lakes at levels 52, 64 and 76, sealed basin beds and connected lavafalls. Requires restart. Existing chunks are unchanged.",
   "naturality.config.feature.ocean_terrain": "Ocean terrain styles",
   "naturality.config.feature.ocean_terrain.tooltip": "Generate deeper offshore oceans with broad beach shelves and large, smoothly blended vanilla, paths, spires, cracks and stepped-platform regions in new chunks. Requires restart.",
   "naturality.config.feature.end_terrain.tooltip": "Generate Naturality's outer End island shapes in new chunks.",

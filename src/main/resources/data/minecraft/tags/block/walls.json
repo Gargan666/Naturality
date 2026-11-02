@@ -1,7 +1,8 @@
 {
-  "values": [
-    "naturality:basalt_wall",
-    "naturality:polished_basalt_wall"
-  ],
-  "replace": false
+    "values":  [
+                   "naturality:basalt_wall",
+                   "naturality:polished_basalt_wall",
+                   "naturality:warped_nether_brick_wall"
+               ],
+    "replace":  false
 }

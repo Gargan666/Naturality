@@ -1,0 +1,13 @@
+{
+  "variants": {
+    "type=bottom": {
+      "model": "naturality:block/warped_nether_brick_slab"
+    },
+    "type=double": {
+      "model": "naturality:block/warped_nether_bricks"
+    },
+    "type=top": {
+      "model": "naturality:block/warped_nether_brick_slab_top"
+    }
+  }
+}

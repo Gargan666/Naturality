@@ -35,6 +35,11 @@ public final class DurabilityMixins {
     @Mixin(ItemStack.class)
     @org.jspecify.annotations.NullMarked
     public static abstract class DurabilityStackMixin {
+        @com.llamalad7.mixinextras.injector.ModifyReturnValue(method = "isValidRepairItem", at = @At("RETURN"))
+        private boolean naturality$repairMaterials(boolean original, ItemStack material) {
+            return ItemDurability.isValidRepairMaterial((ItemStack)(Object)this, material, original);
+        }
+
         @com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod(method = "applyDamage")
         private void naturality$breakOnce(int newDamage, net.minecraft.server.level.@Nullable ServerPlayer player,
                 java.util.function.Consumer<ItemStack> onBreak, Operation<Void> original) {

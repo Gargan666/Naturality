@@ -50,6 +50,19 @@ import net.minecraft.server.packs.resources.Resource;
 public final class FogMixins {
     private FogMixins() {}
 
+    @Mixin(ClientLevel.class)
+    @org.jspecify.annotations.NullMarked
+    public static abstract class NetherLavaFogLakeMixin {
+        @Inject(method = {"sendBlockUpdated", "setBlocksDirty"}, at = @At("HEAD"))
+        private void naturality$invalidateLavaFogLake(CallbackInfo ci,
+                @Local(argsOnly = true) net.minecraft.core.BlockPos position,
+                @Local(argsOnly = true, ordinal = 0) net.minecraft.world.level.block.state.BlockState previous,
+                @Local(argsOnly = true, ordinal = 1) net.minecraft.world.level.block.state.BlockState current) {
+            if (previous.isSolidRender() != current.isSolidRender() || previous.getFluidState() != current.getFluidState())
+                naturality.client.rendering.fog.NetherLavaFog.lakeChanged((ClientLevel)(Object)this, position);
+        }
+    }
+
     @Mixin(AtmosphericFogEnvironment.class)
     @org.jspecify.annotations.NullMarked
     public static abstract class DirectionalAtmosphereFogMixin {
@@ -74,6 +87,7 @@ public final class FogMixins {
         @Unique private @org.jspecify.annotations.Nullable ChunkSectionsToRender naturality$waterChunks;
         @Unique private boolean naturality$replayTransparency;
         @Unique private boolean naturality$backgroundClouds;
+        @Unique private boolean naturality$lavaFogRendered;
         @SuppressWarnings("null") @Shadow @Final private CloudRenderer cloudRenderer;
         @SuppressWarnings("null") @Shadow @Final private net.minecraft.client.renderer.state.OptionsRenderState optionsRenderState;
         @SuppressWarnings("null") @Shadow @Final private net.minecraft.client.renderer.state.level.LevelRenderState levelRenderState;
@@ -94,13 +108,15 @@ public final class FogMixins {
             naturality$fog = fog;
             naturality$clouds = null;
             naturality$backgroundClouds = false;
+            naturality$lavaFogRendered = false;
             naturality$waterChunks = null;
         }
 
         @Inject(method = "executeClassicTransparency", at = @At("HEAD"), cancellable = true)
         private void naturality$holdWaterTransparency(ChunkSectionsToRender chunks,
                 FeatureRenderDispatcher.PreparedFrame features, RenderPass pass, CallbackInfo ci) {
-            if (!naturality$replayTransparency && naturality.client.fluids.water.WaterVisuals.ready()) {
+            if (!naturality$replayTransparency && (naturality.client.fluids.water.WaterVisuals.ready()
+                    || naturality.client.rendering.fog.NetherLavaFog.enabled())) {
                 // Close the opaque pass before sampling its color/depth for optics.
                 naturality$waterChunks = chunks;
                 ci.cancel();
@@ -114,6 +130,10 @@ public final class FogMixins {
             if (naturality.client.api.rendering.ShaderPacks.active()) return;
             naturality.client.fluids.water.WaterComposite.render(targets.main.get(), chunks, features, true);
             var target = targets.main.get();
+            // Composite against opaque depth before OIT replaces it with the
+            // nearest translucent surface. Lava tails then reveal this backdrop.
+            naturality.client.rendering.fog.NetherLavaFog.render(target, naturality$fog);
+            naturality$lavaFogRendered = true;
             var color = target.getColorTextureView();
             if (color == null || !naturality$needsBackgroundClouds()) return;
             naturality.client.sky.shared.clouds.CloudLayerRenderer.WaterOrder.prepare(target,cloudRenderer,optionsRenderState.cloudStatus);
@@ -186,6 +206,8 @@ public final class FogMixins {
             var waterChunks = naturality$waterChunks;
             if (waterChunks != null) {
                 naturality.client.fluids.water.WaterComposite.render(target, waterChunks, features, false);
+                naturality.client.rendering.fog.NetherLavaFog.render(target, naturality$fog);
+                naturality$lavaFogRendered = true;
                 if(naturality$needsBackgroundClouds())
                     naturality.client.sky.shared.clouds.CloudLayerRenderer.WaterOrder.prepare(target,cloudRenderer,optionsRenderState.cloudStatus);
                 naturality$replayTransparency = true;
@@ -200,6 +222,8 @@ public final class FogMixins {
                 }
             }
             naturality.client.rendering.heatwaves.HeatWaves.render(target);
+            if (!naturality$lavaFogRendered)
+                naturality.client.rendering.fog.NetherLavaFog.render(target, naturality$fog);
             EndFogComposite.render(target, naturality$fog);
             naturality.client.sky.shared.aurora.AuroraRenderer.render(target);
             if(naturality$backgroundClouds) {
@@ -237,6 +261,7 @@ public final class FogMixins {
         private void naturality$close(CallbackInfo ci) {
             naturality.client.api.rendering.ShaderPacks.close();
             EndFogComposite.close();
+            naturality.client.rendering.fog.NetherLavaFog.close();
             naturality.client.rendering.heatwaves.HeatWaves.close();
             naturality.client.sky.shared.aurora.AuroraRenderer.close();
             naturality.client.fluids.water.WaterComposite.close();
@@ -249,6 +274,8 @@ public final class FogMixins {
     @org.jspecify.annotations.NullMarked
     public static abstract class EndFogTransparencyMixin {
         @Unique private boolean naturality$transparentEnd;
+        @Unique private boolean naturality$smoothNether;
+        @Unique private boolean naturality$lavaFog;
         @Unique private float naturality$caveFog = 1.0F;
 
         @Inject(method = "setupFog", at = @At("RETURN"))
@@ -256,6 +283,9 @@ public final class FogMixins {
                 float darken, ClientLevel level, CallbackInfoReturnable<FogData> cir) {
             naturality$transparentEnd = level.dimension().equals(net.minecraft.world.level.Level.END)
                 && EndFogTransparency.isActive(level, camera);
+            naturality$smoothNether = level.dimension().equals(Level.NETHER)
+                && camera.getFluidInCamera() == net.minecraft.world.level.material.FogType.NONE;
+            naturality$lavaFog = naturality.client.rendering.fog.NetherLavaFog.enabled(level, camera);
             naturality$caveFog = naturality.client.rendering.lighting.hardcore.HardcoreDarkness.caveFog(level, camera);
             if (level.dimension().equals(net.minecraft.world.level.Level.END)
                     && camera.getFluidInCamera() == net.minecraft.world.level.material.FogType.NONE
@@ -275,6 +305,10 @@ public final class FogMixins {
             // Magnitudes 2..3 carry world-only fog brightness. Sign still selects
             // the atmosphere composite. Never change FogData's sky/clear RGB.
             float alpha = naturality$caveFog < 1.0F ? 2.0F + naturality$caveFog : 1.0F;
+            // 4..5 selects continuous Nether fog while retaining the same brightness.
+            if (naturality$smoothNether) alpha = 4.0F + naturality$caveFog;
+            // 6..7 additionally enables molten terrain's matching lava atmosphere.
+            if (naturality$lavaFog) alpha = 6.0F + naturality$caveFog;
             return new Vector4f(color.x, color.y, color.z, naturality$transparentEnd ? -alpha : alpha);
         }
     }

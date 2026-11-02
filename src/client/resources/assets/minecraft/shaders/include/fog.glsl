@@ -29,7 +29,7 @@ float linear_fog_value(float vertexDistance, float fogStart, float fogEnd) {
 
     float amount = (vertexDistance - fogStart) / (fogEnd - fogStart);
     #ifdef NATURALITY_FRAGMENT_FOG
-    if (!NATURALITY_FOG_ENABLED) return amount;
+    if (!NATURALITY_FOG_ENABLED || FogColor.a >= 4.0) return amount;
     float pixelAmount = clamp((pixelDistance - fogStart) / (fogEnd - fogStart), 0.0, 1.0);
     float borderStrength = smoothstep(NATURALITY_FOG_BORDER_START, NATURALITY_FOG_BORDER_FULL, amount);
     return mix(amount, naturality_fog_density(pixelAmount), borderStrength);
@@ -45,6 +45,8 @@ float total_fog_value(float sphericalVertexDistance, float cylindricalVertexDist
 }
 
 float naturality_world_fog_brightness(float encodedAlpha) {
+    if (encodedAlpha >= 6.0) return clamp(encodedAlpha - 6.0, 0.0, 1.0);
+    if (encodedAlpha >= 4.0) return clamp(encodedAlpha - 4.0, 0.0, 1.0);
     return abs(encodedAlpha) >= 2.0 ? clamp(abs(encodedAlpha) - 2.0, 0.0, 1.0) : 1.0;
 }
 

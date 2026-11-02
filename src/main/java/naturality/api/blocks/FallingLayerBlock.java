@@ -193,6 +193,7 @@ public class FallingLayerBlock extends FallingBlock {
             int placed = Math.min(count,layers.maximumLayers(level,pos));
             BlockState settled = falling.setValue(LAYERS,placed);
             if (settled.hasProperty(WATERLOGGED)) settled = settled.setValue(WATERLOGGED,level.getFluidState(pos).is(Fluids.WATER));
+            settled = naturality.blocks.lavalogging.BlockLavalogging.placement(settled, level, pos);
             if (level.setBlockAndUpdate(pos,settled)) count -= placed;
         }
         if (count > 0 && entity.dropItem && level.getGameRules().get(GameRules.ENTITY_DROPS)) {

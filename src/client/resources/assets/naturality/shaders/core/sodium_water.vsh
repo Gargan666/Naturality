@@ -44,6 +44,7 @@ layout(location=13) out vec2 naturalityFireUV;
 layout(location=14) flat out vec3 naturalityFireSeed;
 layout(location=19) out vec2 naturalityFireShape;
 layout(location=15) flat out int naturalitySubmerged;
+layout(location=20) flat out int naturalityLava;
 layout(location=16) flat out int naturalityGlassKind;
 layout(location=17) out vec3 naturalityGlassRelative;
 layout(location=18) flat out vec3 naturalityGlassForward;
@@ -81,6 +82,7 @@ void main() {
     vertexColor=vec4(1.0);
     #endif
     naturalityFluidKind=-1;
+    naturalityLava=0;
     naturalityFluidUV=vec2(0.0);
     naturalityFlow=vec3(0.0); // Unencoded handler geometry retains derivative-based flow.
     bool fluidSprite=false;
@@ -91,6 +93,7 @@ void main() {
             fluidSprite=true;
             naturalitySubmerged=i<2?-1:0;
             naturalityFluidKind=(NaturalityFluidInfo.w & (1<<i))!=0?i:-1;
+            naturalityLava=i>=2?1:0;
             naturalityFluidUV=(texCoord0-b.xy)/(b.zw-b.xy);
             int flowCode=int(round(_vert_color.a*255.0));
             if((a_Position.x & (1u<<31u))!=0u && flowCode<255) {

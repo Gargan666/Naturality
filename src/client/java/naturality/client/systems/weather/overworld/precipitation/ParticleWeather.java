@@ -29,7 +29,7 @@ import org.joml.Quaternionf;
 public final class ParticleWeather {
     public static final int MAX_CLUSTERS = 1536;
     public static final double RAIN_FALL_SPEED = 0.7;
-    private static final double MAX_CARD_EXTENT = 3.4;
+    public static final double MAX_CARD_EXTENT = 3.4;
     private static final ArrayList<WeatherClusterParticle> ACTIVE = new ArrayList<>();
     private static final RandomSource RANDOM = RandomSource.create();
     private static @org.jspecify.annotations.Nullable ClientLevel world;
@@ -168,9 +168,16 @@ public final class ParticleWeather {
 
     /** One velocity-aligned card contains many drops/flakes; no per-drop simulation. */
     public static final class WeatherClusterParticle extends SingleQuadParticle {
+        /** Local weather supplies exposure rules without changing the shared card simulation. */
+        public interface Environment {
+            boolean active(ClientLevel level, BlockPos position);
+            double clearance(ClientLevel level, double x, double y, double z);
+        }
         private static final ParticleLimit LIMIT = new ParticleLimit(1600);
         private static final Optional<ParticleLimit> OPTIONAL_LIMIT = Optional.of(LIMIT);
         private final boolean snow;
+        private final double motionSpeed;
+        private final @org.jspecify.annotations.Nullable Environment environment;
         private final boolean menuPreview;
         private final boolean flip;
         private final double fallSpeed;
@@ -180,6 +187,10 @@ public final class ParticleWeather {
         private final BlockPos.MutableBlockPos queryPos=new BlockPos.MutableBlockPos();
         private long lastTickTime;
         private float opacity;
+        private float previousOpacity;
+        private static final int RETIRE_TICKS = 8;
+        private int retirementAge = -1;
+        private float retirementOpacity;
         private float snowFallMultiplier=1;
         private boolean boundsDirty;
         public static void initialize() {
@@ -203,8 +214,15 @@ public final class ParticleWeather {
         }
         private WeatherClusterParticle(ClientLevel level, double x, double y, double z,
                 TextureAtlasSprite sprite, RandomSource random, boolean snow) {
+            this(level, x, y, z, sprite, random, snow, 1, null);
+        }
+        public WeatherClusterParticle(ClientLevel level, double x, double y, double z,
+                TextureAtlasSprite sprite, RandomSource random, boolean snow, double motionSpeed,
+                @org.jspecify.annotations.Nullable Environment environment) {
             super(level,x,y,z,sprite);
             this.snow = snow;
+            this.motionSpeed = motionSpeed;
+            this.environment = environment;
             menuPreview = naturality.client.ui.menus.previews.MenuPreview.active();
             flip = random.nextBoolean();
             double phase=random.nextDouble()*Math.PI*2;
@@ -226,6 +244,14 @@ public final class ParticleWeather {
         public Vec3 position() { return new Vec3(x,y,z); }
         public long lastTickTime() { return lastTickTime; }
         public Vec3 velocity() { return new Vec3(xd,yd,zd); }
+        public boolean retiring() { return retirementAge >= 0; }
+        /** Start dissolving without changing the card's velocity. */
+        public void retire() {
+            if (environment == null) { remove(); return; }
+            if (retiring()) return;
+            retirementAge = 0;
+            retirementOpacity = opacity;
+        }
         // These cards do not collide, and vanilla frustum tests use their position.
         // Build the immutable box only when a caller actually asks for it.
         @Override public void setPos(double x,double y,double z) {
@@ -268,16 +294,43 @@ public final class ParticleWeather {
                 yd=-fallSpeed;
             }
         }
+        private void tickRetirement(boolean updateMotion) {
+            var localEnvironment = environment;
+            if (localEnvironment == null) return;
+            // Retain a fully transparent tick so interpolation reaches zero.
+            if (retirementAge >= RETIRE_TICKS) { remove(); return; }
+            if (updateMotion) updateVelocity(WeatherParticleContext.state(level), false);
+            double speed = motionSpeed * naturality.client.systems.sleep.SleepVisuals.speed();
+            double nx = x + xd * speed, ny = y + yd * speed, nz = z + zd * speed;
+            if (localEnvironment.clearance(level, nx, ny, nz) > 0) setPos(nx, ny, nz);
+            else {
+                // Keep drifting along an obstruction instead of crossing it.
+                if (localEnvironment.clearance(level, nx, y, z) > 0) setPos(nx, y, z);
+                if (localEnvironment.clearance(level, x, ny, z) > 0) setPos(x, ny, z);
+                if (localEnvironment.clearance(level, x, y, nz) > 0) setPos(x, y, nz);
+            }
+            float progress = ++retirementAge / (float)RETIRE_TICKS;
+            opacity = retirementOpacity * (1 - progress * progress * (3 - 2 * progress));
+        }
         @Override public void tick() {
             lastTickTime = level.getGameTime();
             xo=x; yo=y; zo=z; oRoll=roll;
+            previousOpacity = opacity;
+            if (retiring()) {
+                tickRetirement(true);
+                return;
+            }
+            if (environment != null && age >= lifetime - RETIRE_TICKS) { retire(); tickRetirement(true); return; }
             if (++age >= lifetime) { remove(); return; }
             var weather = WeatherParticleContext.state(level);
-            if (!weather.enabled()) { remove(); return; }
-            var kind = WeatherParticleContext.precipitation(level, queryPos.set(x,y,z));
-            if (kind != (snow ? Biome.Precipitation.SNOW : Biome.Precipitation.RAIN)) { remove(); return; }
+            var localEnvironment = environment;
+            if (localEnvironment == null) {
+                if (!weather.enabled()) { remove(); return; }
+                var kind = WeatherParticleContext.precipitation(level, queryPos.set(x,y,z));
+                if (kind != (snow ? Biome.Precipitation.SNOW : Biome.Precipitation.RAIN)) { remove(); return; }
+            } else if (!localEnvironment.active(level, queryPos.set(x,y,z))) { retire(); tickRetirement(true); return; }
             updateVelocity(weather,false);
-            double speed = menuPreview ? 4 : naturality.client.systems.sleep.SleepVisuals.speed();
+            double speed = motionSpeed * (menuPreview ? 4 : naturality.client.systems.sleep.SleepVisuals.speed());
             double nx=x+xd*speed, ny=y+yd*speed, nz=z+zd*speed;
             if (menuPreview) {
                 if (!naturality.client.ui.menus.previews.MenuPreview.active() || !ParticleWeather.previewContains(new Vec3(nx,ny,nz))) { remove(); return; }
@@ -297,14 +350,22 @@ public final class ParticleWeather {
                     new Vec3(x + offsetX, y + offsetY, z + offsetZ),
                     new Vec3(nx + offsetX, ny + offsetY, nz + offsetZ));
             }
-            double clearance = ParticleWeather.clearance(level,nx,ny,nz,0);
-            if (clearance <= 0) { remove(); return; }
+            double clearance = localEnvironment == null ? ParticleWeather.clearance(level,nx,ny,nz,0)
+                : localEnvironment.clearance(level,nx,ny,nz);
+            if (clearance <= 0) { retire(); tickRetirement(false); return; }
+            // Begin dissolving before reaching shelter, leaving room to drift
+            // throughout the fade rather than waiting until movement is blocked.
+            if (localEnvironment != null && localEnvironment.clearance(level,
+                    x + xd * speed * RETIRE_TICKS, y + yd * speed * RETIRE_TICKS,
+                    z + zd * speed * RETIRE_TICKS) <= 0) {
+                retire(); tickRetirement(false); return;
+            }
             var eye = weather.eye();
             double dx=nx-eye.x, dy=ny-eye.y, dz=nz-eye.z;
             double horizontalSquared=dx*dx+dz*dz;
             int radius=weather.radius();
             // Preserve the existing camera-near weather volume, independent of facing/occlusion.
-            if(horizontalSquared>(radius+2)*(radius+2) || ny<eye.y-8 || ny>eye.y+16) {remove();return;}
+            if(horizontalSquared>(radius+2)*(radius+2) || ny<eye.y-8 || ny>eye.y+16) {retire();tickRetirement(false);return;}
             double distanceSquared=horizontalSquared+dy*dy;
             float nearFade=distanceSquared>=9?1:Math.clamp((float)(Math.sqrt(distanceSquared)-1)/2,0,1);
             float edgeFade=radius>=2 && horizontalSquared<=(radius-2)*(radius-2)?1
@@ -319,7 +380,7 @@ public final class ParticleWeather {
             var eye=camera.position();
             double px=Mth.lerp(partial,xo,x)-eye.x,py=Mth.lerp(partial,yo,y)-eye.y,pz=Mth.lerp(partial,zo,z)-eye.z;
             var rotation=ParticleGeometry.orientation(xd,yd,zd,-px,-py,-pz,orientationBasis,orientationRotation);
-            alpha=opacity;
+            alpha=environment == null ? opacity : Mth.lerp(partial, previousOpacity, opacity);
             extractRotatedQuad(output,rotation,(float)px,(float)py,(float)pz,partial);
         }
         @Override protected int getLightCoords(float partial) {

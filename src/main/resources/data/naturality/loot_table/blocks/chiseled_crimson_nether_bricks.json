@@ -1,0 +1,18 @@
+{
+  "pools": [
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "naturality:chiseled_crimson_nether_bricks"
+        }
+      ],
+      "condition": {
+        "type": "minecraft:survives_explosion"
+      }
+    }
+  ],
+  "type": "minecraft:block",
+  "random_sequence": "naturality:blocks/chiseled_crimson_nether_bricks"
+}
