@@ -1,0 +1,13 @@
+{
+  "variants": {
+    "type=bottom": {
+      "model": "naturality:block/golden_concrete_slab"
+    },
+    "type=double": {
+      "model": "naturality:block/golden_concrete"
+    },
+    "type=top": {
+      "model": "naturality:block/golden_concrete_slab_top"
+    }
+  }
+}

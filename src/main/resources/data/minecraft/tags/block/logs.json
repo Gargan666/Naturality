@@ -4,6 +4,7 @@
     {
       "id": "naturality:charred_log",
       "required": false
-    }
+    },
+    "#naturality:gilded_stems"
   ]
 }

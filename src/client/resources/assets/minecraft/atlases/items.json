@@ -1,0 +1,28 @@
+{
+  "sources": [
+    {
+      "type": "minecraft:single",
+      "resource": "naturality:item/golden_bundle"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "naturality:item/golden_bundle_open_back"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "naturality:item/golden_bundle_open_front"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "naturality:item/golden_candle"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "naturality:item/golden_cushion"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "naturality:item/golden_harness"
+    }
+  ]
+}

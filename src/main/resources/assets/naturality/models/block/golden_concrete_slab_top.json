@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/slab_top",
+  "textures": {
+    "bottom": "naturality:block/golden_concrete",
+    "side": "naturality:block/golden_concrete",
+    "top": "naturality:block/golden_concrete"
+  }
+}

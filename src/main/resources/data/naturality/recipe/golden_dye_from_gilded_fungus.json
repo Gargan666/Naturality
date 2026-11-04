@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "naturality:gilded_fungus"
+  ],
+  "result": {
+    "id": "naturality:golden_dye",
+    "count": 1
+  }
+}

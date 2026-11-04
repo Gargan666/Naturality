@@ -1,0 +1,21 @@
+{
+  "variants": {
+    "": [
+      {
+        "model": "naturality:block/golden_concrete_powder"
+      },
+      {
+        "model": "naturality:block/golden_concrete_powder",
+        "y": 90
+      },
+      {
+        "model": "naturality:block/golden_concrete_powder",
+        "y": 180
+      },
+      {
+        "model": "naturality:block/golden_concrete_powder",
+        "y": 270
+      }
+    ]
+  }
+}

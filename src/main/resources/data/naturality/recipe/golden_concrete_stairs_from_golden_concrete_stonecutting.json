@@ -1,0 +1,7 @@
+{
+  "type": "minecraft:stonecutting",
+  "ingredient": "naturality:golden_concrete",
+  "result": {
+    "id": "naturality:golden_concrete_stairs"
+  }
+}

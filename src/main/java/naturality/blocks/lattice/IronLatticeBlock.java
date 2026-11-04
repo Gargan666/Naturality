@@ -2,6 +2,7 @@ package naturality.blocks.lattice;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.Block;
@@ -13,20 +14,19 @@ import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.EnumProperty;
 import net.minecraft.world.level.material.Fluids;
+import net.minecraft.world.level.pathfinder.PathComputationType;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
-/** A full-face lattice with one pixel of collision extending into its block. */
+/** A centered lattice plane surrounded by two pixels of collision thickness. */
 @org.jspecify.annotations.NullMarked
 public final class IronLatticeBlock extends WaterloggedTransparentBlock {
     public static final EnumProperty<Direction> FACING = BlockStateProperties.FACING;
-    private static final VoxelShape DOWN = Block.box(0, 0, 0, 16, 1, 16);
-    private static final VoxelShape UP = Block.box(0, 15, 0, 16, 16, 16);
-    private static final VoxelShape NORTH = Block.box(0, 0, 0, 16, 16, 1);
-    private static final VoxelShape SOUTH = Block.box(0, 0, 15, 16, 16, 16);
-    private static final VoxelShape WEST = Block.box(0, 0, 0, 1, 16, 16);
-    private static final VoxelShape EAST = Block.box(15, 0, 0, 16, 16, 16);
+    private static final VoxelShape HORIZONTAL = Block.box(0, 7, 0, 16, 9, 16);
+    private static final VoxelShape NORTH_SOUTH = Block.box(0, 0, 7, 16, 16, 9);
+    private static final VoxelShape EAST_WEST = Block.box(7, 0, 0, 9, 16, 16);
 
     public IronLatticeBlock(Properties properties) {
         super(properties);
@@ -55,13 +55,23 @@ public final class IronLatticeBlock extends WaterloggedTransparentBlock {
     @Override
     protected VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
         return switch (state.getValue(FACING)) {
-            case DOWN -> DOWN;
-            case UP -> UP;
-            case NORTH -> NORTH;
-            case SOUTH -> SOUTH;
-            case WEST -> WEST;
-            case EAST -> EAST;
+            case DOWN, UP -> HORIZONTAL;
+            case NORTH, SOUTH -> NORTH_SOUTH;
+            case WEST, EAST -> EAST_WEST;
         };
+    }
+
+    @Override
+    protected VoxelShape getBlockSupportShape(BlockState state, BlockGetter level, BlockPos pos) {
+        return Shapes.empty();
+    }
+
+    @Override
+    protected boolean isPathfindable(BlockState state, PathComputationType type) {
+        // Like slabs, lattice cells are collision obstacles rather than open air.
+        // Ground navigation then finds the walkable cell above and uses the real
+        // collision height (9/16 for horizontal panels) as its floor level.
+        return type == PathComputationType.WATER && state.getFluidState().is(FluidTags.WATER);
     }
 
     @Override

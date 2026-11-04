@@ -15,7 +15,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 /** Conservative palette queries scoped to one synchronous ray, including nested rays. */
 @org.jspecify.annotations.NullMarked
 public final class RaycastShapePresence {
-    public static final int FIRE=1, SNOW=2, WIND=4;
+    public static final int FIRE=1, SNOW=2, WIND=4, BANNER=16;
     private static final int KNOWN=8;
     private static final ThreadLocal<ScopeStack> SCOPES=ThreadLocal.withInitial(ScopeStack::new);
     private static final class ScopeStack {
@@ -86,6 +86,8 @@ public final class RaycastShapePresence {
                         if(section.maybeHas(s -> s.getBlock() instanceof BaseFireBlock))presence|=FIRE;
                         if(section.maybeHas(s -> s.is(Blocks.SNOW) || naturality.blocks.ash.Ash.isLayer(s)))presence|=SNOW;
                         if(section.maybeHas(WindShapes::eligible))presence|=WIND;
+                        if(section.maybeHas(s -> s.getBlock() instanceof net.minecraft.world.level.block.WallBannerBlock
+                                || s.getBlock() instanceof naturality.blocks.banner.BannerPlacement.Segment))presence|=BANNER;
                     }
                 }
                 if(scope.sections.size()<256)scope.sections.put(key,(byte)presence);

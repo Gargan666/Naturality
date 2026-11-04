@@ -67,6 +67,8 @@ layout(location = 16) flat in int naturalityGlassKind;
 layout(location = 17) in vec3 naturalityGlassRelative;
 layout(location = 18) flat in vec3 naturalityGlassForward;
 #include <naturality:glass_shine.glsl>
+#define NATURALITY_GOLD_FRAGMENT
+#include <naturality:golden_lines.glsl>
 
 vec4 calculateFinalColor(vec4 color, bool waterSprite, bool submergedTerrain) {
     vec3 waterOffset = naturalityBlockPosition
@@ -183,6 +185,13 @@ void main() {
     if (fallingFluidTail && tailOpacity <= 0.0) discard;
     vec3 positionDx = dFdx(naturalityBlockPosition), positionDy = dFdy(naturalityBlockPosition);
     vec3 derivativeNormal = cross(positionDx, positionDy);
+    // Repeat by the complete palette walk; integer section origins keep the grid
+    // continuous across chunk boundaries without far-world floating-point drift.
+    float goldPeriod = naturality_gold_period();
+    vec3 goldPosition = naturalityBlockPosition + mod(vec3(naturalitySectionOrigin), goldPeriod);
+    vec2 goldenGrid = naturality_gold_surface_grid(goldPosition, derivativeNormal);
+    vec4 goldenView = naturality_gold_pixel_view(goldenGrid, naturalityGlassRelative);
+    vec4 goldenTexel = texelFetch(Sampler0, ivec2(floor(texCoord0 * TextureSize)), 0);
     vec3 menuPosition = naturalityBlockPosition + naturalitySectionOrigin;
     vec3 menuNormal = derivativeNormal / max(length(derivativeNormal), 0.000001);
     if (!naturality_menu_surface_visible(menuPosition, menuNormal)) discard;
@@ -282,6 +291,9 @@ void main() {
         naturality_adaptive_light(light.rgb)
         * naturality_step_brightness(shade.rgb, NATURALITY_AO_STEPS), light.a * shade.a);
     vec4 surfaceColor = sampledColor;
+    if (naturality_golden_texel(goldenTexel.rgb)) {
+        surfaceColor.rgb = naturality_gold_overlay(vec3(goldenTexel.g), goldenGrid, goldenView);
+    }
     if (naturalityFluidKind >= 0)
         surfaceColor = naturality_fluid_color(naturalityFluidKind, naturalityBlockPosition, naturalitySectionOrigin, naturalityFluidUV, naturalityFlow);
     vec4 color = surfaceColor * lighting;

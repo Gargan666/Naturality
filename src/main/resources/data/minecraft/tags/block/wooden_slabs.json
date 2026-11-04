@@ -4,6 +4,7 @@
     {
       "id": "naturality:charred_slab",
       "required": false
-    }
+    },
+    "naturality:gilded_slab"
   ]
 }

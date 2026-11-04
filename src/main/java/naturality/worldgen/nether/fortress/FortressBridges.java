@@ -85,10 +85,25 @@ public final class FortressBridges {
                 || mushroom.is(Blocks.CRIMSON_FUNGUS) || mushroom.is(Blocks.WARPED_FUNGUS))
                 || !(level instanceof WorldGenLevel world)
                 || !world.getLevel().dimension().equals(net.minecraft.world.level.Level.NETHER)) return false;
-        Identifier support = BuiltInRegistries.BLOCK.getKey(level.getBlockState(pos.below()).getBlock());
-        // Includes vanilla and authored crimson/warped brick blocks, slabs, stairs and railings.
-        return (support.getNamespace().equals("minecraft") || support.getNamespace().equals("naturality"))
-            && support.getPath().contains("nether_brick");
+        return naturality.worldgen.shared.StructureProtection.isNetherBrick(level.getBlockState(pos.below()));
+    }
+
+    /** Roofs use the surrounding environment's spawn list, not fortress enemies. */
+    public static boolean isBuildingRooftop(StructureManager structures, BlockPos pos) {
+        Structure fortress = structures.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.STRUCTURE)
+            .getValue(net.minecraft.world.level.levelgen.structure.BuiltinStructures.FORTRESS);
+        if (fortress == null) return false;
+        var start = structures.getStructureAt(pos, fortress);
+        if (!start.isValid()) return false;
+        for (StructurePiece piece : start.getPieces()) {
+            if (!(piece instanceof HallPiece hall)) continue;
+            BlockPos origin = hall.origin();
+            if (pos.getY() < origin.getY() + 8 || pos.getY() > hall.getBoundingBox().maxY() + 1) continue;
+            Rotation inverse = Rotation.values()[(4 - hall.rotation.ordinal()) % 4];
+            BlockPos local = rotate(pos.subtract(origin), inverse);
+            if (hall.footprint.contains(local.getX(), local.getZ())) return true;
+        }
+        return false;
     }
 
     public static void initialize() {
@@ -150,11 +165,11 @@ public final class FortressBridges {
                     for (int y = low; y <= high; y++) {
                         BlockPos origin = new BlockPos(context.chunkPos().getBlockX(2) + dx, y,
                             context.chunkPos().getBlockZ(2) + dz);
-                        // Keep the enlarged west hall and all optional branches within
+                        // Keep randomized large-hall routes and all optional branches within
                         // the start chunk's vanilla eight-chunk reference neighborhood.
                         BoundingBox envelope = BoundingBox.fromCorners(
-                            origin.offset(rotate(new BlockPos(-108, 0, -96), rotation)),
-                            origin.offset(rotate(new BlockPos(96, 0, 96), rotation)));
+                            origin.offset(rotate(new BlockPos(-108, 0, -108), rotation)),
+                            origin.offset(rotate(new BlockPos(123, 0, 108), rotation)));
                         int chunkX = context.chunkPos().getBlockX(0), chunkZ = context.chunkPos().getBlockZ(0);
                         if (envelope.minX() < chunkX - 112 || envelope.maxX() > chunkX + 127
                                 || envelope.minZ() < chunkZ - 112 || envelope.maxZ() > chunkZ + 127) continue;
@@ -330,25 +345,18 @@ public final class FortressBridges {
         Placement junction = attach(templates, junctions.get(2), initial.exits().getFirst(), 0);
         pieces.addAll(junction.pieces());
         List<Connection> pending = new ArrayList<>();
-        Connection west = exitFacing(junction, rotation.rotate(Direction.WEST));
-        Placement largeGate = attach(templates, gate, west, 0);
-        Connection door = largeGate.exits().getFirst();
-        Rotation largeRotation = rotation.getRotated(Rotation.CLOCKWISE_90);
-        BlockPos target = door.anchor().relative(door.outward()).relative(door.outward().getClockWise(), BRIDGE_WIDTH - 1);
-        BlockPos largeOrigin = target.subtract(rotate(new BlockPos(51, 0, 0), largeRotation));
-        HallPiece large = new HallPiece(templates, largeOrigin, largeRotation, 106, 106, HallFootprint.large(random));
-        buildings.add(large);
-        pieces.addAll(largeGate.pieces());
+        Direction largeSide = random.nextBoolean() ? Direction.WEST : Direction.EAST;
+        pending.add(exitFacing(junction, rotation.rotate(largeSide)));
         Placement south = attach(templates, straight, exitFacing(junction, rotation.rotate(Direction.SOUTH)), 0);
         pieces.addAll(south.pieces());
         pending.addAll(south.exits());
-        Placement east = attach(templates, straight, exitFacing(junction, rotation.rotate(Direction.EAST)), 0);
+        Placement east = attach(templates, straight, exitFacing(junction, rotation.rotate(largeSide.getOpposite())), 0);
         pieces.addAll(east.pieces());
         Placement second = attach(templates, junctions.get(2), east.exits().getFirst(), 0);
         pieces.addAll(second.pieces());
         reserveSmallHall(templates, straight, gate, exitFacing(second, rotation.rotate(Direction.NORTH)), pieces, buildings);
         reserveSmallHall(templates, straight, gate, exitFacing(second, rotation.rotate(Direction.SOUTH)), pieces, buildings);
-        Placement onward = attach(templates, straight, exitFacing(second, rotation.rotate(Direction.EAST)), 0);
+        Placement onward = attach(templates, straight, exitFacing(second, rotation.rotate(largeSide.getOpposite())), 0);
         pieces.addAll(onward.pieces());
         Placement third = attach(templates, junctions.get(2), onward.exits().getFirst(), 0);
         pieces.addAll(third.pieces());
@@ -356,9 +364,9 @@ public final class FortressBridges {
         Placement last = attach(templates, straight, exitFacing(third, rotation.rotate(Direction.SOUTH)), 0);
         pieces.addAll(last.pieces());
         pending.addAll(last.exits());
-        pending.add(exitFacing(third, rotation.rotate(Direction.EAST)));
+        pending.add(exitFacing(third, rotation.rotate(largeSide.getOpposite())));
         List<Connection> terminals = new ArrayList<>();
-        int spans = 8;
+        int spans = 8 + reserveLargeHall(context, templates, straight, gate, junctions.getFirst(), pending, pieces, buildings);
         int loops = 0;
         while (spans < SECTION_COUNT && !pending.isEmpty()) {
             Connection next = pending.remove(random.nextInt(pending.size()));
@@ -482,6 +490,68 @@ public final class FortressBridges {
 
     private static Connection exitFacing(Placement placement, Direction direction) {
         return placement.exits().stream().filter(exit -> exit.outward() == direction).findFirst().orElseThrow();
+    }
+
+    /** Choose among complete, reachable routes rather than reserving one fixed side. */
+    private static int reserveLargeHall(Structure.GenerationContext context, StructureTemplateManager templates,
+            BridgeTemplate straight, BridgeTemplate gate, BridgeTemplate corner, List<Connection> pending,
+            List<BridgePiece> pieces, List<HallPiece> buildings) {
+        RandomSource random = context.random();
+        HallPiece selectedHall = null;
+        List<BridgePiece> selectedPieces = List.of();
+        Connection selectedStart = null;
+        int accepted = 0;
+        int chunkX = context.chunkPos().getBlockX(0), chunkZ = context.chunkPos().getBlockZ(0);
+        for (Connection start : pending) for (int lead = 0; lead <= 4; lead++) {
+            for (int turn = -1; turn <= 1; turn++) for (int tail = 0; tail <= (turn == 0 ? 0 : 3); tail++) {
+                List<BridgePiece> route = new ArrayList<>();
+                Connection end = start;
+                for (int i = 0; i < lead; i++) {
+                    Placement span = attach(templates, straight, end, 0);
+                    route.addAll(span.pieces()); end = span.exits().getFirst();
+                }
+                if (turn != 0) {
+                    Direction desired = turn < 0 ? end.outward().getCounterClockWise() : end.outward().getClockWise();
+                    Placement bend = attach(templates, corner, end, 0);
+                    if (bend.exits().getFirst().outward() != desired) bend = attach(templates, corner, end, 1);
+                    route.addAll(bend.pieces()); end = bend.exits().getFirst();
+                    for (int i = 0; i < tail; i++) {
+                        Placement span = attach(templates, straight, end, 0);
+                        route.addAll(span.pieces()); end = span.exits().getFirst();
+                    }
+                }
+                Placement threshold = attach(templates, gate, end, 0);
+                route.addAll(threshold.pieces());
+                if (!fits(pieces, route) || !fitsBuildings(buildings, route)
+                        || route.stream().map(BridgePiece::layoutBounds).anyMatch(bounds ->
+                            bounds.minX() < chunkX - 112 || bounds.maxX() > chunkX + 127
+                                || bounds.minZ() < chunkZ - 112 || bounds.maxZ() > chunkZ + 127)) continue;
+                Connection door = threshold.exits().getFirst();
+                Rotation facing = Rotation.NONE;
+                for (Rotation candidate : Rotation.values())
+                    if (candidate.rotate(Direction.NORTH) == door.outward().getOpposite()) facing = candidate;
+                BlockPos target = door.anchor().relative(door.outward())
+                    .relative(door.outward().getClockWise(), BRIDGE_WIDTH - 1);
+                BlockPos at = target.subtract(rotate(new BlockPos(51, 0, 0), facing));
+                HallPiece hall = new HallPiece(templates, at, facing, 106, 106);
+                BoundingBox box = hall.bodyBounds();
+                if (box.minX() < chunkX - 112 || box.maxX() > chunkX + 127
+                        || box.minZ() < chunkZ - 112 || box.maxZ() > chunkZ + 127
+                        || pieces.stream().anyMatch(piece -> overlaps(box, piece.layoutBounds()))
+                        || route.stream().anyMatch(piece -> overlaps(box, piece.layoutBounds()))
+                        || buildings.stream().anyMatch(other -> overlapsBuilding(box, other))) continue;
+                // Reservoir sampling gives every valid direction/distance combination a chance.
+                if (random.nextInt(++accepted) == 0) {
+                    selectedHall = hall; selectedPieces = List.copyOf(route); selectedStart = start;
+                }
+            }
+        }
+        if (selectedHall == null || selectedStart == null)
+            throw new IllegalStateException("Fortress backbone has no reachable large hall site");
+        buildings.add(new HallPiece(templates, selectedHall.origin(), selectedHall.rotation, 106, 106, HallFootprint.large(random)));
+        pieces.addAll(selectedPieces);
+        pending.remove(selectedStart);
+        return selectedPieces.size();
     }
 
     private static void reserveSmallHall(StructureTemplateManager templates, BridgeTemplate straight, BridgeTemplate gate,
@@ -1786,13 +1856,14 @@ public final class FortressBridges {
                 // Door openings do not turn a continuous wall into ceiling-height end posts.
                 boolean north = walls.contains(at.north()), south = walls.contains(at.south());
                 boolean east = walls.contains(at.east()), west = walls.contains(at.west());
-                boolean alongZ = Math.floorMod(at.getX() - 3, 9) == 0;
+                boolean alongZ = north && south && !east && !west
+                    || !(east && west && !north && !south) && Math.floorMod(at.getX() - 3, 9) == 0;
                 boolean crossing = alongZ && Math.floorMod(at.getZ() - 3, 9) == 0;
                 boolean straight = north && south && !east && !west || east && west && !north && !south;
                 boolean post = !openingColumns.contains(at) && (!straight || crossing);
                 int offset = Math.floorMod((alongZ ? at.getZ() : at.getX()) - 4, 9);
                 if (offset == 8) post = true;
-                if (layout.requiredWalls.contains(at)) { post = false; offset = 0; }
+                if (layout.requiredWalls.contains(at)) offset = 0;
                 String name = post ? "wall_edge" : "wall_regular";
                 BlockPos local = post ? at : at.relative(alongZ ? Direction.NORTH : Direction.WEST, offset);
                 BlockPos bottom = world(origin, at.getX(), 0, at.getZ());
@@ -1801,6 +1872,28 @@ public final class FortressBridges {
                     bottom.getX(), Math.min(bottom.getY() + 7, clip.maxY()), bottom.getZ());
                 interiorPart(name, local, !post && alongZ ? Rotation.CLOCKWISE_90 : Rotation.NONE,
                     level, columnClip, random, processor);
+            }
+        }
+
+        /** Resolve authored room walls against completed rooms, partitions and entrances. */
+        private void connectInteriorWalls(WorldGenLevel level, BoundingBox clip, BlockPos origin) {
+            // Top-down lets stacked walls inherit their final tall side shapes from above.
+            for (int y = 7; y >= 0; y--) {
+                for (int z = 0; z < footprint.depth; z++) for (int x = 0; x < footprint.width; x++) {
+                    if (!footprint.interior(x, z)) continue;
+                    BlockPos at = world(origin, x, y, z);
+                    if (!clip.isInside(at)) continue;
+                    BlockState state = level.getBlockState(at);
+                    if (!(state.getBlock() instanceof WallBlock)) continue;
+                    BlockState connected = Block.updateFromNeighbourShapes(state, level, at);
+                    if (connected != state) level.setBlock(at, connected, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+                    // Adjacent chunks may not have placed their half of a join yet.
+                    if ((at.getX() & 15) == 0 || (at.getX() & 15) == 15
+                            || (at.getZ() & 15) == 0 || (at.getZ() & 15) == 15) {
+                        if (level.getChunk(at) instanceof net.minecraft.world.level.chunk.ProtoChunk chunk)
+                            chunk.markPosForPostProcessing(at);
+                    }
+                }
             }
         }
 
@@ -1959,6 +2052,7 @@ public final class FortressBridges {
                 settings.setRotation(rotation.getRotated(Rotation.CLOCKWISE_180));
                 template("entrance").placeInWorld(level, rear, rear, settings, random, 2);
             }
+            if (plan != null) connectInteriorWalls(level, chunkBB, origin);
         }
     }
 

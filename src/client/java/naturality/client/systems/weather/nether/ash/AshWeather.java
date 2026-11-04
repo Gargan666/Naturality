@@ -15,7 +15,7 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.biome.Biomes;
+import naturality.worldgen.nether.basaltdeltas.IndustrialDeltas;
 import net.minecraft.world.phys.AABB;
 import org.jspecify.annotations.Nullable;
 
@@ -29,7 +29,7 @@ public final class AshWeather {
     private static @Nullable ClientLevel world;
     private static final WeatherClusterParticle.Environment ENVIRONMENT = new WeatherClusterParticle.Environment() {
         @Override public boolean active(ClientLevel level, BlockPos position) {
-            return enabled(level) && LoadedChunks.has(level, position) && level.getBiome(position).is(Biomes.BASALT_DELTAS);
+            return enabled(level) && LoadedChunks.has(level, position) && IndustrialDeltas.isDelta(level.getBiome(position));
         }
         @Override public double clearance(ClientLevel level, double x, double y, double z) {
             return exposed(level, x, y, z) ? 1 : -1;

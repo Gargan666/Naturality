@@ -1,0 +1,7 @@
+{
+  "parent": "minecraft:block/cube_column",
+  "textures": {
+    "end": "naturality:block/gilded_stem",
+    "side": "naturality:block/gilded_stem"
+  }
+}

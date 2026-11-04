@@ -1,0 +1,14 @@
+{
+  "replace": false,
+  "values": [
+    "naturality:gilded_stem",
+    "naturality:gilded_hyphae",
+    "naturality:gilded_planks",
+    "naturality:gilded_stairs",
+    "naturality:gilded_slab",
+    "naturality:gilded_fence",
+    "naturality:gilded_fence_gate",
+    "naturality:gilded_button",
+    "naturality:gilded_pressure_plate"
+  ]
+}

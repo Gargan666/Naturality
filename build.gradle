@@ -299,6 +299,9 @@ processResources {
 	from('resources') {
 		into 'assets/naturality'
 		exclude '**/README.txt', '**/.gitkeep', 'block models/**', 'entity models/**'
+		// Golden wool uses the same white-texture shader fallback as the other dyes.
+		// Retain the original artist input on disk without packaging that static sprite.
+		exclude 'textures/block/golden_wool.png', 'textures/block/golden_wool.png.mcmeta'
 	}
 
 	def version = project.version

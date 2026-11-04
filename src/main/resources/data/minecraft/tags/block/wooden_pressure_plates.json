@@ -4,6 +4,7 @@
     {
       "id": "naturality:charred_pressure_plate",
       "required": false
-    }
+    },
+    "naturality:gilded_pressure_plate"
   ]
 }

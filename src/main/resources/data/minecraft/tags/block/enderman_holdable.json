@@ -1,1 +1,8 @@
-{ "replace": false, "values": ["naturality:sediment"] }
+{
+  "replace": false,
+  "values": [
+    "naturality:sediment",
+    "naturality:gilded_nylium",
+    "naturality:gilded_fungus"
+  ]
+}

@@ -40,6 +40,7 @@ public class Naturality implements ModInitializer {
         naturality.entities.arrows.ArrowImpactPayload.initialize();
         if (naturality.config.startup.FeatureConfig.Feature.CONTENT.enabled()) {
             NaturalityBlocks.initialize();
+            naturality.blocks.banner.BannerPlacement.initialize();
             naturality.blocks.charred.CharredBlocks.initialize();
             naturality.blocks.lilypad.LilypadMotion.initialize();
             NaturalityItems.initialize();
@@ -47,6 +48,8 @@ public class Naturality implements ModInitializer {
             naturality.worldgen.overworld.sand.SandLayersFeature.initialize();
             naturality.worldgen.nether.basaltdeltas.BasaltDeltasFeature.initialize();
             naturality.worldgen.nether.plains.NetherPlains.initialize();
+            naturality.worldgen.nether.gilded.GildedForest.initialize();
+            naturality.worldgen.nether.basaltdeltas.IndustrialDeltas.initialize();
             naturality.worldgen.nether.fortress.FortressBridges.initialize();
             naturality.worldgen.overworld.moss.TreeMossFeature.initialize();
             naturality.worldgen.overworld.waterfalls.MountainWaterfallFeature.initialize();

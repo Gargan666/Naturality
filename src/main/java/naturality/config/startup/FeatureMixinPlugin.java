@@ -28,6 +28,8 @@ public final class FeatureMixinPlugin implements IMixinConfigPlugin {
         if (name.startsWith("ParticleCore") && !net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("particle_core")) return false;
         if (name.startsWith("C2ME") && !net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("c2me")) return false;
         boolean client = mixin.startsWith("naturality.client.");
+        if (mixin.contains(".blocks.banner.mixins.")) return CONTENT.enabled() && !FeatureConfig.clientOnly();
+        if (mixin.contains(".items.golden.mixins.")) return CONTENT.enabled() && !FeatureConfig.clientOnly();
         if (FeatureConfig.clientOnly()) {
             // Common hooks are opt-in here: even an otherwise visual feature must
             // not change server simulation, block states or synchronized entity data.
@@ -108,6 +110,8 @@ public final class FeatureMixinPlugin implements IMixinConfigPlugin {
                 || name.equals("NetherLavaUpdatesMixin") || name.equals("NetherLavaFortressMixin")
                 || name.equals("NetherLavaBastionMixin")) return NETHER_LAVA_LAKES.enabled();
         if (name.equals("BasaltDeltaPoolMixin")) return CONTENT.enabled();
+        if (mixin.startsWith("naturality.worldgen.nether.gilded.mixins.")) return CONTENT.enabled();
+        if (mixin.startsWith("naturality.worldgen.shared.mixins.")) return CONTENT.enabled();
         if (mixin.startsWith("naturality.worldgen.nether.fortress.mixins.")) return CONTENT.enabled();
         if (name.startsWith("OceanMonument")) return OCEAN_TERRAIN.enabled();
         if (name.equals("EndStoneTerrainMixin") || name.equals("SmallEndIslandLayersMixin")) return END_MATERIALS.enabled();

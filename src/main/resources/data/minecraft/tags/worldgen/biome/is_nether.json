@@ -1,4 +1,9 @@
 {
   "replace": false,
-  "values": ["naturality:crimson_plains", "naturality:warped_plains"]
+  "values": [
+    "naturality:crimson_plains",
+    "naturality:warped_plains",
+    "naturality:industrial_deltas",
+    "naturality:gilded_forest"
+  ]
 }

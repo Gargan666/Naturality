@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/cube_bottom_top",
+  "textures": {
+    "bottom": "minecraft:block/netherrack",
+    "side": "naturality:block/gilded_nylium_side",
+    "top": "naturality:block/gilded_nylium"
+  }
+}

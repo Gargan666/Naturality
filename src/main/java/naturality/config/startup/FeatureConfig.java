@@ -190,6 +190,10 @@ public final class FeatureConfig {
                     || Feature.END_TERRAIN.enabled();
             }
             if (!namespace.equals("minecraft")) return true;
+            // Content's extra dye needs its atlas entries and wearable definitions independently of visual presets.
+            if (Feature.CONTENT.enabled() && (path.equals("atlases/blocks.json") || path.equals("atlases/items.json")
+                    || path.equals("atlases/shulker_boxes.json") || path.equals("atlases/map_decorations.json")
+                    || path.startsWith("equipment/golden_"))) return true;
             // These descriptions provide sprites required by their independently enabled providers.
             if (path.equals("particles/poof.json")) return Feature.DEATH_SMOKE.enabled();
             if (path.equals("particles/dragon_breath.json")) return Feature.VISUAL_OVERHAUL.enabled();

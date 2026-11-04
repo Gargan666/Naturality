@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "group": "woolen_carpet",
+  "key": {
+    "#": "naturality:golden_wool"
+  },
+  "pattern": [
+    "##"
+  ],
+  "result": {
+    "count": 3,
+    "id": "naturality:golden_carpet"
+  }
+}

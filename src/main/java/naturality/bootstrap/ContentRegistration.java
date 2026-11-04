@@ -28,6 +28,19 @@ public final class ContentRegistration {
     private ContentRegistration() {}
 
     public static final class NaturalityBlocks {
+        public static final Block BANNER_LOWER = Blocks.register(
+            ResourceKey.create(Registries.BLOCK, Naturality.id("banner_lower")),
+            naturality.blocks.banner.BannerPlacement.Segment::new,
+            BlockBehaviour.Properties.ofFullCopy(Blocks.WALL_BANNER.white()).noLootTable().dynamicShape());
+        public static final Block WARPED_SHROOMLIGHT = Blocks.register(
+            ResourceKey.create(Registries.BLOCK, Naturality.id("warped_shroomlight")), Block::new,
+            BlockBehaviour.Properties.ofFullCopy(Blocks.SHROOMLIGHT).lightLevel(_ -> 12));
+        public static final BlockItem WARPED_SHROOMLIGHT_ITEM = Registry.register(BuiltInRegistries.ITEM,
+            ResourceKey.create(Registries.ITEM, Naturality.id("warped_shroomlight")),
+            new BlockItem(WARPED_SHROOMLIGHT, new Item.Properties()
+                .setId(ResourceKey.create(Registries.ITEM, Naturality.id("warped_shroomlight")))
+                .compostable(net.minecraft.world.level.storage.loot.providers.number.ints.ContextIntProviders.COMPOSTABLE_MEDIUM)
+                .useBlockDescriptionPrefix()));
         public static final Block IRON_GRATE = Blocks.register(
             ResourceKey.create(Registries.BLOCK, Naturality.id("iron_grate")),
             net.minecraft.world.level.block.WaterloggedTransparentBlock::new,
@@ -300,8 +313,13 @@ public final class ContentRegistration {
                 .useBlockDescriptionPrefix()));
 
         public static void initialize() {
+            naturality.blocks.gilded.GildedBlocks.initialize();
+            naturality.items.golden.GoldenDye.initialize();
             naturality.api.blocks.FallingLayerBlock.initialize();
             IRON_GRATE_ITEM.registerBlocks(Item.BY_BLOCK, IRON_GRATE_ITEM);
+            WARPED_SHROOMLIGHT_ITEM.registerBlocks(Item.BY_BLOCK, WARPED_SHROOMLIGHT_ITEM);
+            CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.NATURAL_BLOCKS)
+                .register(output -> output.insertAfter(Blocks.SHROOMLIGHT, WARPED_SHROOMLIGHT));
             IRON_LATTICE_ITEM.registerBlocks(Item.BY_BLOCK, IRON_LATTICE_ITEM);
             CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.BUILDING_BLOCKS)
                 .register(output -> output.insertAfter(Blocks.IRON_BLOCK, IRON_GRATE, IRON_LATTICE));

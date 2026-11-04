@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/stairs",
+  "textures": {
+    "bottom": "naturality:block/gilded_planks",
+    "side": "naturality:block/gilded_planks",
+    "top": "naturality:block/gilded_planks"
+  }
+}

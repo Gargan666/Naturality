@@ -4,6 +4,7 @@
     {
       "id": "naturality:charred_button",
       "required": false
-    }
+    },
+    "naturality:gilded_button"
   ]
 }

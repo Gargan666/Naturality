@@ -80,6 +80,7 @@ public final class SurfaceLayers {
     private static boolean computeVanillaGeometry(BlockGetter level, BlockPos pos, Block material) {
         for(int depth=1;depth<=MAX_DEPTH;depth++) {
             var below=pos.below(depth);var support=level.getBlockState(below);
+            if(support.getBlock() instanceof naturality.blocks.lattice.IronLatticeBlock)return false;
             if(material == Blocks.SNOW && SnowGeometry.NoSnowBlocks.contains(support))return false;
             if(support.getFluidState().is(FluidTags.WATER))return false;
             if(support.is(material)) {
@@ -107,6 +108,8 @@ public final class SurfaceLayers {
         for (int depth = 1; depth <= MAX_DEPTH - stacked; depth++) {
             var supportPos = pos.below(depth);
             var support = level.getBlockState(supportPos);
+            // Lattices cannot carry fitted layers, including coatings on deeper supports.
+            if (support.getBlock() instanceof naturality.blocks.lattice.IronLatticeBlock) break;
             boolean waterlogged = support.getFluidState().is(FluidTags.WATER);
             if (material == Blocks.SNOW && SnowGeometry.NoSnowBlocks.contains(support)) break;
             if (support.getBlock() instanceof net.minecraft.world.level.block.LiquidBlock

@@ -43,13 +43,13 @@ public record BasaltDeltasFeature() implements Feature {
         Registry.register(BuiltInRegistries.FEATURE_TYPE, Naturality.id("basalt_deltas_decoration"), CODEC);
         Registry.register(BuiltInRegistries.FEATURE_TYPE, Naturality.id("basalt_deltas_edge_columns"), EdgeColumns.CODEC);
         BiomeModifications.create(Naturality.id("basalt_deltas_edge_columns")).add(ModificationPhase.REMOVALS,
-            BiomeSelectors.includeByKey(Biomes.BASALT_DELTAS), context -> {
+            BiomeSelectors.includeByKey(Biomes.BASALT_DELTAS, IndustrialDeltas.BIOME), context -> {
                 context.getGenerationSettings().removeFeature(NetherPlacements.SMALL_BASALT_COLUMNS);
                 context.getGenerationSettings().removeFeature(NetherPlacements.LARGE_BASALT_COLUMNS);
             });
-        BiomeModifications.addFeature(BiomeSelectors.includeByKey(Biomes.BASALT_DELTAS),
+        BiomeModifications.addFeature(BiomeSelectors.includeByKey(Biomes.BASALT_DELTAS, IndustrialDeltas.BIOME),
             GenerationStep.Decoration.SURFACE_STRUCTURES, COLUMNS);
-        BiomeModifications.addFeature(BiomeSelectors.includeByKey(Biomes.BASALT_DELTAS),
+        BiomeModifications.addFeature(BiomeSelectors.includeByKey(Biomes.BASALT_DELTAS, IndustrialDeltas.BIOME),
             GenerationStep.Decoration.TOP_LAYER_MODIFICATION, PLACED);
     }
 
@@ -57,7 +57,7 @@ public record BasaltDeltasFeature() implements Feature {
 
     /** Adjacent chunks may already have ash coatings when vanilla places another delta pool. */
     public static boolean canContainLava(LevelAccessor level, BlockPos pos) {
-        if (!level.getBiome(pos).is(Biomes.BASALT_DELTAS)) return true;
+        if (!IndustrialDeltas.isDelta(level.getBiome(pos))) return true;
         for (Direction direction : Direction.values()) {
             if (direction == Direction.UP) continue;
             BlockPos neighbor = pos.relative(direction);
@@ -96,8 +96,9 @@ public record BasaltDeltasFeature() implements Feature {
                     BlockState support = level.getBlockState(ground);
                     if (!(support.is(Blocks.BASALT) || support.is(Blocks.BLACKSTONE) || support.is(Blocks.NETHERRACK)
                             || support.is(Blocks.MAGMA_BLOCK) || support.is(NaturalityBlocks.ASH_BLOCK))
-                            || !level.getBiome(ground).is(Biomes.BASALT_DELTAS)
+                            || !IndustrialDeltas.isDelta(level.getBiome(ground))
                             || !isTerrainEdge(level, ground, neighbor)) continue;
+                    if (level.getBiome(ground).is(IndustrialDeltas.BIOME) && !IndustrialDeltas.pillarSite(x, z)) continue;
                     double shape = heights.get(x / 12.0, y / 32.0, z / 12.0);
                     if (shape < -.55) continue;
                     int height = 1 + (int) Math.floor(Math.clamp((shape + 1) * .5, 0, 1) * 7) + random.nextInt(3);
@@ -110,7 +111,7 @@ public record BasaltDeltasFeature() implements Feature {
                 for (int h = 0; h < column.height; h++) {
                     if (target.getY() > level.getMaxY() || !level.ensureCanWrite(target)
                             || !level.getBlockState(target).isAir()
-                            || !level.getBiome(target).is(Biomes.BASALT_DELTAS)) break;
+                            || !IndustrialDeltas.isDelta(level.getBiome(target))) break;
                     if (!level.setBlock(target, Blocks.BASALT.defaultBlockState(), 2)) break;
                     placed = true;
                     target.move(Direction.UP);
@@ -170,14 +171,14 @@ public record BasaltDeltasFeature() implements Feature {
                     || support.getBlock() instanceof net.minecraft.world.level.block.StairBlock;
                 if (support.is(Blocks.BEDROCK) || (!fittedSupport && !support.isFaceSturdy(level, ground, Direction.UP))
                         || !support.getFluidState().isEmpty()
-                        || !level.getBiome(ground).is(Biomes.BASALT_DELTAS)) continue;
+                        || !IndustrialDeltas.isDelta(level.getBiome(ground))) continue;
                 boolean ashPatch = ashPatches.get(ground.getX() / 18.0, y / 32.0, ground.getZ() / 18.0)
                     + .2 * ashEdges.get(ground.getX() / 6.0, y / 32.0, ground.getZ() / 6.0) > -.2;
                 if (support.is(Blocks.BASALT) && random.nextFloat() < 0.08F && isTerrainEdge(level, ground, neighbor)) {
                     int height = 1 + random.nextInt(5);
                     for (int h = 0; h < height; h++) {
                         if (!level.ensureCanWrite(target) || !level.getBlockState(target).isAir()
-                                || !level.getBiome(target).is(Biomes.BASALT_DELTAS)) break;
+                                || !IndustrialDeltas.isDelta(level.getBiome(target))) break;
                         if (!level.setBlock(target, NaturalityBlocks.BASALT_WALL.defaultBlockState(), 2)) break;
                         placed = true;
                         target.move(Direction.UP);
@@ -187,7 +188,7 @@ public record BasaltDeltasFeature() implements Feature {
                         || support.is(Blocks.NETHERRACK))) {
                     for (int h = 0; h < moundHeight; h++) {
                         if (!level.ensureCanWrite(target) || !level.getBlockState(target).isAir()
-                                || !level.getBiome(target).is(Biomes.BASALT_DELTAS)) break;
+                                || !IndustrialDeltas.isDelta(level.getBiome(target))) break;
                         placed |= level.setBlock(target, NaturalityBlocks.ASH_BLOCK.defaultBlockState(), 2);
                         ground.set(target);
                         target.move(Direction.UP);
@@ -197,7 +198,7 @@ public record BasaltDeltasFeature() implements Feature {
                 if (ashPatch && level.ensureCanWrite(target)
                         && !sheltered.get(target.getY() - level.getMinY())
                         && level.getBlockState(target).isAir()
-                        && level.getBiome(target).is(Biomes.BASALT_DELTAS)
+                        && IndustrialDeltas.isDelta(level.getBiome(target))
                         && NaturalityBlocks.ASH.defaultBlockState().canSurvive(level, target)) {
                     placed |= level.setBlock(target, NaturalityBlocks.ASH.defaultBlockState(), 2);
                 }

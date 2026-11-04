@@ -7,6 +7,7 @@
 #include <minecraft:fog.glsl>
 #include <minecraft:dynamictransforms.glsl>
 #include <minecraft:projection.glsl>
+#include <naturality:golden_lines.glsl>
 #include <minecraft:sample_lightmap.glsl>
 
 layout(location = 0) in vec3 Position;
@@ -48,7 +49,13 @@ layout(location = 8) out float naturalityDeathProgress;
 layout(location = 7) out vec2 texCoordGlint;
 #endif
 
+layout(location = 9) flat out float naturalityGoldenTint;
+layout(location = 10) out vec3 naturalityGoldenView;
+
 void main() {
+    naturalityGoldenTint = naturality_golden_marker(Color.rgb) ? 1.0 : 0.0;
+    naturalityGoldenView = (ModelViewMat * vec4(Position, 1.0)).xyz;
+    vec4 dyeColor = naturalityGoldenTint > 0.5 ? vec4(1.0, 1.0, 1.0, Color.a) : Color;
     naturalityDeathProgress = float(UV1.x >> 4) / 2047.0;
     gl_Position = ProjMat * ModelViewMat * vec4(Position, 1.0);
 
@@ -57,12 +64,12 @@ void main() {
 
 #ifdef PER_FACE_LIGHTING
     vec2 light = minecraft_compute_light(Light0_Direction, Light1_Direction, Normal);
-    vertexPerFaceColorBack = minecraft_mix_light_separate(-light, Color);
-    vertexPerFaceColorFront = minecraft_mix_light_separate(light, Color);
+    vertexPerFaceColorBack = minecraft_mix_light_separate(-light, dyeColor);
+    vertexPerFaceColorFront = minecraft_mix_light_separate(light, dyeColor);
 #elif defined(NO_CARDINAL_LIGHTING)
-    vertexColor = Color;
+    vertexColor = dyeColor;
 #else
-    vertexColor = minecraft_mix_light(Light0_Direction, Light1_Direction, Normal, Color);
+    vertexColor = minecraft_mix_light(Light0_Direction, Light1_Direction, Normal, dyeColor);
 #endif
 
 #if !defined(EMISSIVE) && !defined(OIT_ALPHA_ONLY)

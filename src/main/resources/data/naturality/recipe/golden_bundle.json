@@ -1,0 +1,10 @@
+{
+  "type": "minecraft:crafting_transmute",
+  "category": "equipment",
+  "group": "bundle_dye",
+  "input": "#minecraft:bundles",
+  "material": "naturality:golden_dye",
+  "result": {
+    "id": "naturality:golden_bundle"
+  }
+}

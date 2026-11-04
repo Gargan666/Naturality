@@ -1,0 +1,9 @@
+{
+  "parent": "minecraft:block/template_bed_foot",
+  "textures": {
+    "east": "naturality:block/golden_bed_foot_east",
+    "south": "naturality:block/golden_bed_foot_south",
+    "up": "naturality:block/golden_bed_foot_up",
+    "west": "naturality:block/golden_bed_foot_west"
+  }
+}

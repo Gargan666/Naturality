@@ -1,0 +1,9 @@
+{
+  "sources": [
+    {
+      "type": "minecraft:single",
+      "resource": "naturality:map/decorations/golden_banner",
+      "sprite": "naturality:golden_banner"
+    }
+  ]
+}

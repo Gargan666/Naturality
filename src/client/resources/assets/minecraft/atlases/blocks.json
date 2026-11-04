@@ -1,1 +1,76 @@
-{"sources":[{"type":"single","resource":"naturality:block/snow_overlay"}]}
+{
+  "sources": [
+    {
+      "type": "minecraft:single",
+      "resource": "naturality:block/golden_wool"
+    },
+    {
+      "type": "single",
+      "resource": "naturality:block/snow_overlay"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "naturality:block/golden_bed_foot_east"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "naturality:block/golden_bed_foot_south"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "naturality:block/golden_bed_foot_up"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "naturality:block/golden_bed_foot_west"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "naturality:block/golden_bed_head_east"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "naturality:block/golden_bed_head_up"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "naturality:block/golden_bed_head_west"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "naturality:block/golden_candle"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "naturality:block/golden_candle_lit"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "naturality:block/golden_concrete"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "naturality:block/golden_concrete_powder"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "naturality:block/golden_glazed_terracotta"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "naturality:block/golden_shulker_box"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "naturality:block/golden_stained_glass"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "naturality:block/golden_stained_glass_pane_top"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "naturality:block/golden_terracotta"
+    }
+  ]
+}

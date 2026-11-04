@@ -1,0 +1,13 @@
+{
+  "variants": {
+    "type=bottom": {
+      "model": "naturality:block/golden_wool_slab"
+    },
+    "type=double": {
+      "model": "naturality:block/golden_wool"
+    },
+    "type=top": {
+      "model": "naturality:block/golden_wool_slab_top"
+    }
+  }
+}

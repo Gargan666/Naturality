@@ -1,6 +1,7 @@
 #ifndef NATURALITY_GLASS_SHINE
 #define NATURALITY_GLASS_SHINE
 #include <naturality:glass_uniforms.glsl>
+#include <naturality:distance_bands.glsl>
 
 // Integer hashing gives every line stable, independent placement and width.
 uint naturality_glass_line_hash(uint line) {
@@ -38,14 +39,16 @@ vec4 naturality_glass_shine(vec4 color, vec3 light, vec3 dx, vec3 dy) {
     vec3 vertical = n.y > max(n.x, n.z) ? vec3(0, 0, 1) : vec3(0, 1, 0);
     vec3 diagonal = tangent - vertical;
     vec3 view = normalize(-relative);
+    float bandScale = naturality_band_distance_scale(relative);
     float phase = dot(point, diagonal)
         + 0.75 * dot(naturalityGlassForward, diagonal)
-        + 0.5 * dot(view, diagonal);
+        + 0.5 * dot(view, diagonal)
+        - dot(relative, diagonal) * (1.0 - 1.0 / bandScale);
     // Ten lines in sixteen blocks halves the previous density. Section origins
     // are multiples of sixteen, so random placement still joins across sections.
     float periodicPhase = mod(phase, 16.0);
     float cell = floor(periodicPhase / 1.6);
-    float edgePixel = max(abs(dot(texelU, diagonal)) + abs(dot(texelV, diagonal)), 1e-6);
+    float edgePixel = max((abs(dot(texelU, diagonal)) + abs(dot(texelV, diagonal))) / bandScale, 1e-6);
     float coverage = 0.0;
     // Jitter can move the closest line into either neighboring cell. Evaluate all
     // three, including wrapped neighbors, to avoid popping at selection boundaries.

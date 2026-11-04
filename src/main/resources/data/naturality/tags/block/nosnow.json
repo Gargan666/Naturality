@@ -1,6 +1,7 @@
 {
   "replace": false,
   "values": [
+    "naturality:iron_lattice",
     "minecraft:water",
     "minecraft:lava",
     "minecraft:kelp",

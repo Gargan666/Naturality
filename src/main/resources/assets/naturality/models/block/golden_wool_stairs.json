@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/stairs",
+  "textures": {
+    "bottom": "naturality:block/golden_wool",
+    "side": "naturality:block/golden_wool",
+    "top": "naturality:block/golden_wool"
+  }
+}

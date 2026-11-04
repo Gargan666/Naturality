@@ -7,6 +7,10 @@
 #include <minecraft:fog.glsl>
 #include <minecraft:dynamictransforms.glsl>
 #include <minecraft:oit.glsl>
+#define NATURALITY_GOLD_FRAGMENT
+#include <naturality:golden_lines.glsl>
+layout(location = 9) flat in float naturalityGoldenTint;
+layout(location = 10) in vec3 naturalityGoldenView;
 
 uniform sampler2D Sampler0;
 
@@ -73,6 +77,8 @@ vec4 calculateFinalColor(vec4 color) {
 }
 
 void main() {
+    vec2 goldenGrid = texCoord0 * vec2(textureSize(Sampler0, 0));
+    vec4 goldenView = naturality_gold_pixel_view(goldenGrid, naturalityGoldenView);
     if (naturalityDeathProgress > 0.0) {
         ivec2 size = textureSize(Sampler0, 0);
         ivec2 pixel = ivec2(floor(fract(texCoord0) * vec2(size)));
@@ -90,6 +96,12 @@ void main() {
         if (rank < 0.8 * naturalityDeathProgress) discard;
     }
     vec4 color = texture(Sampler0, texCoord0);
+    vec4 goldenTexel = texelFetch(Sampler0, ivec2(floor(goldenGrid)), 0);
+    bool goldenTexture = naturality_golden_texel(goldenTexel.rgb);
+    if (naturalityGoldenTint > 0.5 || goldenTexture) {
+        vec3 albedo = goldenTexture ? vec3(goldenTexel.g) : color.rgb;
+        color.rgb = naturality_gold_overlay(albedo, goldenGrid, goldenView);
+    }
 
     #ifdef OIT_ADDITIVE
     color.a = min(0.99, color.a);

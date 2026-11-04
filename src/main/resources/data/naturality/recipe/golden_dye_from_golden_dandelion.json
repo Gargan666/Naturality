@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    "minecraft:golden_dandelion"
+  ],
+  "result": {
+    "id": "naturality:golden_dye",
+    "count": 1
+  }
+}
