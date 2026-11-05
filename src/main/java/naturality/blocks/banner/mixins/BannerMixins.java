@@ -37,7 +37,8 @@ public final class BannerMixins {
         private void naturality$neighbor(net.minecraft.world.phys.Vec3 from, net.minecraft.world.phys.Vec3 to,
                 BlockPos pos, VoxelShape shape, BlockState state,
                 CallbackInfoReturnable<net.minecraft.world.phys.BlockHitResult> cir) {
-            cir.setReturnValue(BannerPlacement.pick((BlockGetter)this, pos, from, to, cir.getReturnValue()));
+            var hit = BannerPlacement.pick((BlockGetter)this, pos, from, to, cir.getReturnValue());
+            if (hit != cir.getReturnValue()) cir.setReturnValue(hit);
         }
     }
 

@@ -189,6 +189,8 @@ public final class FeatureConfig {
                 return !namespace.equals("minecraft") || !path.equals("worldgen/noise_settings/end.json")
                     || Feature.END_TERRAIN.enabled();
             }
+            if (namespace.equals("minecraft") && path.equals("blockstates/dark_oak_log.json"))
+                return Feature.CONTENT.enabled() && !FeatureConfig.clientOnly();
             if (!namespace.equals("minecraft")) return true;
             // Content's extra dye needs its atlas entries and wearable definitions independently of visual presets.
             if (Feature.CONTENT.enabled() && (path.equals("atlases/blocks.json") || path.equals("atlases/items.json")

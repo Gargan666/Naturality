@@ -82,15 +82,24 @@ public final class BannerPlacement {
             BlockGetter level, BlockPos cell, Vec3 from, Vec3 to,
             net.minecraft.world.phys.@org.jspecify.annotations.Nullable BlockHitResult current) {
         var context = PICK.get();
-        if (context == null || !naturality.api.geometry.RaycastShapePresence.mayContain(level,
+        if (context == null) return current;
+        var cellBounds = new net.minecraft.world.phys.AABB(cell).inflate(1e-6);
+        // The traversal must reach the cell containing the actual intersection before
+        // accepting an overhanging shape; otherwise it can skip nearer geometry.
+        if (current != null && current.getBlockPos().equals(cell)
+                && (level.getBlockState(cell).getBlock() instanceof WallBannerBlock
+                    || level.getBlockState(cell).getBlock() instanceof Segment)
+                && !cellBounds.contains(current.getLocation())) current = null;
+        if (!naturality.api.geometry.RaycastShapePresence.mayContain(level,
                 naturality.api.geometry.RaycastShapePresence.BANNER, cell.getX()-1, cell.getY(), cell.getZ()-1,
                 cell.getX()+1, cell.getY()+1, cell.getZ()+1)) return current;
         double distance = current == null ? Double.POSITIVE_INFINITY : current.getLocation().distanceToSqr(from);
-        var cellBounds = new net.minecraft.world.phys.AABB(cell).inflate(1e-6);
         for (BlockPos candidate : BlockPos.betweenClosed(cell.offset(-1, 0, -1), cell.offset(1, 1, 1))) {
             BlockState state = level.getBlockState(candidate);
             if (!(state.getBlock() instanceof WallBannerBlock || state.getBlock() instanceof Segment)) continue;
-            var hit = context.getBlockShape(state, level, candidate).clip(from, to, candidate);
+            // betweenClosed reuses a MutableBlockPos, and BlockHitResult retains its
+            // supplied position. Freeze it before the iterator advances to another cell.
+            var hit = context.getBlockShape(state, level, candidate).clip(from, to, candidate.immutable());
             if (hit != null && cellBounds.contains(hit.getLocation()) && hit.getLocation().distanceToSqr(from) < distance) {
                 current = hit;
                 distance = hit.getLocation().distanceToSqr(from);
