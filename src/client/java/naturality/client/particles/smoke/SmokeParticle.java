@@ -182,7 +182,6 @@ public final class SmokeParticle extends SingleQuadParticle {
         private static final int MIN_GROUP_SIZE = 16;
         private static final Long2ObjectOpenHashMap<ChunkSources> chunks = new Long2ObjectOpenHashMap<>();
         private static final Long2ObjectOpenHashMap<Source> cells = new Long2ObjectOpenHashMap<>();
-        private static final it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap scorched = new it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap();
         private static final ArrayList<Source> selected = new ArrayList<>();
         private static final ArrayList<SmokeParticle> particles = new ArrayList<>();
         private static final RouteBuilder builder = new RouteBuilder();
@@ -210,13 +209,15 @@ public final class SmokeParticle extends SingleQuadParticle {
             source.groupRevision = revision;
             return source.groupSize = count;
         }
-        /** Shared loaded-fire index: foliage uses the same cells without a second world scan. */
-        @FunctionalInterface public interface GroupConsumer { void accept(long cell, int count); }
-        public static void forEachGroup(GroupConsumer consumer) {
-            for (Source source : cells.values()) consumer.accept(source.key, groupSize(source));
-        }
-        public static void forEachScorched(GroupConsumer consumer) {
-            for (var entry : scorched.long2IntEntrySet()) consumer.accept(entry.getLongKey(), entry.getIntValue());
+        /** Foliage needs exact positions: smoke cells are wider than its two-block radius. */
+        @FunctionalInterface public interface TintSourceConsumer { void accept(long position, int groupSize); }
+        public static void forEachTintSource(TintSourceConsumer consumer) {
+            for (Source source : cells.values()) {
+                int count = groupSize(source);
+                if (count >= MIN_GROUP_SIZE) for (long position : source.fires) consumer.accept(position, count);
+            }
+            for (ChunkSources chunk : chunks.values())
+                for (long position : chunk.scorchedPositions) consumer.accept(position, Integer.MAX_VALUE);
         }
         public record Stats(int cells, int sources, int particles, long spawned, int routeQueries) { }
         public static Stats stats() { return new Stats(cells.size(), selected.size(), particles.size(), spawned, lastRouteQueries); }
@@ -236,7 +237,7 @@ public final class SmokeParticle extends SingleQuadParticle {
         }
         private static void clear() {
             particlesCleared();
-            selected.clear(); cells.clear(); chunks.clear(); scorched.clear();
+            selected.clear(); cells.clear(); chunks.clear();
             FireFoliageTint.clear();
             world = null; clock = routeCursor = lastRouteQueries = revision = 0; spawned = 0;
         }
@@ -256,7 +257,6 @@ public final class SmokeParticle extends SingleQuadParticle {
             ChunkSources old = chunks.remove(chunk.getPos().pack());
             if (old == null) return;
             revision++;
-            for (long key : old.scorchedCells) scorched.remove(key);
             for (long key : old.cells) {
                 Source source = cells.remove(key);
                 if (source != null) source.fires.clear();
@@ -293,11 +293,8 @@ public final class SmokeParticle extends SingleQuadParticle {
             }
         }
         private static void trackScorched(ChunkSources owner, BlockPos pos, boolean present) {
-            long key = BlockPos.asLong(pos.getX() >> 3, pos.getY() >> 3, pos.getZ() >> 3);
-            int count = scorched.get(key) + (present ? 1 : -1);
-            if (count <= 0) { scorched.remove(key); owner.scorchedCells.remove(key); }
-            else { scorched.put(key, count); owner.scorchedCells.add(key); }
-            revision++;
+            boolean changed = present ? owner.scorchedPositions.add(pos.asLong()) : owner.scorchedPositions.remove(pos.asLong());
+            if (changed) revision++;
         }
         private static void scan(ChunkSources owner) {
             LevelChunk chunk = owner.chunk;
@@ -405,7 +402,7 @@ public final class SmokeParticle extends SingleQuadParticle {
     private static final class ChunkSources {
         final LevelChunk chunk;
         final LongOpenHashSet cells = new LongOpenHashSet();
-        final LongOpenHashSet scorchedCells = new LongOpenHashSet();
+        final LongOpenHashSet scorchedPositions = new LongOpenHashSet();
         ChunkSources(LevelChunk chunk) { this.chunk = chunk; }
     }
     private static final class Source {

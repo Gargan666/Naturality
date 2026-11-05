@@ -28,7 +28,7 @@ public final class FeatureMixinPlugin implements IMixinConfigPlugin {
         if (name.startsWith("ParticleCore") && !net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("particle_core")) return false;
         if (name.startsWith("C2ME") && !net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("c2me")) return false;
         boolean client = mixin.startsWith("naturality.client.");
-        if (mixin.contains(".blocks.darkoak.mixins.")) return CONTENT.enabled() && !FeatureConfig.clientOnly();
+        if (mixin.contains(".blocks.logs.mixins.")) return CONTENT.enabled() && !FeatureConfig.clientOnly();
         if (mixin.contains(".blocks.banner.mixins.")) return CONTENT.enabled() && !FeatureConfig.clientOnly();
         if (mixin.contains(".items.golden.mixins.")) return CONTENT.enabled() && !FeatureConfig.clientOnly();
         if (FeatureConfig.clientOnly()) {

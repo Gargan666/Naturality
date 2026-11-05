@@ -41,7 +41,7 @@ public class Naturality implements ModInitializer {
         if (naturality.config.startup.FeatureConfig.Feature.CONTENT.enabled()) {
             NaturalityBlocks.initialize();
             naturality.blocks.banner.BannerPlacement.initialize();
-            naturality.blocks.darkoak.ConnectedDarkOakLog.initialize();
+            naturality.blocks.logs.ConnectedLogBlock.initialize();
             naturality.blocks.charred.CharredBlocks.initialize();
             naturality.blocks.lilypad.LilypadMotion.initialize();
             NaturalityItems.initialize();

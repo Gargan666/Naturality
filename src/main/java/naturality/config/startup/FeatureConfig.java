@@ -189,7 +189,17 @@ public final class FeatureConfig {
                 return !namespace.equals("minecraft") || !path.equals("worldgen/noise_settings/end.json")
                     || Feature.END_TERRAIN.enabled();
             }
-            if (namespace.equals("minecraft") && path.equals("blockstates/dark_oak_log.json"))
+            if (namespace.equals("minecraft") && java.util.Set.of(
+                    "blockstates/oak_log.json",
+                    "blockstates/spruce_log.json",
+                    "blockstates/birch_log.json",
+                    "blockstates/jungle_log.json",
+                    "blockstates/acacia_log.json",
+                    "blockstates/dark_oak_log.json",
+                    "blockstates/mangrove_log.json",
+                    "blockstates/cherry_log.json",
+                    "blockstates/pale_oak_log.json"
+                ).contains(path))
                 return Feature.CONTENT.enabled() && !FeatureConfig.clientOnly();
             if (!namespace.equals("minecraft")) return true;
             // Content's extra dye needs its atlas entries and wearable definitions independently of visual presets.

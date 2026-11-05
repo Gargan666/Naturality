@@ -304,7 +304,7 @@ public final class ContentRegistration {
 
         public static final Block FOUR_LEAF_CLOVERS = Blocks.register(
             ResourceKey.create(Registries.BLOCK, Naturality.id("four_leaf_clovers")),
-            properties -> new net.minecraft.world.level.block.FlowerBedBlock(properties, 3),
+            naturality.blocks.clover.FourLeafCloversBlock::new,
             BlockBehaviour.Properties.ofFullCopy(Blocks.WILDFLOWERS));
         public static final BlockItem FOUR_LEAF_CLOVERS_ITEM = Registry.register(BuiltInRegistries.ITEM,
             ResourceKey.create(Registries.ITEM, Naturality.id("four_leaf_clovers")),

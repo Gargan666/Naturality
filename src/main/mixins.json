@@ -11,7 +11,7 @@
     "plugin": "naturality.config.startup.FeatureMixinPlugin"
   },
   "main": [
-    "naturality.blocks.darkoak.mixins.DarkOakMixins$Registration",
+    "naturality.blocks.logs.mixins.ConnectedLogMixins$Registration",
     "naturality.blocks.banner.mixins.BannerMixins$StandingPlacement",
     "naturality.blocks.banner.mixins.BannerMixins$WallAttachment",
     "naturality.blocks.banner.mixins.BannerMixins$Lifecycle",

@@ -43,6 +43,8 @@ public final class WindRendering {
     }
     /** Reserved tint-alpha markers, below the water occupancy range 246..254. */
     public static int tag(BlockState state) {
+        // Ground litter stays still under both wind and the shared entity-contact shader.
+        if (state.is(Blocks.LEAF_LITTER)) return 255;
         if (connected(state)) return 100;
         if (state.is(BlockTags.LEAVES)) return 240;
         if (state.getBlock() instanceof VegetationBlock && !(state.getBlock() instanceof net.minecraft.world.level.block.LilyPadBlock)) return 241;

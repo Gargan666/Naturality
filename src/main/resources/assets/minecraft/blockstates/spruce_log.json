@@ -1,0 +1,64 @@
+{
+  "variants": {
+    "axis=x,quarter=0": {
+      "model": "minecraft:block/spruce_log",
+      "x": 90,
+      "y": 90
+    },
+    "axis=x,quarter=1": {
+      "model": "naturality:block/spruce_log_x_1"
+    },
+    "axis=x,quarter=3": {
+      "model": "naturality:block/spruce_log_x_3"
+    },
+    "axis=x,quarter=2": {
+      "model": "naturality:block/spruce_log_x_2"
+    },
+    "axis=x,quarter=4": {
+      "model": "naturality:block/spruce_log_x_4"
+    },
+    "axis=y,quarter=0": {
+      "model": "minecraft:block/spruce_log"
+    },
+    "axis=y,quarter=1": {
+      "model": "naturality:block/spruce_log_y_1"
+    },
+    "axis=y,quarter=3": {
+      "model": "naturality:block/spruce_log_y_3"
+    },
+    "axis=y,quarter=2": {
+      "model": "naturality:block/spruce_log_y_2"
+    },
+    "axis=y,quarter=4": {
+      "model": "naturality:block/spruce_log_y_4"
+    },
+    "axis=z,quarter=0": {
+      "model": "minecraft:block/spruce_log",
+      "x": 90
+    },
+    "axis=z,quarter=1": {
+      "model": "naturality:block/spruce_log_z_1"
+    },
+    "axis=z,quarter=3": {
+      "model": "naturality:block/spruce_log_z_3"
+    },
+    "axis=z,quarter=2": {
+      "model": "naturality:block/spruce_log_z_2"
+    },
+    "axis=z,quarter=4": {
+      "model": "naturality:block/spruce_log_z_4"
+    },
+    "axis=x,quarter=5": {
+      "model": "minecraft:block/spruce_log",
+      "x": 90,
+      "y": 90
+    },
+    "axis=y,quarter=5": {
+      "model": "minecraft:block/spruce_log"
+    },
+    "axis=z,quarter=5": {
+      "model": "minecraft:block/spruce_log",
+      "x": 90
+    }
+  }
+}

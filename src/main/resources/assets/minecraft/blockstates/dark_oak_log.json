@@ -47,6 +47,18 @@
     },
     "axis=z,quarter=4": {
       "model": "naturality:block/dark_oak_log_z_4"
+    },
+    "axis=x,quarter=5": {
+      "model": "minecraft:block/dark_oak_log",
+      "x": 90,
+      "y": 90
+    },
+    "axis=y,quarter=5": {
+      "model": "minecraft:block/dark_oak_log"
+    },
+    "axis=z,quarter=5": {
+      "model": "minecraft:block/dark_oak_log",
+      "x": 90
     }
   }
 }

@@ -10,8 +10,7 @@ import org.jspecify.annotations.NullMarked;
 /** Local biome-foliage discoloration, using the shared loaded-fire index and bounded mesh refreshes. */
 @NullMarked
 public final class FireFoliageTint {
-    private static final int GRID = 4;
-    private static final double RADIUS = 12;
+    private static final double RADIUS = 2;
     private static final int GROWTH_TICKS = 60;
     private static final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<Source> sources =
         new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
@@ -42,10 +41,9 @@ public final class FireFoliageTint {
         if (revision == fireRevision) return;
         revision = fireRevision;
         var strengths = new Long2DoubleOpenHashMap();
-        FireSmoke.forEachGroup((key, count) -> {
+        FireSmoke.forEachTintSource((key, count) -> {
             if (count >= 16) strengths.put(key, Math.min(1, (count - 15) / 17.0));
         });
-        FireSmoke.forEachScorched((key, _) -> strengths.put(key, 1));
         sources.keySet().removeIf(key -> !strengths.containsKey(key));
         for (var entry : strengths.long2DoubleEntrySet()) {
             long key = entry.getLongKey();
@@ -74,17 +72,17 @@ public final class FireFoliageTint {
         for (var entry : sources.long2ObjectEntrySet()) {
             var cell = BlockPos.of(entry.getLongKey());
             Source source = entry.getValue();
-            double front = 2 + Math.min(GROWTH_TICKS, ticks - source.born) * .2;
-            // Four-block samples resolve the advancing edge while retaining constant-time vertex lookups.
-            for (int y = -3; y <= 3; y++) for (int z = -3; z <= 3; z++) for (int x = -3; x <= 3; x++) {
-                double distance = Math.sqrt(x * x + y * y + z * z) * GRID;
-                double weight = Math.clamp((RADIUS - distance) / 8, 0, 1);
-                if (weight == 0) continue;
-                double arrival = animated ? Math.clamp((front - distance) / 2, 0, 1) : 1;
+            double front = 1.25 + Math.min(GROWTH_TICKS, ticks - source.born) * 1.25 / GROWTH_TICKS;
+            // Integer block positions are sampled directly: no coarse-cell interpolation halo.
+            // Only these 27 offsets lie strictly inside the two-block radius.
+            for (int y = -1; y <= 1; y++) for (int z = -1; z <= 1; z++) for (int x = -1; x <= 1; x++) {
+                double distance = Math.sqrt(x * x + y * y + z * z);
+                double weight = Math.clamp(RADIUS - distance, 0, 1);
+                double arrival = animated ? Math.clamp((front - distance) / .5, 0, 1) : 1;
                 arrival = arrival * arrival * (3 - 2 * arrival);
                 weight = (source.instant + (source.strength - source.instant) * arrival) * weight * weight * (3 - 2 * weight);
                 if (weight == 0) continue;
-                long sample = BlockPos.asLong(cell.getX() * 2 + 1 + x, cell.getY() * 2 + 1 + y, cell.getZ() * 2 + 1 + z);
+                long sample = BlockPos.asLong(cell.getX() + x, cell.getY() + y, cell.getZ() + z);
                 field.put(sample, Math.max(field.get(sample), weight));
             }
         }
@@ -134,24 +132,15 @@ public final class FireFoliageTint {
 
     private static void invalidate(long key) {
         var point = BlockPos.of(key);
-        // Each grid sample affects both neighboring four-block cells. Include one
-        // block of mesh interpolation on each side of the section boundary.
-        for (int y = ((point.getY() * GRID - GRID - 1) >> 4); y <= ((point.getY() * GRID + GRID + 1) >> 4); y++)
-            for (int z = ((point.getZ() * GRID - GRID - 1) >> 4); z <= ((point.getZ() * GRID + GRID + 1) >> 4); z++)
-                for (int x = ((point.getX() * GRID - GRID - 1) >> 4); x <= ((point.getX() * GRID + GRID + 1) >> 4); x++)
+        // Include adjacent mesh sections for tint interpolation at block faces.
+        for (int y = ((point.getY() - 1) >> 4); y <= ((point.getY() + 1) >> 4); y++)
+            for (int z = ((point.getZ() - 1) >> 4); z <= ((point.getZ() + 1) >> 4); z++)
+                for (int x = ((point.getX() - 1) >> 4); x <= ((point.getX() + 1) >> 4); x++)
                     dirty.add(BlockPos.asLong(x, y, z));
     }
 
     public static double intensity(BlockPos pos) {
-        var field = visible;
-        if (field.isEmpty()) return 0;
-        int x = pos.getX() >> 2, y = pos.getY() >> 2, z = pos.getZ() >> 2;
-        double fx = (pos.getX() & 3) / 4.0, fy = (pos.getY() & 3) / 4.0, fz = (pos.getZ() & 3) / 4.0;
-        double value = 0;
-        for (int dz = 0; dz <= 1; dz++) for (int dy = 0; dy <= 1; dy++) for (int dx = 0; dx <= 1; dx++)
-            value += field.get(BlockPos.asLong(x + dx, y + dy, z + dz))
-                * (dx == 0 ? 1 - fx : fx) * (dy == 0 ? 1 - fy : fy) * (dz == 0 ? 1 - fz : fz);
-        return value;
+        return visible.get(pos.asLong());
     }
 
     public static int tint(int color, BlockPos pos) {
